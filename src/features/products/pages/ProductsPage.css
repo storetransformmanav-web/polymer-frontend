@@ -54,3 +54,7 @@
   color: var(--color-danger);
   border-color: var(--color-danger);
 }
+
+.products-page__category {
+  text-transform: capitalize;
+}

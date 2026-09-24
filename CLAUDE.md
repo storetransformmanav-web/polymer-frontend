@@ -2,6 +2,10 @@
 
 Guidance for AI coding agents working in this repository. Read this before adding or moving files.
 
+## What this app is
+
+Polymer CRM surfaces a client's Shopify orders and products (and eventually inventory) in one place. **Shopify sync is a backend concern** — this frontend must never call Shopify's Admin API directly (that needs credentials that don't belong in a browser). It calls our own backend through `src/lib/api/client.js`, which syncs with Shopify. Orders and Products currently run on mock data (`features/*/api/mock*.js`) shaped like the eventual sync payload — see "Mock data" below.
+
 ## Stack (do not change without a strong reason)
 
 - React 19, Vite 8, plain JavaScript (no TypeScript) — files are `.jsx`/`.js`.
@@ -46,7 +50,7 @@ src/
 
 - **New page/route** → `features/<name>/pages/`, then export it from `features/<name>/index.js`, then add a route entry in `app/router/AppRouter.jsx` pointing at that export.
 - **New feature** → create `features/<name>/` with only the subdirectories it needs (a simple feature might only need `pages/` and `index.js` — don't scaffold empty `schemas/`/`utils/` folders in advance).
-- **API call** → add a function in `features/<name>/api/` that calls `apiClient` from `src/lib/api/client.js`. Never call `fetch` directly from a component.
+- **API call** → add a function in `features/<name>/api/` that calls `apiClient` from `src/lib/api/client.js`. Never call `fetch` directly from a component. (Orders/Products currently have a `mock*.js` in `api/` instead, returning a `Promise` — see "Mock data" below for how to graduate one to real.)
 - **New backend-facing error handling** → throw/catch `ApiError` (`src/lib/api/ApiError.js`); check `.status`/`.data`, don't re-parse `Response` objects in feature code.
 - **Reusable UI with zero feature knowledge** (Button, Modal, Input, Card) → `components/ui/`. If it references a specific feature's data shape, it isn't generic — keep it in the feature.
 - **Reusable hook with zero feature knowledge**, used by 2+ features → `hooks/`. Otherwise keep it inside the feature that uses it.
@@ -65,6 +69,16 @@ src/
 6. **Don't create empty placeholder directories** "for later." Add a subdirectory when the first file that belongs in it exists.
 7. **Keep `App.jsx`, `main.jsx`, and `AppRouter.jsx` thin.** They wire things together; they don't contain business logic, data fetching, or complex JSX.
 8. **Secrets never get committed.** Anything sensitive goes in `.env.local` (git-ignored), not `.env.example`, and never hardcoded.
+
+## Mock data
+
+`features/orders/` and `features/products/` follow this pattern for data that doesn't have a real backend yet:
+
+- `api/mock*.js` exports a `get*()` function returning a `Promise` that resolves with an array after a simulated delay (real loading states, no real network call).
+- `hooks/use*.js` calls it and exposes `{ data, status, error }` with `status: 'loading' | 'success' | 'error'`.
+- The page renders all three states via `components/ui/Table`'s `TableState` row, not just the happy path.
+
+**To connect a real backend**, change only what's inside `get*()` — call `apiClient` from `src/lib/api/client.js` instead of returning mock data, keep the same resolved shape, and delete the `TODO` comment above it. The hook and page don't need to change. Follow the same `api/` + `hooks/` shape for any new feature that fetches data — don't invent a different pattern per feature.
 
 ## Commands
 

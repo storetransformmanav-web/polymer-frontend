@@ -1,6 +1,6 @@
 # Polymer CRM Frontend
 
-React frontend for Polymer CRM.
+React frontend for Polymer CRM — a CRM that surfaces a client's Shopify orders and products (and eventually inventory) in one place. Shopify sync is a backend concern: this frontend never talks to Shopify's Admin API directly (that needs credentials that don't belong in a browser); it calls our own backend, which syncs with Shopify. Orders and Products currently run on mock data shaped like the eventual sync payload — see [Mock data →](#mock-data) below.
 
 ## Tech stack
 
@@ -97,19 +97,32 @@ src/
 │   └── layouts/               # shared page chrome (header/nav/etc.)
 ├── features/                  # one directory per business feature
 │   ├── auth/                   # login
-│   ├── orders/, products/       # stat-card overview + a filter (placeholder data)
+│   ├── orders/, products/       # stat cards + a filterable table (mock data, see below)
+│   │   ├── api/                  # mock*.js — swap for a real fetch here later
+│   │   ├── hooks/                  # use*.js — loads via api/, exposes {data, status, error}
+│   │   └── pages/
 │   ├── dashboard/, inventory/     # coming-soon placeholders for now
 │   └── <feature>/pages/, index.js  # the feature's public API
 ├── components/ui/             # generic, reusable UI primitives
-│                               # (Button, Logo, StatCard, PageHeader, ThemeToggle, icons, ...)
+│                               # (Button, Logo, StatCard, PageHeader, Table, Badge,
+│                               #  ThemeToggle, icons, ...)
 ├── hooks/                     # generic shared hooks
 ├── lib/api/                   # HTTP client + typed API errors
+├── lib/format.js               # shared Intl currency/date formatters
 ├── config/                    # env var access
 ├── styles/                    # global CSS
 └── test/                      # test setup (jest-dom matchers, etc.)
 ```
 
 See [`src/features/README.md`](src/features/README.md) for the convention each feature follows, and [`CLAUDE.md`](CLAUDE.md) for the fuller architecture rationale and rules for extending it.
+
+## Mock data
+
+Orders and Products are wired up end-to-end against **mock data**, not a real backend yet:
+
+- `features/orders/api/mockOrders.js` and `features/products/api/mockProducts.js` export a `get*()` function that resolves with an array after a short simulated delay — shaped like the fields this app will eventually sync from the client's Shopify store (order/fulfillment status, SKU, inventory, etc. — see the `TODO` comments in those files).
+- `features/orders/hooks/useOrders.js` / `features/products/hooks/useProducts.js` call that `get*()` function and expose `{ orders/products, status, error }`, where `status` is `'loading' | 'success' | 'error'` — so `OrdersPage`/`ProductsPage` render real loading/empty/error states, not just a happy path.
+- **Swapping in the real thing** means changing what's inside `get*()` to call `apiClient` from `src/lib/api/client.js` instead of returning mock data — the hook and page don't need to change, since the return shape stays the same.
 
 ## Testing
 
