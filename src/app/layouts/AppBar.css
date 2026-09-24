@@ -1,0 +1,23 @@
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.app-bar__brand {
+  font-weight: 600;
+}
+
+.app-bar__account {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.app-bar__account:hover {
+  color: var(--color-text);
+}

@@ -1,0 +1,15 @@
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.dashboard-layout__body {
+  flex: 1;
+  display: flex;
+}
+
+.dashboard-layout__content {
+  flex: 1;
+  padding: 2rem 1.5rem;
+}

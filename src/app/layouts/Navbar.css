@@ -1,0 +1,35 @@
+.navbar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  padding: 1rem 0.75rem;
+}
+
+.navbar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.navbar__link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.navbar__link:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.navbar__link--active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}

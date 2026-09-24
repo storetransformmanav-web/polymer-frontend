@@ -1,0 +1,32 @@
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.login-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  text-align: left;
+}
+
+.login-form__field label {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.login-form__field input {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.login-form__field input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

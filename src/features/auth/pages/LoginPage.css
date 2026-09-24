@@ -1,0 +1,8 @@
+.login-page {
+  width: 100%;
+  max-width: 360px;
+  padding: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  text-align: center;
+}
