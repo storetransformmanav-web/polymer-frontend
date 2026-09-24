@@ -16,7 +16,7 @@ export function Navbar() {
   return (
     <nav className={`navbar${collapsed ? ' navbar--collapsed' : ''}`}>
       <div className="navbar__header">
-        {collapsed ? <Logo variant="mark" /> : <Logo />}
+        {!collapsed && <Logo />}
         <button
           type="button"
           className="navbar__collapse-toggle"

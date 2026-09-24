@@ -1,33 +1,7 @@
 .logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.logo__mark {
-  height: 28px;
-  width: auto;
-  flex-shrink: 0;
+  display: block;
+  width: 132px;
+  height: auto;
+  max-width: 100%;
   object-fit: contain;
-}
-
-.logo--mark {
-  height: 28px;
-  width: auto;
-  object-fit: contain;
-}
-
-.logo__text {
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.01em;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.logo__text-accent {
-  color: var(--color-accent);
 }
