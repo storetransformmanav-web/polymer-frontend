@@ -12,6 +12,12 @@
   font-weight: 600;
 }
 
+.app-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .app-bar__account {
   color: var(--color-text-muted);
   text-decoration: none;

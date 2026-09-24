@@ -63,7 +63,15 @@ The palette in [`src/styles/globals.css`](src/styles/globals.css) is sourced fro
 | `--color-surface`      | `#fcfcfd` | Card/surface background                                   |
 | `--color-border`       | `#e5ebe5` | Default border color                                      |
 
-A dark-mode variant of the same palette is defined alongside it under `@media (prefers-color-scheme: dark)`. Components should always reference these CSS custom properties rather than hardcoding colors, so the theme stays swappable from one place.
+A dark-mode variant of the same palette is defined alongside it. Components should always reference these CSS custom properties rather than hardcoding colors, so the theme stays swappable from one place.
+
+### Light/dark mode
+
+The theme toggle in the AppBar (☀️/🌙/🖥️) cycles **system → light → dark → system**:
+
+- `src/hooks/useTheme.js` holds the current choice, persists it to `localStorage`, and sets `data-theme="light"`/`"dark"` on `<html>` (or removes it for `"system"`).
+- `src/styles/globals.css` applies the dark palette either when the OS prefers dark (and there's no explicit `"light"` override) or when `[data-theme="dark"]` is set explicitly.
+- A small inline script in `index.html` applies the stored choice before first paint, so there's no flash of the wrong theme on load.
 
 ## Project structure
 

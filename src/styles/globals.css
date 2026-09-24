@@ -20,8 +20,15 @@
   font: 16px/1.5 var(--font-sans);
 }
 
+/*
+ * Dark palette applies when the OS prefers dark AND the user hasn't
+ * explicitly picked "light" (via ThemeToggle), or when the user has
+ * explicitly picked "dark" regardless of the OS setting. See
+ * src/app/providers/ThemeProvider.jsx, which sets [data-theme] on
+ * <html> from localStorage.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --color-text: #e5e7eb;
     --color-text-muted: #9ca3af;
     --color-bg: #14151a;
@@ -34,6 +41,20 @@
     --color-secondary: #4a4030;
     --color-danger: #f87171;
   }
+}
+
+:root[data-theme='dark'] {
+  --color-text: #e5e7eb;
+  --color-text-muted: #9ca3af;
+  --color-bg: #14151a;
+  --color-surface: #1c1e24;
+  --color-border: #2b2d34;
+  --color-accent: #8fb59a;
+  --color-accent-hover: #a9c9b2;
+  --color-accent-tint: #202a23;
+  --color-accent-contrast: #14151a;
+  --color-secondary: #4a4030;
+  --color-danger: #f87171;
 }
 
 *,

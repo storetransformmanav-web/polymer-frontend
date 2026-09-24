@@ -5,6 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Polymer CRM</title>
+    <!--
+      Set [data-theme] before first paint so a stored 'light'/'dark'
+      choice doesn't flash the wrong theme while React hydrates. Keep
+      the storage key in sync with src/hooks/useTheme.js.
+    -->
+    <script>
+      ;(function () {
+        try {
+          var theme = localStorage.getItem('polymer-crm:theme')
+          if (theme === 'light' || theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', theme)
+          }
+        } catch (error) {
+          // localStorage unavailable — fall back to the OS preference.
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
