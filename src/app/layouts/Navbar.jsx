@@ -2,7 +2,12 @@ import { NavLink } from 'react-router-dom'
 import './Navbar.css'
 
 // Add an entry here for every new top-level authenticated route.
-const NAV_ITEMS = [{ to: '/', label: 'Dashboard', end: true }]
+const NAV_ITEMS = [
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/orders', label: 'Orders' },
+  { to: '/products', label: 'Products' },
+  { to: '/inventory', label: 'Inventory' },
+]
 
 /**
  * Primary left-hand navigation for authenticated pages.

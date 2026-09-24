@@ -2,7 +2,10 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthLayout } from '../layouts/AuthLayout.jsx'
 import { DashboardLayout } from '../layouts/DashboardLayout.jsx'
 import { DashboardPage } from '../../features/dashboard/index.js'
+import { InventoryPage } from '../../features/inventory/index.js'
 import { LoginPage } from '../../features/auth/index.js'
+import { OrdersPage } from '../../features/orders/index.js'
+import { ProductsPage } from '../../features/products/index.js'
 import { NotFoundPage } from './NotFoundPage.jsx'
 
 /**
@@ -24,7 +27,12 @@ const router = createBrowserRouter([
     path: '/',
     element: <DashboardLayout />,
     errorElement: <NotFoundPage />,
-    children: [{ index: true, element: <DashboardPage /> }],
+    children: [
+      { index: true, element: <DashboardPage /> },
+      { path: 'orders', element: <OrdersPage /> },
+      { path: 'products', element: <ProductsPage /> },
+      { path: 'inventory', element: <InventoryPage /> },
+    ],
   },
   { path: '*', element: <NotFoundPage /> },
 ])
