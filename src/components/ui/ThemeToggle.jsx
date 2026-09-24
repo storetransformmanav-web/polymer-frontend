@@ -1,29 +1,36 @@
 import { useTheme } from '../../hooks/useTheme.js'
+import { MonitorIcon, MoonIcon, SunIcon } from './icons.jsx'
 import './ThemeToggle.css'
 
-const THEME_META = {
-  system: { icon: '🖥️', label: 'System' },
-  light: { icon: '☀️', label: 'Light' },
-  dark: { icon: '🌙', label: 'Dark' },
-}
+const OPTIONS = [
+  { value: 'light', label: 'Light', icon: SunIcon },
+  { value: 'dark', label: 'Dark', icon: MoonIcon },
+  { value: 'system', label: 'System', icon: MonitorIcon },
+]
 
 /**
- * Cycles system → light → dark → system. Reflects and controls the
+ * Segmented light/dark/system control. Lives in the AppBar's UserMenu
+ * rather than as a standalone AppBar button. Reflects and controls the
  * theme set by `useTheme` (persisted, applied via `[data-theme]`).
  */
 export function ThemeToggle() {
-  const { theme, cycleTheme } = useTheme()
-  const { icon, label } = THEME_META[theme]
+  const { theme, setTheme } = useTheme()
 
   return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={cycleTheme}
-      aria-label={`Theme: ${label}. Click to change.`}
-    >
-      <span aria-hidden="true">{icon}</span>
-      <span className="theme-toggle__label">{label}</span>
-    </button>
+    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
+      {OPTIONS.map(({ value, label, icon: Icon }) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={theme === value}
+          className={`theme-toggle__option${theme === value ? ' theme-toggle__option--active' : ''}`}
+          onClick={() => setTheme(value)}
+        >
+          <Icon />
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }

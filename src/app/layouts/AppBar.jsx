@@ -1,5 +1,4 @@
 import { useLocation, matchPath } from 'react-router-dom'
-import { ThemeToggle } from '../../components/ui/ThemeToggle.jsx'
 import { NAV_ITEMS } from '../router/navigation.js'
 import { UserMenu } from './UserMenu.jsx'
 import './AppBar.css'
@@ -19,7 +18,6 @@ export function AppBar() {
     <header className="app-bar">
       <span className="app-bar__title">{activeItem?.label ?? ''}</span>
       <div className="app-bar__actions">
-        <ThemeToggle />
         <UserMenu />
       </div>
     </header>

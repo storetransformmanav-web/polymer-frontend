@@ -1,28 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ThemeToggle } from '../../components/ui/ThemeToggle.jsx'
 import { ChevronDownIcon, LogoutIcon, UserCogIcon } from '../../components/ui/icons.jsx'
+import { CURRENT_USER, initials } from './currentUser.js'
 import './UserMenu.css'
 
-// TODO: replace with the signed-in user once features/auth has a real
-// session (see LoginForm.jsx's TODO for the other half of this).
-const CURRENT_USER = {
-  name: 'Alex Morgan',
-  email: 'alex@polymercrm.example',
-  role: 'Administrator',
-}
-
-function initials(name) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-}
-
 /**
- * Account menu in the AppBar: current user summary plus account
- * actions. Closes on outside click.
+ * Account menu in the AppBar: current user summary, theme control,
+ * and account actions. Closes on outside click.
  */
 export function UserMenu() {
   const [open, setOpen] = useState(false)
@@ -66,6 +51,11 @@ export function UserMenu() {
               <span className="user-menu__role">{CURRENT_USER.role}</span>
             </div>
           </div>
+
+          <div className="user-menu__divider" />
+
+          <span className="user-menu__section-label">Theme</span>
+          <ThemeToggle />
 
           <div className="user-menu__divider" />
 

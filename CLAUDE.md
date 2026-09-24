@@ -57,7 +57,7 @@ src/
 - **Env var** → add it to `.env.example` and read it through `src/config/env.js`. Never call `import.meta.env` from anywhere else.
 - **Global provider** (auth, query client) → register it in `src/app/providers/AppProviders.jsx`, not in `App.jsx` or `main.jsx`. (Theme and sidebar-collapsed state are plain hooks, not providers — see `src/hooks/useTheme.js`/`useSidebarCollapsed.js`; only promote a hook like this to context if a second, unrelated component needs the same live value.)
 - **New top-level route** → add it to `src/app/router/navigation.js` (path, label, icon), then wire the route in `AppRouter.jsx`. Don't add nav links directly in `Navbar.jsx`.
-- **Icon** → `src/components/ui/icons.jsx` has a small hand-written set (no icon library is installed). Add new ones there in the same stroke style rather than pulling in a dependency for one glyph.
+- **Icon** → `src/components/ui/icons.jsx` has a small hand-written set (no icon library is installed). Add new ones there in the same stroke style rather than pulling in a dependency for one glyph. **Never use emoji as icons** — always an SVG from this file.
 
 ## Rules
 

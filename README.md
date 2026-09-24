@@ -71,11 +71,11 @@ A dark-mode variant of the same palette is defined alongside it. Components shou
 
 ### Light/dark mode
 
-The theme toggle in the AppBar (☀️/🌙/🖥️) cycles **system → light → dark → system**:
+**Light is the default** — the app doesn't defer to the OS preference unless the user explicitly picks "System". The `ThemeToggle` (a Light/Dark/System segmented control, icon-based — no emoji) lives inside the AppBar's `UserMenu` dropdown, not as its own AppBar button:
 
-- `src/hooks/useTheme.js` holds the current choice, persists it to `localStorage`, and sets `data-theme="light"`/`"dark"` on `<html>` (or removes it for `"system"`).
+- `src/hooks/useTheme.js` holds the current choice, persists it to `localStorage`, and sets `data-theme="light"`/`"dark"` on `<html>` (or removes it for `"system"`, deferring to the OS).
 - `src/styles/globals.css` applies the dark palette either when the OS prefers dark (and there's no explicit `"light"` override) or when `[data-theme="dark"]` is set explicitly.
-- A small inline script in `index.html` applies the stored choice before first paint, so there's no flash of the wrong theme on load.
+- A small inline script in `index.html` applies the stored (or default-light) choice before first paint, so there's no flash of the wrong theme on load.
 
 ### App shell
 
@@ -83,7 +83,7 @@ The theme toggle in the AppBar (☀️/🌙/🖥️) cycles **system → light �
 
 - `src/app/router/navigation.js` is the single list of top-level routes (path, label, icon) — both the Navbar's links and the AppBar's page-title heading read from it, so they can't drift apart.
 - The Navbar collapses to icons-only via `src/hooks/useSidebarCollapsed.js` (persisted to `localStorage`, same pattern as `useTheme`).
-- The AppBar's `UserMenu` is a placeholder account dropdown — see the `TODO` in `src/app/layouts/UserMenu.jsx` for wiring it to a real session once `features/auth` has one.
+- The Navbar's bottom section (avatar, name, email, log out) and the AppBar's `UserMenu` dropdown both read the same placeholder identity from `src/app/layouts/currentUser.js` — see the `TODO` there for wiring up a real session once `features/auth` has one.
 
 ## Project structure
 

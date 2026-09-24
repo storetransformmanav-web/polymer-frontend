@@ -6,19 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Polymer CRM</title>
     <!--
-      Set [data-theme] before first paint so a stored 'light'/'dark'
-      choice doesn't flash the wrong theme while React hydrates. Keep
-      the storage key in sync with src/hooks/useTheme.js.
+      Set [data-theme] before first paint so the stored/default theme
+      doesn't flash the wrong mode while React hydrates. Light is the
+      default (not the OS preference) unless the user explicitly picks
+      'dark' or 'system'. Keep this in sync with src/hooks/useTheme.js.
     -->
     <script>
       ;(function () {
         try {
           var theme = localStorage.getItem('polymer-crm:theme')
-          if (theme === 'light' || theme === 'dark') {
-            document.documentElement.setAttribute('data-theme', theme)
+          if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark')
+          } else if (theme !== 'system') {
+            document.documentElement.setAttribute('data-theme', 'light')
           }
         } catch (error) {
-          // localStorage unavailable — fall back to the OS preference.
+          // localStorage unavailable — default to light.
+          document.documentElement.setAttribute('data-theme', 'light')
         }
       })()
     </script>

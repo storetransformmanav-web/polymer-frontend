@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { Logo } from '../../components/ui/Logo.jsx'
-import { ChevronsLeftIcon } from '../../components/ui/icons.jsx'
+import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.jsx'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.js'
 import { NAV_ITEMS } from '../router/navigation.js'
+import { CURRENT_USER, initials } from './currentUser.js'
 import './Navbar.css'
 
 /**
@@ -46,6 +47,27 @@ export function Navbar() {
           </li>
         ))}
       </ul>
+
+      <div className="navbar__footer">
+        {!collapsed && (
+          <div className="navbar__footer-user">
+            <span className="navbar__footer-avatar">{initials(CURRENT_USER.name)}</span>
+            <span className="navbar__footer-text">
+              <span className="navbar__footer-name">{CURRENT_USER.name}</span>
+              <span className="navbar__footer-email">{CURRENT_USER.email}</span>
+            </span>
+          </div>
+        )}
+        {/* TODO: wire up once features/auth has a real session. */}
+        <Link
+          to="/login"
+          className="navbar__footer-logout"
+          title="Log out"
+          aria-label="Log out"
+        >
+          <LogoutIcon />
+        </Link>
+      </div>
     </nav>
   )
 }

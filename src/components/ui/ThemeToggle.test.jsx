@@ -15,25 +15,29 @@ describe('ThemeToggle', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  it('cycles system → light → dark → system, persisting and applying each choice', async () => {
+  it('defaults to light and lets the user pick dark or system directly', async () => {
     const user = userEvent.setup()
     render(<ThemeToggle />)
-    const button = screen.getByRole('button')
 
-    expect(button).toHaveAccessibleName(/System/)
-    expect(document.documentElement).not.toHaveAttribute('data-theme')
-
-    await user.click(button)
-    expect(button).toHaveAccessibleName(/Light/)
+    expect(screen.getByRole('radio', { name: 'Light' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
-    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
 
-    await user.click(button)
-    expect(button).toHaveAccessibleName(/Dark/)
+    await user.click(screen.getByRole('radio', { name: 'Dark' }))
+    expect(screen.getByRole('radio', { name: 'Dark' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
 
-    await user.click(button)
-    expect(button).toHaveAccessibleName(/System/)
+    await user.click(screen.getByRole('radio', { name: 'System' }))
+    expect(screen.getByRole('radio', { name: 'System' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
     expect(document.documentElement).not.toHaveAttribute('data-theme')
   })
 })
