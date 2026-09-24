@@ -47,6 +47,24 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in real values. Only 
 | `npm test`             | Run the test suite once            |
 | `npm run test:watch`   | Run tests in watch mode            |
 
+## Color theme
+
+The palette in [`src/styles/globals.css`](src/styles/globals.css) is sourced from [polymeruk.com](https://polymeruk.com)'s storefront theme (sage-green accent, warm cream secondary, near-black text on white):
+
+| Token                  | Light     | Meaning                                                   |
+| ---------------------- | --------- | --------------------------------------------------------- |
+| `--color-accent`       | `#648c6e` | Brand sage green — primary actions, links, active states  |
+| `--color-accent-hover` | `#4a5a4e` | Darker green for hover/pressed states                     |
+| `--color-accent-tint`  | `#eef7ef` | Light green background for active/highlighted UI          |
+| `--color-secondary`    | `#f2dec4` | Warm cream secondary accent (dividers, subtle highlights) |
+| `--color-text`         | `#1a1a1a` | Primary text                                              |
+| `--color-text-muted`   | `#7c7c7c` | Secondary/muted text                                      |
+| `--color-bg`           | `#ffffff` | Page background                                           |
+| `--color-surface`      | `#fcfcfd` | Card/surface background                                   |
+| `--color-border`       | `#e5ebe5` | Default border color                                      |
+
+A dark-mode variant of the same palette is defined alongside it under `@media (prefers-color-scheme: dark)`. Components should always reference these CSS custom properties rather than hardcoding colors, so the theme stays swappable from one place.
+
 ## Project structure
 
 ```

@@ -29,7 +29,7 @@
 }
 
 .navbar__link--active {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
   font-weight: 600;
 }

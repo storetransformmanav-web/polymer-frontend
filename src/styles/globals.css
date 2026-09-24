@@ -1,11 +1,16 @@
 :root {
-  --color-text: #1f2328;
-  --color-text-muted: #6b7280;
+  /* Brand palette sourced from polymeruk.com: sage-green accent,
+     warm cream secondary, near-black text on white. */
+  --color-text: #1a1a1a;
+  --color-text-muted: #7c7c7c;
   --color-bg: #ffffff;
-  --color-surface: #f6f7f9;
-  --color-border: #e2e4e9;
-  --color-accent: #6d28d9;
+  --color-surface: #fcfcfd;
+  --color-border: #e5ebe5;
+  --color-accent: #648c6e;
+  --color-accent-hover: #4a5a4e;
+  --color-accent-tint: #eef7ef;
   --color-accent-contrast: #ffffff;
+  --color-secondary: #f2dec4;
   --color-danger: #dc2626;
 
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -22,8 +27,11 @@
     --color-bg: #14151a;
     --color-surface: #1c1e24;
     --color-border: #2b2d34;
-    --color-accent: #a78bfa;
+    --color-accent: #8fb59a;
+    --color-accent-hover: #a9c9b2;
+    --color-accent-tint: #202a23;
     --color-accent-contrast: #14151a;
+    --color-secondary: #4a4030;
     --color-danger: #f87171;
   }
 }

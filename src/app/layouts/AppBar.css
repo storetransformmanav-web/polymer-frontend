@@ -19,5 +19,5 @@
 }
 
 .app-bar__account:hover {
-  color: var(--color-text);
+  color: var(--color-accent);
 }
