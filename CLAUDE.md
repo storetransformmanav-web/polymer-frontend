@@ -31,7 +31,7 @@ src/
 │   ├── utils/                  # feature-local helpers
 │   └── index.js                 # PUBLIC EXPORTS — the only import surface
 ├── components/ui/           # generic reusable primitives (Button, Logo, StatCard,
-│                             # Panel, ThemeToggle, icons.jsx, ...)
+│                             # PageHeader, ThemeToggle, icons.jsx, ...)
 ├── hooks/                    # generic shared hooks (used by 2+ features)
 ├── lib/api/                   # apiClient (fetch wrapper) + ApiError
 ├── config/env.js               # the only place import.meta.env is read

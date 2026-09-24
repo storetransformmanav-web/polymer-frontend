@@ -97,11 +97,11 @@ src/
 │   └── layouts/               # shared page chrome (header/nav/etc.)
 ├── features/                  # one directory per business feature
 │   ├── auth/                   # login
-│   ├── dashboard/               # executive overview (stat cards)
-│   ├── orders/, products/, inventory/  # placeholder pages
-│   └── <feature>/pages/, index.js      # the feature's public API
+│   ├── orders/, products/       # stat-card overview + a filter (placeholder data)
+│   ├── dashboard/, inventory/     # coming-soon placeholders for now
+│   └── <feature>/pages/, index.js  # the feature's public API
 ├── components/ui/             # generic, reusable UI primitives
-│                               # (Button, Logo, StatCard, Panel, ThemeToggle, icons, ...)
+│                               # (Button, Logo, StatCard, PageHeader, ThemeToggle, icons, ...)
 ├── hooks/                     # generic shared hooks
 ├── lib/api/                   # HTTP client + typed API errors
 ├── config/                    # env var access
