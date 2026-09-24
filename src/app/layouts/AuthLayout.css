@@ -4,4 +4,8 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  background:
+    radial-gradient(circle at 15% 15%, var(--color-accent-tint), transparent 55%),
+    radial-gradient(circle at 85% 85%, var(--color-secondary), transparent 45%),
+    var(--color-surface);
 }

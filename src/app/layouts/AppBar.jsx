@@ -1,22 +1,26 @@
-import { Link } from 'react-router-dom'
+import { useLocation, matchPath } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ui/ThemeToggle.jsx'
+import { NAV_ITEMS } from '../router/navigation.js'
+import { UserMenu } from './UserMenu.jsx'
 import './AppBar.css'
 
 /**
- * Top application bar. Shared chrome for every authenticated page —
- * add global actions (search, notifications, account menu) here, not
- * inside individual feature pages.
+ * Top application bar: shows the active section's label (derived from
+ * the shared NAV_ITEMS, so it never drifts from the Navbar) plus
+ * global actions. Add cross-page actions here, not in feature pages.
  */
 export function AppBar() {
+  const { pathname } = useLocation()
+  const activeItem = NAV_ITEMS.find((item) =>
+    matchPath({ path: item.to, end: item.end ?? false }, pathname),
+  )
+
   return (
     <header className="app-bar">
-      <span className="app-bar__brand">Polymer CRM</span>
+      <span className="app-bar__title">{activeItem?.label ?? ''}</span>
       <div className="app-bar__actions">
         <ThemeToggle />
-        {/* Placeholder until an `auth` feature exists to back this. */}
-        <Link className="app-bar__account" to="/login">
-          Sign out
-        </Link>
+        <UserMenu />
       </div>
     </header>
   )

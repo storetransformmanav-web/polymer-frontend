@@ -65,6 +65,10 @@ The palette in [`src/styles/globals.css`](src/styles/globals.css) is sourced fro
 
 A dark-mode variant of the same palette is defined alongside it. Components should always reference these CSS custom properties rather than hardcoding colors, so the theme stays swappable from one place.
 
+### Typeface
+
+`--font-sans` leads with `'Neue Haas Unica Pro'`, falling back to the system font stack. **That font is commercially licensed and isn't bundled with this project** — the fallback stack is what actually renders today. If you have a licensed webfont file, self-host it with an `@font-face` rule in `src/styles/globals.css` and it'll be picked up automatically; don't load it from a public CDN (most aren't licensed to redistribute it).
+
 ### Light/dark mode
 
 The theme toggle in the AppBar (☀️/🌙/🖥️) cycles **system → light → dark → system**:
@@ -72,6 +76,14 @@ The theme toggle in the AppBar (☀️/🌙/🖥️) cycles **system → light �
 - `src/hooks/useTheme.js` holds the current choice, persists it to `localStorage`, and sets `data-theme="light"`/`"dark"` on `<html>` (or removes it for `"system"`).
 - `src/styles/globals.css` applies the dark palette either when the OS prefers dark (and there's no explicit `"light"` override) or when `[data-theme="dark"]` is set explicitly.
 - A small inline script in `index.html` applies the stored choice before first paint, so there's no flash of the wrong theme on load.
+
+### App shell
+
+`DashboardLayout` renders a full-height `Navbar` on the left and an `AppBar` + page content column on the right:
+
+- `src/app/router/navigation.js` is the single list of top-level routes (path, label, icon) — both the Navbar's links and the AppBar's page-title heading read from it, so they can't drift apart.
+- The Navbar collapses to icons-only via `src/hooks/useSidebarCollapsed.js` (persisted to `localStorage`, same pattern as `useTheme`).
+- The AppBar's `UserMenu` is a placeholder account dropdown — see the `TODO` in `src/app/layouts/UserMenu.jsx` for wiring it to a real session once `features/auth` has one.
 
 ## Project structure
 
@@ -84,10 +96,12 @@ src/
 │   ├── router/                # route table + top-level route components
 │   └── layouts/               # shared page chrome (header/nav/etc.)
 ├── features/                  # one directory per business feature
-│   └── dashboard/
-│       ├── pages/
-│       └── index.js           # the feature's public API
-├── components/ui/             # generic, reusable UI primitives (Button, ...)
+│   ├── auth/                   # login
+│   ├── dashboard/               # executive overview (stat cards)
+│   ├── orders/, products/, inventory/  # placeholder pages
+│   └── <feature>/pages/, index.js      # the feature's public API
+├── components/ui/             # generic, reusable UI primitives
+│                               # (Button, Logo, StatCard, Panel, ThemeToggle, icons, ...)
 ├── hooks/                     # generic shared hooks
 ├── lib/api/                   # HTTP client + typed API errors
 ├── config/                    # env var access

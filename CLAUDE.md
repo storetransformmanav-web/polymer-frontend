@@ -30,13 +30,17 @@ src/
 │   ├── pages/                 # route-level components
 │   ├── utils/                  # feature-local helpers
 │   └── index.js                 # PUBLIC EXPORTS — the only import surface
-├── components/ui/           # generic reusable primitives (Button, Input, Modal, ...)
+├── components/ui/           # generic reusable primitives (Button, Logo, StatCard,
+│                             # Panel, ThemeToggle, icons.jsx, ...)
 ├── hooks/                    # generic shared hooks (used by 2+ features)
 ├── lib/api/                   # apiClient (fetch wrapper) + ApiError
 ├── config/env.js               # the only place import.meta.env is read
+├── assets/                      # static files (logo, ...) imported by components
 ├── styles/globals.css           # global CSS custom properties + resets
 └── test/setup.js                  # vitest setup (jest-dom matchers)
 ```
+
+`app/router/navigation.js` is the single list of top-level routes (path, label, icon). Both `Navbar` (links) and `AppBar` (page-title heading) read from it — add a route there, not in each component separately.
 
 ## Where things go
 
@@ -47,7 +51,9 @@ src/
 - **Reusable UI with zero feature knowledge** (Button, Modal, Input, Card) → `components/ui/`. If it references a specific feature's data shape, it isn't generic — keep it in the feature.
 - **Reusable hook with zero feature knowledge**, used by 2+ features → `hooks/`. Otherwise keep it inside the feature that uses it.
 - **Env var** → add it to `.env.example` and read it through `src/config/env.js`. Never call `import.meta.env` from anywhere else.
-- **Global provider** (theme, auth, query client) → register it in `src/app/providers/AppProviders.jsx`, not in `App.jsx` or `main.jsx`.
+- **Global provider** (auth, query client) → register it in `src/app/providers/AppProviders.jsx`, not in `App.jsx` or `main.jsx`. (Theme and sidebar-collapsed state are plain hooks, not providers — see `src/hooks/useTheme.js`/`useSidebarCollapsed.js`; only promote a hook like this to context if a second, unrelated component needs the same live value.)
+- **New top-level route** → add it to `src/app/router/navigation.js` (path, label, icon), then wire the route in `AppRouter.jsx`. Don't add nav links directly in `Navbar.jsx`.
+- **Icon** → `src/components/ui/icons.jsx` has a small hand-written set (no icon library is installed). Add new ones there in the same stroke style rather than pulling in a dependency for one glyph.
 
 ## Rules
 
@@ -88,3 +94,4 @@ Run `npm run lint`, `npm run format:check`, `npm test`, and `npm run build` befo
 - Adding Redux/Zustand/React Query the moment a feature needs one piece of server or global state — try local/feature state first.
 - Reading `import.meta.env.VITE_*` outside `src/config/env.js`.
 - Adding a second formatter/linter (e.g. ESLint) alongside the existing Prettier/Oxlint setup.
+- Adding an icon library or a new global font import — the icon set is hand-rolled in `components/ui/icons.jsx`, and `'Neue Haas Unica Pro'` (commercially licensed, not bundled) is the intended typeface; self-host a licensed webfont file rather than pulling one from a public CDN.

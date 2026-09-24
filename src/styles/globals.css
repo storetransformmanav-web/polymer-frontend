@@ -13,7 +13,12 @@
   --color-secondary: #f2dec4;
   --color-danger: #dc2626;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* 'Neue Haas Unica Pro' is a commercially licensed font and isn't
+     bundled with this project — if you have a licensed webfont file,
+     self-host it (e.g. via @font-face in this file) and it will be
+     picked up automatically. Until then, these fallbacks render. */
+  --font-sans:
+    'Neue Haas Unica Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 
   color-scheme: light dark;
@@ -24,8 +29,8 @@
  * Dark palette applies when the OS prefers dark AND the user hasn't
  * explicitly picked "light" (via ThemeToggle), or when the user has
  * explicitly picked "dark" regardless of the OS setting. See
- * src/app/providers/ThemeProvider.jsx, which sets [data-theme] on
- * <html> from localStorage.
+ * src/hooks/useTheme.js, which sets [data-theme] on <html> from
+ * localStorage.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {

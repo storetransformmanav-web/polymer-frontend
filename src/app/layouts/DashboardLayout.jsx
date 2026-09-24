@@ -4,16 +4,17 @@ import { Navbar } from './Navbar.jsx'
 import './DashboardLayout.css'
 
 /**
- * Shell for authenticated pages: an AppBar on top, a Navbar on the
- * side, and the active route rendered via <Outlet /> in between.
- * Pages should not re-implement this chrome themselves.
+ * Shell for authenticated pages: a full-height Navbar on the left, and
+ * a main column with the AppBar on top and the active route rendered
+ * via <Outlet /> below it. Pages should not re-implement this chrome
+ * themselves.
  */
 export function DashboardLayout() {
   return (
     <div className="dashboard-layout">
-      <AppBar />
-      <div className="dashboard-layout__body">
-        <Navbar />
+      <Navbar />
+      <div className="dashboard-layout__main">
+        <AppBar />
         <main className="dashboard-layout__content">
           <Outlet />
         </main>
