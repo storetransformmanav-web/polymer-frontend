@@ -1,5 +1,4 @@
 import { Outlet } from 'react-router-dom'
-import './AuthLayout.css'
 
 /**
  * Minimal shell for unauthenticated pages (login, password reset, ...).
@@ -7,7 +6,7 @@ import './AuthLayout.css'
  */
 export function AuthLayout() {
   return (
-    <div className="auth-layout">
+    <div className="flex min-h-svh items-center justify-center p-6 [background:radial-gradient(circle_at_15%_15%,var(--color-accent-tint),transparent_55%),radial-gradient(circle_at_85%_85%,var(--color-secondary),transparent_45%),var(--color-surface)]">
       <Outlet />
     </div>
   )

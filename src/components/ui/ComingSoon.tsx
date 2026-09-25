@@ -1,5 +1,3 @@
-import './ComingSoon.css'
-
 export interface ComingSoonProps {
   title: string
 }
@@ -11,10 +9,12 @@ export interface ComingSoonProps {
  */
 export function ComingSoon({ title }: ComingSoonProps) {
   return (
-    <div className="coming-soon">
-      <h1>{title}</h1>
-      <p className="coming-soon__badge">Coming soon</p>
-      <p>This page isn't built yet — check back later.</p>
+    <div className="px-6 py-12 text-center">
+      <h1 className="mb-3 text-2xl font-semibold">{title}</h1>
+      <p className="bg-accent-tint text-accent mb-4 inline-block rounded-full px-3 py-1 text-[0.8rem] font-semibold tracking-wide uppercase">
+        Coming soon
+      </p>
+      <p className="text-text-muted">This page isn't built yet — check back later.</p>
     </div>
   )
 }

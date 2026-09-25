@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react'
 import { useTheme, type Theme } from '../../hooks/useTheme.ts'
 import { MonitorIcon, MoonIcon, SunIcon, type IconProps } from './icons.tsx'
-import './ThemeToggle.css'
 
 interface ThemeOption {
   value: Theme
@@ -24,14 +23,20 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
+    <div
+      className="border-border bg-surface flex gap-1 rounded-lg border p-1"
+      role="radiogroup"
+      aria-label="Theme"
+    >
       {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
           type="button"
           role="radio"
           aria-checked={theme === value}
-          className={`theme-toggle__option${theme === value ? ' theme-toggle__option--active' : ''}`}
+          className={`text-text-muted hover:text-text flex flex-1 flex-col items-center gap-0.5 rounded-md px-1.5 py-1.5 text-[0.68rem] ${
+            theme === value ? 'bg-bg text-accent shadow-sm' : ''
+          }`}
           onClick={() => setTheme(value)}
         >
           <Icon />

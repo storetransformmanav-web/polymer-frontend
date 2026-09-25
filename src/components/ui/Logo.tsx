@@ -1,5 +1,4 @@
 import logoSrc from '../../assets/logo.avif'
-import './Logo.css'
 
 export interface LogoProps {
   className?: string
@@ -11,5 +10,11 @@ export interface LogoProps {
  * next to it — just the image, scaled to fit its container.
  */
 export function Logo({ className = '' }: LogoProps) {
-  return <img src={logoSrc} alt="Polymer" className={`logo ${className}`.trim()} />
+  return (
+    <img
+      src={logoSrc}
+      alt="Polymer"
+      className={`block h-auto w-[132px] max-w-full object-contain ${className}`.trim()}
+    />
+  )
 }

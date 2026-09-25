@@ -8,7 +8,10 @@ import {
   LockIcon,
   MailIcon,
 } from '../../../components/ui/icons.tsx'
-import './LoginForm.css'
+
+const FIELD_LABEL = 'text-text-muted text-[0.72rem] font-bold tracking-wide uppercase'
+const INPUT_GROUP =
+  'border-border bg-surface focus-within:border-accent focus-within:outline-accent-tint flex items-center gap-2 rounded-lg border px-3 focus-within:outline-2'
 
 /**
  * Presentational login form. Submission isn't wired to a real API yet
@@ -30,11 +33,13 @@ export function LoginForm() {
   }
 
   return (
-    <form className="login-form" onSubmit={handleSubmit}>
-      <div className="login-form__field">
-        <label htmlFor="email">Email address</label>
-        <div className="login-form__input-group">
-          <MailIcon className="login-form__input-icon" />
+    <form className="flex w-full flex-col gap-4.5" onSubmit={handleSubmit}>
+      <div className="flex flex-col gap-1.5 text-left">
+        <label htmlFor="email" className={FIELD_LABEL}>
+          Email address
+        </label>
+        <div className={INPUT_GROUP}>
+          <MailIcon className="text-text-muted shrink-0" />
           <input
             id="email"
             name="email"
@@ -43,14 +48,17 @@ export function LoginForm() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            className="text-text min-w-0 flex-1 border-none bg-transparent py-2.5 outline-none"
           />
         </div>
       </div>
 
-      <div className="login-form__field">
-        <label htmlFor="password">Password</label>
-        <div className="login-form__input-group">
-          <LockIcon className="login-form__input-icon" />
+      <div className="flex flex-col gap-1.5 text-left">
+        <label htmlFor="password" className={FIELD_LABEL}>
+          Password
+        </label>
+        <div className={INPUT_GROUP}>
+          <LockIcon className="text-text-muted shrink-0" />
           <input
             id="password"
             name="password"
@@ -59,10 +67,11 @@ export function LoginForm() {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            className="text-text min-w-0 flex-1 border-none bg-transparent py-2.5 outline-none"
           />
           <button
             type="button"
-            className="login-form__toggle-visibility"
+            className="text-text-muted hover:text-text inline-flex items-center justify-center border-none bg-none p-0"
             onClick={() => setShowPassword((value) => !value)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
@@ -71,18 +80,21 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="login-form__row">
-        <label className="login-form__remember">
+      <div className="flex items-center justify-between text-[0.85rem]">
+        <label className="text-text-muted flex items-center gap-1.5">
           <input type="checkbox" name="remember" />
           Remember me
         </label>
         {/* TODO: wire up once a password-reset flow exists. */}
-        <button type="button" className="login-form__link">
+        <button
+          type="button"
+          className="text-accent hover:text-accent-hover border-none bg-none p-0 text-[0.85rem] font-semibold"
+        >
           Forgot password?
         </button>
       </div>
 
-      <Button type="submit" disabled={isSubmitting} className="login-form__submit">
+      <Button type="submit" disabled={isSubmitting} className="w-full">
         {isSubmitting ? (
           'Signing in…'
         ) : (
@@ -92,12 +104,17 @@ export function LoginForm() {
         )}
       </Button>
 
-      <div className="login-form__divider">
+      <div className="text-text-muted flex items-center gap-3 text-[0.72rem] font-bold tracking-wide">
+        <span className="bg-border h-px flex-1" />
         <span>OR</span>
+        <span className="bg-border h-px flex-1" />
       </div>
 
       {/* TODO: wire up once an OAuth provider is configured. */}
-      <button type="button" className="login-form__google">
+      <button
+        type="button"
+        className="border-border bg-bg text-text hover:border-accent flex items-center justify-center gap-2.5 rounded-lg border px-4 py-2.5 font-semibold"
+      >
         <GoogleIcon />
         Sign in with Google
       </button>

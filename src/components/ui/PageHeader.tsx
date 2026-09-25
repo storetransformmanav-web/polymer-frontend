@@ -1,5 +1,3 @@
-import './PageHeader.css'
-
 export interface PageHeaderProps {
   title: string
   description?: string
@@ -12,9 +10,9 @@ export interface PageHeaderProps {
  */
 export function PageHeader({ title, description }: PageHeaderProps) {
   return (
-    <header className="page-header">
-      <h1>{title}</h1>
-      {description && <p>{description}</p>}
+    <header>
+      <h1 className="mb-1 text-2xl font-semibold">{title}</h1>
+      {description && <p className="text-text-muted">{description}</p>}
     </header>
   )
 }

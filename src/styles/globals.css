@@ -1,6 +1,13 @@
-:root {
-  /* Brand palette sourced from polymeruk.com: sage-green accent,
-     warm cream secondary, near-black text on white. */
+@import 'tailwindcss';
+
+/*
+ * Brand palette sourced from polymeruk.com: sage-green accent, warm
+ * cream secondary, near-black text on white. Declaring these under
+ * @theme makes them real Tailwind utilities too (bg-accent,
+ * text-text-muted, border-border, font-sans, ...) — see
+ * https://tailwindcss.com/docs/theme.
+ */
+@theme {
   --color-text: #1a1a1a;
   --color-text-muted: #7c7c7c;
   --color-bg: #ffffff;
@@ -12,6 +19,9 @@
   --color-accent-contrast: #ffffff;
   --color-secondary: #f2dec4;
   --color-danger: #dc2626;
+  --color-danger-bg: #fbe4e4;
+  --color-warning: #b7791f;
+  --color-warning-bg: #fdf1de;
 
   /* 'Neue Haas Unica Pro' is a commercially licensed font and isn't
      bundled with this project — if you have a licensed webfont file,
@@ -19,18 +29,20 @@
      picked up automatically. Until then, these fallbacks render. */
   --font-sans:
     'Neue Haas Unica Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, Consolas, monospace;
-
-  color-scheme: light dark;
-  font: 16px/1.5 var(--font-sans);
 }
 
 /*
  * Dark palette applies when the OS prefers dark AND the user hasn't
  * explicitly picked "light" (via ThemeToggle), or when the user has
  * explicitly picked "dark" regardless of the OS setting. See
- * src/hooks/useTheme.js, which sets [data-theme] on <html> from
+ * src/app/store/uiSlice.ts, which sets [data-theme] on <html> from
  * localStorage.
+ *
+ * Every `bg-accent`/`text-text`/etc. utility Tailwind generates from
+ * @theme above compiles to `var(--color-accent)` etc, not a literal
+ * hex value — so overriding these custom properties here is enough to
+ * re-theme the whole app; no `dark:` variant classes are needed
+ * anywhere in the app.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -45,6 +57,9 @@
     --color-accent-contrast: #14151a;
     --color-secondary: #4a4030;
     --color-danger: #f87171;
+    --color-danger-bg: #3a1c1c;
+    --color-warning: #f0b849;
+    --color-warning-bg: #3a2c14;
   }
 }
 
@@ -60,16 +75,12 @@
   --color-accent-contrast: #14151a;
   --color-secondary: #4a4030;
   --color-danger: #f87171;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+  --color-danger-bg: #3a1c1c;
+  --color-warning: #f0b849;
+  --color-warning-bg: #3a2c14;
 }
 
 body {
-  margin: 0;
   color: var(--color-text);
   background: var(--color-bg);
   font-synthesis: none;
@@ -82,27 +93,4 @@ body {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-}
-
-h1,
-h2,
-h3 {
-  font-weight: 600;
-  margin: 0 0 0.5em;
-}
-
-p {
-  margin: 0 0 1em;
-}
-
-code {
-  font-family: var(--font-mono);
-  background: var(--color-surface);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 0.9em;
-}
-
-button {
-  font: inherit;
 }

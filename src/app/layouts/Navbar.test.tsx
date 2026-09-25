@@ -8,11 +8,14 @@ describe('Navbar', () => {
   it('marks the current route as active', () => {
     renderWithProviders(<Navbar />, { route: '/' })
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveClass(
-      'navbar__link--active',
+    // NavLink sets aria-current="page" on the active link itself —
+    // the semantic signal, rather than asserting a specific class.
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+      'aria-current',
+      'page',
     )
-    expect(screen.getByRole('link', { name: 'Orders' })).not.toHaveClass(
-      'navbar__link--active',
+    expect(screen.getByRole('link', { name: 'Orders' })).not.toHaveAttribute(
+      'aria-current',
     )
   })
 

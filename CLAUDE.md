@@ -10,8 +10,9 @@ Polymer CRM surfaces a client's Shopify orders and products (and eventually inve
 
 - **React 19, Vite 8, TypeScript** (`strict: true`) — every source file is `.ts`/`.tsx`. Don't add a new `.js`/`.jsx` file.
 - Package manager: **npm** (`package-lock.json` is committed — don't switch to yarn/pnpm).
+- **Styling: Tailwind CSS v4** (`@tailwindcss/vite`), utility classes directly in JSX. **No per-component `.css` files and no hand-written CSS** — the only CSS file in the project is `src/styles/globals.css` (the `@import 'tailwindcss'`, the `@theme` token block, and the dark-mode variable overrides). See "Styling" below.
 - Linting: **Oxlint** (`.oxlintrc.json`, with the `typescript` plugin enabled) — not ESLint.
-- Formatting: **Prettier** (`.prettierrc.json`).
+- Formatting: **Prettier** (`.prettierrc.json`, with `prettier-plugin-tailwindcss` — it sorts class lists on format, don't hand-order them).
 - Routing: **react-router-dom** (`createBrowserRouter`).
 - **Server state: TanStack Query** (`@tanstack/react-query`) — every feature's `hooks/use*.ts` that fetches data wraps `useQuery`/`useMutation`, not a hand-rolled `useEffect`+`useState` fetch. The `QueryClient` lives in `src/app/queryClient.ts` and is provided in `AppProviders`.
 - **Client/global state: Redux Toolkit** (`@reduxjs/toolkit` + `react-redux`) — the store is `src/app/store/store.ts`, with one slice per concern (currently just `ui`, for theme + sidebar-collapsed). Use the typed hooks in `src/app/store/hooks.ts` (`useAppDispatch`/`useAppSelector`), never the plain `react-redux` ones.
@@ -47,11 +48,22 @@ src/
 ├── lib/format.ts                 # shared Intl currency/date formatters
 ├── config/env.ts                   # the only place import.meta.env is read
 ├── assets/                          # static files (logo, ...) imported by components
-├── styles/globals.css                # global CSS custom properties + resets
+├── styles/globals.css                # the ONLY .css file — @theme tokens + dark-mode overrides
 └── test/                              # setup.ts (jest-dom) + renderWithProviders.tsx
 ```
 
 `app/router/navigation.ts` is the single list of top-level routes (path, label, icon). Both `Navbar` (links) and `AppBar` (page-title heading) read from it — add a route there, not in each component separately.
+
+### Styling
+
+Every component is styled with **Tailwind utility classes in `className`** — no `ComponentName.css` files, no `styled-components`, no CSS modules.
+
+- The brand palette lives in `src/styles/globals.css` under `@theme` (`--color-accent`, `--color-text`, `--color-border`, ...). Because `@theme` declares real CSS custom properties, every Tailwind utility it generates (`bg-accent`, `text-text-muted`, `border-border`, `font-sans`, ...) compiles to `background-color: var(--color-accent)` etc — **not** a literal hex value.
+- Dark mode is **not** done with Tailwind's `dark:` variant. It's done by re-declaring those same custom properties under `@media (prefers-color-scheme: dark)` and `:root[data-theme='dark']` in `globals.css` (see `src/app/store/uiSlice.ts` for how `[data-theme]` gets set). Since every color utility already resolves through `var(--color-*)`, this re-themes the whole app automatically — **don't add `dark:` variant classes anywhere**, they're redundant and will drift from the real mechanism.
+- When a warning/danger/etc. tone needs a color Tailwind doesn't ship a semantic token for (e.g. a tinted background), add it to `@theme` in `globals.css` (see `--color-warning-bg`, `--color-danger-bg`) rather than hand-picking a Tailwind palette color that won't adapt for dark mode.
+- For layout constants that matter exactly (sidebar width, header height), use Tailwind's arbitrary value syntax (`w-[232px]`) rather than the nearest scale step.
+- A component's own file is `.tsx` only — if two or more class names always travel together, extract a local `const` (e.g. `FILTER_LABEL = '...'` in `OrdersPage.tsx`) rather than reaching for a CSS class.
+- Run `npm run format` after editing className strings — `prettier-plugin-tailwindcss` sorts them into Tailwind's canonical order; don't hand-order them.
 
 ### Import extensions
 
@@ -76,7 +88,7 @@ src/
 1. **Import features only through their `index.ts`.** Never `import { X } from '../../features/other/components/X.tsx'`. If it's not exported from `index.ts`, it's private to that feature.
 2. **Features don't reach into each other's internals**, and avoid feature-to-feature dependencies where practical — prefer lifting shared code to `lib/`, `hooks/`, or `components/ui/`.
 3. **No raw Axios/`fetch` in components or pages.** Go through a feature's `api/` module, which goes through `apiClient`.
-4. **Don't add a dependency without checking this file and `package.json` first** for something that already solves the problem. The state/data/HTTP/validation stack (Redux Toolkit, TanStack Query, Axios, Zod) is deliberately chosen — don't add a second competing library for any of those roles (no RTK Query _and_ a hand-rolled fetch hook; no a second HTTP client; no a second schema/validation library).
+4. **Don't add a dependency without checking this file and `package.json` first** for something that already solves the problem. The state/data/HTTP/validation/styling stack (Redux Toolkit, TanStack Query, Axios, Zod, Tailwind) is deliberately chosen — don't add a second competing library for any of those roles (no RTK Query _and_ a hand-rolled fetch hook; no a second HTTP client; no a second schema/validation library; no CSS-in-JS or CSS Modules alongside Tailwind).
 5. **Server state goes through TanStack Query; client state goes through Redux.** Don't put fetched data in a Redux slice, and don't reach for `useState`/prop-drilling for something two+ unrelated components need — add a slice instead. Local component state is still the default for anything that's neither.
 6. **Don't create empty placeholder directories** "for later." Add a subdirectory when the first file that belongs in it exists.
 7. **Keep `App.tsx`, `main.tsx`, and `AppRouter.tsx` thin.** They wire things together; they don't contain business logic, data fetching, or complex JSX.
@@ -128,3 +140,4 @@ Run `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, and
 - Adding a second formatter/linter (e.g. ESLint) alongside the existing Prettier/Oxlint setup.
 - Adding an icon library or a new global font import — the icon set is hand-rolled in `components/ui/icons.tsx`, and `'Neue Haas Unica Pro'` (commercially licensed, not bundled) is the intended typeface; self-host a licensed webfont file rather than pulling one from a public CDN.
 - Adding a `.js`/`.jsx` file, or importing with a `.js` extension that actually points at a `.ts`/`.tsx` file.
+- Creating a new `ComponentName.css` file, or writing a `dark:` variant class — see "Styling" above for why neither is needed.

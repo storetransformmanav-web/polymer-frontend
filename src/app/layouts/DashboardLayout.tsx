@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
-import './DashboardLayout.css'
 
 /**
  * Shell for authenticated pages: a full-height Navbar on the left, and
@@ -11,11 +10,11 @@ import './DashboardLayout.css'
  */
 export function DashboardLayout() {
   return (
-    <div className="dashboard-layout">
+    <div className="bg-bg flex min-h-svh">
       <Navbar />
-      <div className="dashboard-layout__main">
+      <div className="flex min-w-0 flex-1 flex-col">
         <AppBar />
-        <main className="dashboard-layout__content">
+        <main className="bg-surface flex-1 px-8 pt-7 pb-12">
           <Outlet />
         </main>
       </div>

@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge.tsx'
 import { PageHeader } from '../../../components/ui/PageHeader.tsx'
-import { StatCard, type StatCardProps } from '../../../components/ui/StatCard.tsx'
+import {
+  StatCard,
+  StatGrid,
+  type StatCardProps,
+} from '../../../components/ui/StatCard.tsx'
 import { Table, TableState } from '../../../components/ui/Table.tsx'
 import {
   AlertTriangleIcon,
@@ -18,7 +22,6 @@ import type {
   FulfillmentStatus,
   Order,
 } from '../api/mockOrders.ts'
-import './OrdersPage.css'
 
 const FINANCIAL_STATUS_TONE: Record<FinancialStatus, BadgeTone> = {
   paid: 'success',
@@ -30,6 +33,12 @@ const FULFILLMENT_STATUS_TONE: Record<FulfillmentStatus, BadgeTone> = {
   partial: 'warning',
   unfulfilled: 'neutral',
 }
+
+const FILTER_LABEL = 'text-text-muted flex flex-col gap-1 text-[0.72rem] font-semibold'
+const FILTER_SELECT =
+  'border-border bg-surface text-text min-w-40 rounded-md border px-2.5 py-1.5 text-[0.85rem]'
+const CLEAR_BUTTON =
+  'border-border bg-bg text-text-muted hover:text-danger hover:border-danger flex items-center gap-1.5 rounded-md border px-3 py-2 text-[0.82rem]'
 
 interface Filters {
   customer: CustomerType | 'all'
@@ -84,17 +93,18 @@ export function OrdersPage() {
   }, [orders, filters])
 
   return (
-    <div className="orders-page">
+    <div className="flex flex-col gap-7">
       <PageHeader title="Orders" description="Order pipeline at a glance." />
 
-      <div className="orders-page__filters">
-        <label className="orders-page__filter">
+      <div className="border-border bg-bg flex flex-wrap items-end gap-4 rounded-xl border p-5">
+        <label className={FILTER_LABEL}>
           <span>Customer</span>
           <select
             value={filters.customer}
             onChange={(event) =>
               updateFilter('customer', event.target.value as Filters['customer'])
             }
+            className={FILTER_SELECT}
           >
             <option value="all">All customers</option>
             <option value="retail">Retail</option>
@@ -102,15 +112,16 @@ export function OrdersPage() {
           </select>
         </label>
 
-        <label className="orders-page__filter orders-page__filter--date">
+        <label className={FILTER_LABEL}>
           <span>Date range</span>
-          <div className="orders-page__date-range">
+          <div className="border-border bg-surface text-text-muted flex items-center gap-1.5 rounded-md border px-2.5 py-1.5">
             <CalendarIcon />
             <input
               type="date"
               value={filters.from}
               onChange={(event) => updateFilter('from', event.target.value)}
               aria-label="From date"
+              className="text-text border-none bg-transparent py-0.5 text-[0.85rem] outline-none"
             />
             <span>–</span>
             <input
@@ -118,13 +129,14 @@ export function OrdersPage() {
               value={filters.to}
               onChange={(event) => updateFilter('to', event.target.value)}
               aria-label="To date"
+              className="text-text border-none bg-transparent py-0.5 text-[0.85rem] outline-none"
             />
           </div>
         </label>
 
         <button
           type="button"
-          className="orders-page__clear"
+          className={CLEAR_BUTTON}
           onClick={() => setFilters(DEFAULT_FILTERS)}
         >
           <XIcon />
@@ -132,11 +144,11 @@ export function OrdersPage() {
         </button>
       </div>
 
-      <div className="stat-grid">
+      <StatGrid>
         {buildStats(filteredOrders).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
-      </div>
+      </StatGrid>
 
       <Table>
         <thead>

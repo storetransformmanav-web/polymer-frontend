@@ -7,6 +7,7 @@ React frontend for Polymer CRM — a CRM that surfaces a client's Shopify orders
 - **[React 19](https://react.dev/)** — UI library
 - **[Vite 8](https://vite.dev/)** — dev server & build tool
 - **[TypeScript](https://www.typescriptlang.org/)** (`strict: true`) — every source file is `.ts`/`.tsx`
+- **[Tailwind CSS v4](https://tailwindcss.com/)** (`@tailwindcss/vite`) — utility classes in JSX; no per-component CSS files
 - **[React Router 7](https://reactrouter.com/)** — client-side routing
 - **[TanStack Query](https://tanstack.com/query)** — server state (fetching, caching, loading/error states)
 - **[Redux Toolkit](https://redux-toolkit.js.org/) + [react-redux](https://react-redux.js.org/)** — client/global UI state (theme, sidebar)
@@ -62,23 +63,31 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in real values. Only 
 
 Every source file is TypeScript with `strict` mode on (see [`tsconfig.app.json`](tsconfig.app.json)). A feature that fetches data defines its shape as a **Zod schema** in `features/<name>/schemas/` and derives the TS type from it with `z.infer`, so the compile-time type and the runtime check can't drift apart — see [Mock data →](#mock-data) for how that's used end-to-end today, and how it validates a real API response once one exists.
 
+## Styling
+
+Every component is styled with **Tailwind utility classes** directly in `className` — there are no per-component `.css` files. [`src/styles/globals.css`](src/styles/globals.css) is the **only** CSS file in the project: it imports Tailwind and declares the brand palette under `@theme`.
+
+Declaring the palette under `@theme` (rather than in a separate config file, Tailwind v4's default) does two things at once: it makes each token a real CSS custom property (`--color-accent`, etc.) **and** generates the matching utility class (`bg-accent`, `text-accent`, `border-accent`, ...). Because the generated utility compiles to `background-color: var(--color-accent)` rather than a literal hex value, re-theming for dark mode (see below) is just re-declaring those custom properties elsewhere — no `dark:` variant classes needed anywhere in the app.
+
 ## Color theme
 
-The palette in [`src/styles/globals.css`](src/styles/globals.css) is sourced from [polymeruk.com](https://polymeruk.com)'s storefront theme (sage-green accent, warm cream secondary, near-black text on white):
+The palette sourced from [polymeruk.com](https://polymeruk.com)'s storefront theme (sage-green accent, warm cream secondary, near-black text on white):
 
-| Token                  | Light     | Meaning                                                   |
-| ---------------------- | --------- | --------------------------------------------------------- |
-| `--color-accent`       | `#648c6e` | Brand sage green — primary actions, links, active states  |
-| `--color-accent-hover` | `#4a5a4e` | Darker green for hover/pressed states                     |
-| `--color-accent-tint`  | `#eef7ef` | Light green background for active/highlighted UI          |
-| `--color-secondary`    | `#f2dec4` | Warm cream secondary accent (dividers, subtle highlights) |
-| `--color-text`         | `#1a1a1a` | Primary text                                              |
-| `--color-text-muted`   | `#7c7c7c` | Secondary/muted text                                      |
-| `--color-bg`           | `#ffffff` | Page background                                           |
-| `--color-surface`      | `#fcfcfd` | Card/surface background                                   |
-| `--color-border`       | `#e5ebe5` | Default border color                                      |
+| Token                   | Light               | Tailwind utilities                        | Meaning                                                   |
+| ----------------------- | ------------------- | ----------------------------------------- | --------------------------------------------------------- |
+| `--color-accent`        | `#648c6e`           | `bg-accent` `text-accent` `border-accent` | Brand sage green — primary actions, links, active states  |
+| `--color-accent-hover`  | `#4a5a4e`           | `bg-accent-hover` `text-accent-hover`     | Darker green for hover/pressed states                     |
+| `--color-accent-tint`   | `#eef7ef`           | `bg-accent-tint` `text-accent-tint`       | Light green background for active/highlighted UI          |
+| `--color-secondary`     | `#f2dec4`           | `bg-secondary`                            | Warm cream secondary accent (dividers, subtle highlights) |
+| `--color-text`          | `#1a1a1a`           | `text-text`                               | Primary text                                              |
+| `--color-text-muted`    | `#7c7c7c`           | `text-text-muted`                         | Secondary/muted text                                      |
+| `--color-bg`            | `#ffffff`           | `bg-bg`                                   | Page background                                           |
+| `--color-surface`       | `#fcfcfd`           | `bg-surface`                              | Card/surface background                                   |
+| `--color-border`        | `#e5ebe5`           | `border-border`                           | Default border color                                      |
+| `--color-warning`/`-bg` | `#b7791f`/`#fdf1de` | `text-warning` `bg-warning-bg`            | Warning tone (stat cards, badges)                         |
+| `--color-danger`/`-bg`  | `#dc2626`/`#fbe4e4` | `text-danger` `bg-danger-bg`              | Danger/error tone                                         |
 
-A dark-mode variant of the same palette is defined alongside it. Components should always reference these CSS custom properties rather than hardcoding colors, so the theme stays swappable from one place.
+A dark-mode variant of the same palette is defined alongside it — see "Light/dark mode" below.
 
 ### Typeface
 
@@ -89,7 +98,7 @@ A dark-mode variant of the same palette is defined alongside it. Components shou
 **Light is the default** — the app doesn't defer to the OS preference unless the user explicitly picks "System". The `ThemeToggle` (a Light/Dark/System segmented control, icon-based — no emoji) lives inside the AppBar's `UserMenu` dropdown, not as its own AppBar button:
 
 - `src/app/store/uiSlice.ts` (Redux) holds the current choice and persists it to `localStorage`; `src/hooks/useTheme.ts` reads/writes it and sets `data-theme="light"`/`"dark"` on `<html>` (or removes it for `"system"`, deferring to the OS).
-- `src/styles/globals.css` applies the dark palette either when the OS prefers dark (and there's no explicit `"light"` override) or when `[data-theme="dark"]` is set explicitly.
+- `src/styles/globals.css` re-declares the `@theme` custom properties under `@media (prefers-color-scheme: dark)` and `:root[data-theme='dark']` — applying the dark palette either when the OS prefers dark (and there's no explicit `"light"` override) or when `[data-theme="dark"]` is set explicitly. No Tailwind `dark:` classes are used anywhere (see "Styling" above).
 - A small inline script in `index.html` applies the stored (or default-light) choice before first paint, so there's no flash of the wrong theme on load.
 
 ### App shell
@@ -129,7 +138,7 @@ src/
 ├── lib/api/                   # Axios-backed HTTP client + typed API errors
 ├── lib/format.ts                # shared Intl currency/date formatters
 ├── config/                    # env var access
-├── styles/                    # global CSS
+├── styles/globals.css         # the ONLY .css file — Tailwind import + @theme tokens
 └── test/                      # setup.ts (jest-dom) + renderWithProviders.tsx
 ```
 

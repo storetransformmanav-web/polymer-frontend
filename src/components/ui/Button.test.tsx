@@ -8,8 +8,10 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })
 
-  it('applies the variant class', () => {
+  it('applies the secondary variant styling', () => {
     render(<Button variant="secondary">Cancel</Button>)
-    expect(screen.getByRole('button')).toHaveClass('btn--secondary')
+    // bg-transparent only appears on the secondary variant — a stand-in
+    // for "the variant prop changed which style branch rendered".
+    expect(screen.getByRole('button')).toHaveClass('bg-transparent')
   })
 })
