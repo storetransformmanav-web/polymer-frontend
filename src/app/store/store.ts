@@ -1,4 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { setAccessToken } from '../../lib/api/client.ts'
+import { authReducer, SESSION_STORAGE_KEY } from './authSlice.ts'
 import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
 
 /**
@@ -12,16 +14,35 @@ export function createAppStore() {
   const appStore = configureStore({
     reducer: {
       ui: uiReducer,
+      auth: authReducer,
     },
   })
 
   // Persist the `ui` slice to localStorage whenever it changes — the
   // single place this app writes UI preferences back to storage,
   // mirroring what each hook used to do on its own before this state
-  // moved into Redux.
+  // moved into Redux. The auth session is persisted the same way, and
+  // its token is mirrored into apiClient for the Authorization header.
   let previousUi = appStore.getState().ui
+  let previousSession = appStore.getState().auth.session
+  setAccessToken(previousSession?.accessToken ?? null)
+
   appStore.subscribe(() => {
-    const ui = appStore.getState().ui
+    const { ui, auth } = appStore.getState()
+
+    if (auth.session !== previousSession) {
+      previousSession = auth.session
+      setAccessToken(auth.session?.accessToken ?? null)
+      try {
+        if (auth.session) {
+          window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(auth.session))
+        } else {
+          window.localStorage.removeItem(SESSION_STORAGE_KEY)
+        }
+      } catch {
+        // localStorage unavailable — the session just won't survive a reload.
+      }
+    }
 
     if (ui.theme !== previousUi.theme) {
       try {

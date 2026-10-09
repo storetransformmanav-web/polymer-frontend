@@ -83,6 +83,15 @@ Every component is styled with **Tailwind utility classes in `className`** — n
 - **New top-level route** → add it to `src/app/router/navigation.ts` (path, label, icon), then wire the route in `AppRouter.tsx`. Don't add nav links directly in `Navbar.tsx`.
 - **Icon** → `src/components/ui/icons.tsx` has a small hand-written set (no icon library is installed). Add new ones there in the same stroke style rather than pulling in a dependency for one glyph. **Never use emoji as icons** — always an SVG from this file.
 
+## Backend API (auth)
+
+- **All real backend endpoints live in one file: `src/lib/api/endpoints.ts`** — path (`ENDPOINTS`), Zod response schema, and request function (`api.auth.requestOtp`, ...). Add new endpoints there. Its schemas live in that file (not in `features/*/schemas/`) so `lib/` never imports from a feature. Orders/Products still use their `mock*.ts` until they're moved over.
+- **Auth is passwordless (email OTP) and runs on Redux Toolkit**: `src/app/store/authSlice.ts` holds the login-flow state (`step`, `email`, statuses, `error`) and the persisted `session`; `requestOtp`/`verifyOtp` are `createAsyncThunk`s that call `api.auth.*`. Components use `features/auth/hooks/useLogin.ts` (flow) and `hooks/useAuth.ts` (session/logout), never the slice directly. This is a deliberate exception to "server state → TanStack Query": a login flow is client-owned state, not a cached resource.
+- **Google sign-in** (`POST /auth/google`) sends the Google ID token; `features/auth/utils/googleIdentity.ts` loads Google's GIS script (no npm package) and `GoogleSignIn.tsx` renders Google's own button. It needs `VITE_GOOGLE_CLIENT_ID`; when empty, production hides the Google option and development shows a disabled placeholder with setup instructions. The thunk is `googleSignIn` in `authSlice.ts`.
+- Error messages shown to users come from the backend: `lib/api/client.ts` turns a failed response into an `ApiError` whose `message` is the first field error (422) or the body's `message`, with a friendly fallback for network failures/timeouts.
+- The backend rejects browser CORS from localhost, so dev/preview proxy `/api` to `https://polymeruk-api.vercel.app` (see `vite.config.ts`). A production host must route `/api` the same way, or set `VITE_API_BASE_URL` to the full URL and have the backend allow that origin.
+- Not done yet: route protection (`ProtectedRoute`), showing the real signed-in user (`currentUser.ts` is still a placeholder), and `GET /auth/me` / 401 handling.
+
 ## Rules
 
 1. **Import features only through their `index.ts`.** Never `import { X } from '../../features/other/components/X.tsx'`. If it's not exported from `index.ts`, it's private to that feature.

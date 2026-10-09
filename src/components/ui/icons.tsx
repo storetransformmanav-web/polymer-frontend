@@ -134,6 +134,24 @@ export function LogoutIcon(props: IconProps) {
   )
 }
 
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M16 10H4.5" />
+      <path d="M9.5 5 4.5 10l5 5" />
+    </svg>
+  )
+}
+
+/** Indeterminate spinner — pair with Tailwind's `animate-spin`. */
+export function SpinnerIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 2.5a7.5 7.5 0 1 0 7.5 7.5" />
+    </svg>
+  )
+}
+
 export function GoogleIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" {...props}>

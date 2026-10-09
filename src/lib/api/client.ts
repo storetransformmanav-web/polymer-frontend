@@ -19,13 +19,55 @@ import { ApiError } from './ApiError.ts'
 const axiosInstance = axios.create({
   baseURL: env.apiBaseUrl,
   headers: { Accept: 'application/json' },
+  timeout: 15_000,
 })
+
+// The bearer token is pushed in from the Redux store (see store.ts) rather
+// than read from it here, so this module never imports the store.
+let accessToken: string | null = null
+
+export function setAccessToken(token: string | null) {
+  accessToken = token
+}
+
+axiosInstance.interceptors.request.use((config) => {
+  if (accessToken && !config.headers.has('Authorization')) {
+    config.headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+  return config
+})
+
+/** Error body shared by every non-2xx response from the backend. */
+interface ErrorBody {
+  message?: string
+  errors?: { field?: string; message?: string }[]
+}
+
+/**
+ * Picks the most useful human-readable message out of a failed request:
+ * the first field error for 422s (e.g. "Enter a valid email address"),
+ * otherwise the backend's own `message`, otherwise a friendly network
+ * message when no response arrived at all.
+ */
+function getErrorMessage(error: AxiosError<ErrorBody>): string {
+  const body = error.response?.data
+  const fieldMessage = body?.errors?.[0]?.message?.replace(/^Value error,\s*/i, '')
+
+  if (fieldMessage) return fieldMessage
+  if (body?.message) return body.message
+  if (!error.response) {
+    return error.code === 'ECONNABORTED'
+      ? 'The request timed out. Please try again.'
+      : 'Unable to reach the server. Check your connection and try again.'
+  }
+  return error.message
+}
 
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ message?: string }>) => {
+  (error: AxiosError<ErrorBody>) => {
     return Promise.reject(
-      new ApiError(error.response?.data?.message ?? error.message, {
+      new ApiError(getErrorMessage(error), {
         status: error.response?.status,
         data: error.response?.data,
       }),

@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom'
 import { Logo } from '../../components/ui/Logo.tsx'
 import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.tsx'
+import { useAuth } from '../../hooks/useAuth.ts'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
 import { NAV_ITEMS } from '../router/navigation.ts'
 import { CURRENT_USER, initials } from './currentUser.ts'
@@ -12,6 +13,7 @@ import { CURRENT_USER, initials } from './currentUser.ts'
  */
 export function Navbar() {
   const [collapsed, setCollapsed] = useSidebarCollapsed()
+  const { logout } = useAuth()
 
   return (
     <nav
@@ -75,9 +77,9 @@ export function Navbar() {
             </span>
           </div>
         )}
-        {/* TODO: wire up once features/auth has a real session. */}
         <Link
           to="/login"
+          onClick={logout}
           className="text-text-muted hover:bg-bg hover:text-danger flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
           title="Log out"
           aria-label="Log out"

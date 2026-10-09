@@ -20,6 +20,8 @@ function requireEnv(key: keyof ImportMetaEnv, fallback?: string): string {
 
 export const env = {
   apiBaseUrl: requireEnv('VITE_API_BASE_URL', '/api'),
+  /** OAuth client ID for Google sign-in; empty hides the Google button. */
+  googleClientId: requireEnv('VITE_GOOGLE_CLIENT_ID', ''),
   mode: import.meta.env.MODE,
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,

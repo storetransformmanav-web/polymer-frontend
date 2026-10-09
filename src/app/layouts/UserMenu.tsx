@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ui/ThemeToggle.tsx'
 import { ChevronDownIcon, LogoutIcon, UserCogIcon } from '../../components/ui/icons.tsx'
+import { useAuth } from '../../hooks/useAuth.ts'
 import { CURRENT_USER, initials } from './currentUser.ts'
 
 const AVATAR_BASE =
@@ -16,6 +17,7 @@ const MENU_ITEM =
 export function UserMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const { logout } = useAuth()
 
   useEffect(() => {
     if (!open) return undefined
@@ -83,7 +85,7 @@ export function UserMenu() {
             <UserCogIcon />
             Update profile
           </button>
-          <Link to="/login" className={MENU_ITEM} role="menuitem">
+          <Link to="/login" onClick={logout} className={MENU_ITEM} role="menuitem">
             <LogoutIcon />
             Log out
           </Link>
