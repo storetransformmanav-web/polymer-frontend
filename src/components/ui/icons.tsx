@@ -200,6 +200,46 @@ export function BoxesIcon(props: IconProps) {
   )
 }
 
+export function LayersIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m10 2.5 7.5 4-7.5 4-7.5-4Z" />
+      <path d="m2.5 10 7.5 4 7.5-4" />
+      <path d="m2.5 13.5 7.5 4 7.5-4" />
+    </svg>
+  )
+}
+
+export function ListChecksIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m3 5 1.6 1.6L7.5 3.7" />
+      <path d="m3 12 1.6 1.6L7.5 10.7" />
+      <path d="M10.5 5h6.5M10.5 12h6.5M10.5 16h6.5M10.5 8.5h3" />
+    </svg>
+  )
+}
+
+export function ExternalLinkIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11.5 3H17v5.5" />
+      <path d="M17 3 9.5 10.5" />
+      <path d="M15 11.5V15a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 4 15V7a1.5 1.5 0 0 1 1.5-1.5H9" />
+    </svg>
+  )
+}
+
+export function ImageIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.5" y="3.5" width="15" height="13" rx="1.6" />
+      <circle cx="7" cy="8" r="1.4" />
+      <path d="m3 15 4.5-4.5 3 3 2-2L17 15.5" />
+    </svg>
+  )
+}
+
 export function ArrowLeftIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

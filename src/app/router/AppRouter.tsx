@@ -30,7 +30,8 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'orders', element: <OrdersPage /> },
-          { path: 'products', element: <ProductsPage /> },
+          // `*` lets ProductsPage also serve /products/:id (the details page).
+          { path: 'products/*', element: <ProductsPage /> },
           { path: 'inventory', element: <InventoryPage /> },
         ],
       },

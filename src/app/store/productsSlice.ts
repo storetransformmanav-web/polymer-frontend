@@ -8,7 +8,7 @@ import {
 import { toUserMessage } from '../../lib/api/ApiError.ts'
 import {
   api,
-  type ProductListItem,
+  type ProductDetail,
   type ProductListParams,
   type ProductListResponse,
   type ProductSort,
@@ -31,7 +31,7 @@ import { sessionCleared } from './authSlice.ts'
  */
 
 export const PRODUCTS_STALE_MS = 30_000
-const MAX_RECENT = 8
+const MAX_TABS = 10
 
 export interface ProductFilters {
   search: string
@@ -127,10 +127,24 @@ export interface ProductsState {
   lastData: ProductListResponse | null
   /** Distinct values seen so far — the API has no "list options" endpoint. */
   facets: ProductsFacets
-  /** Recently opened products, newest first. */
-  recent: ProductListItem[]
-  /** The product open in the details panel. */
-  selected: ProductListItem | null
+  /** Opened products, shown as tabs above the list/details (oldest first). */
+  tabs: ProductTab[]
+  /** Product details, cached by id (and "id|raw" for the with-raw-data variant). */
+  details: Record<string, ProductDetailsEntry>
+}
+
+export interface ProductTab {
+  id: string
+  /** Not known when a details URL is opened directly; filled in on load. */
+  handle: string | null
+  title: string | null
+}
+
+export interface ProductDetailsEntry {
+  data: ProductDetail | null
+  error: string | null
+  isFetching: boolean
+  fetchedAt: number | null
 }
 
 type ProductsRootState = { products: ProductsState }
@@ -140,8 +154,8 @@ const initialState: ProductsState = {
   entries: {},
   lastData: null,
   facets: { vendors: [], productTypes: [], tags: [] },
-  recent: [],
-  selected: null,
+  tabs: [],
+  details: {},
 }
 
 interface FetchArg {
@@ -167,6 +181,44 @@ export const fetchProducts = createAsyncThunk<
     // Skip if the same page is already in flight, or cached and still fresh.
     condition: ({ filters, force }, { getState }) => {
       const entry = getState().products.entries[cacheKey(filters)]
+      if (entry?.isFetching) return false
+      const isFresh =
+        entry?.data != null &&
+        entry.fetchedAt !== null &&
+        Date.now() - entry.fetchedAt < PRODUCTS_STALE_MS
+      return force || !isFresh
+    },
+  },
+)
+
+/** Cache key for a product's details; the raw-data variant is cached separately. */
+export function detailsKey(id: string, raw = false): string {
+  return raw ? `${id}|raw` : id
+}
+
+interface FetchDetailsArg {
+  id: string
+  /** Also load Shopify's original payload (only the "Raw data" tab needs it). */
+  raw?: boolean
+  force?: boolean
+}
+
+export const fetchProductDetails = createAsyncThunk<
+  { data: ProductDetail; fetchedAt: number },
+  FetchDetailsArg,
+  { state: ProductsRootState; rejectValue: string }
+>(
+  'products/fetchDetails',
+  async ({ id, raw = false }, { rejectWithValue }) => {
+    try {
+      return { data: await api.products.details(id, raw), fetchedAt: Date.now() }
+    } catch (error) {
+      return rejectWithValue(toUserMessage(error))
+    }
+  },
+  {
+    condition: ({ id, raw, force }, { getState }) => {
+      const entry = getState().products.details[detailsKey(id, raw)]
       if (entry?.isFetching) return false
       const isFresh =
         entry?.data != null &&
@@ -212,19 +264,30 @@ const productsSlice = createSlice({
       const cached = state.entries[cacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },
-    productOpened(state, action: PayloadAction<ProductListItem>) {
-      state.selected = action.payload
-      state.recent = [
-        action.payload,
-        ...state.recent.filter((product) => product.id !== action.payload.id),
-      ].slice(0, MAX_RECENT)
+    /** Opens (or refreshes the label of) a product tab; existing tabs keep their place. */
+    tabOpened(
+      state,
+      action: PayloadAction<{
+        id: string
+        handle?: string | null
+        title?: string | null
+      }>,
+    ) {
+      const { id, handle = null, title = null } = action.payload
+      const existing = state.tabs.find((tab) => tab.id === id)
+      if (existing) {
+        existing.handle ??= handle
+        existing.title ??= title
+        return
+      }
+      state.tabs.push({ id, handle, title })
+      if (state.tabs.length > MAX_TABS) state.tabs.shift()
     },
-    productClosed(state) {
-      state.selected = null
+    tabClosed(state, action: PayloadAction<string>) {
+      state.tabs = state.tabs.filter((tab) => tab.id !== action.payload)
     },
-    recentCleared(state) {
-      state.recent = []
-      state.selected = null
+    tabsCleared(state) {
+      state.tabs = []
     },
   },
   extraReducers: (builder) => {
@@ -260,6 +323,44 @@ const productsSlice = createSlice({
           data.items.flatMap((item) => item.tags),
         )
       })
+      .addCase(fetchProductDetails.pending, (state, action) => {
+        const key = detailsKey(action.meta.arg.id, action.meta.arg.raw)
+        const entry = state.details[key]
+        state.details[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: null,
+          isFetching: true,
+        }
+      })
+      .addCase(fetchProductDetails.fulfilled, (state, action) => {
+        const { id, raw } = action.meta.arg
+        const { data, fetchedAt } = action.payload
+        state.details[detailsKey(id, raw)] = {
+          data,
+          fetchedAt,
+          error: null,
+          isFetching: false,
+        }
+
+        // A tab opened from a bare URL gets its label once the product loads.
+        const tab = state.tabs.find((candidate) => candidate.id === id)
+        if (tab) {
+          tab.handle = data.handle
+          tab.title = data.title
+        }
+      })
+      .addCase(fetchProductDetails.rejected, (state, action) => {
+        if (action.meta.condition) return
+        const key = detailsKey(action.meta.arg.id, action.meta.arg.raw)
+        const entry = state.details[key]
+        state.details[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: action.payload ?? 'Something went wrong. Please try again.',
+          isFetching: false,
+        }
+      })
       .addCase(fetchProducts.rejected, (state, action) => {
         if (action.meta.condition) return
         const key = cacheKey(action.meta.arg.filters)
@@ -274,13 +375,8 @@ const productsSlice = createSlice({
   },
 })
 
-export const {
-  filtersChanged,
-  filtersReset,
-  productOpened,
-  productClosed,
-  recentCleared,
-} = productsSlice.actions
+export const { filtersChanged, filtersReset, tabOpened, tabClosed, tabsCleared } =
+  productsSlice.actions
 export const productsReducer = productsSlice.reducer
 
 /** Warms the cache for whatever filters are currently set (e.g. on app load). */

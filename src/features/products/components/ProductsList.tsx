@@ -24,8 +24,10 @@ interface ProductsListProps {
   hasFilters: boolean
   /** Rows belong to the previous query while the new one loads. */
   isStale: boolean
-  selectedId: string | null
+  /** Opens a product's details page. Only the View button / card triggers this. */
   onOpen: (product: ProductListItem) => void
+  /** Hover/focus on View: start loading details so opening is instant. */
+  onPrefetch: (id: string) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -63,8 +65,8 @@ export function ProductsList({
   error,
   hasFilters,
   isStale,
-  selectedId,
   onOpen,
+  onPrefetch,
   onRetry,
   onClearFilters,
 }: ProductsListProps) {
@@ -128,10 +130,10 @@ export function ProductsList({
                 <button
                   type="button"
                   onClick={() => onOpen(product)}
+                  onPointerEnter={() => onPrefetch(product.id)}
+                  onFocus={() => onPrefetch(product.id)}
                   aria-label={`View ${product.title}`}
-                  className={`border-border bg-bg hover:border-accent flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
-                    product.id === selectedId ? 'border-accent' : ''
-                  }`}
+                  className="border-border bg-bg hover:border-accent flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-colors"
                 >
                   <ProductImage src={product.image_url} alt="" />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -199,12 +201,7 @@ export function ProductsList({
             : items.map((product) => (
                 <tr
                   key={product.id}
-                  onClick={() => onOpen(product)}
-                  className={`border-border cursor-pointer border-b transition-colors ${
-                    product.id === selectedId
-                      ? 'bg-accent-tint'
-                      : 'even:bg-surface hover:bg-accent-tint/60'
-                  }`}
+                  className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                 >
                   <td className={TD}>
                     <span className="flex items-center gap-1.5 font-mono text-[0.8rem]">
@@ -258,10 +255,9 @@ export function ProductsList({
                     <button
                       type="button"
                       aria-label={`View ${product.title}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onOpen(product)
-                      }}
+                      onClick={() => onOpen(product)}
+                      onPointerEnter={() => onPrefetch(product.id)}
+                      onFocus={() => onPrefetch(product.id)}
                       className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
                     >
                       <EyeIcon />

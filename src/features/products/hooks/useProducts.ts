@@ -2,17 +2,14 @@ import { useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
   cacheKey,
+  fetchProductDetails,
   fetchProducts,
   filtersChanged,
   filtersReset,
   hasActiveFilters,
   prefetchProducts,
-  productClosed,
-  productOpened,
-  recentCleared,
   type ProductFilters,
 } from '../../../app/store/productsSlice.ts'
-import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 
 /**
  * Everything the Products page needs, backed by the `products` Redux slice
@@ -29,8 +26,6 @@ export function useProducts() {
   const entry = useAppSelector((state) => state.products.entries[cacheKey(filters)])
   const lastData = useAppSelector((state) => state.products.lastData)
   const facets = useAppSelector((state) => state.products.facets)
-  const recent = useAppSelector((state) => state.products.recent)
-  const selected = useAppSelector((state) => state.products.selected)
 
   const key = cacheKey(filters)
 
@@ -69,10 +64,7 @@ export function useProducts() {
     resetFilters: () => dispatch(filtersReset()),
     retry: () => dispatch(fetchProducts({ filters, force: true })),
 
-    recent,
-    selected,
-    openProduct: (product: ProductListItem) => dispatch(productOpened(product)),
-    closeProduct: () => dispatch(productClosed()),
-    clearRecent: () => dispatch(recentCleared()),
+    /** Start loading a product's details (e.g. on hover) so opening it is instant. */
+    prefetchDetails: (id: string) => void dispatch(fetchProductDetails({ id })),
   }
 }
