@@ -46,7 +46,7 @@ axiosInstance.interceptors.request.use((config) => {
 })
 
 /** Error body shared by every non-2xx response from the backend. */
-interface ErrorBody {
+export interface ErrorBody {
   message?: string
   errors?: { field?: string; message?: string }[]
 }
@@ -57,7 +57,7 @@ interface ErrorBody {
  * otherwise the backend's own `message`, otherwise a friendly network
  * message when no response arrived at all.
  */
-function getErrorMessage(error: AxiosError<ErrorBody>): string {
+export function getErrorMessage(error: AxiosError<ErrorBody>): string {
   const body = error.response?.data
   const fieldMessage = body?.errors?.[0]?.message?.replace(/^Value error,\s*/i, '')
 
@@ -68,7 +68,17 @@ function getErrorMessage(error: AxiosError<ErrorBody>): string {
       ? 'The request timed out. Please try again.'
       : 'Unable to reach the server. Check your connection and try again.'
   }
-  return error.message
+
+  // A response with no usable message (an HTML error page from a proxy or
+  // host, say) — say something readable instead of Axios's raw text.
+  const { status } = error.response
+  if (status === 404) {
+    return 'The service could not be reached (404). Please try again later.'
+  }
+  if (status >= 500) {
+    return `The server ran into a problem (${status}). Please try again shortly.`
+  }
+  return `The request could not be completed (${status}).`
 }
 
 axiosInstance.interceptors.response.use(

@@ -93,7 +93,7 @@ Every component is styled with **Tailwind utility classes in `className`** — n
 - The API has no endpoint listing vendors/types/tags, so those dropdowns fill from products seen so far (`facets`); a backend facets endpoint would make them exact.
 - **Routes**: everything under `DashboardLayout` is behind `ProtectedRoute`; a 401 on an authenticated request clears the session (`setUnauthorizedHandler` in `lib/api/client.ts`) and the guard redirects to `/login`. Below 768px the sidebar always renders as its icon rail.
 - Error messages shown to users come from the backend: `lib/api/client.ts` turns a failed response into an `ApiError` whose `message` is the first field error (422) or the body's `message`, with a friendly fallback for network failures/timeouts.
-- The backend rejects browser CORS from localhost, so dev/preview proxy `/api` to `https://polymeruk-api.vercel.app` (see `vite.config.ts`). A production host must route `/api` the same way, or set `VITE_API_BASE_URL` to the full URL and have the backend allow that origin.
+- The backend rejects browser CORS from localhost, so dev/preview proxy `/api` to `https://polymeruk-api.vercel.app` (see `vite.config.ts`). On Vercel, `vercel.json` does the same job: it rewrites `/api/*` to the backend (without it every API call 404s), serves `index.html` for deep links like `/products/<id>`, and marks `/api/*` responses `no-store`. Keep `VITE_API_BASE_URL=/api` there; setting it to the full backend URL would instead require the backend's CORS list to include the site's exact origin (it currently allows only `https://polymer-frontend.vercel.app`).
 - Not done yet: showing the real signed-in user (`currentUser.ts` is still a placeholder) and `GET /auth/me`.
 
 ## Rules
