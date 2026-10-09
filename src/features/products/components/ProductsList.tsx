@@ -4,7 +4,6 @@ import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/i
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
-import { CopyButton } from './CopyButton.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
 const TH_BASE =
@@ -169,11 +168,10 @@ export function ProductsList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[860px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[720px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={TH}>Handle</th>
             <th className={TH}>Image</th>
             <th className={TH}>Product Name</th>
             <th className={TH_RIGHT}>Price</th>
@@ -194,7 +192,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 9 }, (_, cell) => (
+                  {Array.from({ length: 8 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -206,17 +204,6 @@ export function ProductsList({
                   key={product.id}
                   className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                 >
-                  <td className={TD}>
-                    <span className="flex items-center gap-1.5 font-mono text-[0.8rem]">
-                      <span className="max-w-44 truncate" title={product.handle}>
-                        {product.handle}
-                      </span>
-                      <CopyButton
-                        value={product.handle}
-                        label={`Copy ${product.handle}`}
-                      />
-                    </span>
-                  </td>
                   <td className={TD}>
                     <button
                       type="button"
