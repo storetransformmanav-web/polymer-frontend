@@ -1,6 +1,8 @@
+import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
+import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { ProductsFooter } from '../components/ProductsFooter.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
@@ -26,6 +28,9 @@ export function ProductsPage() {
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = products
+  // The product whose quick-view side panel is open (opened from a row's image).
+  const [quickView, setQuickView] = useState<ProductListItem | null>(null)
+  const closeQuickView = useCallback(() => setQuickView(null), [])
 
   // `/products/<id>[/…]` → the product id; `/products` → null (the list).
   const activeId = splat ? splat.split('/')[0] || null : null
@@ -33,6 +38,11 @@ export function ProductsPage() {
   function openProduct(product: ProductListItem) {
     tabs.openTab({ id: product.id, handle: product.handle, title: product.title })
     navigate(detailsPath(product.id))
+  }
+
+  function openFromQuickView(product: ProductListItem) {
+    setQuickView(null)
+    openProduct(product)
   }
 
   function closeTab(id: string) {
@@ -99,6 +109,7 @@ export function ProductsPage() {
             hasFilters={products.hasFilters}
             isStale={products.isShowingPrevious}
             onOpen={openProduct}
+            onQuickView={setQuickView}
             onPrefetch={products.prefetchDetails}
             onRetry={products.retry}
             onClearFilters={products.resetFilters}
@@ -116,6 +127,15 @@ export function ProductsPage() {
           )}
         </section>
       </div>
+
+      {quickView && !activeId && (
+        <ProductQuickView
+          key={quickView.id}
+          product={quickView}
+          onClose={closeQuickView}
+          onOpenDetails={() => openFromQuickView(quickView)}
+        />
+      )}
     </div>
   )
 }

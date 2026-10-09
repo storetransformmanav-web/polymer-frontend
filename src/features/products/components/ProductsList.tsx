@@ -26,7 +26,9 @@ interface ProductsListProps {
   isStale: boolean
   /** Opens a product's details page. Only the View button / card triggers this. */
   onOpen: (product: ProductListItem) => void
-  /** Hover/focus on View: start loading details so opening is instant. */
+  /** Clicking a row's image opens the quick-view side panel. */
+  onQuickView: (product: ProductListItem) => void
+  /** Hover/focus on View or an image: start loading details so opening is instant. */
   onPrefetch: (id: string) => void
   onRetry: () => void
   onClearFilters: () => void
@@ -66,6 +68,7 @@ export function ProductsList({
   hasFilters,
   isStale,
   onOpen,
+  onQuickView,
   onPrefetch,
   onRetry,
   onClearFilters,
@@ -215,7 +218,16 @@ export function ProductsList({
                     </span>
                   </td>
                   <td className={TD}>
-                    <ProductImage src={product.image_url} alt="" />
+                    <button
+                      type="button"
+                      aria-label={`Quick view ${product.title}`}
+                      onClick={() => onQuickView(product)}
+                      onPointerEnter={() => onPrefetch(product.id)}
+                      onFocus={() => onPrefetch(product.id)}
+                      className="focus-visible:outline-accent block cursor-zoom-in rounded-md border-none bg-transparent p-0 transition-transform duration-150 hover:scale-110 focus-visible:outline-2"
+                    >
+                      <ProductImage src={product.image_url} alt="" />
+                    </button>
                   </td>
                   <td className={TD}>
                     <span

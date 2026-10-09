@@ -313,7 +313,7 @@ describe('ProductsPage details', () => {
 
     const tabs = screen.getByRole('navigation', { name: 'Open products' })
     expect(
-      within(tabs).getByRole('button', { name: /^Products*handle-3$/ }),
+      within(tabs).getByRole('button', { name: /^Product\s*handle-3$/ }),
     ).toHaveAttribute('aria-current', 'page')
   })
 
@@ -409,7 +409,7 @@ describe('ProductsPage details', () => {
     const tabs = await screen.findByRole('navigation', { name: 'Open products' })
     await waitFor(() =>
       expect(
-        within(tabs).getByRole('button', { name: /^Products*handle-9$/ }),
+        within(tabs).getByRole('button', { name: /^Product\s*handle-9$/ }),
       ).toBeInTheDocument(),
     )
   })
@@ -443,7 +443,7 @@ describe('ProductsPage details', () => {
     )
 
     const calls = details.mock.calls.length
-    await user.click(within(tabs).getByRole('button', { name: /^Products*handle-5$/ }))
+    await user.click(within(tabs).getByRole('button', { name: /^Product\s*handle-5$/ }))
     expect(screen.getByText('Home > Desks')).toBeInTheDocument()
     expect(details.mock.calls.length).toBe(calls)
   })
@@ -468,5 +468,78 @@ describe('ProductsPage details', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Open products' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductsPage quick view', () => {
+  beforeEach(() => {
+    list.mockImplementation((params) => Promise.resolve(respond(params)))
+    details.mockImplementation((id, raw) => Promise.resolve(makeDetail(id, raw)))
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('opens a right-side panel when a product image is clicked, without leaving the list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'Quick view Product 3' }))
+
+    // Appears at once: it only needs the row that's already loaded.
+    const panel = screen.getByRole('dialog', { name: 'Product 3 quick view' })
+    expect(within(panel).getByText('Vendor 1')).toBeInTheDocument()
+    expect(within(panel).getByText('Out of stock')).toBeInTheDocument()
+    expect(within(panel).getByText('tag-3')).toBeInTheDocument()
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/products$/)
+    expect(
+      screen.queryByRole('navigation', { name: 'Open products' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('closes with Escape, the close button, or the backdrop, and returns focus to the image', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+    const image = screen.getByRole('button', { name: 'Quick view Product 2' })
+
+    await user.click(image)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(image).toHaveFocus()
+
+    await user.click(image)
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(image)
+    await user.click(screen.getByRole('button', { name: 'Close quick view' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('continues to the full details page from the panel', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'Quick view Product 4' }))
+    await user.click(screen.getByRole('button', { name: /Open full details/ }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('path')).toHaveTextContent('/products/id-4')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Product 4' }),
+    ).toBeInTheDocument()
+  })
+
+  it('prefetches details when the image is hovered, so "Open full details" is instant', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.hover(screen.getByRole('button', { name: 'Quick view Product 6' }))
+    await waitFor(() => expect(details).toHaveBeenCalledWith('id-6', false))
   })
 })
