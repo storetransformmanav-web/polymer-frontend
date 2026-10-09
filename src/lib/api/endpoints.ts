@@ -18,6 +18,9 @@ export const ENDPOINTS = {
     google: '/auth/google',
     logout: '/auth/logout',
   },
+  products: {
+    list: '/products',
+  },
 } as const
 
 // ---------------------------------------------------------------------------
@@ -45,6 +48,74 @@ const loginResponseSchema = z.object({
   user: authUserSchema,
 })
 
+export const PRODUCT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+export const PRODUCT_SORTS = [
+  'created_at',
+  'updated_at',
+  'title',
+  'price',
+  'inventory',
+  'vendor',
+  'synced_at',
+] as const
+
+export const productStatusSchema = z.enum(PRODUCT_STATUSES)
+export const productSortSchema = z.enum(PRODUCT_SORTS)
+
+const productListItemSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number(),
+  title: z.string(),
+  handle: z.string(),
+  status: z.string().nullable(),
+  vendor: z.string().nullable(),
+  product_type: z.string().nullable(),
+  category_name: z.string().nullable(),
+  tags: z.array(z.string()),
+  image_url: z.string().nullable(),
+  // Prices arrive as decimal strings (e.g. "170.00").
+  price_min: z.string().nullable(),
+  price_max: z.string().nullable(),
+  currency: z.string().nullable(),
+  variants_count: z.number(),
+  total_inventory: z.number().nullable(),
+  shopify_created_at: z.string().nullable(),
+  shopify_updated_at: z.string().nullable(),
+  synced_at: z.string(),
+})
+
+const productListResponseSchema = z.object({
+  items: z.array(productListItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+  sort: z.string(),
+  order: z.string(),
+})
+
+export type ProductStatus = z.infer<typeof productStatusSchema>
+export type ProductSort = z.infer<typeof productSortSchema>
+export type ProductListItem = z.infer<typeof productListItemSchema>
+export type ProductListResponse = z.infer<typeof productListResponseSchema>
+
+/** Query parameters accepted by `GET /products` (all optional). */
+export interface ProductListParams {
+  search?: string
+  status?: ProductStatus
+  vendor?: string
+  product_type?: string
+  tag?: string
+  min_price?: number
+  max_price?: number
+  in_stock?: boolean
+  sort?: ProductSort
+  order?: 'asc' | 'desc'
+  page?: number
+  page_size?: number
+}
+
 export type AuthUser = z.infer<typeof authUserSchema>
 export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>
 export type LoginResponse = z.infer<typeof loginResponseSchema>
@@ -54,6 +125,14 @@ export type LoginResponse = z.infer<typeof loginResponseSchema>
 // ---------------------------------------------------------------------------
 
 export const api = {
+  products: {
+    /** One page of products, filtered/sorted server-side. Needs a signed-in session. */
+    async list(params: ProductListParams): Promise<ProductListResponse> {
+      const data = await apiClient.get(ENDPOINTS.products.list, { params })
+      return productListResponseSchema.parse(data)
+    },
+  },
+
   auth: {
     /** Step 1 of login: emails a 6-digit code (valid 10 minutes). */
     async requestOtp(email: string): Promise<OtpRequestResponse> {

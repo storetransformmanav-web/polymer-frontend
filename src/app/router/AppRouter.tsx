@@ -7,15 +7,12 @@ import { LoginPage } from '../../features/auth/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
 import { NotFoundPage } from './NotFoundPage.tsx'
+import { ProtectedRoute } from './ProtectedRoute.tsx'
 
 /**
  * Central route table. Add one entry per top-level route here and point
  * it at a feature's page component — keep route *logic* inside the
- * feature, not in this file.
- *
- * When auth state exists, wrap the `DashboardLayout` routes with a
- * `ProtectedRoute` element here rather than scattering auth checks
- * across pages.
+ * feature, not in this file. Signed-in pages live under `ProtectedRoute`.
  */
 const router = createBrowserRouter([
   {
@@ -24,14 +21,19 @@ const router = createBrowserRouter([
     children: [{ path: '/login', element: <LoginPage /> }],
   },
   {
-    path: '/',
-    element: <DashboardLayout />,
+    element: <ProtectedRoute />,
     errorElement: <NotFoundPage />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'orders', element: <OrdersPage /> },
-      { path: 'products', element: <ProductsPage /> },
-      { path: 'inventory', element: <InventoryPage /> },
+      {
+        path: '/',
+        element: <DashboardLayout />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'orders', element: <OrdersPage /> },
+          { path: 'products', element: <ProductsPage /> },
+          { path: 'inventory', element: <InventoryPage /> },
+        ],
+      },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

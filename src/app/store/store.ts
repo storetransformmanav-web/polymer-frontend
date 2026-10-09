@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit'
-import { setAccessToken } from '../../lib/api/client.ts'
-import { authReducer, SESSION_STORAGE_KEY } from './authSlice.ts'
+import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
+import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
+import { productsReducer } from './productsSlice.ts'
 import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
 
 /**
@@ -15,6 +16,7 @@ export function createAppStore() {
     reducer: {
       ui: uiReducer,
       auth: authReducer,
+      products: productsReducer,
     },
   })
 
@@ -26,6 +28,7 @@ export function createAppStore() {
   let previousUi = appStore.getState().ui
   let previousSession = appStore.getState().auth.session
   setAccessToken(previousSession?.accessToken ?? null)
+  setUnauthorizedHandler(() => appStore.dispatch(sessionCleared()))
 
   appStore.subscribe(() => {
     const { ui, auth } = appStore.getState()

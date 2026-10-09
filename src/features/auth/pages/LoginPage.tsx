@@ -1,13 +1,16 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Logo } from '../../../components/ui/Logo.tsx'
 import { useAuth } from '../../../hooks/useAuth.ts'
 import { LoginForm } from '../components/LoginForm.tsx'
 
 export function LoginPage() {
   const { isAuthenticated } = useAuth()
+  const location = useLocation()
 
-  // Signing in (or already having a valid session) lands on the dashboard.
-  if (isAuthenticated) return <Navigate to="/" replace />
+  // Signing in (or already having a valid session) goes back to where the
+  // user was headed (set by ProtectedRoute), else the dashboard.
+  const from = (location.state as { from?: string } | null)?.from
+  if (isAuthenticated) return <Navigate to={from ?? '/'} replace />
 
   return (
     <div className="bg-bg grid w-full max-w-[420px] grid-cols-1 overflow-hidden rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.12)] md:max-w-[900px] md:grid-cols-2">

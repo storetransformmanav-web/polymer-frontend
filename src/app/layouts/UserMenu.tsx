@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ui/ThemeToggle.tsx'
 import { ChevronDownIcon, LogoutIcon, UserCogIcon } from '../../components/ui/icons.tsx'
 import { useAuth } from '../../hooks/useAuth.ts'
-import { CURRENT_USER, initials } from './currentUser.ts'
+import { initials, useCurrentUser } from './currentUser.ts'
 
 const AVATAR_BASE =
   'bg-accent text-accent-contrast inline-flex shrink-0 items-center justify-center rounded-full font-bold'
@@ -18,6 +18,7 @@ export function UserMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const { logout } = useAuth()
+  const currentUser = useCurrentUser()
 
   useEffect(() => {
     if (!open) return undefined
@@ -41,9 +42,11 @@ export function UserMenu() {
         aria-expanded={open}
       >
         <span className={`${AVATAR_BASE} h-6.5 w-6.5 text-[0.7rem]`}>
-          {initials(CURRENT_USER.name)}
+          {initials(currentUser.name)}
         </span>
-        <span className="max-w-40 truncate font-semibold">{CURRENT_USER.name}</span>
+        <span className="hidden max-w-40 truncate font-semibold sm:inline">
+          {currentUser.name}
+        </span>
         <ChevronDownIcon />
       </button>
 
@@ -54,16 +57,23 @@ export function UserMenu() {
         >
           <div className="flex items-center gap-2.5">
             <span className={`${AVATAR_BASE} h-9 w-9 text-sm`}>
-              {initials(CURRENT_USER.name)}
+              {initials(currentUser.name)}
             </span>
             <div className="flex min-w-0 flex-col">
-              <span className="text-[0.9rem] font-semibold">{CURRENT_USER.name}</span>
-              <span className="text-text-muted truncate text-[0.78rem]">
-                {CURRENT_USER.email}
+              <span className="truncate text-[0.9rem] font-semibold">
+                {currentUser.name}
               </span>
-              <span className="bg-accent-tint text-accent mt-1 self-start rounded-full px-1.5 py-0.5 text-[0.68rem] font-bold tracking-wide uppercase">
-                {CURRENT_USER.role}
+              <span
+                className="text-text-muted truncate text-[0.78rem]"
+                title={currentUser.email}
+              >
+                {currentUser.email}
               </span>
+              {currentUser.role && (
+                <span className="bg-accent-tint text-accent mt-1 self-start rounded-full px-1.5 py-0.5 text-[0.68rem] font-bold tracking-wide uppercase">
+                  {currentUser.role}
+                </span>
+              )}
             </div>
           </div>
 

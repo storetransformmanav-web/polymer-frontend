@@ -30,6 +30,14 @@ export function setAccessToken(token: string | null) {
   accessToken = token
 }
 
+// Called when a request made *with* a session token comes back 401 (expired
+// or revoked). The store registers a handler that clears the session.
+let unauthorizedHandler: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
 axiosInstance.interceptors.request.use((config) => {
   if (accessToken && !config.headers.has('Authorization')) {
     config.headers.set('Authorization', `Bearer ${accessToken}`)
@@ -66,6 +74,10 @@ function getErrorMessage(error: AxiosError<ErrorBody>): string {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ErrorBody>) => {
+    // Only a 401 on an authenticated request means "session is dead"; a 401
+    // from sign-in itself (e.g. a bad Google token) has no token attached.
+    if (error.response?.status === 401 && accessToken) unauthorizedHandler?.()
+
     return Promise.reject(
       new ApiError(getErrorMessage(error), {
         status: error.response?.status,

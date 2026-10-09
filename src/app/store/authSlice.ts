@@ -4,6 +4,7 @@ import {
   type ThunkAction,
   type UnknownAction,
 } from '@reduxjs/toolkit'
+import { toUserMessage } from '../../lib/api/ApiError.ts'
 import { api, type AuthUser } from '../../lib/api/endpoints.ts'
 
 export const SESSION_STORAGE_KEY = 'polymer-crm:session'
@@ -67,14 +68,7 @@ const initialState: AuthState = {
   googleError: null,
 }
 
-function toMessage(error: unknown): string {
-  // Failures from apiClient are always ApiErrors carrying the backend's
-  // message; anything else (e.g. a response that fails schema validation)
-  // gets a generic fallback rather than leaking internals to the UI.
-  return error instanceof Error && error.name === 'ApiError'
-    ? error.message
-    : 'Something went wrong. Please try again.'
-}
+const toMessage = toUserMessage
 
 /** Step 1: ask the backend to email a login code. Also used to resend. */
 export const requestOtp = createAsyncThunk<

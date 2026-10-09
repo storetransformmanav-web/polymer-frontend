@@ -1,0 +1,291 @@
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+  type ThunkAction,
+  type UnknownAction,
+} from '@reduxjs/toolkit'
+import { toUserMessage } from '../../lib/api/ApiError.ts'
+import {
+  api,
+  type ProductListItem,
+  type ProductListParams,
+  type ProductListResponse,
+  type ProductSort,
+  type ProductStatus,
+} from '../../lib/api/endpoints.ts'
+import { sessionCleared } from './authSlice.ts'
+
+/**
+ * Products list, built for instant-feeling navigation:
+ *  - every page is cached by its exact query, so revisiting a page, a
+ *    filter or a sort order renders immediately from memory;
+ *  - cached data is shown first and quietly refreshed once it's older
+ *    than `PRODUCTS_STALE_MS` (stale-while-revalidate);
+ *  - while a new query loads, the previous results stay on screen
+ *    (`lastData`) instead of flashing an empty table;
+ *  - the next page is prefetched, so "Next" is usually instant.
+ *
+ * This is server data held in Redux on purpose (the project otherwise
+ * keeps server state in TanStack Query) — see "Backend API" in CLAUDE.md.
+ */
+
+export const PRODUCTS_STALE_MS = 30_000
+const MAX_RECENT = 8
+
+export interface ProductFilters {
+  search: string
+  status: ProductStatus | ''
+  vendor: string
+  productType: string
+  tag: string
+  stock: '' | 'in' | 'out'
+  minPrice: string
+  maxPrice: string
+  sort: ProductSort
+  order: 'asc' | 'desc'
+  page: number
+  pageSize: number
+}
+
+export const DEFAULT_FILTERS: ProductFilters = {
+  search: '',
+  status: '',
+  vendor: '',
+  productType: '',
+  tag: '',
+  stock: '',
+  minPrice: '',
+  maxPrice: '',
+  sort: 'created_at',
+  order: 'desc',
+  page: 1,
+  pageSize: 25,
+}
+
+/** Filters → the query parameters the API understands (empty ones omitted). */
+export function toParams(filters: ProductFilters): ProductListParams {
+  const params: ProductListParams = {
+    sort: filters.sort,
+    order: filters.order,
+    page: filters.page,
+    page_size: filters.pageSize,
+  }
+
+  const search = filters.search.trim()
+  if (search) params.search = search
+  if (filters.status) params.status = filters.status
+  if (filters.vendor) params.vendor = filters.vendor
+  if (filters.productType) params.product_type = filters.productType
+  if (filters.tag) params.tag = filters.tag
+  if (filters.stock) params.in_stock = filters.stock === 'in'
+
+  const min = Number.parseFloat(filters.minPrice)
+  if (Number.isFinite(min) && min >= 0) params.min_price = min
+  const max = Number.parseFloat(filters.maxPrice)
+  if (Number.isFinite(max) && max >= 0) params.max_price = max
+
+  return params
+}
+
+/** Cache key: two filter sets with the same request share one entry. */
+export function cacheKey(filters: ProductFilters): string {
+  return JSON.stringify(toParams(filters))
+}
+
+/** True when any narrowing filter (not sort/paging) is applied. */
+export function hasActiveFilters(filters: ProductFilters): boolean {
+  return (
+    filters.search.trim() !== '' ||
+    filters.status !== '' ||
+    filters.vendor !== '' ||
+    filters.productType !== '' ||
+    filters.tag !== '' ||
+    filters.stock !== '' ||
+    filters.minPrice !== '' ||
+    filters.maxPrice !== ''
+  )
+}
+
+export interface ProductsEntry {
+  data: ProductListResponse | null
+  error: string | null
+  isFetching: boolean
+  fetchedAt: number | null
+}
+
+export interface ProductsFacets {
+  vendors: string[]
+  productTypes: string[]
+  tags: string[]
+}
+
+export interface ProductsState {
+  filters: ProductFilters
+  entries: Record<string, ProductsEntry>
+  /** The most recent results shown, kept on screen while the next query loads. */
+  lastData: ProductListResponse | null
+  /** Distinct values seen so far — the API has no "list options" endpoint. */
+  facets: ProductsFacets
+  /** Recently opened products, newest first. */
+  recent: ProductListItem[]
+  /** The product open in the details panel. */
+  selected: ProductListItem | null
+}
+
+type ProductsRootState = { products: ProductsState }
+
+const initialState: ProductsState = {
+  filters: DEFAULT_FILTERS,
+  entries: {},
+  lastData: null,
+  facets: { vendors: [], productTypes: [], tags: [] },
+  recent: [],
+  selected: null,
+}
+
+interface FetchArg {
+  filters: ProductFilters
+  /** Refetch even if the cached page is still fresh. */
+  force?: boolean
+}
+
+export const fetchProducts = createAsyncThunk<
+  { data: ProductListResponse; fetchedAt: number },
+  FetchArg,
+  { state: ProductsRootState; rejectValue: string }
+>(
+  'products/fetch',
+  async ({ filters }, { rejectWithValue }) => {
+    try {
+      return { data: await api.products.list(toParams(filters)), fetchedAt: Date.now() }
+    } catch (error) {
+      return rejectWithValue(toUserMessage(error))
+    }
+  },
+  {
+    // Skip if the same page is already in flight, or cached and still fresh.
+    condition: ({ filters, force }, { getState }) => {
+      const entry = getState().products.entries[cacheKey(filters)]
+      if (entry?.isFetching) return false
+      const isFresh =
+        entry?.data != null &&
+        entry.fetchedAt !== null &&
+        Date.now() - entry.fetchedAt < PRODUCTS_STALE_MS
+      return force || !isFresh
+    },
+  },
+)
+
+function addSorted(list: string[], values: (string | null)[]) {
+  let changed = false
+  for (const value of values) {
+    if (value && !list.includes(value)) {
+      list.push(value)
+      changed = true
+    }
+  }
+  if (changed) list.sort((a, b) => a.localeCompare(b))
+}
+
+const productsSlice = createSlice({
+  name: 'products',
+  initialState,
+  reducers: {
+    /**
+     * Applies filter/sort/paging changes. Anything other than an explicit
+     * page change sends the user back to page 1.
+     */
+    filtersChanged(state, action: PayloadAction<Partial<ProductFilters>>) {
+      const next = { ...state.filters, ...action.payload }
+      if (!('page' in action.payload)) next.page = 1
+      state.filters = next
+
+      // Cached already? Show it in the same render — no empty flash.
+      const cached = state.entries[cacheKey(next)]?.data
+      if (cached) state.lastData = cached
+    },
+    /** "Clear all": drops every narrowing filter, keeps sort and page size. */
+    filtersReset(state) {
+      const { sort, order, pageSize } = state.filters
+      state.filters = { ...DEFAULT_FILTERS, sort, order, pageSize }
+      const cached = state.entries[cacheKey(state.filters)]?.data
+      if (cached) state.lastData = cached
+    },
+    productOpened(state, action: PayloadAction<ProductListItem>) {
+      state.selected = action.payload
+      state.recent = [
+        action.payload,
+        ...state.recent.filter((product) => product.id !== action.payload.id),
+      ].slice(0, MAX_RECENT)
+    },
+    productClosed(state) {
+      state.selected = null
+    },
+    recentCleared(state) {
+      state.recent = []
+      state.selected = null
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Leaving the session (logout / expired token) drops every cached page.
+      .addCase(sessionCleared, () => initialState)
+      .addCase(fetchProducts.pending, (state, action) => {
+        const key = cacheKey(action.meta.arg.filters)
+        const entry = state.entries[key]
+        state.entries[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: null,
+          isFetching: true,
+        }
+      })
+      .addCase(fetchProducts.fulfilled, (state, action) => {
+        const key = cacheKey(action.meta.arg.filters)
+        const { data, fetchedAt } = action.payload
+        state.entries[key] = { data, fetchedAt, error: null, isFetching: false }
+
+        if (key === cacheKey(state.filters)) state.lastData = data
+        addSorted(
+          state.facets.vendors,
+          data.items.map((item) => item.vendor),
+        )
+        addSorted(
+          state.facets.productTypes,
+          data.items.map((item) => item.product_type),
+        )
+        addSorted(
+          state.facets.tags,
+          data.items.flatMap((item) => item.tags),
+        )
+      })
+      .addCase(fetchProducts.rejected, (state, action) => {
+        if (action.meta.condition) return
+        const key = cacheKey(action.meta.arg.filters)
+        const entry = state.entries[key]
+        state.entries[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: action.payload ?? 'Something went wrong. Please try again.',
+          isFetching: false,
+        }
+      })
+  },
+})
+
+export const {
+  filtersChanged,
+  filtersReset,
+  productOpened,
+  productClosed,
+  recentCleared,
+} = productsSlice.actions
+export const productsReducer = productsSlice.reducer
+
+/** Warms the cache for whatever filters are currently set (e.g. on app load). */
+export const prefetchProducts =
+  (): ThunkAction<void, ProductsRootState, unknown, UnknownAction> =>
+  (dispatch, getState) => {
+    void dispatch(fetchProducts({ filters: getState().products.filters }))
+  }

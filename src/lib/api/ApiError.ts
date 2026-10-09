@@ -19,3 +19,15 @@ export class ApiError extends Error {
     this.data = data
   }
 }
+
+/**
+ * Message safe to show in the UI for anything thrown by an API call.
+ * Failures from `apiClient` are always ApiErrors carrying the backend's
+ * message; anything else (e.g. a response that fails schema validation)
+ * gets a generic fallback rather than leaking internals.
+ */
+export function toUserMessage(error: unknown): string {
+  return error instanceof ApiError
+    ? error.message
+    : 'Something went wrong. Please try again.'
+}

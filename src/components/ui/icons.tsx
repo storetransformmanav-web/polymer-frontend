@@ -134,6 +134,72 @@ export function LogoutIcon(props: IconProps) {
   )
 }
 
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="m13.2 13.2 3.8 3.8" />
+    </svg>
+  )
+}
+
+export function SlidersIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 6h7M14 6h3M3 14h3M10 14h7" />
+      <circle cx="12" cy="6" r="1.8" />
+      <circle cx="8" cy="14" r="1.8" />
+    </svg>
+  )
+}
+
+export function CopyIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="7" y="7" width="9.5" height="9.5" rx="1.6" />
+      <path d="M13 7V5a1.5 1.5 0 0 0-1.5-1.5H5A1.5 1.5 0 0 0 3.5 5v6.5A1.5 1.5 0 0 0 5 13h2" />
+    </svg>
+  )
+}
+
+export function HistoryIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 10a7 7 0 1 0 2.1-5" />
+      <path d="M3 3.8V6.5h2.7" />
+      <path d="M10 6.5V10l2.4 1.5" />
+    </svg>
+  )
+}
+
+export function TagIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M2.8 10.4V3.8a1 1 0 0 1 1-1h6.6l6.8 6.8a1 1 0 0 1 0 1.4l-5.2 5.2a1 1 0 0 1-1.4 0Z" />
+      <circle cx="6.8" cy="6.8" r="1.1" />
+    </svg>
+  )
+}
+
+export function ArrowUpDownIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6.5 16.5v-13M3.5 6.5l3-3 3 3" />
+      <path d="M13.5 3.5v13M10.5 13.5l3 3 3-3" />
+    </svg>
+  )
+}
+
+export function BoxesIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.5" y="10" width="7" height="7" rx="1.2" />
+      <rect x="10.5" y="10" width="7" height="7" rx="1.2" />
+      <rect x="6.5" y="3" width="7" height="7" rx="1.2" />
+    </svg>
+  )
+}
+
 export function ArrowLeftIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

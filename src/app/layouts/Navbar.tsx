@@ -2,9 +2,10 @@ import { Link, NavLink } from 'react-router-dom'
 import { Logo } from '../../components/ui/Logo.tsx'
 import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.tsx'
 import { useAuth } from '../../hooks/useAuth.ts'
+import { useMediaQuery } from '../../hooks/useMediaQuery.ts'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
 import { NAV_ITEMS } from '../router/navigation.ts'
-import { CURRENT_USER, initials } from './currentUser.ts'
+import { initials, useCurrentUser } from './currentUser.ts'
 
 /**
  * Primary left-hand navigation. Collapses to icons-only (persisted via
@@ -12,8 +13,13 @@ import { CURRENT_USER, initials } from './currentUser.ts'
  * user preference.
  */
 export function Navbar() {
-  const [collapsed, setCollapsed] = useSidebarCollapsed()
+  const [preferCollapsed, setCollapsed] = useSidebarCollapsed()
+  // Phones always get the icon rail — a 232px sidebar would leave no room for
+  // content — so the saved preference only applies from tablet width up.
+  const isWide = useMediaQuery('(min-width: 768px)')
+  const collapsed = preferCollapsed || !isWide
   const { logout } = useAuth()
+  const currentUser = useCurrentUser()
 
   return (
     <nav
@@ -29,7 +35,9 @@ export function Navbar() {
         {!collapsed && <Logo />}
         <button
           type="button"
-          className="border-border bg-bg text-text-muted hover:text-accent hover:border-accent inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border"
+          className={`border-border bg-bg text-text-muted hover:text-accent hover:border-accent h-7 w-7 shrink-0 items-center justify-center rounded-md border ${
+            isWide ? 'inline-flex' : 'hidden'
+          }`}
           onClick={() => setCollapsed((value) => !value)}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -65,14 +73,17 @@ export function Navbar() {
         {!collapsed && (
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="bg-accent text-accent-contrast flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-              {initials(CURRENT_USER.name)}
+              {initials(currentUser.name)}
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="text-text truncate text-sm font-semibold">
-                {CURRENT_USER.name}
+                {currentUser.name}
               </span>
-              <span className="text-text-muted truncate text-[0.72rem]">
-                {CURRENT_USER.email}
+              <span
+                className="text-text-muted truncate text-[0.72rem]"
+                title={currentUser.email}
+              >
+                {currentUser.email}
               </span>
             </span>
           </div>
