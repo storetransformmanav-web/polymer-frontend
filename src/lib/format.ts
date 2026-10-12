@@ -34,3 +34,14 @@ export function formatDate(isoString: string): string {
     year: 'numeric',
   }).format(new Date(isoString))
 }
+
+/** "Priya Shah" → "PS": up to two initials, ignoring extra spaces. */
+export function initials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}

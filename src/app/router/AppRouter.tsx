@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthLayout } from '../layouts/AuthLayout.tsx'
 import { DashboardLayout } from '../layouts/DashboardLayout.tsx'
+import { CustomersPage } from '../../features/customers/index.ts'
 import { DashboardPage } from '../../features/dashboard/index.ts'
 import { InventoryPage } from '../../features/inventory/index.ts'
 import { LoginPage } from '../../features/auth/index.ts'
@@ -32,6 +33,8 @@ const router = createBrowserRouter([
           { path: 'orders', element: <OrdersPage /> },
           // `*` lets ProductsPage also serve /products/:id (the details page).
           { path: 'products/*', element: <ProductsPage /> },
+          // `*` lets CustomersPage also serve /customers/:id (the details page).
+          { path: 'customers/*', element: <CustomersPage /> },
           { path: 'inventory', element: <InventoryPage /> },
         ],
       },

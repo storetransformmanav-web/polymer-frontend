@@ -3,19 +3,19 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
 import { statusLabel, statusTone } from '../utils/format.ts'
-import { CopyButton } from './CopyButton.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   CollectionsPanel,
   InventoryPanel,
   MediaPanel,
   MetafieldsPanel,
   OverviewPanel,
-  PanelSkeleton,
   RawPanel,
   SeoPanel,
   VariantsPanel,
 } from './ProductDetailPanels.tsx'
 import { ProductImage } from './ProductImage.tsx'
+import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
 type TabId =
   | 'overview'

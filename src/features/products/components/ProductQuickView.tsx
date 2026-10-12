@@ -5,7 +5,7 @@ import { ChevronRightIcon, XIcon } from '../../../components/ui/icons.tsx'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate } from '../../../lib/format.ts'
 import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
-import { CopyButton } from './CopyButton.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
 interface ProductQuickViewProps {

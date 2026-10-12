@@ -134,6 +134,26 @@ export function LogoutIcon(props: IconProps) {
   )
 }
 
+export function UsersIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="7.5" cy="6.5" r="3" />
+      <path d="M2 17c.4-3.2 2.7-5 5.5-5s5.1 1.8 5.5 5" />
+      <path d="M13 3.8a3 3 0 0 1 0 5.4" />
+      <path d="M14.5 12.3c1.8.5 3.2 2 3.5 4.7" />
+    </svg>
+  )
+}
+
+export function MapPinIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 17.5s5.5-4.7 5.5-9A5.5 5.5 0 0 0 4.5 8.5c0 4.3 5.5 9 5.5 9Z" />
+      <circle cx="10" cy="8.5" r="2" />
+    </svg>
+  )
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

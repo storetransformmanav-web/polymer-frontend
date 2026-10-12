@@ -4,6 +4,7 @@ import {
   InventoryIcon,
   OrdersIcon,
   ProductsIcon,
+  UsersIcon,
   type IconProps,
 } from '../../components/ui/icons.tsx'
 
@@ -25,5 +26,6 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: DashboardIcon, end: true },
   { to: '/orders', label: 'Orders', icon: OrdersIcon },
   { to: '/products', label: 'Products', icon: ProductsIcon },
+  { to: '/customers', label: 'Customers', icon: UsersIcon },
   { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
 ]

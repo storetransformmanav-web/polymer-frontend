@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { CheckCircleIcon, CopyIcon } from '../../../components/ui/icons.tsx'
+import { CheckCircleIcon, CopyIcon } from './icons.tsx'
 
 interface CopyButtonProps {
   value: string

@@ -18,6 +18,11 @@ export const ENDPOINTS = {
     google: '/auth/google',
     logout: '/auth/logout',
   },
+  customers: {
+    list: '/customers',
+    /** `ref` is the customer's UUID, Shopify ID or email. */
+    detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
+  },
   products: {
     list: '/products',
     /** `ref` is the product's UUID or Shopify ID. */
@@ -96,6 +101,168 @@ const productListResponseSchema = z.object({
   sort: z.string(),
   order: z.string(),
 })
+
+// --- Customers (GET /customers) ------------------------------------------------
+
+export const CUSTOMER_ROLES = ['administrator', 'subscriber'] as const
+export const CUSTOMER_SOURCES = ['shopify', 'crm'] as const
+export const CUSTOMER_STATES = ['ENABLED', 'DISABLED', 'INVITED', 'DECLINED'] as const
+export const CUSTOMER_SORTS = [
+  'created_at',
+  'updated_at',
+  'name',
+  'email',
+  'orders_count',
+  'total_spent',
+  'last_login',
+] as const
+
+const customerListItemSchema = z.object({
+  id: z.string(),
+  // null for customers created in the CRM rather than migrated from Shopify.
+  shopify_id: z.number().nullish(),
+  email: z.string().nullish(),
+  full_name: z.string().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  phone: z.string().nullish(),
+  role: z.string(),
+  is_active: z.boolean(),
+  shopify_state: z.string().nullish(),
+  accepts_marketing: z.boolean().nullish(),
+  orders_count: z.number(),
+  // A decimal string, e.g. "45.70".
+  total_spent: z.string().nullish(),
+  currency: z.string().nullish(),
+  tags: z.array(z.string()).default([]),
+  city: z.string().nullish(),
+  country: z.string().nullish(),
+  last_order_name: z.string().nullish(),
+  shopify_created_at: z.string().nullish(),
+  last_login_at: z.string().nullish(),
+})
+
+const customerListResponseSchema = z.object({
+  items: z.array(customerListItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+  sort: z.string(),
+  order: z.string(),
+})
+
+export type CustomerRole = (typeof CUSTOMER_ROLES)[number]
+export type CustomerSource = (typeof CUSTOMER_SOURCES)[number]
+export type CustomerState = (typeof CUSTOMER_STATES)[number]
+export type CustomerSort = (typeof CUSTOMER_SORTS)[number]
+export type CustomerListItem = z.infer<typeof customerListItemSchema>
+export type CustomerListResponse = z.infer<typeof customerListResponseSchema>
+
+/** Query parameters accepted by `GET /customers` (all optional). */
+export interface CustomerListParams {
+  search?: string
+  role?: CustomerRole
+  source?: CustomerSource
+  state?: CustomerState
+  accepts_marketing?: boolean
+  has_orders?: boolean
+  tag?: string
+  country?: string
+  min_spent?: number
+  max_spent?: number
+  sort?: CustomerSort
+  order?: 'asc' | 'desc'
+  page?: number
+  page_size?: number
+}
+
+// --- Customer details (GET /customers/{ref}) ---------------------------------
+// Optional-ish fields use `.nullish()` so one missing value in the backend's
+// payload can't take the whole page down.
+
+const customerAddressSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  is_default: z.boolean().nullish(),
+  position: z.number().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  name: z.string().nullish(),
+  company: z.string().nullish(),
+  address1: z.string().nullish(),
+  address2: z.string().nullish(),
+  city: z.string().nullish(),
+  province: z.string().nullish(),
+  province_code: z.string().nullish(),
+  country: z.string().nullish(),
+  country_code: z.string().nullish(),
+  zip: z.string().nullish(),
+  phone: z.string().nullish(),
+  time_zone: z.string().nullish(),
+})
+
+const customerDetailSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  shopify_gid: z.string().nullish(),
+  email: z.string().nullish(),
+  full_name: z.string().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  phone: z.string().nullish(),
+  role: z.string(),
+  is_active: z.boolean(),
+  shopify_state: z.string().nullish(),
+  verified_email: z.boolean().nullish(),
+  accepts_marketing: z.boolean().nullish(),
+  email_marketing_state: z.string().nullish(),
+  email_marketing_opt_in_level: z.string().nullish(),
+  email_marketing_updated_at: z.string().nullish(),
+  sms_marketing_state: z.string().nullish(),
+  sms_marketing_opt_in_level: z.string().nullish(),
+  sms_marketing_updated_at: z.string().nullish(),
+  tax_exempt: z.boolean().nullish(),
+  tax_exemptions: z.array(z.string()).default([]),
+  tax_id: z.string().nullish(),
+  tags: z.array(z.string()).default([]),
+  note: z.string().nullish(),
+  locale: z.string().nullish(),
+  orders_count: z.number(),
+  total_spent: z.string().nullish(),
+  currency: z.string().nullish(),
+  last_order_name: z.string().nullish(),
+  rfm_group: z.string().nullish(),
+  predicted_spend_tier: z.string().nullish(),
+  data_sale_opt_out: z.boolean().nullish(),
+  image_url: z.string().nullish(),
+  shopify_created_at: z.string().nullish(),
+  shopify_updated_at: z.string().nullish(),
+  shopify_synced_at: z.string().nullish(),
+  email_verified_at: z.string().nullish(),
+  last_login_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  addresses: z.array(customerAddressSchema).default([]),
+  metafields: z
+    .array(
+      z.object({
+        namespace: z.string(),
+        key: z.string(),
+        value: z.string().nullish(),
+        type: z.string().nullish(),
+      }),
+    )
+    .default([]),
+  /** The untouched Shopify payload — only present when requested. */
+  raw_json: z.record(z.string(), z.unknown()).nullish(),
+})
+
+const customerDetailResponseSchema = z.object({ customer: customerDetailSchema })
+
+export type CustomerDetail = z.infer<typeof customerDetailSchema>
+export type CustomerAddress = z.infer<typeof customerAddressSchema>
 
 // --- Product details (GET /products/{ref}) --------------------------------
 // Optional-ish fields use `.nullish()` so one missing value in the backend's
@@ -258,6 +425,25 @@ export type LoginResponse = z.infer<typeof loginResponseSchema>
 // ---------------------------------------------------------------------------
 
 export const api = {
+  customers: {
+    /** One page of customers, filtered/sorted server-side. Needs a signed-in session. */
+    async list(params: CustomerListParams): Promise<CustomerListResponse> {
+      const data = await apiClient.get(ENDPOINTS.customers.list, { params })
+      return customerListResponseSchema.parse(data)
+    },
+
+    /**
+     * Everything about one customer. `includeRaw` also returns Shopify's
+     * original payload (large) — leave it off unless it's going to be shown.
+     */
+    async details(ref: string, includeRaw = false): Promise<CustomerDetail> {
+      const data = await apiClient.get(ENDPOINTS.customers.detail(ref), {
+        params: { include_raw: includeRaw },
+      })
+      return customerDetailResponseSchema.parse(data).customer
+    },
+  },
+
   products: {
     /** One page of products, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: ProductListParams): Promise<ProductListResponse> {

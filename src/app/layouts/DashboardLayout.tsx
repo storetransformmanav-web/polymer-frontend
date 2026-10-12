@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import { usePrefetchCustomers } from '../../features/customers/index.ts'
 import { usePrefetchProducts } from '../../features/products/index.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
@@ -10,9 +11,10 @@ import { Navbar } from './Navbar.tsx'
  * themselves.
  */
 export function DashboardLayout() {
-  // Warm the products cache as soon as the user is signed in, so that page
-  // opens with its data already loaded.
+  // Warm the list caches as soon as the user is signed in, so those pages
+  // open with their data already loaded.
   usePrefetchProducts()
+  usePrefetchCustomers()
 
   return (
     <div className="bg-bg flex min-h-svh">

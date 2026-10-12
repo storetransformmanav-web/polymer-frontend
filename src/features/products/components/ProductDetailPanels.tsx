@@ -7,7 +7,6 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
-  SpinnerIcon,
 } from '../../../components/ui/icons.tsx'
 import type {
   ProductDetail,
@@ -22,45 +21,26 @@ import {
   statusLabel,
   statusTone,
 } from '../utils/format.ts'
-import { CopyButton } from './CopyButton.tsx'
-import { DetailSection, Field, FieldGrid } from './DetailSection.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
+import {
+  DETAIL_CARD as CARD,
+  DETAIL_TD as TD,
+  DETAIL_TH as TH,
+  DetailEmpty as Empty,
+  DetailSection,
+  DetailSkeleton as PanelSkeleton,
+  RawJsonPanel as RawPanel,
+  DetailTable as TableWrap,
+  Field,
+  FieldGrid,
+} from '../../../components/ui/DetailSection.tsx'
 import { ProductImage } from './ProductImage.tsx'
-
-const TH =
-  'text-text-muted border-border bg-accent-tint/60 border-b px-3.5 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
-const TD = 'px-3.5 py-2.5 text-[0.85rem] whitespace-nowrap'
-const CARD = 'border-border bg-bg rounded-xl border'
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
 const date = (value: string | null | undefined) => (value ? formatDate(value) : null)
 const num = (value: number | null | undefined) =>
   value === null || value === undefined ? '—' : value.toLocaleString('en-GB')
-
-function Empty({
-  icon: Icon,
-  children,
-}: {
-  icon: typeof BoxesIcon
-  children: ReactNode
-}) {
-  return (
-    <div
-      className={`${CARD} text-text-muted flex flex-col items-center gap-2 px-4 py-14 text-center text-[0.9rem]`}
-    >
-      <Icon width={28} height={28} />
-      {children}
-    </div>
-  )
-}
-
-function TableWrap({ children }: { children: ReactNode }) {
-  return (
-    <div className={`${CARD} overflow-x-auto`}>
-      <table className="w-full min-w-[640px] border-collapse">{children}</table>
-    </div>
-  )
-}
 
 function ExternalLink({
   href,
@@ -81,26 +61,6 @@ function ExternalLink({
       {children}
       <ExternalLinkIcon width={14} height={14} className="shrink-0" />
     </a>
-  )
-}
-
-export function PanelSkeleton() {
-  return (
-    <div aria-hidden="true" className="flex flex-col gap-4">
-      {[0, 1].map((n) => (
-        <div key={n} className={`${CARD} flex flex-col gap-4 p-5`}>
-          <div className="bg-border/70 h-5 w-48 animate-pulse rounded" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <div className="bg-border/70 h-3 w-20 animate-pulse rounded" />
-                <div className="bg-border/70 h-4 w-32 animate-pulse rounded" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -561,54 +521,4 @@ export function MetafieldsPanel({ product }: { product: ProductDetail }) {
   )
 }
 
-// --- Raw Shopify data ------------------------------------------------------------
-
-interface RawPanelProps {
-  raw: Record<string, unknown> | null
-  isLoading: boolean
-  error: string | null
-  onRetry: () => void
-}
-
-export function RawPanel({ raw, isLoading, error, onRetry }: RawPanelProps) {
-  const json = useMemo(() => (raw ? JSON.stringify(raw, null, 2) : ''), [raw])
-
-  if (error) {
-    return (
-      <Empty icon={ListChecksIcon}>
-        <p className="text-text font-semibold">Couldn&apos;t load the raw data</p>
-        <p>{error}</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="border-border bg-bg text-text hover:border-accent mt-1 cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors"
-        >
-          Try again
-        </button>
-      </Empty>
-    )
-  }
-  if (!raw) {
-    return (
-      <div
-        role="status"
-        className={`${CARD} text-text-muted flex items-center justify-center gap-2 px-4 py-14 text-[0.9rem]`}
-      >
-        {isLoading && <SpinnerIcon width={16} height={16} className="animate-spin" />}
-        {isLoading ? 'Loading Shopify data…' : 'No raw data available.'}
-      </div>
-    )
-  }
-
-  return (
-    <div className={CARD}>
-      <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
-        <p className="text-text-muted text-[0.78rem]">Original Shopify payload</p>
-        <CopyButton value={json} label="Copy raw JSON" />
-      </div>
-      <pre className="max-h-[65svh] overflow-auto p-4 font-mono text-[0.78rem] leading-relaxed">
-        {json}
-      </pre>
-    </div>
-  )
-}
+export { RawPanel }

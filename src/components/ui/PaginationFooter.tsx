@@ -1,12 +1,12 @@
-import { Pagination } from '../../../components/ui/Pagination.tsx'
-import { SelectField } from '../../../components/ui/SelectField.tsx'
+import { Pagination } from './Pagination.tsx'
+import { SelectField } from './SelectField.tsx'
 
 const PAGE_SIZES = [10, 25, 50, 100].map((size) => ({
   value: String(size),
   label: String(size),
 }))
 
-interface ProductsFooterProps {
+interface PaginationFooterProps {
   page: number
   pageSize: number
   total: number
@@ -16,14 +16,14 @@ interface ProductsFooterProps {
 }
 
 /** "Showing 1 to 25 of 6971 entries", page-size picker and page buttons. */
-export function ProductsFooter({
+export function PaginationFooter({
   page,
   pageSize,
   total,
   totalPages,
   onPageChange,
   onPageSizeChange,
-}: ProductsFooterProps) {
+}: PaginationFooterProps) {
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1
   const to = Math.min(page * pageSize, total)
   const format = (n: number) => n.toLocaleString('en-GB')

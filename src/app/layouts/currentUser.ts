@@ -37,12 +37,4 @@ export function useCurrentUser(): CurrentUser {
   return toCurrentUser(user)
 }
 
-export function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-}
+export { initials } from '../../lib/format.ts'

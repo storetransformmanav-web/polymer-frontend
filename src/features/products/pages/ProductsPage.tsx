@@ -4,7 +4,7 @@ import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
-import { ProductsFooter } from '../components/ProductsFooter.tsx'
+import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
@@ -116,7 +116,7 @@ export function ProductsPage() {
           />
 
           {data && data.total > 0 && (
-            <ProductsFooter
+            <PaginationFooter
               page={data.page}
               pageSize={filters.pageSize}
               total={data.total}
