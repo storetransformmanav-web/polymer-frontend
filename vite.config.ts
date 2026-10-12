@@ -14,6 +14,9 @@ export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: { proxy: apiProxy },
   preview: { proxy: apiProxy },
+  // Never ship source maps to production: they publish the original source
+  // (comments, structure, endpoints) to anyone who opens dev tools.
+  build: { sourcemap: false },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

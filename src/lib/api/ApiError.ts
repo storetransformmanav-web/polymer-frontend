@@ -1,6 +1,8 @@
 interface ApiErrorOptions {
   status?: number
   data?: unknown
+  /** Transport-level code when no response arrived, e.g. 'ERR_NETWORK'. */
+  code?: string
 }
 
 /**
@@ -11,12 +13,14 @@ interface ApiErrorOptions {
 export class ApiError extends Error {
   status?: number
   data?: unknown
+  code?: string
 
-  constructor(message: string, { status, data }: ApiErrorOptions = {}) {
+  constructor(message: string, { status, data, code }: ApiErrorOptions = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.data = data
+    this.code = code
   }
 }
 

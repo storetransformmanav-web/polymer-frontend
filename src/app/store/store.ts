@@ -30,7 +30,8 @@ export function createAppStore() {
   let previousUi = appStore.getState().ui
   let previousSession = appStore.getState().auth.session
   setAccessToken(previousSession?.accessToken ?? null)
-  setUnauthorizedHandler(() => appStore.dispatch(sessionCleared()))
+  // A 401 on an authenticated request means the token expired or was revoked.
+  setUnauthorizedHandler(() => appStore.dispatch(sessionCleared('expired')))
 
   appStore.subscribe(() => {
     const { ui, auth } = appStore.getState()

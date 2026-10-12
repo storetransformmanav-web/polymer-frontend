@@ -8,6 +8,7 @@ import { LoginPage } from '../../features/auth/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
 import { NotFoundPage } from './NotFoundPage.tsx'
+import { RouteErrorPage } from './RouteErrorPage.tsx'
 import { ProtectedRoute } from './ProtectedRoute.tsx'
 
 /**
@@ -18,12 +19,12 @@ import { ProtectedRoute } from './ProtectedRoute.tsx'
 const router = createBrowserRouter([
   {
     element: <AuthLayout />,
-    errorElement: <NotFoundPage />,
+    errorElement: <RouteErrorPage />,
     children: [{ path: '/login', element: <LoginPage /> }],
   },
   {
     element: <ProtectedRoute />,
-    errorElement: <NotFoundPage />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         path: '/',

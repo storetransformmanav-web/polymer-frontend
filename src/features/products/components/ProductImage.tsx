@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ProductsIcon } from '../../../components/ui/icons.tsx'
+import { safeUrl } from '../utils/format.ts'
 
 interface ProductImageProps {
   src: string | null
@@ -18,12 +19,17 @@ const SIZES = {
  * Product thumbnail that never leaves a broken-image icon behind: a
  * missing or failing image falls back to a neutral product glyph. Images
  * load lazily so long lists don't compete with the data for bandwidth.
+ *
+ * The URL comes from the API, so it's only used if it's a plain http(s)
+ * link, and the request sends no referrer (the image host doesn't need to
+ * know which CRM page it was shown on).
  */
 export function ProductImage({ src, alt, size = 'sm' }: ProductImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const { box, icon, fit } = SIZES[size]
+  const safeSrc = safeUrl(src)
 
-  if (!src || failedSrc === src) {
+  if (!safeSrc || failedSrc === safeSrc) {
     return (
       <span
         role="img"
@@ -37,11 +43,12 @@ export function ProductImage({ src, alt, size = 'sm' }: ProductImageProps) {
 
   return (
     <img
-      src={src}
+      src={safeSrc}
       alt={alt}
       loading="lazy"
       decoding="async"
-      onError={() => setFailedSrc(src)}
+      referrerPolicy="no-referrer"
+      onError={() => setFailedSrc(safeSrc)}
       className={`border-border bg-surface shrink-0 border ${fit} ${box}`}
     />
   )

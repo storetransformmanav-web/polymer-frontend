@@ -72,6 +72,8 @@ export function getErrorMessage(error: AxiosError<ErrorBody>): string {
   // A response with no usable message (an HTML error page from a proxy or
   // host, say) — say something readable instead of Axios's raw text.
   const { status } = error.response
+  if (status === 403) return "You don't have permission to do that."
+  if (status === 429) return 'Too many requests. Please wait a moment and try again.'
   if (status === 404) {
     return 'The service could not be reached (404). Please try again later.'
   }
@@ -89,17 +91,57 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && accessToken) unauthorizedHandler?.()
 
     return Promise.reject(
+      // Deliberately a *new* error carrying only the status, body and code:
+      // an AxiosError holds the full request config, including the
+      // Authorization header, which must never travel into logs or UI.
       new ApiError(getErrorMessage(error), {
         status: error.response?.status,
         data: error.response?.data,
+        code: error.code,
       }),
     )
   },
 )
 
+// Transient failures worth retrying — but only for GET (see `request`).
+const RETRY_DELAYS_MS = [400, 1200]
+const RETRYABLE_STATUSES = new Set([502, 503, 504])
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** A dropped connection or a gateway hiccup — not a real answer from the API. */
+function isTransient(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.code === 'ERR_NETWORK' ||
+      (error.status !== undefined && RETRYABLE_STATUSES.has(error.status)))
+  )
+}
+
+/**
+ * Sends the request. GETs are retried a couple of times (with a short
+ * backoff) on network drops and 502/503/504, so a blip doesn't surface as
+ * an error. Writes (POST/PUT/PATCH/DELETE) are never retried: repeating one
+ * could create or delete something twice. Timeouts, 4xx and 401s are never
+ * retried either, and a cancelled request stops immediately.
+ */
 async function request<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
-  const response = await axiosInstance.request<T>({ url: path, ...config })
-  return response.data
+  const isRead = (config?.method ?? 'GET').toUpperCase() === 'GET'
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await axiosInstance.request<T>({ url: path, ...config })
+      return response.data
+    } catch (error) {
+      const canRetry =
+        isRead &&
+        attempt < RETRY_DELAYS_MS.length &&
+        isTransient(error) &&
+        !config?.signal?.aborted
+      if (!canRetry) throw error
+      await sleep(RETRY_DELAYS_MS[attempt])
+    }
+  }
 }
 
 export const apiClient = {

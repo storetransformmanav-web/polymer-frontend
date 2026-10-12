@@ -12,6 +12,12 @@ const INPUT_GROUP =
 // Same wording the API returns for a malformed email, so the message is
 // identical whether it's caught here (instantly) or by the server.
 const INVALID_EMAIL = 'Enter a valid email address'
+
+// Shown once after an automatic sign-out, so it's never a mystery.
+const SIGNED_OUT_MESSAGES = {
+  idle: 'You were signed out after a period of inactivity. Please sign in again.',
+  expired: 'Your session has expired. Please sign in again.',
+} as const
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Step 1: collect the email and request a login code. */
@@ -61,7 +67,10 @@ export function EmailStep() {
             onChange={(event) => {
               setEmail(event.target.value)
               if (validationError) setValidationError(null)
-              if (login.error) login.clearError()
+              // Typing means "trying again": drop any error or sign-out notice.
+              if (login.error || login.googleError || login.signedOutReason) {
+                login.clearError()
+              }
             }}
             className="text-text placeholder:text-text-muted/60 min-w-0 flex-1 border-none bg-transparent py-2.5 outline-none"
           />
@@ -71,6 +80,13 @@ export function EmailStep() {
       {error && (
         <div className="mt-3">
           <FormMessage tone="error">{error}</FormMessage>
+        </div>
+      )}
+      {!error && login.signedOutReason && (
+        <div className="mt-3">
+          <FormMessage tone="info">
+            {SIGNED_OUT_MESSAGES[login.signedOutReason]}
+          </FormMessage>
         </div>
       )}
 

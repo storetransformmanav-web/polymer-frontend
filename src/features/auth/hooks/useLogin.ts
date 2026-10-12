@@ -28,6 +28,7 @@ export function useLogin() {
     isSending: auth.sendStatus === 'loading',
     isVerifying: auth.verifyStatus === 'loading',
     googleError: auth.googleError,
+    signedOutReason: auth.signedOutReason,
     isGoogleSigningIn: auth.googleStatus === 'loading',
 
     async sendCode(email: string) {

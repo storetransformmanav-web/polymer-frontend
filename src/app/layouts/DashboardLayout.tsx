@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { usePrefetchCustomers } from '../../features/customers/index.ts'
 import { usePrefetchProducts } from '../../features/products/index.ts'
+import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
 
@@ -15,6 +16,8 @@ export function DashboardLayout() {
   // open with their data already loaded.
   usePrefetchProducts()
   usePrefetchCustomers()
+  // Idle timeout, token expiry and cross-tab logout for the signed-in session.
+  useSessionGuard()
 
   return (
     <div className="bg-bg flex min-h-svh">

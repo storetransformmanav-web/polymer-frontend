@@ -1,6 +1,7 @@
 import {
   createAsyncThunk,
   createSlice,
+  type PayloadAction,
   type ThunkAction,
   type UnknownAction,
 } from '@reduxjs/toolkit'
@@ -35,20 +36,42 @@ export interface AuthState {
   error: string | null
   /** Same, for Google sign-in (shown next to the Google button). */
   googleError: string | null
+  /** Why the user was signed out automatically (shown once on the login page). */
+  signedOutReason: SignOutReason | null
 }
 
+/** 'idle' = inactivity timeout; 'expired' = the token ran out or was rejected. */
+export type SignOutReason = 'idle' | 'expired'
+
 type AuthRootState = { auth: AuthState }
+
+/** Is this stored value really a Session? (localStorage can be edited or corrupted.) */
+function isSession(value: unknown): value is Session {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  const user = candidate.user as Record<string, unknown> | null | undefined
+
+  return (
+    typeof candidate.accessToken === 'string' &&
+    candidate.accessToken.length > 0 &&
+    typeof candidate.expiresAt === 'string' &&
+    typeof user === 'object' &&
+    user !== null &&
+    typeof user.id === 'string' &&
+    typeof user.role === 'string'
+  )
+}
 
 function getStoredSession(): Session | null {
   try {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
 
-    const session = JSON.parse(raw) as Session
+    const session: unknown = JSON.parse(raw)
+    if (!isSession(session)) return null
+
     const expiresAt = Date.parse(session.expiresAt)
-    return session.accessToken && Number.isFinite(expiresAt) && expiresAt > Date.now()
-      ? session
-      : null
+    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? session : null
   } catch {
     return null
   }
@@ -66,6 +89,7 @@ const initialState: AuthState = {
   googleStatus: 'idle',
   error: null,
   googleError: null,
+  signedOutReason: null,
 }
 
 const toMessage = toUserMessage
@@ -149,6 +173,7 @@ function signedIn(state: AuthState, session: Session) {
   state.codeSentAt = null
   state.verifyStatus = 'idle'
   state.googleStatus = 'idle'
+  state.signedOutReason = null
 }
 
 const authSlice = createSlice({
@@ -165,9 +190,12 @@ const authSlice = createSlice({
     errorCleared(state) {
       state.error = null
       state.googleError = null
+      state.signedOutReason = null
     },
-    sessionCleared(state) {
+    /** Ends the session. `reason` is set for automatic sign-outs only. */
+    sessionCleared(state, action: PayloadAction<SignOutReason | undefined>) {
       state.session = null
+      state.signedOutReason = action.payload ?? null
     },
   },
   extraReducers: (builder) => {
@@ -226,9 +254,9 @@ export const authReducer = authSlice.reducer
  * background (an expired/invalid token failing there is harmless).
  */
 export const logout =
-  (): ThunkAction<void, AuthRootState, unknown, UnknownAction> =>
+  (reason?: SignOutReason): ThunkAction<void, AuthRootState, unknown, UnknownAction> =>
   (dispatch, getState) => {
     const token = getState().auth.session?.accessToken
-    dispatch(sessionCleared())
+    dispatch(sessionCleared(reason))
     if (token) void api.auth.logout(token).catch(() => undefined)
   }
