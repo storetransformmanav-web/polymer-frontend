@@ -9,7 +9,7 @@ const apiProxy = {
   '/api': { target: 'https://polymeruk-api.vercel.app', changeOrigin: true },
 }
 
-// https://vite.dev/config/        
+// https://vite.dev/config/
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: { proxy: apiProxy },

@@ -10,9 +10,9 @@ import {
 /**
  * State and actions for the two-step email-code login (email -> code).
  * The flow lives in the `auth` Redux slice, so components only render
- * `step` and call these actions. `sendCode`/`verifyCode` resolve to
- * whether the request succeeded, so callers can react (e.g. reset the
- * code boxes after a wrong code) without inspecting thunk results.
+ * `step` and call these actions. `sendCode`/`verifyCode` report how the
+ * request went, so callers can react (e.g. reset the code boxes after a
+ * wrong code) without inspecting thunk results.
  */
 export function useLogin() {
   const dispatch = useAppDispatch()
@@ -23,7 +23,7 @@ export function useLogin() {
     email: auth.email,
     notice: auth.notice,
     expiresInSeconds: auth.otpExpiresInSeconds,
-    codeSentAt: auth.codeSentAt,
+    resendAvailableAt: auth.resendAvailableAt,
     error: auth.error,
     isSending: auth.sendStatus === 'loading',
     isVerifying: auth.verifyStatus === 'loading',
@@ -31,8 +31,15 @@ export function useLogin() {
     signedOutReason: auth.signedOutReason,
     isGoogleSigningIn: auth.googleStatus === 'loading',
 
-    async sendCode(email: string) {
-      return requestOtp.fulfilled.match(await dispatch(requestOtp(email)))
+    /**
+     * 'sent'     — a new code was emailed;
+     * 'cooldown' — one was sent moments ago and is still valid (backend 429);
+     * 'failed'   — nothing was sent (the reason is in `error`).
+     */
+    async sendCode(email: string): Promise<'sent' | 'cooldown' | 'failed'> {
+      const result = await dispatch(requestOtp(email))
+      if (!requestOtp.fulfilled.match(result)) return 'failed'
+      return result.payload.rateLimited ? 'cooldown' : 'sent'
     },
     async verifyCode(code: string) {
       return verifyOtp.fulfilled.match(await dispatch(verifyOtp(code)))

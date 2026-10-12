@@ -5,7 +5,7 @@ import {
   type ThunkAction,
   type UnknownAction,
 } from '@reduxjs/toolkit'
-import { toUserMessage } from '../../lib/api/ApiError.ts'
+import { ApiError, toUserMessage } from '../../lib/api/ApiError.ts'
 import { api, type AuthUser } from '../../lib/api/endpoints.ts'
 
 export const SESSION_STORAGE_KEY = 'polymer-crm:session'
@@ -27,8 +27,8 @@ export interface AuthState {
   /** The backend's confirmation message after a code was requested. */
   notice: string | null
   otpExpiresInSeconds: number
-  /** `Date.now()` of the last successful code request (drives resend cooldown). */
-  codeSentAt: number | null
+  /** `Date.now()`-style time when a new code may be requested (drives the resend timer). */
+  resendAvailableAt: number | null
   sendStatus: RequestStatus
   verifyStatus: RequestStatus
   googleStatus: RequestStatus
@@ -83,7 +83,7 @@ const initialState: AuthState = {
   email: '',
   notice: null,
   otpExpiresInSeconds: 600,
-  codeSentAt: null,
+  resendAvailableAt: null,
   sendStatus: 'idle',
   verifyStatus: 'idle',
   googleStatus: 'idle',
@@ -94,9 +94,46 @@ const initialState: AuthState = {
 
 const toMessage = toUserMessage
 
-/** Step 1: ask the backend to email a login code. Also used to resend. */
+/** How long before a new code can be requested, when the backend doesn't say. */
+export const DEFAULT_RESEND_SECONDS = 30
+
+/**
+ * Pulls the wait out of the backend's cooldown message, e.g. "Please wait
+ * 41 seconds before requesting another code." → 41 ("2 minutes" → 120).
+ * Returns null when the message has no usable duration.
+ */
+export function parseWaitSeconds(message: string): number | null {
+  const match = /(\d+)\s*(second|sec|minute|min)/i.exec(message)
+  if (!match) return null
+
+  const amount = Number(match[1])
+  const seconds = match[2].toLowerCase().startsWith('min') ? amount * 60 : amount
+  return seconds > 0 && seconds <= 3600 ? seconds : null
+}
+
+interface OtpRequestResult {
+  email: string
+  message: string
+  /** null when unknown (a still-valid earlier code is being reused). */
+  expiresInSeconds: number | null
+  resendAvailableAt: number
+  /** True when no new code was sent because one was requested a moment ago. */
+  rateLimited: boolean
+}
+
+/**
+ * Step 1: ask the backend to email a login code. Also used to resend.
+ *
+ * The backend limits how often a code can be requested for one account and
+ * answers 429 "Please wait N seconds…". That means a code was *already sent*
+ * and is still valid, so instead of leaving the user stuck on the email
+ * screen with an error, this resolves as "rate limited": the flow moves on
+ * to the code screen with the backend's message and an exact resend timer.
+ * A 429 with no readable wait time (e.g. a general traffic limit) is still
+ * reported as an error.
+ */
 export const requestOtp = createAsyncThunk<
-  { email: string; message: string; expiresInSeconds: number; sentAt: number },
+  OtpRequestResult,
   string,
   { state: AuthRootState; rejectValue: string }
 >(
@@ -108,9 +145,24 @@ export const requestOtp = createAsyncThunk<
         email,
         message: response.message,
         expiresInSeconds: response.expires_in_seconds,
-        sentAt: Date.now(),
+        resendAvailableAt: Date.now() + DEFAULT_RESEND_SECONDS * 1000,
+        rateLimited: false,
       }
     } catch (error) {
+      const waitSeconds =
+        error instanceof ApiError && error.status === 429
+          ? parseWaitSeconds(error.message)
+          : null
+
+      if (error instanceof ApiError && waitSeconds !== null) {
+        return {
+          email,
+          message: `${error.message} A code you already received is still valid — enter it below.`,
+          expiresInSeconds: null,
+          resendAvailableAt: Date.now() + waitSeconds * 1000,
+          rateLimited: true,
+        }
+      }
       return rejectWithValue(toMessage(error))
     }
   },
@@ -170,7 +222,7 @@ function signedIn(state: AuthState, session: Session) {
   state.step = 'email'
   state.email = ''
   state.notice = null
-  state.codeSentAt = null
+  state.resendAvailableAt = null
   state.verifyStatus = 'idle'
   state.googleStatus = 'idle'
   state.signedOutReason = null
@@ -209,8 +261,10 @@ const authSlice = createSlice({
         state.step = 'otp'
         state.email = action.payload.email
         state.notice = action.payload.message
-        state.otpExpiresInSeconds = action.payload.expiresInSeconds
-        state.codeSentAt = action.payload.sentAt
+        if (action.payload.expiresInSeconds !== null) {
+          state.otpExpiresInSeconds = action.payload.expiresInSeconds
+        }
+        state.resendAvailableAt = action.payload.resendAvailableAt
       })
       .addCase(requestOtp.rejected, (state, action) => {
         // A skipped duplicate (see `condition`) isn't a failure.

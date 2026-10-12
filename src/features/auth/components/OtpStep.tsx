@@ -6,14 +6,13 @@ import { useLogin } from '../hooks/useLogin.ts'
 import { FormMessage } from './FormMessage.tsx'
 
 const CODE_LENGTH = 6
-const RESEND_COOLDOWN_SECONDS = 30
 
 /**
- * Seconds left until a resend is allowed; ticks once a second. The
- * component using it is keyed on `sentAt`, so each new send remounts it
- * with a fresh clock.
+ * Seconds left until a new code may be requested; ticks once a second. The
+ * component using it is keyed on `availableAt`, so every new send (or
+ * backend cooldown) remounts it with a fresh clock.
  */
-function useResendCountdown(sentAt: number | null) {
+function useResendCountdown(availableAt: number | null) {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -21,20 +20,20 @@ function useResendCountdown(sentAt: number | null) {
     return () => window.clearInterval(timer)
   }, [])
 
-  if (sentAt === null) return 0
-  return Math.max(0, Math.ceil((sentAt + RESEND_COOLDOWN_SECONDS * 1000 - now) / 1000))
+  if (availableAt === null) return 0
+  return Math.max(0, Math.ceil((availableAt - now) / 1000))
 }
 
 interface ResendProps {
-  sentAt: number | null
+  availableAt: number | null
   isSending: boolean
   disabled: boolean
   onResend: () => void
 }
 
 // Its own component so the 1s countdown tick re-renders only this line.
-function Resend({ sentAt, isSending, disabled, onResend }: ResendProps) {
-  const secondsLeft = useResendCountdown(sentAt)
+function Resend({ availableAt, isSending, disabled, onResend }: ResendProps) {
+  const secondsLeft = useResendCountdown(availableAt)
 
   return (
     <p className="text-text-muted text-center text-[0.85rem]">
@@ -73,7 +72,8 @@ export function OtpStep() {
 
   async function resend() {
     setCode('')
-    setResent(await login.sendCode(login.email))
+    // "A new code has been sent" only if one really was (not on a cooldown reply).
+    setResent((await login.sendCode(login.email)) === 'sent')
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -121,7 +121,7 @@ export function OtpStep() {
           onComplete={(value) => void verify(value)}
         />
         <span className="text-text-muted text-[0.78rem]">
-          The code expires in {minutes} {minutes === 1 ? 'minute' : 'minutes'}.
+          Codes are valid for {minutes} {minutes === 1 ? 'minute' : 'minutes'}.
         </span>
       </div>
 
@@ -152,8 +152,8 @@ export function OtpStep() {
 
       <div className="mt-5">
         <Resend
-          key={login.codeSentAt}
-          sentAt={login.codeSentAt}
+          key={login.resendAvailableAt}
+          availableAt={login.resendAvailableAt}
           isSending={login.isSending}
           disabled={login.isVerifying}
           onResend={() => void resend()}
