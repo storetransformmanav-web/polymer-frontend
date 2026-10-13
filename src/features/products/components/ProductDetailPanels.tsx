@@ -182,21 +182,24 @@ export function OverviewPanel({ product, preview }: OverviewProps) {
               ))}
             </FieldGrid>
             {product.tags.length > 0 && (
-              <div className="mt-5">
-                <p className="text-text-muted mb-2 text-[0.68rem] font-bold tracking-wide uppercase">
+              <section aria-labelledby="product-tags-heading" className="mt-5">
+                <h3
+                  id="product-tags-heading"
+                  className="mb-2 text-[0.9rem] font-semibold"
+                >
                   Tags
-                </p>
-                <ul className="flex flex-wrap gap-1.5">
+                </h3>
+                <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
                   {product.tags.map((tag) => (
                     <li
                       key={tag}
-                      className="bg-accent-tint text-accent rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                      className="bg-surface text-text border-border rounded-md border px-2.5 py-1 text-[0.8rem] font-medium"
                     >
                       {tag}
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
           </DetailSection>
 

@@ -93,6 +93,25 @@ export function cacheKey(filters: ProductFilters): string {
   return JSON.stringify(toParams(filters))
 }
 
+/**
+ * The query that yields one status tab's count: the same narrowing filters
+ * (search, vendor, ...) with that status, one row per page — only `total`
+ * is read. Sort/order are pinned so changing them reuses the cached count.
+ */
+export function statusCountFilters(
+  filters: ProductFilters,
+  status: ProductStatus | '',
+): ProductFilters {
+  return {
+    ...filters,
+    status,
+    page: 1,
+    pageSize: 1,
+    sort: DEFAULT_FILTERS.sort,
+    order: DEFAULT_FILTERS.order,
+  }
+}
+
 /** True when any narrowing filter (not sort/paging) is applied. */
 export function hasActiveFilters(filters: ProductFilters): boolean {
   return (

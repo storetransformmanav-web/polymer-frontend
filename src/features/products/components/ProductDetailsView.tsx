@@ -3,7 +3,6 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
 import { statusLabel, statusTone } from '../utils/format.ts'
-import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   CollectionsPanel,
   InventoryPanel,
@@ -54,8 +53,6 @@ export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
   const vendor = product?.vendor ?? preview?.vendor
   const imageUrl =
     product?.featured_image_url ?? product?.images[0]?.url ?? preview?.image_url ?? null
-  const firstSku = product?.variants.find((variant) => variant.sku)?.sku
-  const extraVariants = product ? Math.max(0, product.variants.length - 1) : 0
 
   const inventoryLevels = product?.variants.reduce(
     (sum, variant) => sum + variant.inventory_levels.length,
@@ -125,20 +122,6 @@ export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
                   />
                   {statusLabel(status)}
                 </Badge>
-              )}
-              {firstSku && (
-                <span className="flex items-center gap-1.5">
-                  <span className="text-text-muted">SKU</span>
-                  <span className="bg-accent-tint rounded-md px-1.5 py-0.5 font-mono text-[0.8rem]">
-                    {firstSku}
-                  </span>
-                  <CopyButton value={firstSku} label={`Copy ${firstSku}`} />
-                  {extraVariants > 0 && (
-                    <span className="text-text-muted text-[0.78rem] whitespace-nowrap">
-                      +{extraVariants} more
-                    </span>
-                  )}
-                </span>
               )}
               {vendor && (
                 <span>

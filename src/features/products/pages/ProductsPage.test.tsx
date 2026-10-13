@@ -140,8 +140,11 @@ function makeDetail(id: string, raw = false): ProductDetail {
 
 const list = vi.mocked(api.products.list)
 const details = vi.mocked(api.products.details)
+// One-row requests are the status tabs' counts, not pages of the list.
+const isCountQuery = (params: ProductListParams) => params.page_size === 1
 const callsForPage = (page: number) =>
-  list.mock.calls.filter(([params]) => params.page === page).length
+  list.mock.calls.filter(([params]) => params.page === page && !isCountQuery(params))
+    .length
 
 function Path() {
   return <p data-testid="path">{useLocation().pathname}</p>
@@ -182,9 +185,37 @@ describe('ProductsPage list', () => {
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
     // Price range for a multi-variant product, single price otherwise.
     expect(screen.getAllByText('£170.00 – £200.00').length).toBeGreaterThan(0)
+    // Product 3 is out of stock: shown in the Stock column and in Inventory.
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('Out of stock')).toBeInTheDocument()
+    expect(within(table).getByText('Out of stock across 2 variants')).toBeInTheDocument()
+  })
+
+  it('lays the table out as Image, Product, Status, Inventory, Type, Category, Stock, Price, View', async () => {
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const table = screen.getByRole('table')
+    const headers = within(table)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+    expect(headers).toEqual([
+      'Image',
+      'Product',
+      'Status',
+      'Inventory',
+      'Type',
+      'Category',
+      'Stock',
+      'Price',
+      'View',
+    ])
+    expect(within(table).queryByText('Vendor 2')).not.toBeInTheDocument()
+    // Product 1 has 10 units across 2 variants; Product 3 is out of stock.
     expect(
-      within(screen.getByRole('table')).getByText('Out of stock'),
-    ).toBeInTheDocument()
+      within(table).getAllByText('10 in stock across 2 variants').length,
+    ).toBeGreaterThan(0)
+    expect(within(table).getByText('Out of stock across 2 variants')).toBeInTheDocument()
   })
 
   it('searches after a short pause and returns to page 1', async () => {
@@ -211,7 +242,7 @@ describe('ProductsPage list', () => {
     renderPage()
     await screen.findByText('Product 1')
 
-    await user.click(screen.getByRole('button', { name: 'Unlisted' }))
+    await user.click(screen.getByRole('button', { name: /^Unlisted/ }))
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ status: 'UNLISTED' })),
@@ -219,6 +250,41 @@ describe('ProductsPage list', () => {
     expect(screen.getByRole('button', { name: /^Unlisted/ })).toHaveAttribute(
       'aria-pressed',
       'true',
+    )
+  })
+
+  it('shows a count on every status tab, honouring the other filters', async () => {
+    list.mockImplementation((params) => {
+      const byStatus = { ACTIVE: 40, DRAFT: 15, ARCHIVED: 5, UNLISTED: 0 }
+      const total = params.status ? byStatus[params.status] : 60
+      return Promise.resolve({ ...respond(params), total })
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const tabs = screen.getByRole('group', { name: 'Filter by status' })
+    expect(
+      await within(tabs).findByRole('button', { name: /^All Products\s*60$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Active\s*40$/ }),
+    ).toBeInTheDocument()
+    expect(within(tabs).getByRole('button', { name: /^Draft\s*15$/ })).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Archived\s*5$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Unlisted\s*0$/ }),
+    ).toBeInTheDocument()
+
+    // The search narrows the counts too (the fake server ignores it, so only
+    // check that the count queries carry it).
+    await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'desk')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'desk', status: 'DRAFT', page_size: 1 }),
+      ),
     )
   })
 
@@ -276,7 +342,15 @@ describe('ProductsPage list', () => {
   })
 
   it('shows the backend error and recovers on retry', async () => {
-    list.mockRejectedValueOnce(new ApiError('Not logged in.', { status: 401 }))
+    // Fail the list's first page once (not the tabs' one-row count queries).
+    let failed = false
+    list.mockImplementation((params) => {
+      if (!failed && !isCountQuery(params)) {
+        failed = true
+        return Promise.reject(new ApiError('Not logged in.', { status: 401 }))
+      }
+      return Promise.resolve(respond(params))
+    })
     const user = userEvent.setup()
     renderPage()
 
@@ -315,6 +389,18 @@ describe('ProductsPage details', () => {
     expect(
       within(tabs).getByRole('button', { name: /^Product\s*handle-3$/ }),
     ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('lists the product tags as chips in a boxed "Tags" section', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'View Product 3' }))
+
+    const tags = await screen.findByRole('region', { name: 'Tags' })
+    expect(within(tags).getByRole('heading', { name: 'Tags' })).toBeInTheDocument()
+    expect(within(tags).getByRole('listitem')).toHaveTextContent('modern')
   })
 
   it('does not open details when a row is clicked anywhere but the View button', async () => {
@@ -375,9 +461,11 @@ describe('ProductsPage details', () => {
     const description = screen.getByText('Sturdy walnut desk')
     expect(description.querySelector('strong, script')).toBeNull()
     expect(description).not.toHaveTextContent('alert')
-    expect(screen.getByText('SKU-7')).toBeInTheDocument()
+    // The header no longer shows a SKU; it lives in the Variants tab.
+    expect(screen.queryByText('SKU-7')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
+    expect(screen.getByText('SKU-7')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: /Default Title/ })).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
 

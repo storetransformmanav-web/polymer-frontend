@@ -3,7 +3,12 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
-import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
+import {
+  formatInventory,
+  formatPriceRange,
+  statusLabel,
+  statusTone,
+} from '../utils/format.ts'
 import { ProductImage } from './ProductImage.tsx'
 
 const TH_BASE =
@@ -173,13 +178,13 @@ export function ProductsList({
         <thead>
           <tr>
             <th className={TH}>Image</th>
-            <th className={TH}>Product Name</th>
-            <th className={TH_RIGHT}>Price</th>
-            <th className={TH}>Vendor</th>
+            <th className={TH}>Product</th>
+            <th className={TH}>Status</th>
+            <th className={TH}>Inventory</th>
             <th className={TH}>Type</th>
             <th className={`${TH} ${CATEGORY_CELL}`}>Category</th>
             <th className={TH_RIGHT}>Stock</th>
-            <th className={TH}>Status</th>
+            <th className={TH_RIGHT}>Price</th>
             <th className={TH_CENTER}>View</th>
           </tr>
         </thead>
@@ -192,7 +197,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: 9 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -224,14 +229,12 @@ export function ProductsList({
                       {product.title}
                     </span>
                   </td>
-                  <td className={`${TD} text-right font-semibold`}>
-                    {formatPriceRange(product)}
-                  </td>
                   <td className={TD}>
-                    <span className="block max-w-32 truncate">
-                      {product.vendor ?? '—'}
-                    </span>
+                    <Badge tone={statusTone(product.status)}>
+                      {statusLabel(product.status)}
+                    </Badge>
                   </td>
+                  <td className={TD}>{formatInventory(product)}</td>
                   <td className={TD}>
                     <span className="block max-w-40 truncate">
                       {product.product_type || '—'}
@@ -245,10 +248,8 @@ export function ProductsList({
                   <td className={`${TD} text-right`}>
                     <Stock value={product.total_inventory} />
                   </td>
-                  <td className={TD}>
-                    <Badge tone={statusTone(product.status)}>
-                      {statusLabel(product.status)}
-                    </Badge>
+                  <td className={`${TD} text-right font-semibold`}>
+                    {formatPriceRange(product)}
                   </td>
                   <td className={`${TD} text-center`}>
                     <button

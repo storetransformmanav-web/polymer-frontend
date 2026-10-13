@@ -17,6 +17,16 @@ export function formatPriceRange(product: ProductListItem): string {
   return formatRange(product.price_min, product.price_max, product.currency)
 }
 
+/** "21,122 in stock across 3 variants"; "—" when the stock isn't tracked. */
+export function formatInventory(product: ProductListItem): string {
+  const { total_inventory: stock, variants_count: variants } = product
+  if (stock === null) return '—'
+  const across = `${variants.toLocaleString('en-GB')} ${variants === 1 ? 'variant' : 'variants'}`
+  return stock <= 0
+    ? `Out of stock across ${across}`
+    : `${stock.toLocaleString('en-GB')} in stock across ${across}`
+}
+
 const STATUS_TONES: Record<string, BadgeTone> = {
   ACTIVE: 'success',
   DRAFT: 'neutral',

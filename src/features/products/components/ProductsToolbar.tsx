@@ -14,6 +14,7 @@ import {
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
+import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
 import {
   PRODUCT_SORTS,
   type ProductSort,
@@ -27,6 +28,7 @@ const STATUS_TABS: { value: ProductStatus | ''; label: string }[] = [
   { value: 'ARCHIVED', label: 'Archived' },
   { value: 'UNLISTED', label: 'Unlisted' },
 ]
+const STATUS_VALUES = STATUS_TABS.map((tab) => tab.value)
 
 const SORT_LABELS: Record<ProductSort, string> = {
   created_at: 'Date created',
@@ -90,6 +92,7 @@ export function ProductsToolbar({
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const filtersOpen = userOpen ?? isDesktop
+  const counts = useProductStatusCounts(filters, STATUS_VALUES)
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
   )
@@ -165,6 +168,8 @@ export function ProductsToolbar({
         >
           {STATUS_TABS.map((tab) => {
             const active = filters.status === tab.value
+            // The open tab can fall back to the list's own total while its count loads.
+            const count = counts[tab.value] ?? (active ? total : null)
             return (
               <button
                 key={tab.value}
@@ -178,9 +183,15 @@ export function ProductsToolbar({
                 }`}
               >
                 {tab.label}
-                {active && total !== null && (
-                  <span className="bg-accent-tint text-accent rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold">
-                    {total.toLocaleString('en-GB')}
+                {count !== null && (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
+                      active
+                        ? 'bg-accent-tint text-accent'
+                        : 'bg-border/60 text-text-muted'
+                    }`}
+                  >
+                    {count.toLocaleString('en-GB')}
                   </span>
                 )}
               </button>
