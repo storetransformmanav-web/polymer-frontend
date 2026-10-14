@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  TagIcon,
+  XCircleIcon,
+} from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
-import { statusLabel, statusTone } from '../utils/format.ts'
+import {
+  formatPriceRange,
+  formatRange,
+  statusLabel,
+  statusTone,
+} from '../utils/format.ts'
 import {
   CollectionsPanel,
   InventoryPanel,
@@ -53,6 +64,17 @@ export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
   const vendor = product?.vendor ?? preview?.vendor
   const imageUrl =
     product?.featured_image_url ?? product?.images[0]?.url ?? preview?.image_url ?? null
+
+  // Price and stock come from the full record when it's loaded, otherwise
+  // from the list row, so the header is complete the moment the page opens.
+  const currency = product?.currency ?? preview?.currency
+  const price = product?.price_range
+    ? formatRange(product.price_range.min, product.price_range.max, currency)
+    : preview
+      ? formatPriceRange(preview)
+      : '—'
+  const compareAt = product?.compare_at_price_range
+  const stock = (product ? product.total_inventory : preview?.total_inventory) ?? null
 
   const inventoryLevels = product?.variants.reduce(
     (sum, variant) => sum + variant.inventory_levels.length,
@@ -110,9 +132,65 @@ export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
         <div className="flex items-start gap-4">
           <ProductImage src={imageUrl} alt="" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-              {title}
-            </h1>
+            {/* Name, then stock and price right beside it (they wrap below on narrow screens). */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
+                {title}
+              </h1>
+
+              <dl className="flex flex-col gap-y-2 lg:flex-row lg:flex-wrap lg:items-center">
+                <div className="border-border flex items-center gap-2 lg:border-l lg:pl-5">
+                  <dt className="sr-only">Total stock</dt>
+                  <dd className="flex items-center gap-2 whitespace-nowrap">
+                    {stock === null ? (
+                      <span className="text-text-muted">—</span>
+                    ) : stock <= 0 ? (
+                      <>
+                        <XCircleIcon
+                          width={20}
+                          height={20}
+                          className="text-danger shrink-0"
+                        />
+                        <span className="text-danger font-semibold">Out of stock</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircleIcon
+                          width={20}
+                          height={20}
+                          className="text-accent shrink-0"
+                        />
+                        <span className="font-semibold">
+                          {stock.toLocaleString('en-GB')}
+                        </span>
+                        <span className="text-text-muted text-[0.85rem]">in stock</span>
+                      </>
+                    )}
+                  </dd>
+                </div>
+
+                <div className="border-border flex flex-wrap items-center gap-x-2 lg:ml-5 lg:border-l lg:pl-5">
+                  <dt className="sr-only">Price</dt>
+                  <dd className="flex items-center gap-2 whitespace-nowrap">
+                    <TagIcon
+                      width={20}
+                      height={20}
+                      className="text-text-muted shrink-0"
+                    />
+                    <span className="text-lg font-bold tracking-tight">{price}</span>
+                  </dd>
+                  {compareAt?.min && (
+                    <dd className="text-text-muted text-[0.8rem] whitespace-nowrap">
+                      <span className="sr-only">Compare at </span>
+                      <span className="line-through">
+                        {formatRange(compareAt.min, compareAt.max, currency)}
+                      </span>
+                    </dd>
+                  )}
+                </div>
+              </dl>
+            </div>
+
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
               {status && (
                 <Badge tone={statusTone(status)}>

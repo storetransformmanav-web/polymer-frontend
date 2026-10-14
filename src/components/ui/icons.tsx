@@ -340,6 +340,20 @@ export function CheckCircleIcon(props: IconProps) {
   )
 }
 
+/** A solid circle (the current colour) with a contrasting ✕ — for "out of stock" style states. */
+export function XCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="8" fill="currentColor" stroke="none" />
+      <path
+        d="m7.2 7.2 5.6 5.6M12.8 7.2l-5.6 5.6"
+        strokeWidth={1.8}
+        style={{ stroke: 'var(--color-accent-contrast)' }}
+      />
+    </svg>
+  )
+}
+
 export function DollarSignIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

@@ -477,12 +477,55 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('button', { name: 'View Product 4' }))
 
-    // Title, status and vendor come from the already-loaded list row.
+    // Name, stock and price come from the already-loaded list row.
+    const header = screen.getByRole('banner')
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Product 4' }),
+      within(header).getByRole('heading', { level: 1, name: 'Product 4' }),
     ).toBeInTheDocument()
-    expect(screen.getAllByText('Vendor 2').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('£170.00').length).toBeGreaterThan(0)
+    expect(within(header).getByText('10')).toBeInTheDocument()
+    expect(within(header).getByText('in stock')).toBeInTheDocument()
+    expect(within(header).getByText('£170.00')).toBeInTheDocument()
+    // Status and vendor stay in the header too, from the same list row.
+    expect(within(header).getByText('Vendor 2')).toBeInTheDocument()
+    expect(within(header).getByText('Active')).toBeInTheDocument()
+  })
+
+  it('shows the name, total stock and price in the header, from the list row while loading', async () => {
+    details.mockReturnValue(new Promise(() => undefined)) // never answers
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'View Product 3' }))
+
+    const header = screen.getByRole('banner')
+    expect(
+      within(header).getByRole('heading', { level: 1, name: 'Product 3' }),
+    ).toBeInTheDocument()
+    expect(within(header).getByText('Total stock')).toBeInTheDocument()
+    expect(within(header).getByText('Out of stock')).toBeInTheDocument()
+    expect(within(header).getByText('Price')).toBeInTheDocument()
+    expect(within(header).getByText('£170.00 – £200.00')).toBeInTheDocument()
+  })
+
+  it('keeps total stock and price in the header on every tab, not as Overview cards', async () => {
+    const user = userEvent.setup()
+    renderPage('/products/id-7')
+    await screen.findByText('Home > Desks')
+
+    // In the header — and the old Price / Total stock cards are gone from Overview.
+    const overview = screen.getByRole('tabpanel')
+    expect(within(overview).queryByText('Total stock')).not.toBeInTheDocument()
+    expect(within(overview).queryByText('Price')).not.toBeInTheDocument()
+    expect(within(overview).queryByText('£25.85')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText('Price')).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText('£25.85')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /Variants/ }))
+    expect(
+      within(screen.getByRole('banner')).getByText('Total stock'),
+    ).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).getByText('£25.85')).toBeInTheDocument()
   })
 
   it('prefetches details on hover so opening needs no extra request', async () => {
@@ -532,6 +575,99 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Media/ }))
     expect(screen.getByText('This product has no images.')).toBeInTheDocument()
+  })
+
+  it('starts with Status & Launch and Description collapsed, Specifications open', async () => {
+    const user = userEvent.setup()
+    renderPage('/products/id-7')
+    await screen.findByText('Home > Desks')
+
+    const section = (name: string) =>
+      screen.getByRole('button', { name: new RegExp(`^${name}`) })
+    expect(section('Product Specifications')).toHaveAttribute('aria-expanded', 'true')
+    expect(section('Status & Launch')).toHaveAttribute('aria-expanded', 'false')
+    expect(section('Description')).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(section('Description'))
+    expect(section('Description')).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  describe('image lightbox', () => {
+    const IMAGES = [1, 2, 3].map((n) => ({
+      id: `img-${n}`,
+      url: `https://cdn.example.com/p${n}.jpg`,
+      alt_text: `Photo ${n}`,
+      width: 800,
+      height: 600,
+      position: n,
+      media_type: 'IMAGE',
+    }))
+    // The lightbox loads on demand, so the first open needs a little longer.
+    const LOAD = { timeout: 8000 }
+    const closeButton = () => screen.findByRole('button', { name: 'Close' }, LOAD)
+    const currentSlide = () => document.querySelector('.yarl__slide_current img')
+
+    beforeEach(() => {
+      details.mockImplementation((id) =>
+        Promise.resolve({
+          ...makeDetail(id),
+          featured_image_url: IMAGES[0].url,
+          images: [
+            ...IMAGES,
+            // An unsafe URL must never become a thumbnail or a slide.
+            { ...IMAGES[0], id: 'img-bad', url: 'javascript:alert(1)' },
+          ],
+        }),
+      )
+    })
+
+    it('shows every image under the main one and opens the lightbox on click', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+
+      const gallery = await screen.findByRole('list', { name: 'Product media' })
+      expect(within(gallery).getAllByRole('button')).toHaveLength(3)
+      expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+
+      await user.click(within(gallery).getByRole('button', { name: 'Open image 2 of 3' }))
+
+      await closeButton()
+      // It opens on the clicked image, and the image host gets no referrer.
+      await waitFor(() => expect(currentSlide()).toHaveAttribute('src', IMAGES[1].url))
+      expect(currentSlide()).toHaveAttribute('referrerpolicy', 'no-referrer')
+
+      await user.click(await closeButton())
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument(),
+      )
+    }, 20000)
+
+    it('opens the lightbox from the main image and its View Full button', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByRole('list', { name: 'Product media' })
+
+      await user.click(screen.getByRole('button', { name: 'View Full' }))
+
+      await closeButton()
+      await waitFor(() => expect(currentSlide()).toHaveAttribute('src', IMAGES[0].url))
+    }, 20000)
+
+    it('opens the lightbox from an image on the Media tab', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByRole('list', { name: 'Product media' })
+
+      await user.click(screen.getByRole('tab', { name: /Media/ }))
+      const tabpanel = screen.getByRole('tabpanel')
+      const buttons = within(tabpanel).getAllByRole('button', { name: /^Open image/ })
+      expect(buttons).toHaveLength(3)
+
+      await user.click(buttons[2])
+
+      await closeButton()
+      await waitFor(() => expect(currentSlide()).toHaveAttribute('src', IMAGES[2].url))
+    }, 20000)
   })
 
   it('loads the raw Shopify data only when its tab is opened', async () => {

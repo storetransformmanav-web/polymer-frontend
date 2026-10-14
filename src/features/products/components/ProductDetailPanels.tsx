@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   BoxesIcon,
@@ -14,13 +14,8 @@ import type {
   ProductVariant,
 } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
-import {
-  formatRange,
-  htmlToText,
-  safeUrl,
-  statusLabel,
-  statusTone,
-} from '../utils/format.ts'
+import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
+import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   DETAIL_CARD as CARD,
@@ -35,6 +30,7 @@ import {
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
 import { ProductImage } from './ProductImage.tsx'
+import { ProductLightbox } from './ProductLightbox.tsx'
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
@@ -96,73 +92,77 @@ interface OverviewProps {
 }
 
 export function OverviewPanel({ product, preview }: OverviewProps) {
+  const title = product?.title ?? preview?.title ?? ''
   const imageUrl =
     product?.featured_image_url ?? product?.images[0]?.url ?? preview?.image_url ?? null
-  const fullImage = safeUrl(imageUrl)
+  const heroSrc = safeUrl(imageUrl)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
-  const currency = product?.currency ?? preview?.currency
-  const price = product?.price_range
-    ? formatRange(product.price_range.min, product.price_range.max, currency)
-    : preview
-      ? formatRange(preview.price_min, preview.price_max, preview.currency)
-      : '—'
-  const compareAt = product?.compare_at_price_range
-  const stock = (product ? product.total_inventory : preview?.total_inventory) ?? null
   const description = useMemo(() => htmlToText(product?.description_html), [product])
+
+  // The lightbox pages through every product image. The hero image is normally
+  // one of them; if it isn't (still loading, or a featured image that isn't in
+  // the list) it's put first so "View Full" always opens on what's shown.
+  const gallery = useMemo(
+    () => (product ? toSlides(product.images, title) : []),
+    [product, title],
+  )
+  const hero: LightboxSlide | null = heroSrc ? { src: heroSrc, alt: title } : null
+  const heroInGallery = hero !== null && gallery.some((slide) => slide.src === hero.src)
+  const slides = hero && !heroInGallery ? [hero, ...gallery] : gallery
+  const offset = slides.length - gallery.length
+  const heroIndex = hero ? slides.findIndex((slide) => slide.src === hero.src) : -1
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4">
         <div className={`${CARD} relative p-3`}>
-          <ProductImage
-            src={imageUrl}
-            alt={product?.title ?? preview?.title ?? ''}
-            size="xl"
-          />
-          {fullImage && (
-            <a
-              href={fullImage}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="border-border bg-bg text-text hover:border-accent absolute right-6 bottom-6 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.78rem] font-semibold shadow-sm transition-colors"
-            >
-              <ExternalLinkIcon width={14} height={14} />
-              View Full
-            </a>
+          {heroIndex >= 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(heroIndex)}
+                aria-label={`View ${title} full size`}
+                className="focus-visible:outline-accent block w-full cursor-zoom-in rounded-xl border-none bg-transparent p-0 focus-visible:outline-2"
+              >
+                <ProductImage src={imageUrl} alt={title} size="xl" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(heroIndex)}
+                className="border-border bg-bg text-text hover:border-accent absolute right-6 bottom-6 flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.78rem] font-semibold shadow-sm transition-colors"
+              >
+                <ExternalLinkIcon width={14} height={14} />
+                View Full
+              </button>
+            </>
+          ) : (
+            <ProductImage src={imageUrl} alt={title} size="xl" />
           )}
         </div>
 
-        <div className="border-border bg-accent-tint/50 rounded-xl border p-5">
-          <p className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
-            Price
-          </p>
-          <p className="mt-1 text-3xl font-bold tracking-tight">{price}</p>
-          {compareAt?.min && (
-            <p className="text-text-muted mt-1 text-[0.82rem]">
-              Compare at{' '}
-              <span className="line-through">
-                {formatRange(compareAt.min, compareAt.max, currency)}
-              </span>
-            </p>
-          )}
-        </div>
+        {gallery.length > 0 && (
+          <ul aria-label="Product media" className={`${CARD} grid grid-cols-4 gap-2 p-3`}>
+            {gallery.map((slide, index) => (
+              <li key={`${slide.src}-${index}`}>
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(index + offset)}
+                  aria-label={`Open image ${index + 1} of ${gallery.length}`}
+                  className="hover:border-accent focus-visible:outline-accent block w-full cursor-zoom-in overflow-hidden rounded-lg border border-transparent bg-transparent p-0 transition-colors focus-visible:outline-2"
+                >
+                  <ProductImage src={slide.src} alt={slide.alt} size="thumb" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <div className="border-border bg-accent-tint/50 rounded-xl border p-5">
-          <p className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
-            Total stock
-          </p>
-          <p
-            className={`mt-1 text-3xl font-bold tracking-tight ${
-              stock !== null && stock <= 0 ? 'text-danger' : ''
-            }`}
-          >
-            {stock === null
-              ? '—'
-              : stock <= 0
-                ? 'Out of stock'
-                : stock.toLocaleString('en-GB')}
-          </p>
-        </div>
+        <ProductLightbox
+          slides={slides}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
       </div>
 
       {!product ? (
@@ -203,7 +203,12 @@ export function OverviewPanel({ product, preview }: OverviewProps) {
             )}
           </DetailSection>
 
-          <DetailSection title="Status & Launch" count={6} icon={ListChecksIcon}>
+          <DetailSection
+            title="Status & Launch"
+            count={6}
+            icon={ListChecksIcon}
+            defaultOpen={false}
+          >
             <FieldGrid>
               <Field label="Status">
                 <Badge tone={statusTone(product.status)}>
@@ -222,7 +227,7 @@ export function OverviewPanel({ product, preview }: OverviewProps) {
             </FieldGrid>
           </DetailSection>
 
-          <DetailSection title="Description" icon={CheckCircleIcon}>
+          <DetailSection title="Description" icon={CheckCircleIcon} defaultOpen={false}>
             {description ? (
               <p className="text-[0.9rem] leading-relaxed whitespace-pre-line">
                 {description}
@@ -435,21 +440,42 @@ export function CollectionsPanel({ product }: { product: ProductDetail }) {
 }
 
 export function MediaPanel({ product }: { product: ProductDetail }) {
-  if (product.images.length === 0) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const slides = useMemo(
+    () => toSlides(product.images, product.title),
+    [product.images, product.title],
+  )
+
+  if (slides.length === 0) {
     return <Empty icon={ImageIcon}>This product has no images.</Empty>
   }
 
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {product.images.map((image) => (
-        <li key={image.id} className={`${CARD} overflow-hidden`}>
-          <ProductImage src={image.url} alt={image.alt_text ?? product.title} size="xl" />
-          <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
-            {image.width && image.height ? `${image.width} × ${image.height}` : 'Image'}
-          </p>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {slides.map((slide, index) => (
+          <li key={`${slide.src}-${index}`} className={`${CARD} overflow-hidden`}>
+            <button
+              type="button"
+              onClick={() => setLightboxIndex(index)}
+              aria-label={`Open image ${index + 1} of ${slides.length}`}
+              className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
+            >
+              <ProductImage src={slide.src} alt={slide.alt} size="xl" />
+            </button>
+            <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
+              {slide.width && slide.height ? `${slide.width} × ${slide.height}` : 'Image'}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <ProductLightbox
+        slides={slides}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
+    </>
   )
 }
 
