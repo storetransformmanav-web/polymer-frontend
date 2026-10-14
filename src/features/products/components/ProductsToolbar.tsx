@@ -5,7 +5,6 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   DollarSignIcon,
-  FilterIcon,
   SearchIcon,
   SlidersIcon,
   TagIcon,
@@ -36,7 +35,6 @@ const SORT_LABELS: Record<ProductSort, string> = {
   title: 'Name',
   price: 'Price',
   inventory: 'Inventory',
-  vendor: 'Vendor',
   synced_at: 'Last synced',
 }
 
@@ -76,7 +74,7 @@ interface ProductsToolbarProps {
 }
 
 /**
- * Search, vendor, status tabs and the collapsible filter grid. Typing in
+ * Search, status tabs and the collapsible filter grid. Typing in
  * the search/price boxes is instant locally and sent to the API once the
  * user pauses (see useDebouncedField); selects apply immediately.
  */
@@ -133,21 +131,6 @@ export function ProductsToolbar({
         </div>
 
         <div className="flex items-center gap-3">
-          <FilterIcon
-            width={16}
-            height={16}
-            className="text-text-muted hidden sm:block"
-          />
-          <div className="min-w-0 flex-1 lg:w-56 lg:flex-none">
-            <SelectField
-              inline
-              id="filter-vendor"
-              label="Vendor"
-              value={filters.vendor}
-              options={withAll('All Vendors', facets.vendors, filters.vendor)}
-              onChange={(vendor) => onChange({ vendor })}
-            />
-          </div>
           <button
             type="button"
             onClick={onReset}

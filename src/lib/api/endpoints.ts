@@ -69,7 +69,6 @@ export const PRODUCT_SORTS = [
   'title',
   'price',
   'inventory',
-  'vendor',
   'synced_at',
 ] as const
 
@@ -411,7 +410,6 @@ export type ProductListResponse = z.infer<typeof productListResponseSchema>
 export interface ProductListParams {
   search?: string
   status?: ProductStatus
-  vendor?: string
   product_type?: string
   tag?: string
   min_price?: number

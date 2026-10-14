@@ -11,7 +11,7 @@ import type { ProductStatus } from '../../../lib/api/endpoints.ts'
 
 /**
  * Number of products per status tab ('' = All Products), under the current
- * search/vendor/type/tag/stock/price filters. A count is `null` until it has
+ * search/type/tag/stock/price filters. A count is `null` until it has
  * loaded. Each one is a cached one-row query (see `statusCountFilters`), so
  * paging or re-sorting doesn't refetch them. Pass a stable `statuses` array.
  */

@@ -191,6 +191,16 @@ describe('ProductsPage list', () => {
     expect(within(table).getByText('Out of stock across 2 variants')).toBeInTheDocument()
   })
 
+  it('offers no vendor filter and no vendor sort option', async () => {
+    renderPage()
+    await screen.findByText('Product 1')
+
+    expect(screen.queryByLabelText('Vendor')).not.toBeInTheDocument()
+    expect(screen.queryByText('All Vendors')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Sort by')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
+  })
+
   it('lays the table out as Image, Product, Status, Inventory, Type, Category, Stock, Price, View', async () => {
     renderPage()
     await screen.findByText('Product 1')

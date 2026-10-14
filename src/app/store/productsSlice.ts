@@ -36,7 +36,6 @@ const MAX_TABS = 10
 export interface ProductFilters {
   search: string
   status: ProductStatus | ''
-  vendor: string
   productType: string
   tag: string
   stock: '' | 'in' | 'out'
@@ -51,7 +50,6 @@ export interface ProductFilters {
 export const DEFAULT_FILTERS: ProductFilters = {
   search: '',
   status: '',
-  vendor: '',
   productType: '',
   tag: '',
   stock: '',
@@ -75,7 +73,6 @@ export function toParams(filters: ProductFilters): ProductListParams {
   const search = filters.search.trim()
   if (search) params.search = search
   if (filters.status) params.status = filters.status
-  if (filters.vendor) params.vendor = filters.vendor
   if (filters.productType) params.product_type = filters.productType
   if (filters.tag) params.tag = filters.tag
   if (filters.stock) params.in_stock = filters.stock === 'in'
@@ -95,7 +92,7 @@ export function cacheKey(filters: ProductFilters): string {
 
 /**
  * The query that yields one status tab's count: the same narrowing filters
- * (search, vendor, ...) with that status, one row per page — only `total`
+ * (search, type, ...) with that status, one row per page — only `total`
  * is read. Sort/order are pinned so changing them reuses the cached count.
  */
 export function statusCountFilters(
@@ -117,7 +114,6 @@ export function hasActiveFilters(filters: ProductFilters): boolean {
   return (
     filters.search.trim() !== '' ||
     filters.status !== '' ||
-    filters.vendor !== '' ||
     filters.productType !== '' ||
     filters.tag !== '' ||
     filters.stock !== '' ||
@@ -134,7 +130,6 @@ export interface ProductsEntry {
 }
 
 export interface ProductsFacets {
-  vendors: string[]
   productTypes: string[]
   tags: string[]
 }
@@ -172,7 +167,7 @@ const initialState: ProductsState = {
   filters: DEFAULT_FILTERS,
   entries: {},
   lastData: null,
-  facets: { vendors: [], productTypes: [], tags: [] },
+  facets: { productTypes: [], tags: [] },
   tabs: [],
   details: {},
 }
@@ -329,10 +324,6 @@ const productsSlice = createSlice({
         state.entries[key] = { data, fetchedAt, error: null, isFetching: false }
 
         if (key === cacheKey(state.filters)) state.lastData = data
-        addSorted(
-          state.facets.vendors,
-          data.items.map((item) => item.vendor),
-        )
         addSorted(
           state.facets.productTypes,
           data.items.map((item) => item.product_type),
