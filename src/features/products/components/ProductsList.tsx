@@ -3,12 +3,7 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
-import {
-  formatInventory,
-  formatPriceRange,
-  statusLabel,
-  statusTone,
-} from '../utils/format.ts'
+import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
 import { ProductImage } from './ProductImage.tsx'
 
 const TH_BASE =
@@ -16,9 +11,9 @@ const TH_BASE =
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
-const TD = 'px-3.5 py-2.5 text-left whitespace-nowrap'
-// Category is the first column to go on narrower desktops, keeping the rest unclipped.
-const CATEGORY_CELL = 'hidden 2xl:table-cell'
+// No alignment here: a `text-left` in the base would fight (and beat) the
+// `text-center` / `text-right` added per cell. Cells default to left.
+const TD = 'px-3.5 py-2.5 whitespace-nowrap'
 const SKELETON_ROWS = 8
 
 interface ProductsListProps {
@@ -177,15 +172,14 @@ export function ProductsList({
       >
         <thead>
           <tr>
-            <th className={TH}>Image</th>
+            {/* Narrow columns get a fixed width so Product takes the spare space. */}
+            <th className={`${TH} w-20`}>Image</th>
             <th className={TH}>Product</th>
-            <th className={TH}>Status</th>
-            <th className={TH}>Inventory</th>
-            <th className={TH}>Type</th>
-            <th className={`${TH} ${CATEGORY_CELL}`}>Category</th>
-            <th className={TH_RIGHT}>Stock</th>
-            <th className={TH_RIGHT}>Price</th>
-            <th className={TH_CENTER}>View</th>
+            <th className={`${TH_CENTER} w-28`}>Variants</th>
+            <th className={`${TH} w-32`}>Status</th>
+            <th className={`${TH_RIGHT} w-36`}>Inventory</th>
+            <th className={`${TH_RIGHT} w-44`}>Price</th>
+            <th className={`${TH_CENTER} w-20`}>View</th>
           </tr>
         </thead>
         <tbody>
@@ -197,7 +191,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 9 }, (_, cell) => (
+                  {Array.from({ length: 7 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -229,21 +223,13 @@ export function ProductsList({
                       {product.title}
                     </span>
                   </td>
+                  <td className={`${TD} text-center`}>
+                    {product.variants_count.toLocaleString('en-GB')}
+                  </td>
                   <td className={TD}>
                     <Badge tone={statusTone(product.status)}>
                       {statusLabel(product.status)}
                     </Badge>
-                  </td>
-                  <td className={TD}>{formatInventory(product)}</td>
-                  <td className={TD}>
-                    <span className="block max-w-40 truncate">
-                      {product.product_type || '—'}
-                    </span>
-                  </td>
-                  <td className={`${TD} ${CATEGORY_CELL}`}>
-                    <span className="block max-w-40 truncate">
-                      {product.category_name ?? '—'}
-                    </span>
                   </td>
                   <td className={`${TD} text-right`}>
                     <Stock value={product.total_inventory} />

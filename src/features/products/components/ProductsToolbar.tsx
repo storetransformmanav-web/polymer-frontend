@@ -12,7 +12,6 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
 import {
   PRODUCT_SORTS,
@@ -86,10 +85,8 @@ export function ProductsToolbar({
   onChange,
   onReset,
 }: ProductsToolbarProps) {
-  // Open by default on larger screens; on phones start collapsed so results are in view.
-  const isDesktop = useMediaQuery('(min-width: 768px)')
-  const [userOpen, setUserOpen] = useState<boolean | null>(null)
-  const filtersOpen = userOpen ?? isDesktop
+  // Collapsed by default on every screen size; the Filters button reveals the grid.
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const counts = useProductStatusCounts(filters, STATUS_VALUES)
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -186,7 +183,7 @@ export function ProductsToolbar({
           type="button"
           aria-expanded={filtersOpen}
           aria-controls="product-filter-grid"
-          onClick={() => setUserOpen(!filtersOpen)}
+          onClick={() => setFiltersOpen(!filtersOpen)}
           className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
         >
           <SlidersIcon width={16} height={16} />

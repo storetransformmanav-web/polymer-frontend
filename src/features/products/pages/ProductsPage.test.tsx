@@ -185,15 +185,16 @@ describe('ProductsPage list', () => {
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
     // Price range for a multi-variant product, single price otherwise.
     expect(screen.getAllByText('£170.00 – £200.00').length).toBeGreaterThan(0)
-    // Product 3 is out of stock: shown in the Stock column and in Inventory.
+    // Product 3 is out of stock: shown in the Inventory column.
     const table = screen.getByRole('table')
     expect(within(table).getByText('Out of stock')).toBeInTheDocument()
-    expect(within(table).getByText('Out of stock across 2 variants')).toBeInTheDocument()
   })
 
   it('offers no vendor filter and no vendor sort option', async () => {
+    const user = userEvent.setup()
     renderPage()
     await screen.findByText('Product 1')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     expect(screen.queryByLabelText('Vendor')).not.toBeInTheDocument()
     expect(screen.queryByText('All Vendors')).not.toBeInTheDocument()
@@ -201,7 +202,7 @@ describe('ProductsPage list', () => {
     expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
   })
 
-  it('lays the table out as Image, Product, Status, Inventory, Type, Category, Stock, Price, View', async () => {
+  it('lays the table out as Image, Product, Variants, Status, Inventory, Price, View', async () => {
     renderPage()
     await screen.findByText('Product 1')
 
@@ -212,20 +213,42 @@ describe('ProductsPage list', () => {
     expect(headers).toEqual([
       'Image',
       'Product',
+      'Variants',
       'Status',
       'Inventory',
-      'Type',
-      'Category',
-      'Stock',
       'Price',
       'View',
     ])
     expect(within(table).queryByText('Vendor 2')).not.toBeInTheDocument()
-    // Product 1 has 10 units across 2 variants; Product 3 is out of stock.
-    expect(
-      within(table).getAllByText('10 in stock across 2 variants').length,
-    ).toBeGreaterThan(0)
-    expect(within(table).getByText('Out of stock across 2 variants')).toBeInTheDocument()
+
+    // Product 1: 2 variants, 10 units. Product 3 is out of stock.
+    const [, row1, , row3] = within(table).getAllByRole('row')
+    const cells1 = within(row1).getAllByRole('cell')
+    expect(cells1[2]).toHaveTextContent('2')
+    // Alignment classes must not conflict (a stray text-left beat text-center).
+    expect(cells1[2]).toHaveClass('text-center')
+    expect(cells1[2]).not.toHaveClass('text-left')
+    expect(cells1[4]).toHaveClass('text-right')
+    expect(cells1[4]).not.toHaveClass('text-left')
+    expect(cells1[4]).toHaveTextContent('10')
+    expect(within(row3).getAllByRole('cell')[4]).toHaveTextContent('Out of stock')
+  })
+
+  it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const toggle = screen.getByRole('button', { name: 'Filters' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(document.getElementById('product-filter-grid')).toHaveAttribute('inert')
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById('product-filter-grid')).not.toHaveAttribute('inert')
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('searches after a short pause and returns to page 1', async () => {
@@ -303,6 +326,7 @@ describe('ProductsPage list', () => {
     renderPage()
     await screen.findByText('Product 1')
 
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
     await user.selectOptions(screen.getByLabelText('Sort by'), 'price')
     await user.selectOptions(screen.getByLabelText('Order'), 'asc')
     await user.selectOptions(screen.getByLabelText('Stock'), 'in')
