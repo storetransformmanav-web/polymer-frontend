@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import {
+  ActivityIcon,
   DashboardIcon,
   InventoryIcon,
   OrdersIcon,
@@ -54,6 +55,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon },
+  { to: '/activity', label: 'Activity Management', icon: ActivityIcon },
 ]
 
 /**

@@ -1,8 +1,14 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { api } from '../../lib/api/endpoints.ts'
 import { renderWithProviders } from '../../test/renderWithProviders.tsx'
 import { Navbar } from './Navbar.tsx'
+
+vi.mock('../../lib/api/endpoints.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/api/endpoints.ts')>()),
+  api: { activity: { list: vi.fn(), actions: vi.fn() }, auth: {} },
+}))
 
 const GROUP = { name: 'Shopify Management' }
 const SECTIONS = [
@@ -44,6 +50,39 @@ describe('Navbar', () => {
     expect(users).toHaveAttribute('aria-current', 'page')
     // Not a Shopify page, so the Shopify group stays closed.
     expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('links Activity Management at the top level', () => {
+    renderWithProviders(<Navbar />, { route: '/activity' })
+
+    const activity = screen.getByRole('link', { name: 'Activity Management' })
+    expect(activity).toHaveAttribute('href', '/activity')
+    expect(activity).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('starts loading the Activity page as soon as its link is hovered or focused', async () => {
+    vi.mocked(api.activity.list).mockResolvedValue({
+      items: [],
+      page: 1,
+      page_size: 25,
+      total: 0,
+      total_pages: 1,
+      has_next: false,
+    })
+    vi.mocked(api.activity.actions).mockResolvedValue([])
+    const user = userEvent.setup()
+    renderWithProviders(<Navbar />, { route: '/' })
+    expect(api.activity.list).not.toHaveBeenCalled()
+
+    await user.hover(screen.getByRole('link', { name: 'Activity Management' }))
+
+    await waitFor(() =>
+      expect(api.activity.list).toHaveBeenCalledWith({ page: 1, page_size: 25 }),
+    )
+    expect(api.activity.actions).toHaveBeenCalled()
+    // Other links don't trigger any loading.
+    await user.hover(screen.getByRole('link', { name: 'Dashboard' }))
+    expect(api.activity.list).toHaveBeenCalledTimes(1)
   })
 
   describe('Shopify Management accordion', () => {

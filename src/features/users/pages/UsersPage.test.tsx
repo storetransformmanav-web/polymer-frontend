@@ -109,8 +109,11 @@ const create = vi.mocked(api.users.create)
 const rolesList = vi.mocked(api.roles.list)
 const shopsList = vi.mocked(api.shops.list)
 
+// One-row requests are the status tabs' counts, not pages of the list.
+const isCountQuery = (params: UserListParams) => params.page_size === 1
 const callsForPage = (page: number) =>
-  list.mock.calls.filter(([params]) => params.page === page).length
+  list.mock.calls.filter(([params]) => !isCountQuery(params) && params.page === page)
+    .length
 
 describe('UsersPage', () => {
   beforeEach(() => {
@@ -272,8 +275,14 @@ describe('UsersPage', () => {
     })
 
     it('shows the backend message when loading fails, and retries', async () => {
-      list.mockRejectedValueOnce(
-        new ApiError('You do not have access to Users.', { status: 403 }),
+      // The list request fails once; the tabs' count requests are unaffected.
+      let failList = true
+      list.mockImplementation((params) =>
+        failList && !isCountQuery(params)
+          ? Promise.reject(
+              new ApiError('You do not have access to Users.', { status: 403 }),
+            )
+          : Promise.resolve(respond(params)),
       )
       const user = userEvent.setup()
       renderWithProviders(<UsersPage />)
@@ -281,8 +290,43 @@ describe('UsersPage', () => {
       expect(await screen.findByText("Couldn't load users")).toBeInTheDocument()
       expect(screen.getByText('You do not have access to Users.')).toBeInTheDocument()
 
+      failList = false
       await user.click(screen.getByRole('button', { name: 'Try again' }))
       expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+    })
+
+    it('shows a count on every status tab, honouring the other filters', async () => {
+      list.mockImplementation((params) => {
+        const byStatus = { active: 48, inactive: 12 }
+        const total = params.status ? byStatus[params.status] : 60
+        return Promise.resolve({ ...respond(params), total })
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      const tabs = screen.getByRole('group', { name: 'Filter by status' })
+      expect(
+        await within(tabs).findByRole('button', { name: /^All Userss*60$/ }),
+      ).toBeInTheDocument()
+      expect(
+        within(tabs).getByRole('button', { name: /^Actives*48$/ }),
+      ).toBeInTheDocument()
+      expect(
+        within(tabs).getByRole('button', { name: /^Inactives*12$/ }),
+      ).toBeInTheDocument()
+
+      // The role filter narrows every tab's count (the count queries carry it).
+      await user.selectOptions(screen.getByLabelText('Role:'), 'warehouse')
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({
+            role: 'warehouse',
+            status: 'inactive',
+            page_size: 1,
+          }),
+        ),
+      )
     })
   })
 

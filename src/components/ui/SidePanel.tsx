@@ -11,6 +11,8 @@ interface SidePanelProps {
   closeDisabled?: boolean
   /** Pinned to the bottom of the panel (action buttons). */
   footer?: ReactNode
+  /** A roomier panel (for tables or code) instead of the default form width. */
+  wide?: boolean
   children: ReactNode
 }
 
@@ -25,6 +27,7 @@ export function SidePanel({
   onClose,
   closeDisabled = false,
   footer,
+  wide = false,
   children,
 }: SidePanelProps) {
   const panelRef = useRef<HTMLElement>(null)
@@ -64,7 +67,7 @@ export function SidePanel({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="bg-bg border-border relative flex h-full w-full flex-col border-l shadow-[0_0_40px_rgba(0,0,0,0.18)] transition-transform duration-300 ease-out motion-reduce:transition-none sm:max-w-md starting:translate-x-full"
+        className={`bg-bg border-border relative flex h-full w-full flex-col border-l shadow-[0_0_40px_rgba(0,0,0,0.18)] transition-transform duration-300 ease-out motion-reduce:transition-none starting:translate-x-full ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'}`}
       >
         <header className="border-border flex items-center justify-between gap-3 border-b px-5 py-4">
           <h2 className="text-text-muted text-xs font-bold tracking-wider uppercase">

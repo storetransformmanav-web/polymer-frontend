@@ -28,6 +28,11 @@ export const ENDPOINTS = {
   roles: {
     list: '/roles',
   },
+  activity: {
+    list: '/activity',
+    /** Distinct action names with counts — feeds the action dropdown. */
+    actions: '/activity/actions',
+  },
   customers: {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
@@ -104,7 +109,7 @@ const userItemSchema = z.object({
   full_name: z.string().default(''),
   email: z.string(),
   phone: z.string().nullish(),
-  /** The role's name (what \`role=\` filters and create/update take), e.g. "office". */
+  /** The role's name (what `role=` filters and create/update take), e.g. "office". */
   role: z.string(),
   /** The role's display name, e.g. "Office". */
   role_label: z.string().nullish(),
@@ -142,11 +147,11 @@ export type UserItem = z.infer<typeof userItemSchema>
 export type UserListResponse = z.infer<typeof userListResponseSchema>
 export type Role = z.infer<typeof roleSchema>
 
-/** Query parameters accepted by \`GET /users\` (all optional). */
+/** Query parameters accepted by `GET /users` (all optional). */
 export interface UserListParams {
   /** Name or email. */
   search?: string
-  /** A role name from \`GET /roles\`. */
+  /** A role name from `GET /roles`. */
   role?: string
   status?: UserStatus
   page?: number
@@ -154,16 +159,87 @@ export interface UserListParams {
   page_size?: number
 }
 
-/** Body of \`POST /users\`. */
+/** Body of `POST /users`. */
 export interface UserCreateBody {
   first_name: string
   last_name?: string
   email: string
-  /** A role name from \`GET /roles\`. */
+  /** A role name from `GET /roles`. */
   role?: string
   phone?: string | null
   /** Stores a non-admin user may see. */
   shop_keys?: string[]
+}
+
+// --- Activity log (GET /activity, GET /activity/actions) -----------------------
+// A record of what staff did in the CRM. `details` and `changes` are free-form
+// JSON from the backend: they are only ever shown as text, never as markup.
+
+export const ACTIVITY_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+
+const activityUserSchema = z.object({
+  id: z.string().nullish(),
+  full_name: z.string().nullish(),
+  email: z.string().nullish(),
+  role: z.string().nullish(),
+})
+
+const activityItemSchema = z.object({
+  id: z.number(),
+  time: z.string(),
+  user: activityUserSchema.nullish(),
+  /** Machine name, e.g. "list_products" — what the `action` filter takes. */
+  action: z.string(),
+  /** A sentence, e.g. "Manav viewed the products list". */
+  summary: z.string().default(''),
+  method: z.string().nullish(),
+  path: z.string().nullish(),
+  entity_type: z.string().nullish(),
+  entity_id: z.string().nullish(),
+  entity_label: z.string().nullish(),
+  details: z.record(z.string(), z.unknown()).nullish(),
+  changes: z.record(z.string(), z.unknown()).nullish(),
+  status_code: z.number().nullish(),
+  duration_ms: z.number().nullish(),
+  ip: z.string().nullish(),
+  device: z.string().nullish(),
+})
+
+const activityListResponseSchema = z.object({
+  items: z.array(activityItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+const activityActionSchema = z.object({ action: z.string(), count: z.number() })
+const activityActionsResponseSchema = z.object({ items: z.array(activityActionSchema) })
+
+export type ActivityMethod = (typeof ACTIVITY_METHODS)[number]
+export type ActivityItem = z.infer<typeof activityItemSchema>
+export type ActivityListResponse = z.infer<typeof activityListResponseSchema>
+export type ActivityActionCount = z.infer<typeof activityActionSchema>
+
+/** Query parameters accepted by `GET /activity` (all optional). */
+export interface ActivityListParams {
+  /** Only this user (omit for everyone). */
+  user_id?: string
+  /** Exact action name, e.g. "update_user". */
+  action?: string
+  entity_type?: string
+  entity_id?: string
+  method?: ActivityMethod
+  /** Matches the summary text or the path. */
+  search?: string
+  /** ISO date-time, inclusive start. */
+  from?: string
+  /** ISO date-time, end. */
+  to?: string
+  page?: number
+  /** 1–200. */
+  page_size?: number
 }
 
 const loginResponseSchema = z.object({
@@ -607,6 +683,20 @@ export const api = {
     async list(): Promise<Role[]> {
       const data = await apiClient.get(ENDPOINTS.roles.list)
       return roleListResponseSchema.parse(data).items
+    },
+  },
+
+  activity: {
+    /** One page of the activity log, newest first, filtered server-side. */
+    async list(params: ActivityListParams): Promise<ActivityListResponse> {
+      const data = await apiClient.get(ENDPOINTS.activity.list, { params })
+      return activityListResponseSchema.parse(data)
+    },
+
+    /** Every action name that appears in the log, with how often (for the filter dropdown). */
+    async actions(): Promise<ActivityActionCount[]> {
+      const data = await apiClient.get(ENDPOINTS.activity.actions)
+      return activityActionsResponseSchema.parse(data).items
     },
   },
 

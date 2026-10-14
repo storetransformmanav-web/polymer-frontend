@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
+import { queryClient } from '../queryClient.ts'
 import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
 import { customersReducer } from './customersSlice.ts'
 import { productsReducer } from './productsSlice.ts'
@@ -41,6 +42,10 @@ export function createAppStore() {
     if (auth.session !== previousSession) {
       previousSession = auth.session
       setAccessToken(auth.session?.accessToken ?? null)
+      // Signing out (or an expired session) must not leave anything the last
+      // user was allowed to see — activity logs, user lists — in memory for
+      // the next one. (The Redux caches reset themselves on `sessionCleared`.)
+      if (!auth.session) queryClient.clear()
       try {
         if (auth.session) {
           window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(auth.session))

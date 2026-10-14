@@ -32,6 +32,17 @@ export function toUserParams(filters: UserFilters): UserListParams {
   return params
 }
 
+/**
+ * The query that yields one status tab's count: the same narrowing filters
+ * (search, role) with that status, one row per page — only `total` is read.
+ */
+export function statusCountFilters(
+  filters: UserFilters,
+  status: UserFilters['status'],
+): UserFilters {
+  return { ...filters, status, page: 1, pageSize: 1 }
+}
+
 /** True when any narrowing filter (not paging) is applied. */
 export function hasActiveUserFilters(filters: UserFilters): boolean {
   return filters.search.trim() !== '' || filters.role !== '' || filters.status !== ''

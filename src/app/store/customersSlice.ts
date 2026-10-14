@@ -96,6 +96,25 @@ export function customersCacheKey(filters: CustomerFilters): string {
   return JSON.stringify(toCustomerParams(filters))
 }
 
+/**
+ * The query that yields one role tab's count: the same narrowing filters
+ * (search, country, store, ...) with that role, one row per page — only
+ * `total` is read. Sort/order are pinned so changing them reuses the cached count.
+ */
+export function roleCountFilters(
+  filters: CustomerFilters,
+  role: CustomerRole | '',
+): CustomerFilters {
+  return {
+    ...filters,
+    role,
+    page: 1,
+    pageSize: 1,
+    sort: DEFAULT_CUSTOMER_FILTERS.sort,
+    order: DEFAULT_CUSTOMER_FILTERS.order,
+  }
+}
+
 /** True when any narrowing filter (not sort/paging) is applied. */
 export function hasActiveCustomerFilters(filters: CustomerFilters): boolean {
   return (

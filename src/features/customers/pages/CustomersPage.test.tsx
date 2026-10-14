@@ -67,8 +67,11 @@ function respond(params: CustomerListParams): CustomerListResponse {
 }
 
 const list = vi.mocked(api.customers.list)
+// One-row requests are the role tabs' counts, not pages of the list.
+const isCountQuery = (params: CustomerListParams) => params.page_size === 1
+const pageCalls = () => list.mock.calls.filter(([params]) => !isCountQuery(params))
 const callsForPage = (page: number) =>
-  list.mock.calls.filter(([params]) => params.page === page).length
+  pageCalls().filter(([params]) => params.page === page).length
 
 describe('CustomersPage', () => {
   beforeEach(() => {
@@ -161,11 +164,11 @@ describe('CustomersPage', () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
-    await user.click(screen.getByRole('button', { name: 'Administrators' }))
+    await user.click(screen.getByRole('button', { name: /^Administrators/ }))
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'administrator' }),
+        expect.objectContaining({ role: 'administrator', page_size: 25 }),
       ),
     )
     expect(screen.getByRole('button', { name: /^Administrators/ })).toHaveAttribute(
@@ -259,7 +262,7 @@ describe('CustomersPage', () => {
 
     // Page 2 is requested in the background without being asked for.
     await waitFor(() => expect(callsForPage(2)).toBe(1))
-    const callsBefore = list.mock.calls.length
+    const callsBefore = pageCalls().length
 
     await user.click(screen.getByRole('button', { name: 'Page 2' }))
     // No await/findBy: the rows are there in the same render as the click.
@@ -271,7 +274,7 @@ describe('CustomersPage', () => {
 
     // Page 1 was never fetched a second time; only page 3 was prefetched.
     expect(callsForPage(1)).toBe(1)
-    expect(list.mock.calls.length - callsBefore).toBeLessThanOrEqual(1)
+    expect(pageCalls().length - callsBefore).toBeLessThanOrEqual(1)
   })
 
   it('changes the page size', async () => {
@@ -290,14 +293,51 @@ describe('CustomersPage', () => {
   })
 
   it('shows the backend error and recovers on retry', async () => {
-    list.mockRejectedValueOnce(new ApiError('Not logged in.', { status: 401 }))
+    // The list request fails once; the tabs' count requests are unaffected.
+    let failList = true
+    list.mockImplementation((params) =>
+      failList && !isCountQuery(params)
+        ? Promise.reject(new ApiError('Not logged in.', { status: 401 }))
+        : Promise.resolve(respond(params)),
+    )
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
 
     expect(await screen.findByText("Couldn't load customers")).toBeInTheDocument()
     expect(screen.getByText('Not logged in.')).toBeInTheDocument()
 
+    failList = false
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Customer 2')).toBeInTheDocument()
+  })
+
+  it('shows a count on every role tab, honouring the other filters', async () => {
+    list.mockImplementation((params) => {
+      const byRole = { administrator: 7, subscriber: 53 }
+      const total = params.role ? byRole[params.role] : 60
+      return Promise.resolve({ ...respond(params), total })
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    const tabs = screen.getByRole('group', { name: 'Filter by role' })
+    expect(
+      await within(tabs).findByRole('button', { name: /^All Customerss*60$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Administratorss*7$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Subscriberss*53$/ }),
+    ).toBeInTheDocument()
+
+    // The search narrows every tab's count (the count queries carry it).
+    await user.type(screen.getByRole('searchbox', { name: 'Search customers' }), 'ian')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'ian', role: 'administrator', page_size: 1 }),
+      ),
+    )
   })
 })

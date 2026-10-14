@@ -3,6 +3,7 @@ import { FilterIcon, PlusIcon, SearchIcon, XIcon } from '../../../components/ui/
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import type { Role } from '../../../lib/api/endpoints.ts'
+import { useUserStatusCounts } from '../hooks/useUserStatusCounts.ts'
 import type { UserFilters } from '../hooks/useUsers.ts'
 
 const STATUS_TABS: { value: UserFilters['status']; label: string }[] = [
@@ -10,6 +11,8 @@ const STATUS_TABS: { value: UserFilters['status']; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
 ]
+
+const STATUS_VALUES = STATUS_TABS.map((tab) => tab.value)
 
 interface UsersToolbarProps {
   filters: UserFilters
@@ -35,6 +38,7 @@ export function UsersToolbar({
   onReset,
   onAdd,
 }: UsersToolbarProps) {
+  const counts = useUserStatusCounts(filters, STATUS_VALUES)
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
   )
@@ -113,6 +117,8 @@ export function UsersToolbar({
         >
           {STATUS_TABS.map((tab) => {
             const active = filters.status === tab.value
+            // The open tab can fall back to the list's own total while its count loads.
+            const count = counts[tab.value] ?? (active ? total : null)
             return (
               <button
                 key={tab.value}
@@ -126,9 +132,15 @@ export function UsersToolbar({
                 }`}
               >
                 {tab.label}
-                {active && total !== null && (
-                  <span className="bg-accent-tint text-accent rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold">
-                    {total.toLocaleString('en-GB')}
+                {count !== null && (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
+                      active
+                        ? 'bg-accent-tint text-accent'
+                        : 'bg-border/60 text-text-muted'
+                    }`}
+                  >
+                    {count.toLocaleString('en-GB')}
                   </span>
                 )}
               </button>

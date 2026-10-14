@@ -46,6 +46,18 @@ export function formatDateTime(isoString: string): string {
   }).format(new Date(isoString))
 }
 
+/** "14 Oct 2026, 11:04:03" — down to the second, for log entries. */
+export function formatTimestamp(isoString: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(isoString))
+}
+
 /** "Priya Shah" → "PS": up to two initials, ignoring extra spaces. */
 export function initials(name: string): string {
   return name

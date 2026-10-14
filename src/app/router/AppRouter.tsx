@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthLayout } from '../layouts/AuthLayout.tsx'
 import { DashboardLayout } from '../layouts/DashboardLayout.tsx'
+import { ActivityPage } from '../../features/activity/index.ts'
 import { CustomersPage } from '../../features/customers/index.ts'
 import { DashboardPage } from '../../features/dashboard/index.ts'
 import { InventoryPage } from '../../features/inventory/index.ts'
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
           { path: 'customers/*', element: <CustomersPage /> },
           { path: 'inventory', element: <InventoryPage /> },
           { path: 'users', element: <UsersPage /> },
+          { path: 'activity', element: <ActivityPage /> },
         ],
       },
     ],

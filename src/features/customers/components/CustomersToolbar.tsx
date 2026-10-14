@@ -18,6 +18,7 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
+import { useCustomerRoleCounts } from '../hooks/useCustomerRoleCounts.ts'
 import {
   CUSTOMER_SORTS,
   type CustomerRole,
@@ -30,6 +31,8 @@ const ROLE_TABS: { value: CustomerRole | ''; label: string }[] = [
   { value: 'administrator', label: 'Administrators' },
   { value: 'subscriber', label: 'Subscribers' },
 ]
+
+const ROLE_VALUES = ROLE_TABS.map((tab) => tab.value)
 
 const SORT_LABELS: Record<CustomerSort, string> = {
   created_at: 'Date created',
@@ -103,6 +106,7 @@ export function CustomersToolbar({
 }: CustomersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const counts = useCustomerRoleCounts(filters, ROLE_VALUES)
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -179,6 +183,8 @@ export function CustomersToolbar({
         >
           {ROLE_TABS.map((tab) => {
             const active = filters.role === tab.value
+            // The open tab can fall back to the list's own total while its count loads.
+            const count = counts[tab.value] ?? (active ? total : null)
             return (
               <button
                 key={tab.value}
@@ -192,9 +198,15 @@ export function CustomersToolbar({
                 }`}
               >
                 {tab.label}
-                {active && total !== null && (
-                  <span className="bg-accent-tint text-accent rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold">
-                    {total.toLocaleString('en-GB')}
+                {count !== null && (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
+                      active
+                        ? 'bg-accent-tint text-accent'
+                        : 'bg-border/60 text-text-muted'
+                    }`}
+                  >
+                    {count.toLocaleString('en-GB')}
                   </span>
                 )}
               </button>
