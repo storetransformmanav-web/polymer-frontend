@@ -13,7 +13,6 @@ import {
   type CustomerListResponse,
   type CustomerRole,
   type CustomerSort,
-  type CustomerSource,
   type CustomerState,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
@@ -35,7 +34,6 @@ export interface CustomerFilters {
   /** The store picked in the top bar ('' = all). Set by `shopSelected`, not by this page's toolbar. */
   shop: string
   role: CustomerRole | ''
-  source: CustomerSource | ''
   state: CustomerState | ''
   marketing: '' | 'yes' | 'no'
   orders: '' | 'yes' | 'no'
@@ -53,7 +51,6 @@ export const DEFAULT_CUSTOMER_FILTERS: CustomerFilters = {
   search: '',
   shop: '',
   role: '',
-  source: '',
   state: '',
   marketing: '',
   orders: '',
@@ -80,7 +77,6 @@ export function toCustomerParams(filters: CustomerFilters): CustomerListParams {
   if (search) params.search = search
   if (filters.shop) params.shop = filters.shop
   if (filters.role) params.role = filters.role
-  if (filters.source) params.source = filters.source
   if (filters.state) params.state = filters.state
   if (filters.marketing) params.accepts_marketing = filters.marketing === 'yes'
   if (filters.orders) params.has_orders = filters.orders === 'yes'
@@ -105,7 +101,6 @@ export function hasActiveCustomerFilters(filters: CustomerFilters): boolean {
   return (
     filters.search.trim() !== '' ||
     filters.role !== '' ||
-    filters.source !== '' ||
     filters.state !== '' ||
     filters.marketing !== '' ||
     filters.orders !== '' ||

@@ -140,7 +140,6 @@ const productListResponseSchema = z.object({
 // --- Customers (GET /customers) ------------------------------------------------
 
 export const CUSTOMER_ROLES = ['administrator', 'subscriber'] as const
-export const CUSTOMER_SOURCES = ['shopify', 'crm'] as const
 export const CUSTOMER_STATES = ['ENABLED', 'DISABLED', 'INVITED', 'DECLINED'] as const
 export const CUSTOMER_SORTS = [
   'created_at',
@@ -189,7 +188,6 @@ const customerListResponseSchema = z.object({
 })
 
 export type CustomerRole = (typeof CUSTOMER_ROLES)[number]
-export type CustomerSource = (typeof CUSTOMER_SOURCES)[number]
 export type CustomerState = (typeof CUSTOMER_STATES)[number]
 export type CustomerSort = (typeof CUSTOMER_SORTS)[number]
 export type CustomerListItem = z.infer<typeof customerListItemSchema>
@@ -199,7 +197,6 @@ export type CustomerListResponse = z.infer<typeof customerListResponseSchema>
 export interface CustomerListParams {
   search?: string
   role?: CustomerRole
-  source?: CustomerSource
   state?: CustomerState
   /** Store key or domain; omit for every store. */
   shop?: string

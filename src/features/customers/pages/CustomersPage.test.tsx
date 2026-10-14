@@ -174,12 +174,40 @@ describe('CustomersPage', () => {
     )
   })
 
-  it('sends source, state, marketing, orders, sort and spend filters', async () => {
+  it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
-    await user.selectOptions(screen.getByLabelText('Source'), 'crm')
+    const toggle = screen.getByRole('button', { name: 'Filters' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(document.getElementById('customer-filter-grid')).toHaveAttribute('inert')
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById('customer-filter-grid')).not.toHaveAttribute('inert')
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('has no Source filter', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    expect(screen.queryByLabelText('Source')).not.toBeInTheDocument()
+    expect(screen.queryByText('All Sources')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Account State')).toBeInTheDocument()
+  })
+
+  it('sends state, marketing, orders, sort and spend filters', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
     await user.selectOptions(screen.getByLabelText('Account State'), 'INVITED')
     await user.selectOptions(screen.getByLabelText('Marketing'), 'yes')
     await user.selectOptions(screen.getByLabelText('Orders'), 'no')
@@ -190,7 +218,6 @@ describe('CustomersPage', () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
-          source: 'crm',
           state: 'INVITED',
           accepts_marketing: true,
           has_orders: false,

@@ -18,12 +18,10 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import {
   CUSTOMER_SORTS,
   type CustomerRole,
   type CustomerSort,
-  type CustomerSource,
   type CustomerState,
 } from '../../../lib/api/endpoints.ts'
 
@@ -50,11 +48,6 @@ const SORT_OPTIONS: SelectOption[] = CUSTOMER_SORTS.map((value) => ({
 const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
-]
-const SOURCE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'All Sources' },
-  { value: 'shopify', label: 'Shopify' },
-  { value: 'crm', label: 'Created in CRM' },
 ]
 const STATE_OPTIONS: SelectOption[] = [
   { value: '', label: 'All States' },
@@ -108,10 +101,8 @@ export function CustomersToolbar({
   onChange,
   onReset,
 }: CustomersToolbarProps) {
-  // Open by default on larger screens; on phones start collapsed so results are in view.
-  const isDesktop = useMediaQuery('(min-width: 768px)')
-  const [userOpen, setUserOpen] = useState<boolean | null>(null)
-  const filtersOpen = userOpen ?? isDesktop
+  // Collapsed by default on every screen size; the Filters button reveals the grid.
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -215,7 +206,7 @@ export function CustomersToolbar({
           type="button"
           aria-expanded={filtersOpen}
           aria-controls="customer-filter-grid"
-          onClick={() => setUserOpen(!filtersOpen)}
+          onClick={() => setFiltersOpen(!filtersOpen)}
           className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
         >
           <SlidersIcon width={16} height={16} />
@@ -237,14 +228,6 @@ export function CustomersToolbar({
       >
         <div className="-m-1 overflow-hidden p-1">
           <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-            <SelectField
-              id="filter-source"
-              label="Source"
-              icon={UsersIcon}
-              value={filters.source}
-              options={SOURCE_OPTIONS}
-              onChange={(source) => onChange({ source: source as CustomerSource | '' })}
-            />
             <SelectField
               id="filter-state"
               label="Account State"
