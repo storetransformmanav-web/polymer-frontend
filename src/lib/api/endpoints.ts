@@ -18,6 +18,9 @@ export const ENDPOINTS = {
     google: '/auth/google',
     logout: '/auth/logout',
   },
+  shops: {
+    list: '/shops',
+  },
   customers: {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
@@ -54,6 +57,32 @@ const otpRequestResponseSchema = z.object({
    * account exists).
    */
   dev_note: z.string().optional(),
+})
+
+// --- Shops (GET /shops) --------------------------------------------------------
+// The stores the signed-in user may see, in dropdown order. Optional-ish fields
+// are `.nullish()` so one missing value can't take the whole dropdown down.
+
+const shopSchema = z.object({
+  id: z.string(),
+  /** Short store key, e.g. "polymer-uk" — what `shop=` filters take. */
+  key: z.string().nullish(),
+  name: z.string().nullish(),
+  domain: z.string(),
+  primary_domain: z.string().nullish(),
+  currency: z.string().nullish(),
+  timezone: z.string().nullish(),
+  colour: z.string().nullish(),
+  is_active: z.boolean().default(true),
+  position: z.number().default(0),
+  connected: z.boolean().default(true),
+  products_count: z.number().default(0),
+  last_synced_at: z.string().nullish(),
+})
+
+const shopListResponseSchema = z.object({
+  items: z.array(shopSchema),
+  total: z.number().default(0),
 })
 
 const loginResponseSchema = z.object({
@@ -172,6 +201,8 @@ export interface CustomerListParams {
   role?: CustomerRole
   source?: CustomerSource
   state?: CustomerState
+  /** Store key or domain; omit for every store. */
+  shop?: string
   accepts_marketing?: boolean
   has_orders?: boolean
   tag?: string
@@ -410,6 +441,8 @@ export type ProductListResponse = z.infer<typeof productListResponseSchema>
 export interface ProductListParams {
   search?: string
   status?: ProductStatus
+  /** Store key or domain; omit for every store. */
+  shop?: string
   product_type?: string
   tag?: string
   min_price?: number
@@ -421,6 +454,7 @@ export interface ProductListParams {
   page_size?: number
 }
 
+export type Shop = z.infer<typeof shopSchema>
 export type AuthUser = z.infer<typeof authUserSchema>
 export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>
 export type LoginResponse = z.infer<typeof loginResponseSchema>
@@ -465,6 +499,14 @@ export const api = {
         params: { include_raw: includeRaw },
       })
       return productDetailResponseSchema.parse(data).product
+    },
+  },
+
+  shops: {
+    /** Stores the signed-in user may see, in dropdown order (admins see all). */
+    async list(): Promise<Shop[]> {
+      const data = await apiClient.get(ENDPOINTS.shops.list)
+      return shopListResponseSchema.parse(data).items
     },
   },
 

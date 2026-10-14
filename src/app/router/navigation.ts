@@ -15,6 +15,11 @@ export interface NavItem {
   icon: ComponentType<IconProps>
   /** Matches react-router's `end` prop — exact match required. */
   end?: boolean
+  /**
+   * The page honours the top-bar store dropdown (it sends the API's `shop`
+   * filter). Only set this for pages that do — the dropdown is hidden elsewhere.
+   */
+  shopScoped?: boolean
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -42,8 +47,8 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: StoreIcon,
     items: [
       { to: '/orders', label: 'Orders', icon: OrdersIcon },
-      { to: '/products', label: 'Products', icon: ProductsIcon },
-      { to: '/customers', label: 'Customers', icon: UsersIcon },
+      { to: '/products', label: 'Products', icon: ProductsIcon, shopScoped: true },
+      { to: '/customers', label: 'Customers', icon: UsersIcon, shopScoped: true },
       { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
     ],
   },

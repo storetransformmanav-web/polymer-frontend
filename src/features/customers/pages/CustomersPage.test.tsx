@@ -8,6 +8,7 @@ import {
   type CustomerListParams,
   type CustomerListResponse,
 } from '../../../lib/api/endpoints.ts'
+import { shopSelected } from '../../../app/store/shopSlice.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { CustomersPage } from './CustomersPage.tsx'
 
@@ -117,6 +118,20 @@ describe('CustomersPage', () => {
   it('falls back to first + last name, then the email, when there is no full name', async () => {
     renderWithProviders(<CustomersPage />)
     expect(await screen.findByText('Ian Rayner')).toBeInTheDocument()
+  })
+
+  it('queries the store picked in the top bar', async () => {
+    const { store } = renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+    expect(list.mock.calls.every(([params]) => !('shop' in params))).toBe(true)
+
+    store.dispatch(shopSelected('polymer-uk'))
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ shop: 'polymer-uk', page: 1 }),
+      ),
+    )
   })
 
   it('searches after a short pause, returns to page 1, and recovers from an empty result', async () => {

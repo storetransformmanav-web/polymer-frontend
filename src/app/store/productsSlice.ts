@@ -15,6 +15,7 @@ import {
   type ProductStatus,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
+import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
 
 /**
  * Products list, built for instant-feeling navigation:
@@ -36,6 +37,8 @@ const MAX_TABS = 10
 export interface ProductFilters {
   search: string
   status: ProductStatus | ''
+  /** The store picked in the top bar ('' = all). Set by `shopSelected`, not by this page's toolbar. */
+  shop: string
   productType: string
   tag: string
   stock: '' | 'in' | 'out'
@@ -50,6 +53,7 @@ export interface ProductFilters {
 export const DEFAULT_FILTERS: ProductFilters = {
   search: '',
   status: '',
+  shop: '',
   productType: '',
   tag: '',
   stock: '',
@@ -73,6 +77,7 @@ export function toParams(filters: ProductFilters): ProductListParams {
   const search = filters.search.trim()
   if (search) params.search = search
   if (filters.status) params.status = filters.status
+  if (filters.shop) params.shop = filters.shop
   if (filters.productType) params.product_type = filters.productType
   if (filters.tag) params.tag = filters.tag
   if (filters.stock) params.in_stock = filters.stock === 'in'
@@ -273,8 +278,9 @@ const productsSlice = createSlice({
     },
     /** "Clear all": drops every narrowing filter, keeps sort and page size. */
     filtersReset(state) {
-      const { sort, order, pageSize } = state.filters
-      state.filters = { ...DEFAULT_FILTERS, sort, order, pageSize }
+      // The top-bar store isn't one of this page's filters, so it survives "Clear all".
+      const { sort, order, pageSize, shop } = state.filters
+      state.filters = { ...DEFAULT_FILTERS, sort, order, pageSize, shop }
       const cached = state.entries[cacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },
@@ -308,6 +314,17 @@ const productsSlice = createSlice({
     builder
       // Leaving the session (logout / expired token) drops every cached page.
       .addCase(sessionCleared, () => initialState)
+      // The top-bar store changed: query that store (from page 1), showing it at once if cached.
+      .addCase(shopSelected, (state, action) => {
+        const next = {
+          ...state.filters,
+          shop: action.payload === ALL_SHOPS ? '' : action.payload,
+          page: 1,
+        }
+        state.filters = next
+        const cached = state.entries[cacheKey(next)]?.data
+        if (cached) state.lastData = cached
+      })
       .addCase(fetchProducts.pending, (state, action) => {
         const key = cacheKey(action.meta.arg.filters)
         const entry = state.entries[key]

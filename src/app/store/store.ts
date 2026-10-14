@@ -3,6 +3,7 @@ import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
 import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
 import { customersReducer } from './customersSlice.ts'
 import { productsReducer } from './productsSlice.ts'
+import { shopReducer } from './shopSlice.ts'
 import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
 
 /**
@@ -19,6 +20,7 @@ export function createAppStore() {
       auth: authReducer,
       products: productsReducer,
       customers: customersReducer,
+      shop: shopReducer,
     },
   })
 

@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
 } from '../../../lib/api/endpoints.ts'
 import { ApiError } from '../../../lib/api/ApiError.ts'
+import { shopSelected } from '../../../app/store/shopSlice.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -249,6 +250,35 @@ describe('ProductsPage list', () => {
 
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('queries the store picked in the top bar (list and status counts), and "Clear all" keeps it', async () => {
+    const user = userEvent.setup()
+    const { store } = renderPage()
+    await screen.findByText('Product 1')
+    // Every store by default: no `shop` parameter at all.
+    expect(list.mock.calls.every(([params]) => !('shop' in params))).toBe(true)
+
+    store.dispatch(shopSelected('polymer-uk'))
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ shop: 'polymer-uk', page: 1, page_size: 25 }),
+      ),
+    )
+    // The status tab counts follow the same store.
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ shop: 'polymer-uk', status: 'ACTIVE', page_size: 1 }),
+      ),
+    )
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'nomatch')
+    await user.click(await screen.findByRole('button', { name: 'Clear all filters' }))
+    expect(store.getState().products.filters.shop).toBe('polymer-uk')
+
+    store.dispatch(shopSelected('all'))
+    expect(store.getState().products.filters.shop).toBe('')
   })
 
   it('searches after a short pause and returns to page 1', async () => {
