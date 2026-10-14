@@ -30,6 +30,7 @@ import {
   Field,
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
+import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 
@@ -143,20 +144,26 @@ export function OverviewPanel({ product, preview }: OverviewProps) {
         </div>
 
         {gallery.length > 0 && (
-          <ul aria-label="Product media" className={`${CARD} grid grid-cols-4 gap-2 p-3`}>
-            {gallery.map((slide, index) => (
-              <li key={`${slide.src}-${index}`}>
-                <button
-                  type="button"
-                  onClick={() => setLightboxIndex(index + offset)}
-                  aria-label={`Open image ${index + 1} of ${gallery.length}`}
-                  className="hover:border-accent focus-visible:outline-accent block w-full cursor-zoom-in overflow-hidden rounded-lg border border-transparent bg-transparent p-0 transition-colors focus-visible:outline-2"
+          <div className={`${CARD} p-3`}>
+            {/* One row of thumbnails that scrolls sideways — however many images there are. */}
+            <ScrollRow label="Product media">
+              {gallery.map((slide, index) => (
+                <li
+                  key={`${slide.src}-${index}`}
+                  className="w-[4.5rem] shrink-0 snap-start"
                 >
-                  <ProductImage src={slide.src} alt={slide.alt} size="thumb" />
-                </button>
-              </li>
-            ))}
-          </ul>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex(index + offset)}
+                    aria-label={`Open image ${index + 1} of ${gallery.length}`}
+                    className="hover:border-accent focus-visible:outline-accent block w-full cursor-zoom-in overflow-hidden rounded-lg border border-transparent bg-transparent p-0 transition-colors focus-visible:outline-2"
+                  >
+                    <ProductImage src={slide.src} alt={slide.alt} size="thumb" />
+                  </button>
+                </li>
+              ))}
+            </ScrollRow>
+          </div>
         )}
 
         <ProductLightbox
