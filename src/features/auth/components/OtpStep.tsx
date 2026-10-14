@@ -3,7 +3,7 @@ import { Button } from '../../../components/ui/Button.tsx'
 import { ArrowLeftIcon, MailIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import { OtpInput } from '../../../components/ui/OtpInput.tsx'
 import { useLogin } from '../hooks/useLogin.ts'
-import { FormMessage } from './FormMessage.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 
 const CODE_LENGTH = 6
 

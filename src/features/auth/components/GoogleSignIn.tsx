@@ -3,7 +3,7 @@ import { GoogleIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import { env } from '../../../config/env.ts'
 import { useLogin } from '../hooks/useLogin.ts'
 import { loadGoogleIdentity } from '../utils/googleIdentity.ts'
-import { FormMessage } from './FormMessage.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 
 /**
  * "OR" divider plus Google's own sign-in button. Google renders the

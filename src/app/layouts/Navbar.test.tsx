@@ -36,6 +36,16 @@ describe('Navbar', () => {
     }
   })
 
+  it('links User Management at the top level, outside the Shopify group', () => {
+    renderWithProviders(<Navbar />, { route: '/users' })
+
+    const users = screen.getByRole('link', { name: 'User Management' })
+    expect(users).toHaveAttribute('href', '/users')
+    expect(users).toHaveAttribute('aria-current', 'page')
+    // Not a Shopify page, so the Shopify group stays closed.
+    expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
+  })
+
   describe('Shopify Management accordion', () => {
     it('starts closed away from its pages, then opens and closes on click', async () => {
       const user = userEvent.setup()

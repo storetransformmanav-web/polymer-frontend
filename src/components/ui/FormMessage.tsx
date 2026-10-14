@@ -1,8 +1,4 @@
-import {
-  AlertTriangleIcon,
-  CheckCircleIcon,
-  ClockIcon,
-} from '../../../components/ui/icons.tsx'
+import { AlertTriangleIcon, CheckCircleIcon, ClockIcon } from './icons.tsx'
 
 interface FormMessageProps {
   tone: 'error' | 'success' | 'info'

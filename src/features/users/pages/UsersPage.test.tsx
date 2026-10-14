@@ -1,0 +1,449 @@
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../../lib/api/ApiError.ts'
+import {
+  api,
+  type Role,
+  type Shop,
+  type UserItem,
+  type UserListParams,
+  type UserListResponse,
+} from '../../../lib/api/endpoints.ts'
+import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
+import { UsersPage } from './UsersPage.tsx'
+
+vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
+  api: {
+    users: { list: vi.fn(), create: vi.fn() },
+    roles: { list: vi.fn() },
+    shops: { list: vi.fn() },
+    auth: {},
+  },
+}))
+
+const TOTAL = 60
+
+const ROLES: Role[] = [
+  {
+    name: 'admin',
+    label: 'Administrator',
+    description: null,
+    is_system: true,
+    users_count: 1,
+  },
+  {
+    name: 'office',
+    label: 'Office',
+    description: null,
+    is_system: true,
+    users_count: 40,
+  },
+  {
+    name: 'warehouse',
+    label: 'Warehouse',
+    description: null,
+    is_system: false,
+    users_count: 19,
+  },
+]
+
+function makeShop(id: string, key: string, name: string): Shop {
+  return {
+    id,
+    key,
+    name,
+    domain: `${key}.myshopify.com`,
+    is_active: true,
+    position: 0,
+    connected: true,
+    products_count: 0,
+  }
+}
+const SHOPS = [
+  makeShop('s1', 'polymer-uk', 'Polymer UK'),
+  makeShop('s2', 'polymer-eu', 'Polymer EU'),
+]
+
+/** User #1 is an administrator who signs in with Google; the rest are office staff. */
+function makeUser(n: number): UserItem {
+  const admin = n === 1
+  return {
+    id: `user-${n}`,
+    first_name: `First${n}`,
+    last_name: `Last${n}`,
+    full_name: `First${n} Last${n}`,
+    email: `user${n}@polymer.co`,
+    phone: n === 2 ? '+44 20 7946 0000' : null,
+    role: admin ? 'admin' : 'office',
+    role_label: admin ? 'Administrator' : 'Office',
+    is_active: n % 5 !== 0,
+    google_linked: admin,
+    last_login_at: n === 2 ? '2026-10-14T10:59:11Z' : null,
+    created_at: '2026-10-08T12:58:01Z',
+    shop_keys: n === 2 ? ['polymer-uk', 'polymer-eu'] : [],
+  }
+}
+
+/** A fake server: 60 users, paged by the request's page/page_size. */
+function respond(params: UserListParams): UserListResponse {
+  const page = params.page ?? 1
+  const pageSize = params.page_size ?? 25
+  const matches = params.search === 'nomatch' ? 0 : TOTAL
+  const start = (page - 1) * pageSize
+  const count = Math.max(0, Math.min(pageSize, matches - start))
+
+  return {
+    items: Array.from({ length: count }, (_, i) => makeUser(start + i + 1)),
+    page,
+    page_size: pageSize,
+    total: matches,
+    total_pages: Math.max(1, Math.ceil(matches / pageSize)),
+    has_next: start + count < matches,
+  }
+}
+
+const list = vi.mocked(api.users.list)
+const create = vi.mocked(api.users.create)
+const rolesList = vi.mocked(api.roles.list)
+const shopsList = vi.mocked(api.shops.list)
+
+const callsForPage = (page: number) =>
+  list.mock.calls.filter(([params]) => params.page === page).length
+
+describe('UsersPage', () => {
+  beforeEach(() => {
+    list.mockImplementation((params) => Promise.resolve(respond(params)))
+    rolesList.mockResolvedValue(ROLES)
+    shopsList.mockResolvedValue(SHOPS)
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('list', () => {
+    it('loads the first page from the API with the default query', async () => {
+      renderWithProviders(<UsersPage />)
+
+      expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+      expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25 })
+      expect(screen.getByText(/Showing/)).toHaveTextContent(
+        'Showing 1 to 25 of 60 entries',
+      )
+    })
+
+    it('shows name, email, role, status, phone, stores, sign-in method and last login', async () => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      const table = screen.getByRole('table')
+      const headers = within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent)
+      expect(headers).toEqual([
+        'User',
+        'Role',
+        'Status',
+        'Phone',
+        'Stores',
+        'Sign-in',
+        'Last Login',
+        'Created',
+      ])
+
+      // Administrator: every store, signs in with Google, never logged in.
+      const admin = within(screen.getByText('First1 Last1').closest('tr') as HTMLElement)
+      expect(admin.getByText('user1@polymer.co')).toBeInTheDocument()
+      expect(admin.getByText('Administrator')).toBeInTheDocument()
+      expect(admin.getByText('All stores')).toBeInTheDocument()
+      expect(admin.getByText('Google')).toBeInTheDocument()
+      expect(admin.getByText('Never')).toBeInTheDocument()
+
+      // Office user: their stores by name, a phone number, a last login date.
+      const office = within(screen.getByText('First2 Last2').closest('tr') as HTMLElement)
+      expect(office.getByText('Office')).toBeInTheDocument()
+      expect(office.getByText('Active')).toBeInTheDocument()
+      expect(office.getByText('+44 20 7946 0000')).toBeInTheDocument()
+      expect(await office.findByText('Polymer UK')).toBeInTheDocument()
+      expect(office.getByText('Polymer EU')).toBeInTheDocument()
+      expect(office.getByText('Email code')).toBeInTheDocument()
+      expect(office.getByText('14 Oct 2026')).toBeInTheDocument()
+
+      // Inactive user (#5) and a non-admin with no stores.
+      const inactive = within(
+        screen.getByText('First5 Last5').closest('tr') as HTMLElement,
+      )
+      expect(inactive.getByText('Inactive')).toBeInTheDocument()
+      expect(inactive.getByText('None')).toBeInTheDocument()
+    })
+
+    it('pages with the shared pagination (and prefetch-free cache on revisit)', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      await user.click(screen.getByRole('button', { name: 'Page 2' }))
+
+      expect(await screen.findByText('First26 Last26')).toBeInTheDocument()
+      expect(list).toHaveBeenCalledWith({ page: 2, page_size: 25 })
+      expect(screen.getByText(/Showing/)).toHaveTextContent(
+        'Showing 26 to 50 of 60 entries',
+      )
+
+      // Back to page 1: served from the cache, no extra request.
+      const before = callsForPage(1)
+      await user.click(screen.getByRole('button', { name: 'Page 1' }))
+      expect(screen.getByText('First2 Last2')).toBeInTheDocument()
+      expect(callsForPage(1)).toBe(before)
+    })
+
+    it('changes the page size and returns to page 1', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+      await user.click(screen.getByRole('button', { name: 'Page 2' }))
+      await screen.findByText('First26 Last26')
+
+      await user.selectOptions(screen.getByLabelText('Entries per page'), '10')
+
+      await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 1, page_size: 10 }))
+    })
+
+    it('searches after a short pause, returns to page 1, and recovers from an empty result', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+      await user.click(screen.getByRole('button', { name: 'Page 2' }))
+      await screen.findByText('First26 Last26')
+
+      await user.type(screen.getByRole('searchbox', { name: 'Search users' }), 'nomatch')
+
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ search: 'nomatch', page: 1 }),
+        ),
+      )
+      expect(await screen.findByText('No users found')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
+      expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+      expect(screen.getByRole('searchbox', { name: 'Search users' })).toHaveValue('')
+    })
+
+    it('filters by role (names from the roles API) and by status', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      const role = screen.getByLabelText('Role:')
+      expect(
+        within(role)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['All Roles', 'Administrator', 'Office', 'Warehouse'])
+      await user.selectOptions(role, 'warehouse')
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ role: 'warehouse', page: 1 }),
+        ),
+      )
+
+      await user.click(screen.getByRole('button', { name: /^Inactive/ }))
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ role: 'warehouse', status: 'inactive', page: 1 }),
+        ),
+      )
+      expect(screen.getByRole('button', { name: /^Inactive/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+
+      // "Clear All" resets both; the default query is still cached, so it shows at once.
+      await user.click(screen.getByRole('button', { name: 'Clear All' }))
+      expect(screen.getByLabelText('Role:')).toHaveValue('')
+      expect(screen.getByRole('button', { name: /^All Users/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+    })
+
+    it('shows the backend message when loading fails, and retries', async () => {
+      list.mockRejectedValueOnce(
+        new ApiError('You do not have access to Users.', { status: 403 }),
+      )
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+
+      expect(await screen.findByText("Couldn't load users")).toBeInTheDocument()
+      expect(screen.getByText('You do not have access to Users.')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+    })
+  })
+
+  describe('add user', () => {
+    const openPanel = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+      await user.click(screen.getByRole('button', { name: 'Add user' }))
+      return screen.findByRole('dialog', { name: 'Add user' })
+    }
+
+    it('opens a form with the roles from the API, office selected, and every store to choose', async () => {
+      const dialog = await openPanel(userEvent.setup())
+
+      expect(within(dialog).getByLabelText('First name')).toHaveFocus()
+      const role = within(dialog).getByLabelText('Role')
+      expect(role).toHaveValue('office')
+      expect(
+        within(role)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['Administrator', 'Office', 'Warehouse'])
+      expect(await within(dialog).findByLabelText('Polymer UK')).not.toBeChecked()
+      expect(within(dialog).getByLabelText('Polymer EU')).not.toBeChecked()
+    })
+
+    it('validates the required fields without calling the API', async () => {
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+
+      await user.click(within(dialog).getByRole('button', { name: 'Create user' }))
+
+      expect(within(dialog).getByText('Enter a first name')).toBeInTheDocument()
+      expect(within(dialog).getByText('Enter a valid email address')).toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+
+      // Typing clears that field's message.
+      await user.type(within(dialog).getByLabelText('First name'), 'Jane')
+      expect(within(dialog).queryByText('Enter a first name')).not.toBeInTheDocument()
+    })
+
+    it('creates the user, closes the panel, confirms, and refreshes the list', async () => {
+      create.mockResolvedValue({
+        ...makeUser(99),
+        first_name: 'Jane',
+        last_name: 'Doe',
+        full_name: 'Jane Doe',
+        email: 'jane@company.com',
+      })
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+      const within_ = within(dialog)
+
+      await user.type(within_.getByLabelText('First name'), '  Jane ')
+      await user.type(within_.getByLabelText(/^Last name/), 'Doe')
+      await user.type(within_.getByLabelText('Email address'), ' Jane@Company.com ')
+      await user.type(within_.getByLabelText(/^Phone/), '80159632145')
+      await user.click(await within_.findByLabelText('Polymer UK'))
+      const callsBefore = list.mock.calls.length
+
+      await user.click(within_.getByRole('button', { name: 'Create user' }))
+
+      // Trimmed, email lower-cased, default role, only the ticked store.
+      await waitFor(() =>
+        expect(create).toHaveBeenCalledWith({
+          first_name: 'Jane',
+          last_name: 'Doe',
+          email: 'jane@company.com',
+          role: 'office',
+          shop_keys: ['polymer-uk'],
+          phone: '80159632145',
+        }),
+      )
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: 'Add user' }),
+        ).not.toBeInTheDocument(),
+      )
+      expect(
+        screen.getByText('Jane Doe (jane@company.com) was added. They can now sign in.'),
+      ).toBeInTheDocument()
+      // Every cached users query was invalidated, so the list is fetched again.
+      await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(callsBefore))
+    })
+
+    it('does not ask for stores for an administrator, and sends none', async () => {
+      create.mockResolvedValue(makeUser(98))
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+      const within_ = within(dialog)
+      await within_.findByLabelText('Polymer UK')
+      await user.click(within_.getByLabelText('Polymer UK'))
+
+      await user.selectOptions(within_.getByLabelText('Role'), 'admin')
+
+      expect(within_.getByText('Administrators can see every store.')).toBeInTheDocument()
+      expect(within_.queryByLabelText('Polymer UK')).not.toBeInTheDocument()
+
+      await user.type(within_.getByLabelText('First name'), 'Ada')
+      await user.type(within_.getByLabelText('Email address'), 'ada@polymer.co')
+      await user.click(within_.getByRole('button', { name: 'Create user' }))
+
+      await waitFor(() =>
+        expect(create).toHaveBeenCalledWith({
+          first_name: 'Ada',
+          last_name: '',
+          email: 'ada@polymer.co',
+          role: 'admin',
+          shop_keys: [],
+        }),
+      )
+    })
+
+    it("keeps the panel open and shows the backend's message when creating fails", async () => {
+      create.mockRejectedValue(
+        new ApiError('A user with this email already exists.', { status: 409 }),
+      )
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+      const within_ = within(dialog)
+      await user.type(within_.getByLabelText('First name'), 'Jane')
+      await user.type(within_.getByLabelText('Email address'), 'jane@company.com')
+
+      await user.click(within_.getByRole('button', { name: 'Create user' }))
+
+      expect(
+        await within_.findByText('A user with this email already exists.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: 'Add user' })).toBeInTheDocument()
+
+      // Editing a field dismisses the stale error so the user can try again.
+      await user.type(within_.getByLabelText('Email address'), 'x')
+      expect(
+        within_.queryByText('A user with this email already exists.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('closes on Escape and Cancel, and starts clean when reopened', async () => {
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+      await user.type(within(dialog).getByLabelText('First name'), 'Jane')
+
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog', { name: 'Add user' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Add user' }))
+      const reopened = await screen.findByRole('dialog', { name: 'Add user' })
+      expect(within(reopened).getByLabelText('First name')).toHaveValue('')
+      await user.click(within(reopened).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('dialog', { name: 'Add user' })).not.toBeInTheDocument()
+    })
+
+    it('explains when the roles cannot be loaded and lets the user retry', async () => {
+      rolesList.mockRejectedValueOnce(new ApiError('Server error', { status: 500 }))
+      const user = userEvent.setup()
+      const dialog = await openPanel(user)
+
+      expect(await within(dialog).findByText(/Couldn't load roles/)).toBeInTheDocument()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Try again' }))
+      expect(await within(dialog).findByLabelText('Role')).toHaveValue('office')
+    })
+  })
+})

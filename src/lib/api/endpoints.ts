@@ -21,6 +21,13 @@ export const ENDPOINTS = {
   shops: {
     list: '/shops',
   },
+  users: {
+    list: '/users',
+    create: '/users',
+  },
+  roles: {
+    list: '/roles',
+  },
   customers: {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
@@ -84,6 +91,80 @@ const shopListResponseSchema = z.object({
   items: z.array(shopSchema),
   total: z.number().default(0),
 })
+
+// --- Users (GET/POST /users) and roles (GET /roles) ---------------------------
+// CRM staff accounts. They sign in with an emailed code or Google — no password.
+
+export const USER_STATUSES = ['active', 'inactive'] as const
+
+const userItemSchema = z.object({
+  id: z.string(),
+  first_name: z.string().default(''),
+  last_name: z.string().default(''),
+  full_name: z.string().default(''),
+  email: z.string(),
+  phone: z.string().nullish(),
+  /** The role's name (what \`role=\` filters and create/update take), e.g. "office". */
+  role: z.string(),
+  /** The role's display name, e.g. "Office". */
+  role_label: z.string().nullish(),
+  is_active: z.boolean(),
+  google_linked: z.boolean().default(false),
+  last_login_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  /** Keys of the stores a non-admin user may see (admins see every store). */
+  shop_keys: z.array(z.string()).default([]),
+})
+
+const userListResponseSchema = z.object({
+  items: z.array(userItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+const userCreateResponseSchema = z.object({ user: userItemSchema })
+
+const roleSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  description: z.string().nullish(),
+  is_system: z.boolean().default(false),
+  users_count: z.number().default(0),
+})
+
+const roleListResponseSchema = z.object({ items: z.array(roleSchema) })
+
+export type UserStatus = (typeof USER_STATUSES)[number]
+export type UserItem = z.infer<typeof userItemSchema>
+export type UserListResponse = z.infer<typeof userListResponseSchema>
+export type Role = z.infer<typeof roleSchema>
+
+/** Query parameters accepted by \`GET /users\` (all optional). */
+export interface UserListParams {
+  /** Name or email. */
+  search?: string
+  /** A role name from \`GET /roles\`. */
+  role?: string
+  status?: UserStatus
+  page?: number
+  /** 1–100. */
+  page_size?: number
+}
+
+/** Body of \`POST /users\`. */
+export interface UserCreateBody {
+  first_name: string
+  last_name?: string
+  email: string
+  /** A role name from \`GET /roles\`. */
+  role?: string
+  phone?: string | null
+  /** Stores a non-admin user may see. */
+  shop_keys?: string[]
+}
 
 const loginResponseSchema = z.object({
   access_token: z.string().min(1),
@@ -504,6 +585,28 @@ export const api = {
     async list(): Promise<Shop[]> {
       const data = await apiClient.get(ENDPOINTS.shops.list)
       return shopListResponseSchema.parse(data).items
+    },
+  },
+
+  users: {
+    /** One page of CRM users, filtered server-side. Needs a signed-in session. */
+    async list(params: UserListParams): Promise<UserListResponse> {
+      const data = await apiClient.get(ENDPOINTS.users.list, { params })
+      return userListResponseSchema.parse(data)
+    },
+
+    /** Creates a staff user (they sign in by emailed code or Google). Returns the new user. */
+    async create(body: UserCreateBody): Promise<UserItem> {
+      const data = await apiClient.post(ENDPOINTS.users.create, body)
+      return userCreateResponseSchema.parse(data).user
+    },
+  },
+
+  roles: {
+    /** Every role the backend knows (the create form and the role filter use their names). */
+    async list(): Promise<Role[]> {
+      const data = await apiClient.get(ENDPOINTS.roles.list)
+      return roleListResponseSchema.parse(data).items
     },
   },
 

@@ -7,6 +7,7 @@ import { InventoryPage } from '../../features/inventory/index.ts'
 import { LoginPage } from '../../features/auth/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
+import { UsersPage } from '../../features/users/index.ts'
 import { NotFoundPage } from './NotFoundPage.tsx'
 import { RouteErrorPage } from './RouteErrorPage.tsx'
 import { ProtectedRoute } from './ProtectedRoute.tsx'
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
           // `*` lets CustomersPage also serve /customers/:id (the details page).
           { path: 'customers/*', element: <CustomersPage /> },
           { path: 'inventory', element: <InventoryPage /> },
+          { path: 'users', element: <UsersPage /> },
         ],
       },
     ],

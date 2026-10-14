@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button.tsx'
 import { ChevronRightIcon, MailIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import { useLogin } from '../hooks/useLogin.ts'
-import { FormMessage } from './FormMessage.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { GoogleSignIn } from './GoogleSignIn.tsx'
 
 const FIELD_LABEL = 'text-text-muted text-[0.72rem] font-bold tracking-wide uppercase'

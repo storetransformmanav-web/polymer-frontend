@@ -381,6 +381,14 @@ export function CalendarIcon(props: IconProps) {
   )
 }
 
+export function PlusIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 4.5v11M4.5 10h11" />
+    </svg>
+  )
+}
+
 export function XIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
