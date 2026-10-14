@@ -62,6 +62,17 @@ export function InventoryIcon(props: IconProps) {
   )
 }
 
+export function StoreIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 7.5 4.3 3h11.4L17 7.5" />
+      <path d="M3 7.5a2.3 2.3 0 0 0 4.7 0 2.3 2.3 0 0 0 4.6 0 2.3 2.3 0 0 0 4.7 0" />
+      <path d="M4 10.5V17h12v-6.5" />
+      <path d="M8.5 17v-3.5h3V17" />
+    </svg>
+  )
+}
+
 export function ChevronsLeftIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

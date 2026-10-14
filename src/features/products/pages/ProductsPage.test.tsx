@@ -437,12 +437,33 @@ describe('ProductsPage details', () => {
     expect(within(tags).getByRole('listitem')).toHaveTextContent('modern')
   })
 
-  it('does not open details when a row is clicked anywhere but the View button', async () => {
+  it('opens details from the product name, prefetching them on hover', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Product 3')
 
-    await user.click(screen.getByText('Product 3'))
+    await user.hover(screen.getByRole('button', { name: 'Product 3' }))
+    await waitFor(() => expect(details).toHaveBeenCalledWith('id-3', false))
+    const callsAfterHover = details.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Product 3' }))
+
+    expect(screen.getByTestId('path')).toHaveTextContent('/products/id-3')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Product 3' }),
+    ).toBeInTheDocument()
+    expect(details.mock.calls.length).toBe(callsAfterHover)
+  })
+
+  it('does not open details when a row is clicked anywhere but the name, View button or card', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 3')
+
+    const row = screen.getByRole('button', { name: 'View Product 3' }).closest('tr')
+    expect(row).not.toBeNull()
+    // Price cell (second to last) — plain text, not a link.
+    await user.click(within(row as HTMLElement).getAllByRole('cell')[5])
 
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/products$/)
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()

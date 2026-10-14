@@ -216,12 +216,16 @@ export function ProductsList({
                     </button>
                   </td>
                   <td className={TD}>
-                    <span
-                      className="block max-w-64 truncate font-medium 2xl:max-w-[26rem]"
+                    <button
+                      type="button"
                       title={product.title}
+                      onClick={() => onOpen(product)}
+                      onPointerEnter={() => onPrefetch(product.id)}
+                      onFocus={() => onPrefetch(product.id)}
+                      className="hover:text-accent focus-visible:outline-accent block max-w-64 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2 2xl:max-w-[26rem]"
                     >
                       {product.title}
-                    </span>
+                    </button>
                   </td>
                   <td className={`${TD} text-center`}>
                     {product.variants_count.toLocaleString('en-GB')}

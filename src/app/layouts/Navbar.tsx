@@ -1,11 +1,13 @@
-import { Link, NavLink } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Logo } from '../../components/ui/Logo.tsx'
 import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.tsx'
 import { useAuth } from '../../hooks/useAuth.ts'
 import { useMediaQuery } from '../../hooks/useMediaQuery.ts'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
-import { NAV_ITEMS } from '../router/navigation.ts'
+import { NAV_ENTRIES, isNavGroup } from '../router/navigation.ts'
 import { initials, useCurrentUser } from './currentUser.ts'
+import { NavAccordion } from './NavAccordion.tsx'
+import { NavItemLink } from './NavItemLink.tsx'
 
 /**
  * Primary left-hand navigation. Collapses to icons-only (persisted via
@@ -46,23 +48,17 @@ export function Navbar() {
       </div>
 
       <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-        {NAV_ITEMS.map(({ to, label, end, icon: Icon }) => (
-          <li key={to}>
-            <NavLink
-              to={to}
-              end={end}
-              title={collapsed ? label : undefined}
-              className={({ isActive }) =>
-                `text-text-muted hover:bg-bg hover:text-text flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-medium no-underline ${
-                  collapsed ? 'justify-center' : ''
-                } ${isActive ? 'bg-accent-tint text-accent' : ''}`
-              }
-            >
-              <Icon className="shrink-0" />
-              <span className={collapsed ? 'sr-only' : ''}>{label}</span>
-            </NavLink>
-          </li>
-        ))}
+        {NAV_ENTRIES.map((entry) =>
+          isNavGroup(entry) ? (
+            <li key={entry.label}>
+              <NavAccordion group={entry} collapsed={collapsed} />
+            </li>
+          ) : (
+            <li key={entry.to}>
+              <NavItemLink item={entry} collapsed={collapsed} />
+            </li>
+          ),
+        )}
       </ul>
 
       <div
