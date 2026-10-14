@@ -92,6 +92,31 @@ describe('LoginForm', () => {
       expect(screen.getByLabelText('Email address')).toBeInTheDocument()
     })
 
+    it('shows the development note and stays on the email step when no active user matches', async () => {
+      const DEV_NOTE =
+        'No active user with this email (this note only appears in development).'
+      vi.mocked(api.auth.requestOtp).mockResolvedValue({
+        message: NOTICE,
+        expires_in_seconds: 600,
+        dev_note: DEV_NOTE,
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<LoginForm />)
+
+      await user.type(screen.getByLabelText('Email address'), EMAIL)
+      await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(DEV_NOTE)
+      expect(screen.getByLabelText('Email address')).toHaveValue(EMAIL)
+      expect(
+        screen.queryByRole('heading', { name: 'Check your email' }),
+      ).not.toBeInTheDocument()
+
+      // Typing again clears the note, ready for another attempt.
+      await user.type(screen.getByLabelText('Email address'), 'x')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
     it('requests a code and moves to the code step, showing the backend message', async () => {
       const user = userEvent.setup()
       renderWithProviders(<LoginForm />)

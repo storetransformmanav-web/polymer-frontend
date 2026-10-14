@@ -47,6 +47,13 @@ const authUserSchema = z.object({
 const otpRequestResponseSchema = z.object({
   message: z.string(),
   expires_in_seconds: z.number().default(600),
+  /**
+   * Only sent by development backends, e.g. "No active user with this email
+   * (this note only appears in development)." Production never includes it
+   * (the generic message above deliberately doesn't reveal whether the
+   * account exists).
+   */
+  dev_note: z.string().optional(),
 })
 
 const loginResponseSchema = z.object({

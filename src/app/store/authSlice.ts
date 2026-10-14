@@ -111,6 +111,14 @@ export function parseWaitSeconds(message: string): number | null {
   return seconds > 0 && seconds <= 3600 ? seconds : null
 }
 
+/**
+ * In development the backend answers 200 even for an unknown email, but adds
+ * a `dev_note` saying no code was sent ("No active user with this email…").
+ * Moving on to the code screen would be misleading, so that note is surfaced
+ * on the email step instead. Other notes are ignored.
+ */
+const NO_ACTIVE_USER_NOTE = /no active user/i
+
 interface OtpRequestResult {
   email: string
   message: string
@@ -141,6 +149,9 @@ export const requestOtp = createAsyncThunk<
   async (email, { rejectWithValue }) => {
     try {
       const response = await api.auth.requestOtp(email)
+      if (response.dev_note && NO_ACTIVE_USER_NOTE.test(response.dev_note)) {
+        return rejectWithValue(response.dev_note)
+      }
       return {
         email,
         message: response.message,
