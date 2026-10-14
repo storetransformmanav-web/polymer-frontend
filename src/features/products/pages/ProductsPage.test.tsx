@@ -592,6 +592,81 @@ describe('ProductsPage details', () => {
     expect(section('Description')).toHaveAttribute('aria-expanded', 'true')
   })
 
+  describe('collections tab', () => {
+    const COLLECTIONS = Array.from({ length: 10 }, (_, i) => ({
+      id: `col-${i}`,
+      shopify_id: 100 + i,
+      title: i === 0 ? 'Food Packaging' : `Collection ${i}`,
+      handle: i === 0 ? 'food-packaging' : `collection-${i}`,
+      collection_type: i === 9 ? 'custom' : 'smart',
+    }))
+
+    beforeEach(() => {
+      details.mockImplementation((id) =>
+        Promise.resolve({ ...makeDetail(id), collections: COLLECTIONS }),
+      )
+    })
+
+    it('summarises the collections and labels custom ones as Manual', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+
+      await user.click(screen.getByRole('tab', { name: /Collections/ }))
+      const panel = screen.getByRole('tabpanel')
+
+      expect(within(panel).getByText('In 10 collections')).toBeInTheDocument()
+      expect(within(panel).getByText('9 Smart')).toBeInTheDocument()
+      expect(within(panel).getByText('1 Manual')).toBeInTheDocument()
+      expect(within(panel).getAllByRole('listitem')).toHaveLength(10)
+      expect(within(panel).getByText('food-packaging')).toBeInTheDocument()
+      expect(
+        within(panel).getByRole('button', { name: 'Copy handle food-packaging' }),
+      ).toBeInTheDocument()
+    })
+
+    it('filters by title or handle, and says so when nothing matches', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('tab', { name: /Collections/ }))
+      const panel = screen.getByRole('tabpanel')
+
+      await user.type(
+        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
+        'food',
+      )
+      expect(within(panel).getAllByRole('listitem')).toHaveLength(1)
+      expect(within(panel).getByText('Food Packaging')).toBeInTheDocument()
+
+      await user.clear(
+        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
+      )
+      await user.type(
+        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
+        'zzz',
+      )
+      expect(within(panel).getByText(/No collections match/)).toBeInTheDocument()
+      expect(within(panel).queryAllByRole('listitem')).toHaveLength(0)
+    })
+
+    it('hides the filter for a short list', async () => {
+      details.mockImplementation((id) =>
+        Promise.resolve({ ...makeDetail(id), collections: COLLECTIONS.slice(0, 2) }),
+      )
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+
+      await user.click(screen.getByRole('tab', { name: /Collections/ }))
+
+      expect(screen.getByText('In 2 collections')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('searchbox', { name: 'Filter collections' }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   describe('image lightbox', () => {
     const IMAGES = [1, 2, 3].map((n) => ({
       id: `img-${n}`,

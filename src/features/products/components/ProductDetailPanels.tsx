@@ -7,6 +7,7 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
+  SearchIcon,
 } from '../../../components/ui/icons.tsx'
 import type {
   ProductDetail,
@@ -415,27 +416,119 @@ export function InventoryPanel({ product }: { product: ProductDetail }) {
 
 // --- Collections / Media -------------------------------------------------------
 
+/** Shopify calls manually curated collections "custom"; the CRM shows them as "Manual". */
+function collectionTypeLabel(type: string): string {
+  return type.toLowerCase() === 'custom' ? 'Manual' : statusLabel(type)
+}
+
+/** Show a filter box once there are enough collections to need one. */
+const COLLECTION_FILTER_MIN = 6
+
 export function CollectionsPanel({ product }: { product: ProductDetail }) {
-  if (product.collections.length === 0) {
+  const [query, setQuery] = useState('')
+  const { collections } = product
+
+  const counts = useMemo(() => {
+    const byType = new Map<string, number>()
+    for (const collection of collections) {
+      const label = collection.collection_type
+        ? collectionTypeLabel(collection.collection_type)
+        : 'Other'
+      byType.set(label, (byType.get(label) ?? 0) + 1)
+    }
+    return [...byType.entries()]
+  }, [collections])
+
+  if (collections.length === 0) {
     return <Empty icon={LayersIcon}>This product isn&apos;t in any collection.</Empty>
   }
 
+  const needle = query.trim().toLowerCase()
+  const visible = needle
+    ? collections.filter(
+        (collection) =>
+          collection.title.toLowerCase().includes(needle) ||
+          collection.handle.toLowerCase().includes(needle),
+      )
+    : collections
+
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {product.collections.map((collection) => (
-        <li key={collection.id} className={`${CARD} flex flex-col gap-1.5 p-4`}>
-          <span className="font-semibold">{collection.title}</span>
-          <span className="text-text-muted font-mono text-[0.78rem] break-all">
-            {collection.handle}
-          </span>
-          {collection.collection_type && (
-            <span className="mt-1 self-start">
-              <Badge tone="neutral">{statusLabel(collection.collection_type)}</Badge>
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[0.95rem] font-semibold">
+            In {collections.length}{' '}
+            {collections.length === 1 ? 'collection' : 'collections'}
+          </p>
+          {counts.map(([label, count]) => (
+            <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
+              {count} {label}
+            </Badge>
+          ))}
+        </div>
+
+        {collections.length >= COLLECTION_FILTER_MIN && (
+          <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 w-full items-center gap-2 rounded-lg border px-3 focus-within:outline-2 sm:w-64">
+            <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
+            <input
+              type="search"
+              aria-label="Filter collections"
+              placeholder="Filter collections…"
+              maxLength={100}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+            />
+          </div>
+        )}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-text-muted py-8 text-center text-[0.9rem]">
+          No collections match &ldquo;{query.trim()}&rdquo;.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {visible.map((collection) => (
+            <li
+              key={collection.id}
+              className={`${CARD} hover:border-accent flex items-center gap-3.5 p-3.5 transition-colors`}
+            >
+              <span className="bg-accent-tint text-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+                <LayersIcon width={20} height={20} />
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-[0.92rem] leading-snug font-semibold">
+                  {collection.title}
+                </p>
+                <p className="text-text-muted mt-0.5 flex items-center gap-1.5 text-[0.76rem]">
+                  <span className="min-w-0 truncate font-mono" title={collection.handle}>
+                    {collection.handle}
+                  </span>
+                  <CopyButton
+                    value={collection.handle}
+                    label={`Copy handle ${collection.handle}`}
+                  />
+                </p>
+              </div>
+
+              {collection.collection_type && (
+                <Badge
+                  tone={
+                    collection.collection_type.toLowerCase() === 'smart'
+                      ? 'default'
+                      : 'neutral'
+                  }
+                >
+                  {collectionTypeLabel(collection.collection_type)}
+                </Badge>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
