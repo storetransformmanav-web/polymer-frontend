@@ -1,4 +1,5 @@
 import { useLocation, matchPath } from 'react-router-dom'
+import { SyncProductsButton } from '../../features/products/index.ts'
 import { useShops } from '../../hooks/useShops.ts'
 import { NAV_ITEMS } from '../router/navigation.ts'
 import { ShopSwitcher } from './ShopSwitcher.tsx'
@@ -36,7 +37,8 @@ export function AppBar() {
           </>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
+        {activeItem?.syncs === 'products' && <SyncProductsButton />}
         <UserMenu />
       </div>
     </header>

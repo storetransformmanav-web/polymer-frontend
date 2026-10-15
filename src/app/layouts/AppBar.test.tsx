@@ -7,8 +7,13 @@ import { renderWithProviders } from '../../test/renderWithProviders.tsx'
 import { shopSelected } from '../store/shopSlice.ts'
 import { AppBar } from './AppBar.tsx'
 
-vi.mock('../../lib/api/endpoints.ts', () => ({
-  api: { shops: { list: vi.fn() }, auth: { logout: vi.fn() } },
+vi.mock('../../lib/api/endpoints.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/api/endpoints.ts')>()),
+  api: {
+    shops: { list: vi.fn() },
+    sync: { triggerProducts: vi.fn(), status: vi.fn() },
+    auth: { logout: vi.fn() },
+  },
 }))
 
 function makeShop(overrides: Partial<Shop>): Shop {
@@ -66,6 +71,20 @@ describe('AppBar shop dropdown', () => {
       'unnamed.myshopify.com',
     ])
     expect(screen.getByText('Products')).toBeInTheDocument()
+  })
+
+  it('has the Sync products button on the Products page only', async () => {
+    const { unmount } = renderWithProviders(<AppBar />, { route: '/products' })
+    expect(
+      await screen.findByRole('button', { name: 'Sync products' }),
+    ).toBeInTheDocument()
+    unmount()
+
+    renderWithProviders(<AppBar />, { route: '/customers' })
+    await dropdown()
+    expect(
+      screen.queryByRole('button', { name: 'Sync products' }),
+    ).not.toBeInTheDocument()
   })
 
   it('also appears on the Customers page', async () => {

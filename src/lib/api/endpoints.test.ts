@@ -150,3 +150,142 @@ describe('the answer to an edit, a retried push and a delete', () => {
     await expect(api.products.update('p1', { status: 'DRAFT' })).rejects.toThrow()
   })
 })
+
+describe('api.products.addMedia and removeMedia', () => {
+  const ENVELOPE = {
+    code: 200,
+    status: 'OK',
+    message: 'Media queued for Shopify',
+    result: {
+      product_id: 'p1',
+      sync_status: 'pending',
+      push_id: 'push-1',
+      changes: {},
+      message: 'Media queued for Shopify',
+    },
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.post).mockReset()
+    vi.mocked(apiClient.delete).mockReset()
+  })
+
+  it('POSTs { items } to /products/{id}/media for the store', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(ENVELOPE)
+    const items = [
+      {
+        url: 'https://example.com/product-image.jpg',
+        alt: 'Product image',
+        media_type: 'IMAGE' as const,
+      },
+    ]
+
+    const result = await api.products.addMedia('p1', items, 'polymer-uk')
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/products/p1/media',
+      { items },
+      { params: { shop: 'polymer-uk' } },
+    )
+    expect(result.message).toBe('Media queued for Shopify')
+  })
+
+  it('leaves the store out when there is none', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(ENVELOPE.result)
+
+    await api.products.addMedia('p1', [{ url: 'https://example.com/a.jpg' }])
+
+    expect(vi.mocked(apiClient.post).mock.calls[0][2]).toEqual({ params: undefined })
+  })
+
+  it('DELETEs /products/{id}/media/{attachment} for the store', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue(ENVELOPE)
+
+    const result = await api.products.removeMedia(
+      'p1',
+      '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      'polymer-uk',
+    )
+
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      '/products/p1/media/3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      { params: { shop: 'polymer-uk' } },
+    )
+    expect(result.sync_status).toBe('pending')
+  })
+
+  it('encodes both ids in the path', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue(ENVELOPE.result)
+
+    await api.products.removeMedia('a/b', 'c d')
+
+    expect(vi.mocked(apiClient.delete).mock.calls[0][0]).toBe(
+      '/products/a%2Fb/media/c%20d',
+    )
+  })
+})
+
+describe('api.sync', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.post).mockReset()
+    vi.mocked(apiClient.get).mockReset()
+  })
+
+  it('POSTs /sync/products for the store, with no body', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message: 'Products sync started',
+      result: { status: 'started', entity: 'products', mode: 'all' },
+    })
+
+    const result = await api.sync.triggerProducts('polymer-uk')
+
+    expect(apiClient.post).toHaveBeenCalledWith('/sync/products', undefined, {
+      params: { shop: 'polymer-uk' },
+    })
+    expect(result.message).toBe('Products sync started')
+  })
+
+  it('accepts whatever the backend answers, so a started sync is never reported as failed', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(undefined)
+    expect((await api.sync.triggerProducts()).message).toBe('')
+    expect(vi.mocked(apiClient.post).mock.calls[0][2]).toEqual({ params: undefined })
+
+    vi.mocked(apiClient.post).mockResolvedValue({ status: 'started' })
+    expect((await api.sync.triggerProducts('x')).message).toBe('')
+  })
+
+  it('GETs /sync/status with the entity, limit and store', async () => {
+    const run = {
+      id: 'r1',
+      entity: 'products',
+      mode: 'full',
+      status: 'running',
+      started_at: '2026-10-15T10:00:00Z',
+      finished_at: null,
+      records_read: 12,
+      records_written: 10,
+      error: null,
+    }
+    vi.mocked(apiClient.get).mockResolvedValue({ code: 200, items: [run] })
+
+    const runs = await api.sync.status({
+      entity: 'products',
+      limit: 3,
+      shop: 'polymer-uk',
+    })
+
+    expect(apiClient.get).toHaveBeenCalledWith('/sync/status', {
+      params: { limit: 3, entity: 'products', shop: 'polymer-uk' },
+    })
+    expect(runs).toHaveLength(1)
+    expect(runs[0].records_read).toBe(12)
+  })
+
+  it('also reads a bare list of runs', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue([])
+    expect(await api.sync.status({})).toEqual([])
+    expect(vi.mocked(apiClient.get).mock.calls[0][1]).toEqual({ params: { limit: 10 } })
+  })
+})

@@ -6,6 +6,10 @@ interface DialogProps {
   onClose: () => void
   /** While true, Escape and the backdrop do nothing (e.g. a request is in flight). */
   closeDisabled?: boolean
+  /** `alertdialog` (the default) for a confirmation; `dialog` for one that holds a form. */
+  role?: 'alertdialog' | 'dialog'
+  /** A roomier dialog, for forms. */
+  wide?: boolean
   /** The action buttons, pinned under the content. */
   footer: ReactNode
   children: ReactNode
@@ -21,6 +25,8 @@ export function Dialog({
   title,
   onClose,
   closeDisabled = false,
+  role = 'alertdialog',
+  wide = false,
   footer,
   children,
 }: DialogProps) {
@@ -63,10 +69,10 @@ export function Dialog({
 
       <div
         ref={panel}
-        role="alertdialog"
+        role={role}
         aria-modal="true"
         aria-label={title}
-        className="bg-bg border-border relative flex w-full max-w-md flex-col gap-4 rounded-2xl border p-5 shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0"
+        className={`bg-bg border-border relative flex max-h-[90svh] w-full flex-col gap-4 overflow-y-auto rounded-2xl border p-5 ${wide ? 'max-w-xl' : 'max-w-md'} shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0`}
       >
         <h2 className="text-[1.05rem] leading-snug font-semibold">{title}</h2>
         <div className="text-text-muted flex flex-col gap-3 text-[0.88rem] leading-relaxed">

@@ -70,12 +70,10 @@ export function VariantsSection({ product, draft, errors, onChange }: SectionPro
 
   const imageOptions = [
     { value: '', label: 'Keep the current image' },
-    ...draft.images
-      .filter((image) => !image.removed)
-      .map((image, index) => ({
-        value: image.id,
-        label: `Image ${index + 1}${image.alt ? ` — ${image.alt}` : ''}`,
-      })),
+    ...draft.images.map((image, index) => ({
+      value: image.id,
+      label: `Image ${index + 1}${image.alt ? ` — ${image.alt}` : ''}`,
+    })),
   ]
 
   return (

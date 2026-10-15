@@ -5,6 +5,7 @@ import {
   type InventoryPolicy,
   type MediaType,
   type ProductDetail,
+  type ProductMediaInput,
   type ProductUpdateBody,
   type ProductVariant,
   type ProductVariantInput,
@@ -44,15 +45,18 @@ export interface VariantDraft {
   removed: boolean
 }
 
-/** One of the product's existing images. */
+/**
+ * One of the product's existing images: its alt text and its place in the order
+ * can be edited in the Media tab. Adding and removing files are separate,
+ * immediate actions (`POST /media`, `DELETE /media/{id}`), not part of this draft.
+ */
 export interface ImageDraft {
   id: string
   url: string
   alt: string
-  removed: boolean
 }
 
-/** A picture or video to attach by URL. */
+/** A picture or video to attach by URL (the "Add media" form's rows). */
 export interface NewMediaDraft {
   key: string
   url: string
@@ -77,7 +81,6 @@ export interface ProductDraft {
   variants: VariantDraft[]
   /** Existing images in their current order (reordering changes this order). */
   images: ImageDraft[]
-  newMedia: NewMediaDraft[]
 }
 
 /** The limits the API enforces (from its schema). */
@@ -94,7 +97,7 @@ export const LIMITS = {
   barcode: 255,
   mediaUrl: 2000,
   mediaAlt: 512,
-  /** Media the API attaches in one call. */
+  /** Media the API attaches in one call (`POST /media`). */
   newMedia: 20,
 } as const
 
@@ -186,9 +189,7 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
       id: image.id,
       url: image.url,
       alt: image.alt_text ?? '',
-      removed: false,
     })),
-    newMedia: [],
   }
 }
 
@@ -347,36 +348,19 @@ export function buildUpdateBody(
   if (variantEdits.length) body.variants = variantEdits
   if (variantsRemove.length) body.variants_remove = variantsRemove
 
-  const mediaRemove = draft.images
-    .filter((image) => image.removed)
-    .map((image) => image.id)
-  if (mediaRemove.length) body.media_remove = mediaRemove
-
-  const mediaUpdate = draft.images
-    .filter((image) => !image.removed)
-    .flatMap((image) => {
-      const original = product.images.find((candidate) => candidate.id === image.id)
-      return original && image.alt.trim() !== (original.alt_text ?? '')
-        ? [{ attachment_id: image.id, alt: image.alt.trim() }]
-        : []
-    })
+  const mediaUpdate = draft.images.flatMap((image) => {
+    const original = product.images.find((candidate) => candidate.id === image.id)
+    return original && image.alt.trim() !== (original.alt_text ?? '')
+      ? [{ attachment_id: image.id, alt: image.alt.trim() }]
+      : []
+  })
   if (mediaUpdate.length) body.media_update = mediaUpdate
 
-  const keptOrder = draft.images
-    .filter((image) => !image.removed)
-    .map((image) => image.id)
+  const order = draft.images.map((image) => image.id)
   const originalOrder = product.images
     .map((image) => image.id)
-    .filter((id) => keptOrder.includes(id))
-  if (keptOrder.some((id, index) => id !== originalOrder[index]))
-    body.media_order = keptOrder
-
-  const mediaAdd = draft.newMedia.map((media) => ({
-    url: media.url.trim(),
-    media_type: media.mediaType,
-    ...(media.alt.trim() ? { alt: media.alt.trim() } : {}),
-  }))
-  if (mediaAdd.length) body.media_add = mediaAdd
+    .filter((id) => order.includes(id))
+  if (order.some((id, index) => id !== originalOrder[index])) body.media_order = order
 
   return body
 }
@@ -390,6 +374,49 @@ export type DraftErrors = Record<string, string>
 
 const tooLong = (label: string, value: string, max: number) =>
   value.trim().length > max ? `${label} can be at most ${max} characters` : null
+
+/** The rows of the "Add media" form → the items `POST /media` expects (blank rows are skipped). */
+export function buildMediaItems(rows: NewMediaDraft[]): ProductMediaInput[] {
+  return rows
+    .filter((row) => row.url.trim() !== '')
+    .map((row) => ({
+      url: row.url.trim(),
+      media_type: row.mediaType,
+      ...(row.alt.trim() ? { alt: row.alt.trim() } : {}),
+    }))
+}
+
+/**
+ * Checks the "Add media" rows against the API's limits. Keys are `<row>.url`,
+ * `<row>.alt` and `rows` (for the list as a whole). Fully blank rows are ignored,
+ * but at least one file is needed.
+ */
+export function validateNewMedia(rows: NewMediaDraft[]): DraftErrors {
+  const errors: DraftErrors = {}
+  const used = rows.filter((row) => row.url.trim() !== '' || row.alt.trim() !== '')
+  if (rows.every((row) => row.url.trim() === '')) {
+    errors.rows = 'Enter the web address of at least one file'
+  }
+  if (used.length > LIMITS.newMedia) {
+    errors.rows = `You can add at most ${LIMITS.newMedia} files at a time`
+  }
+  rows.forEach((row, index) => {
+    const url = row.url.trim()
+    if (url === '' && row.alt.trim() === '') return
+    const urlProblem =
+      url === ''
+        ? 'Enter the file’s web address'
+        : url.length > LIMITS.mediaUrl
+          ? `The address can be at most ${LIMITS.mediaUrl} characters`
+          : /^https:\/\//i.test(url)
+            ? null
+            : 'Use a public https:// address'
+    if (urlProblem) errors[`${index}.url`] = urlProblem
+    const altProblem = tooLong('The alt text', row.alt, LIMITS.mediaAlt)
+    if (altProblem) errors[`${index}.alt`] = altProblem
+  })
+  return errors
+}
 
 /** Checks a draft against the API's limits. An empty result means it can be sent. */
 export function validateDraft(product: ProductDetail, draft: ProductDraft): DraftErrors {
@@ -460,24 +487,6 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
 
   draft.images.forEach((image, index) => {
     put(`images.${index}.alt`, tooLong('The alt text', image.alt, LIMITS.mediaAlt))
-  })
-
-  if (draft.newMedia.length > LIMITS.newMedia) {
-    errors.newMedia = `You can add at most ${LIMITS.newMedia} files at a time`
-  }
-  draft.newMedia.forEach((media, index) => {
-    const url = media.url.trim()
-    put(
-      `newMedia.${index}.url`,
-      url === ''
-        ? 'Enter the file’s web address'
-        : url.length > LIMITS.mediaUrl
-          ? `The address can be at most ${LIMITS.mediaUrl} characters`
-          : /^https:\/\//i.test(url)
-            ? null
-            : 'Use a public https:// address',
-    )
-    put(`newMedia.${index}.alt`, tooLong('The alt text', media.alt, LIMITS.mediaAlt))
   })
 
   return errors

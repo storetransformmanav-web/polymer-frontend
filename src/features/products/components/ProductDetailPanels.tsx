@@ -9,10 +9,15 @@ import {
   ListChecksIcon,
   PlusIcon,
   SearchIcon,
+  SpinnerIcon,
+  TrashIcon,
 } from '../../../components/ui/icons.tsx'
+import { IconAction } from '../../../components/ui/IconAction.tsx'
 import type {
   ProductDetail,
+  ProductImage as ProductImageData,
   ProductListItem,
+  ProductMediaInput,
   ProductVariant,
 } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
@@ -31,6 +36,7 @@ import {
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
+import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
 import {
   CategoryField,
@@ -52,6 +58,8 @@ import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
 import { TagsSection as TagsEditor } from './edit/TagsSection.tsx'
 import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
+import { AddMediaDialog } from './AddMediaDialog.tsx'
+import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 
@@ -68,7 +76,7 @@ const NO_ERRORS = [] as const
 const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
 const VARIANT_ERRORS = ['variants'] as const
 const COLLECTION_ERRORS = ['addedCollections'] as const
-const MEDIA_ERRORS = ['images', 'newMedia'] as const
+const MEDIA_ERRORS = ['images'] as const
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
@@ -669,32 +677,106 @@ function CollectionsHeader({
   )
 }
 
-function MediaView({ product }: { product: ProductDetail }) {
+interface MediaTile {
+  image: ProductImageData
+  src: string
+  alt: string
+  width?: number
+  height?: number
+}
+
+/**
+ * The product's images as tiles (click one to open the lightbox). Each has a
+ * Delete button, and files that were just added show as "processing" tiles until
+ * the store has finished downloading them.
+ */
+function MediaView({
+  product,
+  pending,
+  onDelete,
+}: {
+  product: ProductDetail
+  pending: ProductMediaInput[]
+  onDelete: (image: ProductImageData, position: number) => void
+}) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  // Only images with a safe (http/https) URL are shown; each keeps its own record for Delete.
+  const tiles = useMemo<MediaTile[]>(
+    () =>
+      product.images.flatMap((image) => {
+        const src = safeUrl(image.url)
+        return src
+          ? [
+              {
+                image,
+                src,
+                alt: image.alt_text ?? product.title,
+                width: image.width ?? undefined,
+                height: image.height ?? undefined,
+              },
+            ]
+          : []
+      }),
+    [product.images, product.title],
+  )
   const slides = useMemo(
     () => toSlides(product.images, product.title),
     [product.images, product.title],
   )
 
-  if (slides.length === 0) {
+  if (tiles.length === 0 && pending.length === 0) {
     return <Empty icon={ImageIcon}>This product has no images.</Empty>
   }
 
   return (
     <>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {slides.map((slide, index) => (
-          <li key={`${slide.src}-${index}`} className={`${CARD} overflow-hidden`}>
+        {tiles.map((tile, index) => (
+          <li key={tile.image.id} className={`${CARD} relative overflow-hidden`}>
             <button
               type="button"
               onClick={() => setLightboxIndex(index)}
-              aria-label={`Open image ${index + 1} of ${slides.length}`}
+              aria-label={`Open image ${index + 1} of ${tiles.length}`}
               className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
             >
-              <ProductImage src={slide.src} alt={slide.alt} size="xl" />
+              <ProductImage src={tile.src} alt={tile.alt} size="xl" />
             </button>
+            <div className="absolute top-2 right-2">
+              <IconAction
+                label="Delete"
+                accessibleLabel={`Delete image ${index + 1}`}
+                icon={TrashIcon}
+                tone="danger"
+                onClick={() => onDelete(tile.image, index + 1)}
+              />
+            </div>
             <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
-              {slide.width && slide.height ? `${slide.width} × ${slide.height}` : 'Image'}
+              {tile.width && tile.height ? `${tile.width} × ${tile.height}` : 'Image'}
+            </p>
+          </li>
+        ))}
+
+        {pending.map((item, index) => (
+          <li
+            key={`pending-${item.url}-${index}`}
+            aria-label="Processing"
+            className={`${CARD} border-accent/40 relative overflow-hidden`}
+          >
+            <div className="relative">
+              <ProductImage src={item.url} alt={item.alt ?? ''} size="xl" />
+              <div className="bg-bg/70 absolute inset-0 flex flex-col items-center justify-center gap-2 backdrop-blur-[1px]">
+                <SpinnerIcon
+                  width={22}
+                  height={22}
+                  className="text-accent animate-spin"
+                />
+                <span className="text-text text-[0.78rem] font-semibold">
+                  Processing…
+                </span>
+              </div>
+            </div>
+            <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
+              Waiting for the store
             </p>
           </li>
         ))}
@@ -706,6 +788,46 @@ function MediaView({ product }: { product: ProductDetail }) {
         onClose={() => setLightboxIndex(null)}
       />
     </>
+  )
+}
+
+/**
+ * One row above the tiles, like the Collections tab: how many images there are,
+ * the pencil (alt text and order) and "Add media". While editing, the pencil
+ * becomes Save / Discard.
+ */
+function MediaHeader({
+  count,
+  edit,
+  onAdd,
+}: {
+  count: number
+  edit: SectionEdit
+  onAdd: () => void
+}) {
+  const summary = edit.editing
+    ? 'Editing media'
+    : count === 0
+      ? 'No images'
+      : `${count} ${count === 1 ? 'image' : 'images'}`
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <p className="mr-auto text-[0.95rem] font-semibold">{summary}</p>
+      <div className="flex items-center gap-1.5">
+        <SectionEditControls edit={edit} what="media" />
+        {!edit.editing && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors"
+          >
+            <PlusIcon width={14} height={14} />
+            Add media
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -857,14 +979,61 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
 }
 
 export function MediaPanel({ product, onSaved }: TabProps) {
+  const [adding, setAdding] = useState(false)
+  const [deleting, setDeleting] = useState<{
+    image: ProductImageData
+    position: number
+  } | null>(null)
+  const media = usePendingMedia(product)
+
   return (
-    <EditableTab
-      product={product}
-      what="media"
-      errorPrefixes={MEDIA_ERRORS}
-      onSaved={onSaved}
-      view={<MediaView product={product} />}
-      editor={(section) => <MediaEditor {...section} />}
-    />
+    <>
+      <EditableTab
+        product={product}
+        what="media"
+        errorPrefixes={MEDIA_ERRORS}
+        onSaved={onSaved}
+        header={(edit) => (
+          <MediaHeader
+            count={product.images.length}
+            edit={edit}
+            onAdd={() => setAdding(true)}
+          />
+        )}
+        view={
+          <MediaView
+            product={product}
+            pending={media.pending}
+            onDelete={(image, position) => setDeleting({ image, position })}
+          />
+        }
+        editor={(section) => <MediaEditor {...section} />}
+      />
+
+      {adding && (
+        <AddMediaDialog
+          product={product}
+          onClose={() => setAdding(false)}
+          onDone={(result, items) => {
+            setAdding(false)
+            media.queue(items)
+            onSaved?.(result, product, {})
+          }}
+        />
+      )}
+
+      {deleting && (
+        <DeleteMediaDialog
+          product={product}
+          image={deleting.image}
+          position={deleting.position}
+          onClose={() => setDeleting(null)}
+          onDone={(result) => {
+            setDeleting(null)
+            onSaved?.(result, product, {})
+          }}
+        />
+      )}
+    </>
   )
 }

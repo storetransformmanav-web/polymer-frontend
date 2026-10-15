@@ -22,6 +22,8 @@ export interface NavItem {
    * filter). Only set this for pages that do — the dropdown is hidden elsewhere.
    */
   shopScoped?: boolean
+  /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
+  syncs?: 'products'
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -49,7 +51,13 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: StoreIcon,
     items: [
       { to: '/orders', label: 'Orders', icon: OrdersIcon },
-      { to: '/products', label: 'Products', icon: ProductsIcon, shopScoped: true },
+      {
+        to: '/products',
+        label: 'Products',
+        icon: ProductsIcon,
+        shopScoped: true,
+        syncs: 'products',
+      },
       { to: '/customers', label: 'Customers', icon: UsersIcon, shopScoped: true },
       { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
     ],

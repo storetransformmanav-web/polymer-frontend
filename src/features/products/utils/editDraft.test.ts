@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductDetail } from '../../../lib/api/endpoints.ts'
 import {
   blankMedia,
+  buildMediaItems,
   blankVariant,
   buildUpdateBody,
   draftFromProduct,
@@ -9,6 +10,7 @@ import {
   LIMITS,
   validateDraft,
   type ProductDraft,
+  validateNewMedia,
 } from './editDraft.ts'
 
 const VARIANT_A = '11111111-1111-4111-8111-111111111111'
@@ -256,22 +258,14 @@ describe('buildUpdateBody', () => {
   })
 
   describe('media', () => {
-    it('updates alt text, removes images, and attaches new ones by URL', () => {
+    it('updates alt text, and sends nothing about files — adding and removing are their own calls', () => {
       const body = edit(makeProduct(), (draft) => {
         draft.images[1].alt = 'Two'
-        draft.images[2].removed = true
-        draft.newMedia.push({
-          ...blankMedia(),
-          url: ' https://cdn.example.com/new.jpg ',
-          alt: 'Fresh',
-        })
       })
 
       expect(body.media_update).toEqual([{ attachment_id: IMAGE_2, alt: 'Two' }])
-      expect(body.media_remove).toEqual([IMAGE_3])
-      expect(body.media_add).toEqual([
-        { url: 'https://cdn.example.com/new.jpg', alt: 'Fresh', media_type: 'IMAGE' },
-      ])
+      expect(body.media_add).toBeUndefined()
+      expect(body.media_remove).toBeUndefined()
       expect(body.media_order).toBeUndefined()
     })
 
@@ -281,15 +275,6 @@ describe('buildUpdateBody', () => {
       })
 
       expect(body.media_order).toEqual([IMAGE_3, IMAGE_1, IMAGE_2])
-    })
-
-    it('does not call removing an image a reorder', () => {
-      const body = edit(makeProduct(), (draft) => {
-        draft.images[0].removed = true
-      })
-
-      expect(body.media_remove).toEqual([IMAGE_1])
-      expect(body.media_order).toBeUndefined()
     })
   })
 })
@@ -371,34 +356,6 @@ describe('validateDraft', () => {
     expect(errors).toEqual({})
   })
 
-  it('accepts only public https addresses for new media, within the limits', () => {
-    const errors = problems((d) => {
-      d.newMedia.push(
-        { ...blankMedia(), url: '' },
-        { ...blankMedia(), url: 'http://cdn.example.com/a.jpg' },
-        { ...blankMedia(), url: 'javascript:alert(1)' },
-        { ...blankMedia(), url: 'https://cdn.example.com/ok.jpg', alt: 'a'.repeat(513) },
-      )
-    })
-
-    expect(errors['newMedia.0.url']).toBeDefined()
-    expect(errors['newMedia.1.url']).toMatch(/https/)
-    expect(errors['newMedia.2.url']).toMatch(/https/)
-    expect(errors['newMedia.3.url']).toBeUndefined()
-    expect(errors['newMedia.3.alt']).toMatch(/at most 512/)
-  })
-
-  it('allows at most 20 files to be attached at once', () => {
-    const errors = problems((d) => {
-      d.newMedia = Array.from({ length: 21 }, () => ({
-        ...blankMedia(),
-        url: 'https://cdn.example.com/a.jpg',
-      }))
-    })
-
-    expect(errors.newMedia).toMatch(/at most 20/)
-  })
-
   it('checks that a collection to add is a real id', () => {
     const errors = problems((d) => {
       d.addedCollectionIds = ['not-a-uuid', '44444444-4444-4444-8444-444444444444']
@@ -406,5 +363,58 @@ describe('validateDraft', () => {
 
     expect(errors['addedCollections.0']).toBeDefined()
     expect(errors['addedCollections.1']).toBeUndefined()
+  })
+})
+
+describe('the "Add media" form', () => {
+  const row = (url: string, alt = '') => ({ ...blankMedia(), url, alt })
+
+  it('turns filled rows into the items POST /media takes, skipping blank rows', () => {
+    const items = buildMediaItems([
+      row(' https://cdn.example.com/a.jpg ', 'First'),
+      row(''),
+      { ...row('https://cdn.example.com/b.mp4'), mediaType: 'VIDEO' },
+    ])
+
+    expect(items).toEqual([
+      { url: 'https://cdn.example.com/a.jpg', alt: 'First', media_type: 'IMAGE' },
+      { url: 'https://cdn.example.com/b.mp4', media_type: 'VIDEO' },
+    ])
+  })
+
+  it('accepts only public https addresses, within the limits', () => {
+    const errors = validateNewMedia([
+      row('http://cdn.example.com/a.jpg'),
+      row('javascript:alert(1)'),
+      row('https://cdn.example.com/ok.jpg', 'a'.repeat(513)),
+      row('https://cdn.example.com/fine.jpg'),
+    ])
+
+    expect(errors['0.url']).toMatch(/https/)
+    expect(errors['1.url']).toMatch(/https/)
+    expect(errors['2.url']).toBeUndefined()
+    expect(errors['2.alt']).toMatch(/at most 512/)
+    expect(errors['3.url']).toBeUndefined()
+    expect(errors.rows).toBeUndefined()
+  })
+
+  it('needs at least one address, and ignores rows left entirely blank', () => {
+    expect(validateNewMedia([row('')]).rows).toMatch(/at least one/)
+    expect(validateNewMedia([row('https://cdn.example.com/a.jpg'), row('')])).toEqual({})
+  })
+
+  it('wants an address for a row that only has alt text', () => {
+    expect(
+      validateNewMedia([row('https://cdn.example.com/a.jpg'), row('', 'Only alt')])[
+        '1.url'
+      ],
+    ).toBeDefined()
+  })
+
+  it('allows at most 20 files in one call', () => {
+    const rows = Array.from({ length: 21 }, () => row('https://cdn.example.com/a.jpg'))
+
+    expect(validateNewMedia(rows).rows).toMatch(/at most 20/)
+    expect(validateNewMedia(rows.slice(0, 20))).toEqual({})
   })
 })

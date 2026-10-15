@@ -1,17 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
-import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
-import {
-  fetchProductDetails,
-  fetchProducts,
-  statusCountFilters,
-  updateProduct,
-} from '../../../app/store/productsSlice.ts'
+import { useAppDispatch } from '../../../app/store/hooks.ts'
+import { fetchProductDetails, updateProduct } from '../../../app/store/productsSlice.ts'
 import type { ProductUpdateBody, ProductWriteResult } from '../../../lib/api/endpoints.ts'
 import { productSyncPrefix } from './useProductSyncHistory.ts'
-
-/** Every status tab, so their counts can be refreshed after a status change. */
-const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+import { useRefreshProductList } from './useRefreshProductList.ts'
 
 /**
  * What to refresh quietly once a save is confirmed: the sync history (the edit
@@ -22,22 +15,15 @@ const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
 export function useRefreshAfterSave() {
   const dispatch = useAppDispatch()
   const queryClient = useQueryClient()
-  const filters = useAppSelector((state) => state.products.filters)
+  const refreshList = useRefreshProductList()
 
   return useCallback(
     (id: string, body: ProductUpdateBody) => {
       void queryClient.invalidateQueries({ queryKey: productSyncPrefix(id) })
       void dispatch(fetchProductDetails({ id, force: true }))
-      void dispatch(fetchProducts({ filters, force: true }))
-      if (body.status) {
-        for (const status of STATUS_TABS) {
-          void dispatch(
-            fetchProducts({ filters: statusCountFilters(filters, status), force: true }),
-          )
-        }
-      }
+      refreshList(Boolean(body.status))
     },
-    [dispatch, filters, queryClient],
+    [dispatch, queryClient, refreshList],
   )
 }
 

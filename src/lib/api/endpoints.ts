@@ -38,6 +38,12 @@ export const ENDPOINTS = {
     /** `ref` is the customer's UUID, Shopify ID or email. */
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
   },
+  sync: {
+    /** `POST` starts a background sync of every product of one store. */
+    products: '/sync/products',
+    /** `GET` the recent sync runs (progress and result). */
+    status: '/sync/status',
+  },
   products: {
     list: '/products',
     /** `ref` is the product's UUID or Shopify ID. */
@@ -46,6 +52,11 @@ export const ENDPOINTS = {
     update: (id: string) => `/products/${encodeURIComponent(id)}`,
     /** `DELETE` removes the product (the backend archives it by default); `id` is its CRM UUID. */
     remove: (id: string) => `/products/${encodeURIComponent(id)}`,
+    /** `POST` attaches images/videos by public URL (`id` is the product's CRM UUID). */
+    media: (id: string) => `/products/${encodeURIComponent(id)}/media`,
+    /** `DELETE` removes one media attachment (its CRM UUID) from the product. */
+    mediaItem: (id: string, attachmentId: string) =>
+      `/products/${encodeURIComponent(id)}/media/${encodeURIComponent(attachmentId)}`,
     /** Retry the latest failed or pending push of this product to its store. */
     push: (id: string) => `/products/${encodeURIComponent(id)}/push`,
     /** History of this product's pushes to its store, newest first. */
@@ -627,6 +638,30 @@ const productWriteResponseSchema = z.union([
   z.object({ result: productWriteResultSchema }).transform((body) => body.result),
 ])
 
+/** One run of a sync (what `GET /sync/status` lists, newest first). */
+const syncRunSchema = z.object({
+  id: z.string(),
+  entity: z.string().default(''),
+  mode: z.string().default(''),
+  /** Free text, e.g. "running", "completed", "failed". */
+  status: z.string(),
+  started_at: z.string(),
+  finished_at: z.string().nullish(),
+  /** Processed so far. */
+  records_read: z.number().default(0),
+  /** Saved so far. */
+  records_written: z.number().default(0),
+  error: z.string().nullish(),
+})
+
+/** The runs arrive as a bare list, or inside an envelope's `items`. */
+const syncRunListSchema = z.union([
+  z.array(syncRunSchema),
+  z.object({ items: z.array(syncRunSchema) }).transform((body) => body.items),
+])
+
+export type SyncRun = z.infer<typeof syncRunSchema>
+
 /** One push of this product to its store. */
 const productPushSchema = z.object({
   id: z.string(),
@@ -784,6 +819,38 @@ export const api = {
     },
   },
 
+  sync: {
+    /**
+     * Starts a sync of every product of a store (`shop` = its key; empty means
+     * the backend's default store). It runs in the background — follow it with
+     * `status`. Only success matters here, so the answer is read leniently:
+     * the backend's message when it sent one. Never retried automatically.
+     */
+    async triggerProducts(shop?: string | null): Promise<{ message: string }> {
+      const data = await apiClient.post<unknown>(ENDPOINTS.sync.products, undefined, {
+        params: shop ? { shop } : undefined,
+      })
+      const message =
+        typeof data === 'object' && data !== null && 'message' in data
+          ? String((data as { message: unknown }).message ?? '')
+          : ''
+      return { message }
+    },
+
+    /** The most recent sync runs, newest first. */
+    async status(options: {
+      entity?: string
+      limit?: number
+      shop?: string | null
+    }): Promise<SyncRun[]> {
+      const { entity, limit = 10, shop } = options
+      const data = await apiClient.get(ENDPOINTS.sync.status, {
+        params: { limit, ...(entity ? { entity } : {}), ...(shop ? { shop } : {}) },
+      })
+      return syncRunListSchema.parse(data)
+    },
+  },
+
   products: {
     /** One page of products, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: ProductListParams): Promise<ProductListResponse> {
@@ -828,6 +895,40 @@ export const api = {
       const data = await apiClient.delete(ENDPOINTS.products.remove(id), {
         params: shop ? { shop } : undefined,
       })
+      return productWriteResponseSchema.parse(data)
+    },
+
+    /**
+     * Attaches images/videos to a product by public https URL (1–20 per call).
+     * Shopify downloads each file to its CDN and the CRM stores only the CDN URL
+     * it gets back, so the new attachments appear a little later; the answer says
+     * "Media queued for Shopify". Never retried automatically.
+     */
+    async addMedia(
+      id: string,
+      items: ProductMediaInput[],
+      shop?: string | null,
+    ): Promise<ProductWriteResult> {
+      const data = await apiClient.post(
+        ENDPOINTS.products.media(id),
+        { items },
+        { params: shop ? { shop } : undefined },
+      )
+      return productWriteResponseSchema.parse(data)
+    },
+
+    /** Removes one media attachment from a product ("Media removal queued"). Never retried automatically. */
+    async removeMedia(
+      id: string,
+      attachmentId: string,
+      shop?: string | null,
+    ): Promise<ProductWriteResult> {
+      const data = await apiClient.delete(
+        ENDPOINTS.products.mediaItem(id, attachmentId),
+        {
+          params: shop ? { shop } : undefined,
+        },
+      )
       return productWriteResponseSchema.parse(data)
     },
 

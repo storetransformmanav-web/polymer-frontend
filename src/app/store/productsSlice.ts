@@ -10,6 +10,7 @@ import {
   api,
   type ProductDetail,
   type ProductListParams,
+  type ProductMediaInput,
   type ProductListResponse,
   type ProductSort,
   type ProductStatus,
@@ -298,6 +299,55 @@ export const deleteProduct = createAsyncThunk<
   }
 })
 
+interface AddMediaArg {
+  id: string
+  items: ProductMediaInput[]
+  /** The product's store key (sent as `shop=`). */
+  shop?: string | null
+}
+
+/**
+ * Attaches media by URL. The store downloads the files first, so there is
+ * nothing to show in the product yet — the cached copies are only marked stale
+ * (the caller then refreshes them, and shows the files as "processing" until
+ * they arrive). Never retried automatically.
+ */
+export const addProductMedia = createAsyncThunk<
+  ProductWriteResult,
+  AddMediaArg,
+  { state: ProductsRootState; rejectValue: string }
+>('products/addMedia', async ({ id, items, shop }, { rejectWithValue }) => {
+  try {
+    return await api.products.addMedia(id, items, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
+interface RemoveMediaArg {
+  id: string
+  /** The CRM id of the media attachment (an image's `id`). */
+  attachmentId: string
+  shop?: string | null
+}
+
+/**
+ * Removes one media attachment. On success it disappears from every cached copy
+ * of the product at once (details, so the Media tab, the gallery and the counts
+ * all update with no loader). Never retried automatically.
+ */
+export const removeProductMedia = createAsyncThunk<
+  ProductWriteResult,
+  RemoveMediaArg,
+  { state: ProductsRootState; rejectValue: string }
+>('products/removeMedia', async ({ id, attachmentId, shop }, { rejectWithValue }) => {
+  try {
+    return await api.products.removeMedia(id, attachmentId, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
 function addSorted(list: string[], values: (string | null)[]) {
   let changed = false
   for (const value of values) {
@@ -475,6 +525,13 @@ const productsSlice = createSlice({
       })
       .addCase(deleteProduct.fulfilled, (state, action) => {
         patchCachedProduct(state, action.meta.arg.id, { status: 'ARCHIVED' })
+      })
+      .addCase(addProductMedia.fulfilled, (state, action) => {
+        patchCachedProduct(state, action.meta.arg.id, {})
+      })
+      .addCase(removeProductMedia.fulfilled, (state, action) => {
+        const { id, attachmentId } = action.meta.arg
+        patchCachedProduct(state, id, { media_remove: [attachmentId] })
       })
       .addCase(fetchProductDetails.rejected, (state, action) => {
         if (action.meta.condition) return
