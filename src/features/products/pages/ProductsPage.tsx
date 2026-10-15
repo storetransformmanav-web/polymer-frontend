@@ -1,7 +1,14 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import type { ProductListItem } from '../../../lib/api/endpoints.ts'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import type {
+  ProductDetail,
+  ProductListItem,
+  ProductUpdateBody,
+  ProductWriteResult,
+} from '../../../lib/api/endpoints.ts'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
+import { ProductEditPanel } from '../components/ProductEditPanel.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -31,6 +38,38 @@ export function ProductsPage() {
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
+  // The product whose edit form is open (from a row's pencil or the details page).
+  const [editingId, setEditingId] = useState<string | null>(null)
+  // Products edited this session → the push status their save reported (so the
+  // details header can track whether the edit reached the store).
+  const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
+  const [notice, setNotice] = useState<string | null>(null)
+  const closeEdit = useCallback(() => setEditingId(null), [])
+
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = window.setTimeout(() => setNotice(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  function openEdit(id: string) {
+    setNotice(null)
+    setQuickView(null)
+    setEditingId(id)
+  }
+
+  function handleSaved(
+    result: ProductWriteResult,
+    product: ProductDetail,
+    body: ProductUpdateBody,
+  ) {
+    setEditingId(null)
+    setSavedStatus((current) => ({ ...current, [product.id]: result.sync_status }))
+    // Name the product as it is now (a rename is part of this very edit).
+    setNotice(
+      `Saved “${body.title ?? product.title}”. ${result.message || 'It is being sent to the store.'}`,
+    )
+  }
 
   // `/products/<id>[/…]` → the product id; `/products` → null (the list).
   const activeId = splat ? splat.split('/')[0] || null : null
@@ -68,11 +107,16 @@ export function ProductsPage() {
         onClear={clearTabs}
       />
 
+      {notice && <FormMessage tone="success">{notice}</FormMessage>}
+
       {activeId && (
         <ProductDetailsView
-          key={activeId}
+          key={`details-${activeId}`}
           id={activeId}
           onBack={() => navigate(LIST_PATH)}
+          onEdit={() => openEdit(activeId)}
+          onPrefetchEdit={() => products.prefetchDetails(activeId)}
+          savedStatus={savedStatus[activeId] ?? null}
         />
       )}
 
@@ -110,6 +154,7 @@ export function ProductsPage() {
             isStale={products.isShowingPrevious}
             onOpen={openProduct}
             onQuickView={setQuickView}
+            onEdit={(product) => openEdit(product.id)}
             onPrefetch={products.prefetchDetails}
             onRetry={products.retry}
             onClearFilters={products.resetFilters}
@@ -128,9 +173,18 @@ export function ProductsPage() {
         </section>
       </div>
 
+      {editingId && (
+        <ProductEditPanel
+          key={`edit-${editingId}`}
+          id={editingId}
+          onClose={closeEdit}
+          onSaved={handleSaved}
+        />
+      )}
+
       {quickView && !activeId && (
         <ProductQuickView
-          key={quickView.id}
+          key={`quick-view-${quickView.id}`}
           product={quickView}
           onClose={closeQuickView}
           onOpenDetails={() => openFromQuickView(quickView)}

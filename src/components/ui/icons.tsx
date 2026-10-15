@@ -398,6 +398,26 @@ export function RefreshIcon(props: IconProps) {
   )
 }
 
+export function PencilIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12.9 3.6a1.7 1.7 0 0 1 2.4 0l1.1 1.1a1.7 1.7 0 0 1 0 2.4L7.6 15.9l-3.9.9.9-3.9 8.3-9.3Z" />
+      <path d="m11.4 5.2 3.4 3.4" />
+    </svg>
+  )
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 5.5h13" />
+      <path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
+      <path d="m5 5.5.8 10a1.2 1.2 0 0 0 1.2 1.1h6a1.2 1.2 0 0 0 1.2-1.1l.8-10" />
+      <path d="M8.5 9v4.5M11.5 9v4.5" />
+    </svg>
+  )
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

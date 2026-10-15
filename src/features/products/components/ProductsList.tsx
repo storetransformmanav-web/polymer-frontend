@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  EyeIcon,
+  PencilIcon,
+  SearchIcon,
+} from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
@@ -27,6 +32,8 @@ interface ProductsListProps {
   onOpen: (product: ProductListItem) => void
   /** Clicking a row's image opens the quick-view side panel. */
   onQuickView: (product: ProductListItem) => void
+  /** Opens the edit form for a product (the pencil in its row). */
+  onEdit: (product: ProductListItem) => void
   /** Hover/focus on View or an image: start loading details so opening is instant. */
   onPrefetch: (id: string) => void
   onRetry: () => void
@@ -68,6 +75,7 @@ export function ProductsList({
   isStale,
   onOpen,
   onQuickView,
+  onEdit,
   onPrefetch,
   onRetry,
   onClearFilters,
@@ -179,7 +187,7 @@ export function ProductsList({
             <th className={`${TH} w-32`}>Status</th>
             <th className={`${TH_RIGHT} w-36`}>Inventory</th>
             <th className={`${TH_RIGHT} w-44`}>Price</th>
-            <th className={`${TH_CENTER} w-20`}>View</th>
+            <th className={`${TH_CENTER} w-24`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -242,16 +250,30 @@ export function ProductsList({
                     {formatPriceRange(product)}
                   </td>
                   <td className={`${TD} text-center`}>
-                    <button
-                      type="button"
-                      aria-label={`View ${product.title}`}
-                      onClick={() => onOpen(product)}
-                      onPointerEnter={() => onPrefetch(product.id)}
-                      onFocus={() => onPrefetch(product.id)}
-                      className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
-                    >
-                      <EyeIcon />
-                    </button>
+                    <span className="inline-flex items-center justify-center gap-0.5">
+                      <button
+                        type="button"
+                        aria-label={`View ${product.title}`}
+                        title="View"
+                        onClick={() => onOpen(product)}
+                        onPointerEnter={() => onPrefetch(product.id)}
+                        onFocus={() => onPrefetch(product.id)}
+                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                      >
+                        <EyeIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Edit ${product.title}`}
+                        title="Edit"
+                        onClick={() => onEdit(product)}
+                        onPointerEnter={() => onPrefetch(product.id)}
+                        onFocus={() => onPrefetch(product.id)}
+                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                      >
+                        <PencilIcon />
+                      </button>
+                    </span>
                   </td>
                 </tr>
               ))}

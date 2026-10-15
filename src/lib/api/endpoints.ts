@@ -42,6 +42,12 @@ export const ENDPOINTS = {
     list: '/products',
     /** `ref` is the product's UUID or Shopify ID. */
     detail: (ref: string) => `/products/${encodeURIComponent(ref)}`,
+    /** `id` is the product's CRM UUID (`PUT` edits it). */
+    update: (id: string) => `/products/${encodeURIComponent(id)}`,
+    /** Retry the latest failed or pending push of this product to its store. */
+    push: (id: string) => `/products/${encodeURIComponent(id)}/push`,
+    /** History of this product's pushes to its store, newest first. */
+    sync: (id: string) => `/products/${encodeURIComponent(id)}/sync`,
   },
 } as const
 
@@ -261,7 +267,17 @@ export const PRODUCT_SORTS = [
 export const productStatusSchema = z.enum(PRODUCT_STATUSES)
 export const productSortSchema = z.enum(PRODUCT_SORTS)
 
+/** The store a product belongs to (what the UI shows next to products). */
+const shopRefSchema = z.object({
+  /** Short store key, e.g. "polymer-uk" — what the `shop=` parameter takes. */
+  key: z.string().nullish(),
+  name: z.string().nullish(),
+  domain: z.string().nullish(),
+  currency: z.string().nullish(),
+})
+
 const productListItemSchema = z.object({
+  shop: shopRefSchema.nullish(),
   id: z.string(),
   shopify_id: z.number(),
   title: z.string(),
@@ -519,6 +535,7 @@ const productImageSchema = z.object({
 })
 
 const productDetailSchema = z.object({
+  shop: shopRefSchema.nullish(),
   id: z.string(),
   shopify_id: z.number(),
   title: z.string(),
@@ -581,6 +598,114 @@ const productDetailSchema = z.object({
 })
 
 const productDetailResponseSchema = z.object({ product: productDetailSchema })
+
+// --- Product edits (PUT /products/{id}, POST …/push, GET …/sync) ---------------
+// An edit is saved in the CRM at once and pushed to the product's store right
+// after the response; these describe the answer and the push's progress.
+
+/** The answer to an edit (or a retried push). */
+const productWriteResultSchema = z.object({
+  product_id: z.string(),
+  /** How the push to the store is going, e.g. "pending". */
+  sync_status: z.string(),
+  push_id: z.string().nullish(),
+  /** What the backend recorded as changed. */
+  changes: z.record(z.string(), z.unknown()).nullish(),
+  message: z.string().default(''),
+})
+
+/** One push of this product to its store. */
+const productPushSchema = z.object({
+  id: z.string(),
+  action: z.string().default(''),
+  status: z.string(),
+  attempts: z.number().default(0),
+  error: z.string().nullish(),
+  created_at: z.string(),
+  finished_at: z.string().nullish(),
+})
+
+const productPushListSchema = z.array(productPushSchema)
+
+export type ProductWriteResult = z.infer<typeof productWriteResultSchema>
+export type ProductPush = z.infer<typeof productPushSchema>
+
+/** Statuses the API accepts for an edit (a product can't be edited *to* "unlisted"). */
+export const PRODUCT_EDIT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED'] as const
+export const INVENTORY_POLICIES = ['DENY', 'CONTINUE'] as const
+export const WEIGHT_UNITS = ['GRAMS', 'KILOGRAMS', 'OUNCES', 'POUNDS'] as const
+export const MEDIA_TYPES = ['IMAGE', 'VIDEO', 'EXTERNAL_VIDEO', 'MODEL_3D'] as const
+
+export type ProductEditStatus = (typeof PRODUCT_EDIT_STATUSES)[number]
+export type InventoryPolicy = (typeof INVENTORY_POLICIES)[number]
+export type WeightUnit = (typeof WEIGHT_UNITS)[number]
+export type MediaType = (typeof MEDIA_TYPES)[number]
+
+/** Update an existing variant (give `id`) or create one (no id, give `option_values`). */
+export interface ProductVariantInput {
+  /** CRM variant id to update; omit to create a new variant. */
+  id?: string
+  /** New variant only: one value per product option, in option order. */
+  option_values?: string[]
+  /** A number or decimal string, ≥ 0. */
+  price?: string | number
+  compare_at_price?: string | number | null
+  sku?: string
+  barcode?: string
+  taxable?: boolean
+  tax_code?: string
+  inventory_policy?: InventoryPolicy
+  /** Track stock in Shopify. */
+  tracked?: boolean
+  requires_shipping?: boolean
+  cost?: string | number | null
+  weight?: string | number | null
+  weight_unit?: WeightUnit
+  /** Product image (CRM attachment id) to show for this variant. */
+  image_attachment_id?: string | null
+}
+
+/** A picture or video to attach, by public https URL. */
+export interface ProductMediaInput {
+  url: string
+  alt?: string
+  media_type?: MediaType
+}
+
+/**
+ * Body of `PUT /products/{id}`: any subset of fields — anything left out is
+ * unchanged. List fields named `…_add` / `…_remove` change a list without
+ * replacing it.
+ */
+export interface ProductUpdateBody {
+  title?: string
+  description_html?: string
+  vendor?: string
+  product_type?: string
+  status?: ProductEditStatus
+  handle?: string
+  /** Replace the whole tag list. */
+  tags?: string[]
+  tags_add?: string[]
+  tags_remove?: string[]
+  seo?: { title?: string; description?: string }
+  template_suffix?: string
+  /** Shopify taxonomy id, gid://shopify/TaxonomyCategory/… */
+  category_gid?: string
+  /** CRM collection ids. */
+  collections_add?: string[]
+  collections_remove?: string[]
+  variants?: ProductVariantInput[]
+  /** CRM variant ids to delete in Shopify. */
+  variants_remove?: string[]
+  media_add?: ProductMediaInput[]
+  /** Change the alt text of existing images. */
+  media_update?: { attachment_id: string; alt: string }[]
+  /** CRM attachment ids. */
+  media_remove?: string[]
+  /** Attachment ids in the wanted order (first = featured). */
+  media_order?: string[]
+}
 
 export type ProductDetail = z.infer<typeof productDetailSchema>
 export type ProductVariant = z.infer<typeof productVariantSchema>
@@ -653,6 +778,42 @@ export const api = {
         params: { include_raw: includeRaw },
       })
       return productDetailResponseSchema.parse(data).product
+    },
+
+    /**
+     * Edits a product (any subset of fields). The change is saved in the CRM
+     * at once; the push to the store follows right after the response — see
+     * `syncHistory` for how it went. `shop` is the product's store key.
+     */
+    async update(
+      id: string,
+      body: ProductUpdateBody,
+      shop?: string | null,
+    ): Promise<ProductWriteResult> {
+      const data = await apiClient.put(ENDPOINTS.products.update(id), body, {
+        params: shop ? { shop } : undefined,
+      })
+      return productWriteResultSchema.parse(data)
+    },
+
+    /** Retries the latest failed or pending push of a product to its store. */
+    async push(id: string, shop?: string | null): Promise<ProductWriteResult> {
+      const data = await apiClient.post(ENDPOINTS.products.push(id), undefined, {
+        params: shop ? { shop } : undefined,
+      })
+      return productWriteResultSchema.parse(data)
+    },
+
+    /** The product's recent pushes to its store, newest first. */
+    async syncHistory(
+      id: string,
+      shop?: string | null,
+      limit = 5,
+    ): Promise<ProductPush[]> {
+      const data = await apiClient.get(ENDPOINTS.products.sync(id), {
+        params: { limit, ...(shop ? { shop } : {}) },
+      })
+      return productPushListSchema.parse(data)
     },
   },
 

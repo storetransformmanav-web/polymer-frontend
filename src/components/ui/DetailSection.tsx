@@ -7,6 +7,12 @@ interface DetailSectionProps {
   count?: number
   icon: ComponentType<IconProps>
   defaultOpen?: boolean
+  /**
+   * Opens the card whenever this turns true (e.g. a problem appeared inside a
+   * collapsed section). It never closes it again, and nothing inside is
+   * remounted, so whatever the user has open or typed stays as it is.
+   */
+  forceOpen?: boolean
   children: ReactNode
 }
 
@@ -16,9 +22,16 @@ export function DetailSection({
   count,
   icon: Icon,
   defaultOpen = true,
+  forceOpen = false,
   children,
 }: DetailSectionProps) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(defaultOpen || forceOpen)
+  const [wasForced, setWasForced] = useState(forceOpen)
+  // React's "adjust state while rendering" pattern: react to the flag turning on.
+  if (forceOpen !== wasForced) {
+    setWasForced(forceOpen)
+    if (forceOpen) setOpen(true)
+  }
   const bodyId = useId()
 
   return (

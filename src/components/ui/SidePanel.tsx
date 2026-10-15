@@ -32,9 +32,15 @@ export function SidePanel({
 }: SidePanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  // The latest callbacks/flags, read from a ref so the effect below runs exactly
+  // once — on open and on close. If it re-ran whenever the parent passed a new
+  // `onClose` function (as a form does on every keystroke), focus would be
+  // pulled out of the field being typed in and thrown back to the opener.
   const disabledRef = useRef(closeDisabled)
+  const onCloseRef = useRef(onClose)
   useEffect(() => {
     disabledRef.current = closeDisabled
+    onCloseRef.current = onClose
   })
 
   useEffect(() => {
@@ -42,14 +48,14 @@ export function SidePanel({
     if (!panelRef.current?.contains(document.activeElement)) closeRef.current?.focus()
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !disabledRef.current) onClose()
+      if (event.key === 'Escape' && !disabledRef.current) onCloseRef.current()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       if (opener?.isConnected) opener.focus()
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div className="fixed inset-0 z-30 flex justify-end">

@@ -4,10 +4,12 @@ import {
   AlertTriangleIcon,
   ArrowLeftIcon,
   CheckCircleIcon,
+  PencilIcon,
   TagIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
+import { ProductSyncStatus } from './ProductSyncStatus.tsx'
 import {
   formatPriceRange,
   formatRange,
@@ -40,6 +42,16 @@ type TabId =
 interface ProductDetailsViewProps {
   id: string
   onBack: () => void
+  /** Opens the edit form (the pencil button). */
+  onEdit: () => void
+  /** Hover/focus on the pencil: start loading what the form needs. */
+  onPrefetchEdit?: () => void
+  /**
+   * The push status reported by the last edit saved here, or null if this
+   * product wasn't edited this session. While set, the header tracks whether
+   * the edit reached the store.
+   */
+  savedStatus?: string | null
 }
 
 /**
@@ -48,7 +60,13 @@ interface ProductDetailsViewProps {
  * record loads, so nothing waits on the network when you come from the
  * list.
  */
-export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
+export function ProductDetailsView({
+  id,
+  onBack,
+  onEdit,
+  onPrefetchEdit,
+  savedStatus = null,
+}: ProductDetailsViewProps) {
   const details = useProductDetails(id)
   const { product, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
@@ -212,19 +230,41 @@ export function ProductDetailsView({ id, onBack }: ProductDetailsViewProps) {
                   Updating…
                 </span>
               )}
+              {savedStatus !== null && (
+                <ProductSyncStatus
+                  id={id}
+                  shop={product?.shop?.key ?? preview?.shop?.key}
+                  initialStatus={savedStatus}
+                />
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              onPointerEnter={onPrefetchEdit}
+              onFocus={onPrefetchEdit}
+              aria-label="Edit product"
+              className="bg-accent text-accent-contrast hover:bg-accent-hover flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-[0.82rem] font-semibold shadow-sm transition-colors"
+            >
+              <PencilIcon width={16} height={16} />
+              <span className="hidden sm:inline" aria-hidden="true">
+                Edit
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to list"
+              className="border-border bg-bg text-text hover:border-accent flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+            >
+              <ArrowLeftIcon width={16} height={16} />
+              <span className="hidden sm:inline" aria-hidden="true">
+                Back to list
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 

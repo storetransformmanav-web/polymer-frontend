@@ -203,7 +203,7 @@ describe('ProductsPage list', () => {
     expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
   })
 
-  it('lays the table out as Image, Product, Variants, Status, Inventory, Price, View', async () => {
+  it('lays the table out as Image, Product, Variants, Status, Inventory, Price, Actions', async () => {
     renderPage()
     await screen.findByText('Product 1')
 
@@ -218,7 +218,7 @@ describe('ProductsPage list', () => {
       'Status',
       'Inventory',
       'Price',
-      'View',
+      'Actions',
     ])
     expect(within(table).queryByText('Vendor 2')).not.toBeInTheDocument()
 

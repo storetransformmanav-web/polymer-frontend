@@ -13,8 +13,11 @@ import {
   type ProductListResponse,
   type ProductSort,
   type ProductStatus,
+  type ProductUpdateBody,
+  type ProductWriteResult,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
+import { patchDetail, patchListItem } from './productPatch.ts'
 import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
 
 /**
@@ -248,6 +251,30 @@ export const fetchProductDetails = createAsyncThunk<
   },
 )
 
+interface UpdateProductArg {
+  id: string
+  body: ProductUpdateBody
+  /** The product's store key (sent as `shop=`), when it has one. */
+  shop?: string | null
+}
+
+/**
+ * Saves an edit. On success the cached copies of the product are patched at
+ * once (see the `fulfilled` case below), so nothing waits on a refetch. A
+ * write is never retried automatically — a repeat could apply twice.
+ */
+export const updateProduct = createAsyncThunk<
+  ProductWriteResult,
+  UpdateProductArg,
+  { state: ProductsRootState; rejectValue: string }
+>('products/update', async ({ id, body, shop }, { rejectWithValue }) => {
+  try {
+    return await api.products.update(id, body, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
 function addSorted(list: string[], values: (string | null)[]) {
   let changed = false
   for (const value of values) {
@@ -375,6 +402,46 @@ const productsSlice = createSlice({
         if (tab) {
           tab.handle = data.handle
           tab.title = data.title
+        }
+      })
+      // A saved edit: show it everywhere at once, and mark every cached copy
+      // stale so each refreshes quietly (old values stay on screen meanwhile).
+      .addCase(updateProduct.fulfilled, (state, action) => {
+        const { id, body } = action.meta.arg
+
+        for (const key of [detailsKey(id), detailsKey(id, true)]) {
+          const entry = state.details[key]
+          if (!entry?.data) continue
+          entry.data = patchDetail(entry.data, body)
+          entry.fetchedAt = null
+        }
+
+        for (const entry of Object.values(state.entries)) {
+          if (entry.data?.items.some((item) => item.id === id)) {
+            entry.data = {
+              ...entry.data,
+              items: entry.data.items.map((item) =>
+                item.id === id ? patchListItem(item, body) : item,
+              ),
+            }
+          }
+          // Titles, statuses and prices can move a product between filters and counts.
+          entry.fetchedAt = null
+        }
+
+        if (state.lastData?.items.some((item) => item.id === id)) {
+          state.lastData = {
+            ...state.lastData,
+            items: state.lastData.items.map((item) =>
+              item.id === id ? patchListItem(item, body) : item,
+            ),
+          }
+        }
+
+        const tab = state.tabs.find((candidate) => candidate.id === id)
+        if (tab) {
+          tab.title = body.title ?? tab.title
+          tab.handle = body.handle ?? tab.handle
         }
       })
       .addCase(fetchProductDetails.rejected, (state, action) => {
