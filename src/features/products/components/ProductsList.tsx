@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   AlertTriangleIcon,
@@ -36,6 +36,11 @@ interface ProductsListProps {
   onEdit: (product: ProductListItem) => void
   /** Hover/focus on View or an image: start loading details so opening is instant. */
   onPrefetch: (id: string) => void
+  /** Ids of the ticked rows (the checkbox column). */
+  selected: ReadonlySet<string>
+  onToggleSelected: (id: string) => void
+  /** Ticks (or unticks) every row on this page. */
+  onTogglePage: (checked: boolean) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -77,10 +82,22 @@ export function ProductsList({
   onQuickView,
   onEdit,
   onPrefetch,
+  selected,
+  onToggleSelected,
+  onTogglePage,
   onRetry,
   onClearFilters,
 }: ProductsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const selectedOnPage = items.filter((product) => selected.has(product.id)).length
+  const allSelected = items.length > 0 && selectedOnPage === items.length
+  // "Some but not all": a checkbox can only show this through its DOM property.
+  const pageBox = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (pageBox.current) {
+      pageBox.current.indeterminate = selectedOnPage > 0 && !allSelected
+    }
+  }, [selectedOnPage, allSelected])
 
   if (error) {
     return (
@@ -181,6 +198,17 @@ export function ProductsList({
         <thead>
           <tr>
             {/* Narrow columns get a fixed width so Product takes the spare space. */}
+            <th className={`${TH} w-12`}>
+              <input
+                ref={pageBox}
+                type="checkbox"
+                aria-label="Select all products on this page"
+                checked={allSelected}
+                disabled={isPending || items.length === 0}
+                onChange={(event) => onTogglePage(event.target.checked)}
+                className="accent-accent h-4 w-4 cursor-pointer align-middle"
+              />
+            </th>
             <th className={`${TH} w-20`}>Image</th>
             <th className={TH}>Product</th>
             <th className={`${TH_CENTER} w-28`}>Variants</th>
@@ -199,7 +227,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 7 }, (_, cell) => (
+                  {Array.from({ length: 8 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -209,8 +237,19 @@ export function ProductsList({
             : items.map((product) => (
                 <tr
                   key={product.id}
-                  className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
+                  className={`border-border hover:bg-accent-tint/60 border-b transition-colors ${
+                    selected.has(product.id) ? 'bg-accent-tint/40' : 'even:bg-surface'
+                  }`}
                 >
+                  <td className={TD}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${product.title}`}
+                      checked={selected.has(product.id)}
+                      onChange={() => onToggleSelected(product.id)}
+                      className="accent-accent h-4 w-4 cursor-pointer align-middle"
+                    />
+                  </td>
                   <td className={TD}>
                     <button
                       type="button"

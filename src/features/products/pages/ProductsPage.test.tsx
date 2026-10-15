@@ -203,7 +203,7 @@ describe('ProductsPage list', () => {
     expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
   })
 
-  it('lays the table out as Image, Product, Variants, Status, Inventory, Price, Actions', async () => {
+  it('lays the table out as (tick), Image, Product, Variants, Status, Inventory, Price, Actions', async () => {
     renderPage()
     await screen.findByText('Product 1')
 
@@ -212,6 +212,7 @@ describe('ProductsPage list', () => {
       .getAllByRole('columnheader')
       .map((header) => header.textContent)
     expect(headers).toEqual([
+      '', // the "select all on this page" checkbox
       'Image',
       'Product',
       'Variants',
@@ -225,14 +226,14 @@ describe('ProductsPage list', () => {
     // Product 1: 2 variants, 10 units. Product 3 is out of stock.
     const [, row1, , row3] = within(table).getAllByRole('row')
     const cells1 = within(row1).getAllByRole('cell')
-    expect(cells1[2]).toHaveTextContent('2')
+    expect(cells1[3]).toHaveTextContent('2')
     // Alignment classes must not conflict (a stray text-left beat text-center).
-    expect(cells1[2]).toHaveClass('text-center')
-    expect(cells1[2]).not.toHaveClass('text-left')
-    expect(cells1[4]).toHaveClass('text-right')
-    expect(cells1[4]).not.toHaveClass('text-left')
-    expect(cells1[4]).toHaveTextContent('10')
-    expect(within(row3).getAllByRole('cell')[4]).toHaveTextContent('Out of stock')
+    expect(cells1[3]).toHaveClass('text-center')
+    expect(cells1[3]).not.toHaveClass('text-left')
+    expect(cells1[5]).toHaveClass('text-right')
+    expect(cells1[5]).not.toHaveClass('text-left')
+    expect(cells1[5]).toHaveTextContent('10')
+    expect(within(row3).getAllByRole('cell')[5]).toHaveTextContent('Out of stock')
   })
 
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {

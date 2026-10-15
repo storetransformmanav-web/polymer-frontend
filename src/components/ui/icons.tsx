@@ -407,6 +407,15 @@ export function PencilIcon(props: IconProps) {
   )
 }
 
+export function ColumnsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4" width="14" height="12" rx="2" />
+      <path d="M8 4v12M12.5 4v12" />
+    </svg>
+  )
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

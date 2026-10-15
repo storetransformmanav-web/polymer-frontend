@@ -7,13 +7,16 @@ import type {
   ProductUpdateBody,
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { BulkEditView } from '../components/BulkEditView.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
 import { ProductEditPanel } from '../components/ProductEditPanel.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { ProductsBulkBar } from '../components/ProductsBulkBar.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
+import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 
@@ -45,6 +48,48 @@ export function ProductsPage() {
   const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
   const closeEdit = useCallback(() => setEditingId(null), [])
+  // Ticked rows (by id) and the products open in the bulk editor, if it is open.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const [bulkItems, setBulkItems] = useState<ProductListItem[] | null>(null)
+  const prefetchMany = usePrefetchDetails()
+  // Only rows on the page being shown count as selected (and get edited).
+  const selectedItems = products.items.filter((item) => selected.has(item.id))
+
+  function toggleSelected(id: string) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function togglePage(checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current)
+      for (const item of products.items) {
+        if (checked) next.add(item.id)
+        else next.delete(item.id)
+      }
+      return next
+    })
+  }
+
+  function openBulk(items: ProductListItem[]) {
+    if (items.length === 0) return
+    setNotice(null)
+    setQuickView(null)
+    setBulkItems(items)
+  }
+
+  function handleBulkSaved(saved: BulkSavedItem[]) {
+    setSavedStatus((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        saved.map((item) => [item.product.id, item.result.sync_status]),
+      ),
+    }))
+  }
 
   useEffect(() => {
     if (!notice) return undefined
@@ -98,6 +143,15 @@ export function ProductsPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {bulkItems && (
+        <BulkEditView
+          key="bulk-edit"
+          items={bulkItems}
+          onBack={() => setBulkItems(null)}
+          onSaved={handleBulkSaved}
+        />
+      )}
+
       <ProductTabsBar
         tabs={tabs.tabs}
         activeId={activeId}
@@ -121,7 +175,7 @@ export function ProductsPage() {
 
       {/* Kept mounted but hidden while a product is open (display: none also
           removes it from tab order and screen readers). */}
-      <div className={activeId ? 'hidden' : 'flex flex-col gap-4'}>
+      <div className={activeId || bulkItems ? 'hidden' : 'flex flex-col gap-4'}>
         <ProductsToolbar
           filters={filters}
           facets={products.facets}
@@ -130,6 +184,23 @@ export function ProductsPage() {
           onChange={products.setFilters}
           onReset={products.resetFilters}
         />
+
+        {!products.isPending && !products.error && products.items.length > 0 && (
+          <ProductsBulkBar
+            pageCount={products.items.length}
+            selectedCount={selectedItems.length}
+            onEditPage={() => openBulk(products.items)}
+            onEditSelected={() => openBulk(selectedItems)}
+            onClearSelection={() => setSelected(new Set())}
+            onPrepare={() =>
+              prefetchMany(
+                (selectedItems.length > 0 ? selectedItems : products.items).map(
+                  (item) => item.id,
+                ),
+              )
+            }
+          />
+        )}
 
         <section
           aria-label="Products"
@@ -155,6 +226,9 @@ export function ProductsPage() {
             onQuickView={setQuickView}
             onEdit={(product) => openEdit(product.id)}
             onPrefetch={products.prefetchDetails}
+            selected={selected}
+            onToggleSelected={toggleSelected}
+            onTogglePage={togglePage}
             onRetry={products.retry}
             onClearFilters={products.resetFilters}
           />
