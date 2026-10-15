@@ -95,8 +95,9 @@ function renderPage() {
   )
 }
 
+/** The pill that shows a product's status and opens its menu. */
 const statusOf = (title: string) =>
-  screen.getByRole('combobox', { name: `Status of ${title}` })
+  screen.getByRole('button', { name: new RegExp(`^Status of ${title}:`) })
 
 describe('changing a status from the products table', () => {
   beforeEach(() => {
@@ -116,37 +117,78 @@ describe('changing a status from the products table', () => {
     return user
   }
 
-  it('shows every product’s status as a dropdown offering Active, Draft and Archived', async () => {
+  /** Opens a product's menu and picks a status from it. */
+  async function choose(
+    user: ReturnType<typeof userEvent.setup>,
+    title: string,
+    label: string,
+  ) {
+    await user.click(statusOf(title))
+    await user.click(screen.getByRole('option', { name: label }))
+  }
+
+  it('shows every product’s status as a pill with a dropdown arrow', async () => {
     await openList()
 
-    expect(statusOf('Hippo Bag')).toHaveValue('ACTIVE')
-    expect(statusOf('Foil Lid')).toHaveValue('DRAFT')
-    const options = within(statusOf('Hippo Bag'))
-      .getAllByRole('option')
-      .map((option) => option.textContent)
-    expect(options).toEqual(['Active', 'Draft', 'Archived'])
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Active')
+    expect(statusOf('Foil Lid')).toHaveTextContent('Draft')
+    expect(statusOf('Odd Box')).toHaveTextContent('Unlisted')
+    expect(statusOf('Hippo Bag')).toHaveAttribute('aria-haspopup', 'listbox')
+  })
+
+  it('opens a menu of Active, Draft and Archived with the current one marked', async () => {
+    const user = await openList()
+    await user.click(statusOf('Foil Lid'))
+
+    const options = within(screen.getByRole('listbox')).getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Active',
+      'Draft',
+      'Archived',
+    ])
+    expect(screen.getByRole('option', { name: 'Draft' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('option', { name: 'Active' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    )
+  })
+
+  it('colours each status in the menu: Active green, Draft grey, Archived red', async () => {
+    const user = await openList()
+    await user.click(statusOf('Hippo Bag'))
+
+    const pill = (label: string) =>
+      within(screen.getByRole('option', { name: label })).getByText(label)
+    expect(pill('Active')).toHaveClass('text-accent', 'bg-accent-tint')
+    expect(pill('Draft')).toHaveClass('text-text-muted')
+    expect(pill('Archived')).toHaveClass('text-danger', 'bg-danger-bg')
   })
 
   it('shows a status the API cannot set (Unlisted), but only as a place to move away from', async () => {
-    await openList()
+    const user = await openList()
+    await user.click(statusOf('Odd Box'))
 
-    expect(statusOf('Odd Box')).toHaveValue('UNLISTED')
-    expect(
-      within(statusOf('Odd Box')).getByRole('option', { name: 'Unlisted' }),
-    ).toBeDisabled()
+    const unlisted = screen.getByRole('option', { name: 'Unlisted' })
+    expect(unlisted).toHaveAttribute('aria-disabled', 'true')
+    await user.click(unlisted)
+    expect(update).not.toHaveBeenCalled()
   })
 
   it('saves the chosen status at once, for the product’s store, and keeps it on screen', async () => {
     const user = await openList()
     // The refetch hasn't answered: what shows is the instant update.
     list.mockImplementation(never)
-    await user.selectOptions(statusOf('Hippo Bag'), 'DRAFT')
+    await choose(user, 'Hippo Bag', 'Draft')
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
     )
-    expect(statusOf('Hippo Bag')).toHaveValue('DRAFT')
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Draft')
     await waitFor(() => expect(statusOf('Hippo Bag')).toBeEnabled())
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     // Nothing else was touched.
     expect(update).toHaveBeenCalledTimes(1)
   })
@@ -154,9 +196,9 @@ describe('changing a status from the products table', () => {
   it('shows the new status straight away while the save is still running, and locks that row', async () => {
     update.mockImplementation(never)
     const user = await openList()
-    await user.selectOptions(statusOf('Hippo Bag'), 'ARCHIVED')
+    await choose(user, 'Hippo Bag', 'Archived')
 
-    expect(statusOf('Hippo Bag')).toHaveValue('ARCHIVED')
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Archived')
     expect(statusOf('Hippo Bag')).toBeDisabled()
     // Other rows stay usable.
     expect(statusOf('Foil Lid')).toBeEnabled()
@@ -167,22 +209,58 @@ describe('changing a status from the products table', () => {
       new ApiError('You cannot archive this product.', { status: 422 }),
     )
     const user = await openList()
-    await user.selectOptions(statusOf('Hippo Bag'), 'ARCHIVED')
+    await choose(user, 'Hippo Bag', 'Archived')
 
     expect(
       await screen.findByText('You cannot archive this product.'),
     ).toBeInTheDocument()
-    expect(statusOf('Hippo Bag')).toHaveValue('ACTIVE')
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Active')
     expect(statusOf('Hippo Bag')).toBeEnabled()
   })
 
   it('changes several products independently', async () => {
     const user = await openList()
-    await user.selectOptions(statusOf('Hippo Bag'), 'ARCHIVED')
-    await user.selectOptions(statusOf('Foil Lid'), 'ACTIVE')
+    await choose(user, 'Hippo Bag', 'Archived')
+    await choose(user, 'Foil Lid', 'Active')
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
     expect(update).toHaveBeenCalledWith('id-1', { status: 'ARCHIVED' }, 'polymer-uk')
     expect(update).toHaveBeenCalledWith('id-2', { status: 'ACTIVE' }, 'polymer-uk')
+  })
+
+  it('sends nothing when the current status is picked again', async () => {
+    const user = await openList()
+    await choose(user, 'Hippo Bag', 'Active')
+
+    expect(update).not.toHaveBeenCalled()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('works from the keyboard: arrows move, Enter picks, Escape closes without saving', async () => {
+    const user = await openList()
+    statusOf('Hippo Bag').focus()
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    await user.keyboard('{ArrowDown}{Enter}')
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
+    )
+
+    await user.click(statusOf('Foil Lid'))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(statusOf('Foil Lid')).toHaveFocus()
+  })
+
+  it('closes when you click elsewhere', async () => {
+    const user = await openList()
+    await user.click(statusOf('Hippo Bag'))
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    await user.click(document.body)
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
   })
 })

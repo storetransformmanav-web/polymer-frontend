@@ -231,7 +231,7 @@ describe('editing a product', () => {
       await saveFromDetails(user)
 
       expect(await screen.findByText('Sending to the store…')).toBeInTheDocument()
-      expect(syncHistory).toHaveBeenCalledWith('id-1', 'polymer-uk', 20)
+      expect(syncHistory).toHaveBeenCalledWith('id-1', 'polymer-uk', 1)
 
       syncHistory.mockResolvedValue([
         {
@@ -271,14 +271,15 @@ describe('editing a product', () => {
       await waitFor(() => expect(push).toHaveBeenCalledWith('id-1', 'polymer-uk'))
     })
 
-    it('asks for the push history once when a product is opened, for its own store', async () => {
+    it('does not ask for any push history just because a product was viewed', async () => {
       renderPage('/products/id-1')
       await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
 
-      await waitFor(() => expect(syncHistory).toHaveBeenCalledTimes(1))
-      expect(syncHistory).toHaveBeenCalledWith('id-1', 'polymer-uk', 20)
-      // Not edited here, so there is no "sending to the store" badge — only the history section.
-      expect(screen.queryByText('Sending to the store…')).not.toBeInTheDocument()
+      expect(syncHistory).not.toHaveBeenCalled()
+      expect(screen.queryByText('Sync History')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Sync product' }),
+      ).not.toBeInTheDocument()
     })
   })
 })

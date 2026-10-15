@@ -4,8 +4,8 @@ import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import { api } from '../../../lib/api/endpoints.ts'
 import { classifySync } from '../utils/sync.ts'
 
-/** How many pushes to ask for (the API's own default and a sensible page). */
-export const SYNC_HISTORY_LIMIT = 20
+/** Only the latest push is needed: it tells whether an edit reached the store. */
+const LATEST_PUSH_ONLY = 1
 
 /** Matches every history query of one product (any store) — for invalidating after a change. */
 export const productSyncPrefix = (id: string) => ['product-sync', id] as const
@@ -41,7 +41,7 @@ export function useProductSyncHistory(
 
   const query = useQuery({
     queryKey: productSyncKey(id, shop),
-    queryFn: () => api.products.syncHistory(id, shop, SYNC_HISTORY_LIMIT),
+    queryFn: () => api.products.syncHistory(id, shop, LATEST_PUSH_ONLY),
     enabled,
     staleTime: 30_000,
     refetchInterval: (current) => {
@@ -68,5 +68,3 @@ export function useProductSyncHistory(
     refresh: () => void query.refetch(),
   }
 }
-
-export type ProductSyncHistory = ReturnType<typeof useProductSyncHistory>
