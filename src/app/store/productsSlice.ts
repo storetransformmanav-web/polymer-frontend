@@ -275,6 +275,29 @@ export const updateProduct = createAsyncThunk<
   }
 })
 
+interface DeleteProductArg {
+  id: string
+  /** The product's store key (sent as `shop=`), when it has one. */
+  shop?: string | null
+}
+
+/**
+ * Deletes a product the way the backend does by default — it archives it. On
+ * success the cached copies show it as Archived at once, so nothing waits on a
+ * refetch. Never retried automatically.
+ */
+export const deleteProduct = createAsyncThunk<
+  ProductWriteResult,
+  DeleteProductArg,
+  { state: ProductsRootState; rejectValue: string }
+>('products/delete', async ({ id, shop }, { rejectWithValue }) => {
+  try {
+    return await api.products.remove(id, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
 function addSorted(list: string[], values: (string | null)[]) {
   let changed = false
   for (const value of values) {
@@ -284,6 +307,47 @@ function addSorted(list: string[], values: (string | null)[]) {
     }
   }
   if (changed) list.sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Shows a saved change to a product everywhere at once, and marks every cached
+ * copy stale so each refreshes quietly (old values stay on screen meanwhile).
+ */
+function patchCachedProduct(state: ProductsState, id: string, body: ProductUpdateBody) {
+  for (const key of [detailsKey(id), detailsKey(id, true)]) {
+    const entry = state.details[key]
+    if (!entry?.data) continue
+    entry.data = patchDetail(entry.data, body)
+    entry.fetchedAt = null
+  }
+
+  for (const entry of Object.values(state.entries)) {
+    if (entry.data?.items.some((item) => item.id === id)) {
+      entry.data = {
+        ...entry.data,
+        items: entry.data.items.map((item) =>
+          item.id === id ? patchListItem(item, body) : item,
+        ),
+      }
+    }
+    // Titles, statuses and prices can move a product between filters and counts.
+    entry.fetchedAt = null
+  }
+
+  if (state.lastData?.items.some((item) => item.id === id)) {
+    state.lastData = {
+      ...state.lastData,
+      items: state.lastData.items.map((item) =>
+        item.id === id ? patchListItem(item, body) : item,
+      ),
+    }
+  }
+
+  const tab = state.tabs.find((candidate) => candidate.id === id)
+  if (tab) {
+    tab.title = body.title ?? tab.title
+    tab.handle = body.handle ?? tab.handle
+  }
 }
 
 const productsSlice = createSlice({
@@ -407,42 +471,10 @@ const productsSlice = createSlice({
       // A saved edit: show it everywhere at once, and mark every cached copy
       // stale so each refreshes quietly (old values stay on screen meanwhile).
       .addCase(updateProduct.fulfilled, (state, action) => {
-        const { id, body } = action.meta.arg
-
-        for (const key of [detailsKey(id), detailsKey(id, true)]) {
-          const entry = state.details[key]
-          if (!entry?.data) continue
-          entry.data = patchDetail(entry.data, body)
-          entry.fetchedAt = null
-        }
-
-        for (const entry of Object.values(state.entries)) {
-          if (entry.data?.items.some((item) => item.id === id)) {
-            entry.data = {
-              ...entry.data,
-              items: entry.data.items.map((item) =>
-                item.id === id ? patchListItem(item, body) : item,
-              ),
-            }
-          }
-          // Titles, statuses and prices can move a product between filters and counts.
-          entry.fetchedAt = null
-        }
-
-        if (state.lastData?.items.some((item) => item.id === id)) {
-          state.lastData = {
-            ...state.lastData,
-            items: state.lastData.items.map((item) =>
-              item.id === id ? patchListItem(item, body) : item,
-            ),
-          }
-        }
-
-        const tab = state.tabs.find((candidate) => candidate.id === id)
-        if (tab) {
-          tab.title = body.title ?? tab.title
-          tab.handle = body.handle ?? tab.handle
-        }
+        patchCachedProduct(state, action.meta.arg.id, action.meta.arg.body)
+      })
+      .addCase(deleteProduct.fulfilled, (state, action) => {
+        patchCachedProduct(state, action.meta.arg.id, { status: 'ARCHIVED' })
       })
       .addCase(fetchProductDetails.rejected, (state, action) => {
         if (action.meta.condition) return

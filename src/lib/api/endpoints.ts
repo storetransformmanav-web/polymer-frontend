@@ -44,6 +44,8 @@ export const ENDPOINTS = {
     detail: (ref: string) => `/products/${encodeURIComponent(ref)}`,
     /** `id` is the product's CRM UUID (`PUT` edits it). */
     update: (id: string) => `/products/${encodeURIComponent(id)}`,
+    /** `DELETE` removes the product (the backend archives it by default); `id` is its CRM UUID. */
+    remove: (id: string) => `/products/${encodeURIComponent(id)}`,
     /** Retry the latest failed or pending push of this product to its store. */
     push: (id: string) => `/products/${encodeURIComponent(id)}/push`,
     /** History of this product's pushes to its store, newest first. */
@@ -791,6 +793,19 @@ export const api = {
       shop?: string | null,
     ): Promise<ProductWriteResult> {
       const data = await apiClient.put(ENDPOINTS.products.update(id), body, {
+        params: shop ? { shop } : undefined,
+      })
+      return productWriteResultSchema.parse(data)
+    },
+
+    /**
+     * Deletes a product with the backend's default behaviour (`mode` is left out,
+     * so the backend decides — it archives, which can be undone). The answer is
+     * the same as for an edit, and the change is pushed to the store right after.
+     * Never retried automatically. `shop` is the product's store key.
+     */
+    async remove(id: string, shop?: string | null): Promise<ProductWriteResult> {
+      const data = await apiClient.delete(ENDPOINTS.products.remove(id), {
         params: shop ? { shop } : undefined,
       })
       return productWriteResultSchema.parse(data)

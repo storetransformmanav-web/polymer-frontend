@@ -5,6 +5,7 @@ import {
   EyeIcon,
   PencilIcon,
   SearchIcon,
+  TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
@@ -34,6 +35,8 @@ interface ProductsListProps {
   onQuickView: (product: ProductListItem) => void
   /** Opens the edit form for a product (the pencil in its row). */
   onEdit: (product: ProductListItem) => void
+  /** Asks to delete a product (the trash in its row — the page confirms first). */
+  onDelete: (product: ProductListItem) => void
   /** Hover/focus on View or an image: start loading details so opening is instant. */
   onPrefetch: (id: string) => void
   /** Ids of the ticked rows (the checkbox column). */
@@ -81,6 +84,7 @@ export function ProductsList({
   onOpen,
   onQuickView,
   onEdit,
+  onDelete,
   onPrefetch,
   selected,
   onToggleSelected,
@@ -215,7 +219,7 @@ export function ProductsList({
             <th className={`${TH} w-32`}>Status</th>
             <th className={`${TH_RIGHT} w-36`}>Inventory</th>
             <th className={`${TH_RIGHT} w-44`}>Price</th>
-            <th className={`${TH_CENTER} w-24`}>Actions</th>
+            <th className={`${TH_CENTER} w-32`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -311,6 +315,15 @@ export function ProductsList({
                         className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
                       >
                         <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${product.title}`}
+                        title="Delete"
+                        onClick={() => onDelete(product)}
+                        className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                      >
+                        <TrashIcon />
                       </button>
                     </span>
                   </td>

@@ -8,6 +8,7 @@ import type {
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
 import { BulkEditView } from '../components/BulkEditView.tsx'
+import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
 import { ProductEditPanel } from '../components/ProductEditPanel.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
@@ -96,6 +97,22 @@ export function ProductsPage() {
     const timer = window.setTimeout(() => setNotice(null), 8000)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  // The product a row's trash button asked to delete (the dialog confirms how).
+  const [deleting, setDeleting] = useState<ProductListItem | null>(null)
+  const closeDelete = useCallback(() => setDeleting(null), [])
+
+  function askDelete(product: ProductListItem) {
+    setNotice(null)
+    setQuickView(null)
+    setDeleting(product)
+  }
+
+  function handleDeleted(product: ProductListItem, result: ProductWriteResult) {
+    setDeleting(null)
+    // What happened, in the backend's own words.
+    setNotice(`“${product.title}”: ${result.message || 'Product deleted.'}`)
+  }
 
   function openEdit(id: string) {
     setNotice(null)
@@ -225,6 +242,7 @@ export function ProductsPage() {
             onOpen={openProduct}
             onQuickView={setQuickView}
             onEdit={(product) => openEdit(product.id)}
+            onDelete={askDelete}
             onPrefetch={products.prefetchDetails}
             selected={selected}
             onToggleSelected={toggleSelected}
@@ -245,6 +263,15 @@ export function ProductsPage() {
           )}
         </section>
       </div>
+
+      {deleting && (
+        <ProductDeleteDialog
+          key={`delete-${deleting.id}`}
+          product={deleting}
+          onClose={closeDelete}
+          onDone={(result) => handleDeleted(deleting, result)}
+        />
+      )}
 
       {editingId && (
         <ProductEditPanel
