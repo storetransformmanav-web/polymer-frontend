@@ -3,14 +3,15 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   AlertTriangleIcon,
   EyeIcon,
-  PencilIcon,
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
+import type { ProductEditStatus } from '../../../lib/api/endpoints.ts'
 import { ProductImage } from './ProductImage.tsx'
+import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
 const TH_BASE =
   'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
@@ -33,8 +34,12 @@ interface ProductsListProps {
   onOpen: (product: ProductListItem) => void
   /** Clicking a row's image opens the quick-view side panel. */
   onQuickView: (product: ProductListItem) => void
-  /** Opens the edit form for a product (the pencil in its row). */
-  onEdit: (product: ProductListItem) => void
+  /** Changes a product's status from its row's dropdown (saved at once). */
+  onStatusChange: (product: ProductListItem, status: ProductEditStatus) => void
+  /** The status being saved for a product, by id — shown in its dropdown meanwhile. */
+  statusPending: Readonly<Record<string, ProductEditStatus>>
+  /** The backend's message when a status change failed, by product id. */
+  statusErrors: Readonly<Record<string, string>>
   /** Asks to delete a product (the trash in its row — the page confirms first). */
   onDelete: (product: ProductListItem) => void
   /** Hover/focus on View or an image: start loading details so opening is instant. */
@@ -83,7 +88,9 @@ export function ProductsList({
   isStale,
   onOpen,
   onQuickView,
-  onEdit,
+  onStatusChange,
+  statusPending,
+  statusErrors,
   onDelete,
   onPrefetch,
   selected,
@@ -216,10 +223,10 @@ export function ProductsList({
             <th className={`${TH} w-20`}>Image</th>
             <th className={TH}>Product</th>
             <th className={`${TH_CENTER} w-28`}>Variants</th>
-            <th className={`${TH} w-32`}>Status</th>
+            <th className={`${TH} w-40`}>Status</th>
             <th className={`${TH_RIGHT} w-36`}>Inventory</th>
             <th className={`${TH_RIGHT} w-44`}>Price</th>
-            <th className={`${TH_CENTER} w-32`}>Actions</th>
+            <th className={`${TH_CENTER} w-24`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -282,9 +289,13 @@ export function ProductsList({
                     {product.variants_count.toLocaleString('en-GB')}
                   </td>
                   <td className={TD}>
-                    <Badge tone={statusTone(product.status)}>
-                      {statusLabel(product.status)}
-                    </Badge>
+                    <ProductStatusSelect
+                      title={product.title}
+                      value={statusPending[product.id] ?? product.status}
+                      saving={product.id in statusPending}
+                      error={statusErrors[product.id]}
+                      onChange={(status) => onStatusChange(product, status)}
+                    />
                   </td>
                   <td className={`${TD} text-right`}>
                     <Stock value={product.total_inventory} />
@@ -304,17 +315,6 @@ export function ProductsList({
                         className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
                       >
                         <EyeIcon />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Edit ${product.title}`}
-                        title="Edit"
-                        onClick={() => onEdit(product)}
-                        onPointerEnter={() => onPrefetch(product.id)}
-                        onFocus={() => onPrefetch(product.id)}
-                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
-                      >
-                        <PencilIcon />
                       </button>
                       <button
                         type="button"

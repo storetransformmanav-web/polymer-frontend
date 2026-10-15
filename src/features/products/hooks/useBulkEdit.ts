@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
@@ -21,6 +22,7 @@ import {
   type ProductDraft,
   type VariantDraft,
 } from '../utils/editDraft.ts'
+import { productSyncPrefix } from './useProductSyncHistory.ts'
 
 /** Product details fetched at once when the editor opens (a page can be 100 products). */
 const LOAD_CONCURRENCY = 6
@@ -112,6 +114,7 @@ export interface BulkSaveSummary {
  */
 export function useBulkEdit(ids: string[]) {
   const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
   const filters = useAppSelector((state) => state.products.filters)
   const details = useAppSelector((state) => state.products.details)
   const [edits, setEdits] = useState<
@@ -282,6 +285,7 @@ export function useBulkEdit(ids: string[]) {
 
     // Refresh the authoritative copies quietly; the patched values stay on screen meanwhile.
     for (const item of saved) {
+      void queryClient.invalidateQueries({ queryKey: productSyncPrefix(item.product.id) })
       void dispatch(fetchProductDetails({ id: item.product.id, force: true }))
     }
     if (saved.length > 0) {
@@ -297,7 +301,7 @@ export function useBulkEdit(ids: string[]) {
 
     setIsSaving(false)
     return { saved, failed, blocked: 0 }
-  }, [dispatch, filters, isSaving, rows])
+  }, [dispatch, filters, isSaving, queryClient, rows])
 
   return {
     rows,

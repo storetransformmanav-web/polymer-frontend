@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import type {
   ProductDetail,
+  ProductEditStatus,
   ProductListItem,
   ProductUpdateBody,
   ProductWriteResult,
@@ -10,7 +11,6 @@ import type {
 import { BulkEditView } from '../components/BulkEditView.tsx'
 import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
-import { ProductEditPanel } from '../components/ProductEditPanel.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -18,6 +18,7 @@ import { ProductsBulkBar } from '../components/ProductsBulkBar.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
+import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 
@@ -42,17 +43,15 @@ export function ProductsPage() {
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
-  // The product whose edit form is open (from a row's pencil or the details page).
-  const [editingId, setEditingId] = useState<string | null>(null)
   // Products edited this session → the push status their save reported (so the
   // details header can track whether the edit reached the store).
   const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
-  const closeEdit = useCallback(() => setEditingId(null), [])
   // Ticked rows (by id) and the products open in the bulk editor, if it is open.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [bulkItems, setBulkItems] = useState<ProductListItem[] | null>(null)
   const prefetchMany = usePrefetchDetails()
+  const status = useProductStatusChange()
   // Only rows on the page being shown count as selected (and get edited).
   const selectedItems = products.items.filter((item) => selected.has(item.id))
 
@@ -114,10 +113,13 @@ export function ProductsPage() {
     setNotice(`“${product.title}”: ${result.message || 'Product deleted.'}`)
   }
 
-  function openEdit(id: string) {
-    setNotice(null)
-    setQuickView(null)
-    setEditingId(id)
+  async function changeStatus(product: ProductListItem, next: ProductEditStatus) {
+    if (next === product.status?.toUpperCase()) return
+    const result = await status.change(product, next)
+    // Track whether the change reached the store, if this product's details are opened.
+    if (result) {
+      setSavedStatus((current) => ({ ...current, [product.id]: result.sync_status }))
+    }
   }
 
   function handleSaved(
@@ -125,7 +127,6 @@ export function ProductsPage() {
     product: ProductDetail,
     body: ProductUpdateBody,
   ) {
-    setEditingId(null)
     setSavedStatus((current) => ({ ...current, [product.id]: result.sync_status }))
     // Name the product as it is now (a rename is part of this very edit).
     setNotice(
@@ -241,7 +242,9 @@ export function ProductsPage() {
             isStale={products.isShowingPrevious}
             onOpen={openProduct}
             onQuickView={setQuickView}
-            onEdit={(product) => openEdit(product.id)}
+            onStatusChange={changeStatus}
+            statusPending={status.pending}
+            statusErrors={status.errors}
             onDelete={askDelete}
             onPrefetch={products.prefetchDetails}
             selected={selected}
@@ -270,15 +273,6 @@ export function ProductsPage() {
           product={deleting}
           onClose={closeDelete}
           onDone={(result) => handleDeleted(deleting, result)}
-        />
-      )}
-
-      {editingId && (
-        <ProductEditPanel
-          key={`edit-${editingId}`}
-          id={editingId}
-          onClose={closeEdit}
-          onSaved={handleSaved}
         />
       )}
 

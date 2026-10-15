@@ -111,13 +111,16 @@ describe('deleting a product from the list', () => {
     return { user, dialog }
   }
 
-  it('gives every row three actions: View, Edit and Delete', async () => {
+  it('gives every row two actions: View and Delete — there is no Edit pencil', async () => {
     renderPage()
     await screen.findByLabelText('Select Hippo Bag')
 
-    for (const name of ['View Hippo Bag', 'Edit Hippo Bag', 'Delete Hippo Bag']) {
+    for (const name of ['View Hippo Bag', 'Delete Hippo Bag']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+    expect(
+      screen.queryByRole('button', { name: 'Edit Hippo Bag' }),
+    ).not.toBeInTheDocument()
   })
 
   it('asks first, with just Cancel and Delete, and sends nothing yet', async () => {

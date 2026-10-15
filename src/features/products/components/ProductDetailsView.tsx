@@ -4,11 +4,15 @@ import {
   AlertTriangleIcon,
   ArrowLeftIcon,
   CheckCircleIcon,
+  RefreshIcon,
+  SpinnerIcon,
   TagIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
+import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import type { SavedHandler } from '../hooks/useSectionEdit.ts'
+import { ProductSyncHistory } from './ProductSyncHistory.tsx'
 import { ProductSyncStatus } from './ProductSyncStatus.tsx'
 import {
   formatPriceRange,
@@ -73,6 +77,10 @@ export function ProductDetailsView({
   useEffect(() => {
     if (tab === 'raw') loadRaw()
   }, [tab, loadRaw])
+
+  // The push history needs the product's store, known from the list row or the loaded record.
+  const shop = product?.shop?.key ?? preview?.shop?.key
+  const sync = useProductSyncHistory(id, shop, { enabled: Boolean(product ?? preview) })
 
   const title = product?.title ?? preview?.title ?? 'Loading product…'
   const status = product?.status ?? preview?.status
@@ -228,25 +236,39 @@ export function ProductDetailsView({
                 </span>
               )}
               {savedStatus !== null && (
-                <ProductSyncStatus
-                  id={id}
-                  shop={product?.shop?.key ?? preview?.shop?.key}
-                  initialStatus={savedStatus}
-                />
+                <ProductSyncStatus id={id} shop={shop} initialStatus={savedStatus} />
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={sync.refresh}
+              disabled={!(product ?? preview) || sync.isFetching}
+              aria-label="Sync product"
+              className="border-border bg-bg text-text hover:border-accent hover:text-accent flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-60"
+            >
+              {sync.isFetching ? (
+                <SpinnerIcon width={16} height={16} className="animate-spin" />
+              ) : (
+                <RefreshIcon width={16} height={16} />
+              )}
+              <span className="hidden sm:inline" aria-hidden="true">
+                {sync.isFetching ? 'Syncing…' : 'Sync'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to list"
+              className="border-border bg-bg text-text hover:border-accent flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+            >
+              <ArrowLeftIcon width={16} height={16} />
+              <span className="hidden sm:inline" aria-hidden="true">
+                Back to list
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -312,6 +334,13 @@ export function ProductDetailsView({
           />
         )}
       </div>
+
+      {/* Below all the details: how this product's changes reached the store. */}
+      {Boolean(product ?? preview) && (
+        <div className="bg-surface px-3 pb-3 sm:px-5 sm:pb-5">
+          <ProductSyncHistory history={sync} />
+        </div>
+      )}
     </article>
   )
 }

@@ -1,18 +1,11 @@
 import type { ReactNode } from 'react'
+import { BADGE_TONE_CLASSES, type BadgeTone } from './badgeTones.ts'
 
-export type BadgeTone = 'default' | 'success' | 'warning' | 'danger' | 'neutral'
+export type { BadgeTone }
 
 export interface BadgeProps {
   tone?: BadgeTone
   children: ReactNode
-}
-
-const TONE_CLASSES: Record<BadgeTone, string> = {
-  default: 'bg-accent-tint text-accent',
-  success: 'bg-accent-tint text-accent',
-  warning: 'bg-warning-bg text-warning',
-  danger: 'bg-danger-bg text-danger',
-  neutral: 'bg-surface text-text-muted border border-border',
 }
 
 /**
@@ -22,7 +15,7 @@ const TONE_CLASSES: Record<BadgeTone, string> = {
 export function Badge({ tone = 'default', children }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${BADGE_TONE_CLASSES[tone]}`}
     >
       {children}
     </span>

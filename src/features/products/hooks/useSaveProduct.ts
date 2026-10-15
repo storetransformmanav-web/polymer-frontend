@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
@@ -7,9 +8,38 @@ import {
   updateProduct,
 } from '../../../app/store/productsSlice.ts'
 import type { ProductUpdateBody, ProductWriteResult } from '../../../lib/api/endpoints.ts'
+import { productSyncPrefix } from './useProductSyncHistory.ts'
 
 /** Every status tab, so their counts can be refreshed after a status change. */
 const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+
+/**
+ * What to refresh quietly once a save is confirmed: the sync history (the edit
+ * starts a push to the store), the product's details, the list and — when the
+ * status changed — every status tab's count. The new values are already on
+ * screen (the slice patched them), so none of this shows a loader.
+ */
+export function useRefreshAfterSave() {
+  const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
+  const filters = useAppSelector((state) => state.products.filters)
+
+  return useCallback(
+    (id: string, body: ProductUpdateBody) => {
+      void queryClient.invalidateQueries({ queryKey: productSyncPrefix(id) })
+      void dispatch(fetchProductDetails({ id, force: true }))
+      void dispatch(fetchProducts({ filters, force: true }))
+      if (body.status) {
+        for (const status of STATUS_TABS) {
+          void dispatch(
+            fetchProducts({ filters: statusCountFilters(filters, status), force: true }),
+          )
+        }
+      }
+    },
+    [dispatch, filters, queryClient],
+  )
+}
 
 interface SaveArg {
   id: string
@@ -29,7 +59,7 @@ interface SaveArg {
  */
 export function useSaveProduct() {
   const dispatch = useAppDispatch()
-  const filters = useAppSelector((state) => state.products.filters)
+  const refreshAfterSave = useRefreshAfterSave()
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,18 +75,10 @@ export function useSaveProduct() {
         return null
       }
 
-      void dispatch(fetchProductDetails({ id, force: true }))
-      void dispatch(fetchProducts({ filters, force: true }))
-      if (body.status) {
-        for (const status of STATUS_TABS) {
-          void dispatch(
-            fetchProducts({ filters: statusCountFilters(filters, status), force: true }),
-          )
-        }
-      }
+      refreshAfterSave(id, body)
       return result.payload
     },
-    [dispatch, filters],
+    [dispatch, refreshAfterSave],
   )
 
   return { save, isSaving, error, clearError: () => setError(null) }

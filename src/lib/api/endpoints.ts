@@ -616,18 +616,38 @@ const productWriteResultSchema = z.object({
   message: z.string().default(''),
 })
 
+/**
+ * What an edit, a retried push or a delete answers with: the fields above
+ * inside the backend's usual envelope — `{ code, status, message, result: {…} }`
+ * — or, accepted as well, the fields on their own. The envelope's `result` is
+ * the one that counts (its `message` says what happened to the product).
+ */
+const productWriteResponseSchema = z.union([
+  productWriteResultSchema,
+  z.object({ result: productWriteResultSchema }).transform((body) => body.result),
+])
+
 /** One push of this product to its store. */
 const productPushSchema = z.object({
   id: z.string(),
+  /** What was pushed (a product) and its id. */
+  entity: z.string().nullish(),
+  entity_id: z.string().nullish(),
   action: z.string().default(''),
   status: z.string(),
   attempts: z.number().default(0),
   error: z.string().nullish(),
   created_at: z.string(),
+  /** The fields this push carried. */
+  changes: z.record(z.string(), z.unknown()).nullish(),
   finished_at: z.string().nullish(),
 })
 
-const productPushListSchema = z.array(productPushSchema)
+/** The history arrives as a bare list, or inside an envelope's `items` ({ code, status, message, items }). */
+const productPushListSchema = z.union([
+  z.array(productPushSchema),
+  z.object({ items: z.array(productPushSchema) }).transform((body) => body.items),
+])
 
 export type ProductWriteResult = z.infer<typeof productWriteResultSchema>
 export type ProductPush = z.infer<typeof productPushSchema>
@@ -795,7 +815,7 @@ export const api = {
       const data = await apiClient.put(ENDPOINTS.products.update(id), body, {
         params: shop ? { shop } : undefined,
       })
-      return productWriteResultSchema.parse(data)
+      return productWriteResponseSchema.parse(data)
     },
 
     /**
@@ -808,7 +828,7 @@ export const api = {
       const data = await apiClient.delete(ENDPOINTS.products.remove(id), {
         params: shop ? { shop } : undefined,
       })
-      return productWriteResultSchema.parse(data)
+      return productWriteResponseSchema.parse(data)
     },
 
     /** Retries the latest failed or pending push of a product to its store. */
@@ -816,14 +836,14 @@ export const api = {
       const data = await apiClient.post(ENDPOINTS.products.push(id), undefined, {
         params: shop ? { shop } : undefined,
       })
-      return productWriteResultSchema.parse(data)
+      return productWriteResponseSchema.parse(data)
     },
 
     /** The product's recent pushes to its store, newest first. */
     async syncHistory(
       id: string,
       shop?: string | null,
-      limit = 5,
+      limit = 20,
     ): Promise<ProductPush[]> {
       const data = await apiClient.get(ENDPOINTS.products.sync(id), {
         params: { limit, ...(shop ? { shop } : {}) },

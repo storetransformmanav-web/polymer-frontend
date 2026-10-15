@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
@@ -7,6 +8,7 @@ import {
   statusCountFilters,
 } from '../../../app/store/productsSlice.ts'
 import type { ProductWriteResult } from '../../../lib/api/endpoints.ts'
+import { productSyncPrefix } from './useProductSyncHistory.ts'
 
 /** Every status tab, so their counts can be refreshed (a removal moves a product between them). */
 const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
@@ -27,6 +29,7 @@ interface DeleteArg {
  */
 export function useDeleteProduct() {
   const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
   const filters = useAppSelector((state) => state.products.filters)
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,10 +52,11 @@ export function useDeleteProduct() {
           fetchProducts({ filters: statusCountFilters(filters, status), force: true }),
         )
       }
+      void queryClient.invalidateQueries({ queryKey: productSyncPrefix(id) })
       void dispatch(fetchProductDetails({ id, force: true }))
       return result.payload
     },
-    [dispatch, filters],
+    [dispatch, filters, queryClient],
   )
 
   return { remove, isDeleting, error }
