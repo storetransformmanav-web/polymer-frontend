@@ -418,6 +418,14 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...base} strokeWidth={2} {...props}>
+      <path d="m4.5 10.5 3.6 3.6 7.4-8" />
+    </svg>
+  )
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

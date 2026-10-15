@@ -13,6 +13,8 @@ interface DetailSectionProps {
    * remounted, so whatever the user has open or typed stays as it is.
    */
   forceOpen?: boolean
+  /** Controls shown in the card's header, to the right of the title. */
+  actions?: ReactNode
   children: ReactNode
 }
 
@@ -23,6 +25,7 @@ export function DetailSection({
   icon: Icon,
   defaultOpen = true,
   forceOpen = false,
+  actions,
   children,
 }: DetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
@@ -36,28 +39,41 @@ export function DetailSection({
 
   return (
     <section className="border-border bg-bg rounded-xl border">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => setOpen((value) => !value)}
-        className="text-text flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent px-5 py-4 text-left"
-      >
-        <Icon width={18} height={18} className="text-accent shrink-0" />
-        <h3 className="text-[0.95rem] font-semibold">{title}</h3>
-        {count !== undefined && (
-          <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
-            {count}
-          </span>
-        )}
-        <ChevronDownIcon
-          width={16}
-          height={16}
-          className={`text-text-muted ml-auto transition-transform duration-200 ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
+      <div className="flex items-center gap-2 pr-4 pl-5">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((value) => !value)}
+          className="text-text flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 border-none bg-transparent py-4 text-left"
+        >
+          <Icon width={18} height={18} className="text-accent shrink-0" />
+          <h3 className="text-[0.95rem] font-semibold">{title}</h3>
+          {count !== undefined && (
+            <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
+              {count}
+            </span>
+          )}
+        </button>
+
+        {/* Controls for this card (e.g. edit / save / discard) — beside, not inside, the toggle. */}
+        {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+
+        {/* The same toggle again, as a bigger click target for the chevron; the labelled button above is the accessible one. */}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => setOpen((value) => !value)}
+          className="text-text-muted flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent"
+        >
+          <ChevronDownIcon
+            width={16}
+            height={16}
+            className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+      </div>
 
       <div
         id={bodyId}

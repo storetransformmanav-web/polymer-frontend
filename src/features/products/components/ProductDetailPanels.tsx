@@ -7,6 +7,7 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
+  PlusIcon,
   SearchIcon,
 } from '../../../components/ui/icons.tsx'
 import type {
@@ -23,7 +24,6 @@ import {
   DETAIL_TD as TD,
   DETAIL_TH as TH,
   DetailEmpty as Empty,
-  DetailSection,
   DetailSkeleton as PanelSkeleton,
   RawJsonPanel as RawPanel,
   DetailTable as TableWrap,
@@ -31,8 +31,44 @@ import {
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
+import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
+import {
+  CategoryField,
+  DescriptionField,
+  HandleField,
+  ProductTypeField,
+  StatusField,
+  TemplateSuffixField,
+  TitleField,
+  VendorField,
+} from './edit/BasicsSection.tsx'
+import { CollectionsSection as CollectionsEditor } from './edit/CollectionsSection.tsx'
+import {
+  EditableCard,
+  EditableTab,
+  SectionEditControls,
+} from './edit/EditableSection.tsx'
+import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
+import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
+import { TagsSection as TagsEditor } from './edit/TagsSection.tsx'
+import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
+
+// Which validation problems belong to each editable section (see useSectionEdit).
+const SPEC_ERRORS = [
+  'title',
+  'vendor',
+  'productType',
+  'handle',
+  'templateSuffix',
+  'categoryGid',
+] as const
+const NO_ERRORS = [] as const
+const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
+const VARIANT_ERRORS = ['variants'] as const
+const COLLECTION_ERRORS = ['addedCollections'] as const
+const MEDIA_ERRORS = ['images', 'newMedia'] as const
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
@@ -91,9 +127,11 @@ function getSpecs(product: ProductDetail): [string, ReactNode][] {
 interface OverviewProps {
   product: ProductDetail | null
   preview: ProductListItem | null
+  /** Called after a section of the product is saved here. */
+  onSaved?: SavedHandler
 }
 
-export function OverviewPanel({ product, preview }: OverviewProps) {
+export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   const title = product?.title ?? preview?.title ?? ''
   const imageUrl =
     product?.featured_image_url ?? product?.images[0]?.url ?? preview?.image_url ?? null
@@ -177,73 +215,116 @@ export function OverviewPanel({ product, preview }: OverviewProps) {
         <PanelSkeleton />
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
-          <DetailSection
+          <EditableCard
+            product={product}
             title="Product Specifications"
             count={getSpecs(product).length}
             icon={LayersIcon}
-          >
-            <FieldGrid>
-              {getSpecs(product).map(([label, value]) => (
-                <Field key={label} label={label}>
-                  {value}
-                </Field>
-              ))}
-            </FieldGrid>
-            {product.tags.length > 0 && (
-              <section aria-labelledby="product-tags-heading" className="mt-5">
-                <h3
-                  id="product-tags-heading"
-                  className="mb-2 text-[0.9rem] font-semibold"
-                >
-                  Tags
-                </h3>
-                <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
-                  {product.tags.map((tag) => (
-                    <li
-                      key={tag}
-                      className="bg-surface text-text border-border rounded-md border px-2.5 py-1 text-[0.8rem] font-medium"
-                    >
-                      {tag}
-                    </li>
+            what="specifications"
+            errorPrefixes={SPEC_ERRORS}
+            onSaved={onSaved}
+            view={
+              <>
+                <FieldGrid>
+                  {getSpecs(product).map(([label, value]) => (
+                    <Field key={label} label={label}>
+                      {value}
+                    </Field>
                   ))}
-                </ul>
-              </section>
+                </FieldGrid>
+                {product.tags.length > 0 && (
+                  <section aria-labelledby="product-tags-heading" className="mt-5">
+                    <h3
+                      id="product-tags-heading"
+                      className="mb-2 text-[0.9rem] font-semibold"
+                    >
+                      Tags
+                    </h3>
+                    <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
+                      {product.tags.map((tag) => (
+                        <li
+                          key={tag}
+                          className="bg-surface text-text border-border rounded-md border px-2.5 py-1 text-[0.8rem] font-medium"
+                        >
+                          {tag}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </>
+            }
+            editor={(section) => (
+              <div className="flex flex-col gap-5">
+                <TitleField {...section} />
+                <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+                  <VendorField {...section} />
+                  <ProductTypeField {...section} />
+                  <TemplateSuffixField {...section} />
+                  <HandleField {...section} />
+                </div>
+                <CategoryField {...section} />
+                <section aria-label="Tags">
+                  <h3 className="mb-2 text-[0.9rem] font-semibold">Tags</h3>
+                  <TagsEditor {...section} />
+                </section>
+              </div>
             )}
-          </DetailSection>
+          />
 
-          <DetailSection
+          <EditableCard
+            product={product}
             title="Status & Launch"
             count={6}
             icon={ListChecksIcon}
             defaultOpen={false}
-          >
-            <FieldGrid>
-              <Field label="Status">
-                <Badge tone={statusTone(product.status)}>
-                  {statusLabel(product.status)}
-                </Badge>
-              </Field>
-              <Field label="Published">
-                {date(product.published_at) ?? 'Not published'}
-              </Field>
-              <Field label="Out-of-stock variants">
-                {yesNo(product.has_out_of_stock_variants)}
-              </Field>
-              <Field label="Created">{date(product.shopify_created_at)}</Field>
-              <Field label="Updated">{date(product.shopify_updated_at)}</Field>
-              <Field label="Last synced">{date(product.synced_at)}</Field>
-            </FieldGrid>
-          </DetailSection>
-
-          <DetailSection title="Description" icon={CheckCircleIcon} defaultOpen={false}>
-            {description ? (
-              <p className="text-[0.9rem] leading-relaxed whitespace-pre-line">
-                {description}
-              </p>
-            ) : (
-              <p className="text-text-muted text-[0.9rem]">No description.</p>
+            what="status"
+            errorPrefixes={NO_ERRORS}
+            onSaved={onSaved}
+            view={
+              <FieldGrid>
+                <Field label="Status">
+                  <Badge tone={statusTone(product.status)}>
+                    {statusLabel(product.status)}
+                  </Badge>
+                </Field>
+                <Field label="Published">
+                  {date(product.published_at) ?? 'Not published'}
+                </Field>
+                <Field label="Out-of-stock variants">
+                  {yesNo(product.has_out_of_stock_variants)}
+                </Field>
+                <Field label="Created">{date(product.shopify_created_at)}</Field>
+                <Field label="Updated">{date(product.shopify_updated_at)}</Field>
+                <Field label="Last synced">{date(product.synced_at)}</Field>
+              </FieldGrid>
+            }
+            editor={(section) => (
+              <div className="max-w-xs">
+                <StatusField {...section} />
+              </div>
             )}
-          </DetailSection>
+          />
+
+          <EditableCard
+            product={product}
+            title="Description"
+            icon={CheckCircleIcon}
+            defaultOpen={false}
+            what="description"
+            errorPrefixes={NO_ERRORS}
+            onSaved={onSaved}
+            view={
+              description ? (
+                <p className="text-[0.9rem] leading-relaxed whitespace-pre-line">
+                  {description}
+                </p>
+              ) : (
+                <p className="text-text-muted text-[0.9rem]">No description.</p>
+              )
+            }
+            editor={(section) => <DescriptionField {...section} />}
+          />
         </div>
       )}
     </div>
@@ -258,7 +339,7 @@ function weightLabel(variant: ProductVariant): string {
   return `${weight} ${(variant.weight_unit ?? '').toLowerCase()}`.trim()
 }
 
-export function VariantsPanel({ product }: { product: ProductDetail }) {
+function VariantsView({ product }: { product: ProductDetail }) {
   if (product.variants.length === 0) {
     return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
   }
@@ -431,20 +512,9 @@ function collectionTypeLabel(type: string): string {
 /** Show a filter box once there are enough collections to need one. */
 const COLLECTION_FILTER_MIN = 6
 
-export function CollectionsPanel({ product }: { product: ProductDetail }) {
-  const [query, setQuery] = useState('')
+/** The collections as tiles, narrowed by the header's filter box. */
+function CollectionsView({ product, query }: { product: ProductDetail; query: string }) {
   const { collections } = product
-
-  const counts = useMemo(() => {
-    const byType = new Map<string, number>()
-    for (const collection of collections) {
-      const label = collection.collection_type
-        ? collectionTypeLabel(collection.collection_type)
-        : 'Other'
-      byType.set(label, (byType.get(label) ?? 0) + 1)
-    }
-    return [...byType.entries()]
-  }, [collections])
 
   if (collections.length === 0) {
     return <Empty icon={LayersIcon}>This product isn&apos;t in any collection.</Empty>
@@ -460,36 +530,7 @@ export function CollectionsPanel({ product }: { product: ProductDetail }) {
     : collections
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-[0.95rem] font-semibold">
-            In {collections.length}{' '}
-            {collections.length === 1 ? 'collection' : 'collections'}
-          </p>
-          {counts.map(([label, count]) => (
-            <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
-              {count} {label}
-            </Badge>
-          ))}
-        </div>
-
-        {collections.length >= COLLECTION_FILTER_MIN && (
-          <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 w-full items-center gap-2 rounded-lg border px-3 focus-within:outline-2 sm:w-64">
-            <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
-            <input
-              type="search"
-              aria-label="Filter collections"
-              placeholder="Filter collections…"
-              maxLength={100}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
-            />
-          </div>
-        )}
-      </div>
-
+    <>
       {visible.length === 0 ? (
         <p className="text-text-muted py-8 text-center text-[0.9rem]">
           No collections match &ldquo;{query.trim()}&rdquo;.
@@ -535,11 +576,100 @@ export function CollectionsPanel({ product }: { product: ProductDetail }) {
           ))}
         </ul>
       )}
+    </>
+  )
+}
+
+/**
+ * One row above the tiles: "In 10 collections" + a badge per type on the left;
+ * the filter box, the pencil and "Add collection" on the right. While editing,
+ * the pencil becomes Save / Discard and the summary says what is being edited.
+ */
+function CollectionsHeader({
+  product,
+  query,
+  onQuery,
+  edit,
+  addOpen,
+  onAdd,
+  onStart,
+}: {
+  product: ProductDetail
+  query: string
+  onQuery: (value: string) => void
+  edit: SectionEdit
+  /** Whether the "add by ID" box is open (only meaningful while editing). */
+  addOpen: boolean
+  onAdd: () => void
+  onStart: () => void
+}) {
+  const { collections } = product
+
+  const counts = useMemo(() => {
+    const byType = new Map<string, number>()
+    for (const collection of collections) {
+      const label = collection.collection_type
+        ? collectionTypeLabel(collection.collection_type)
+        : 'Other'
+      byType.set(label, (byType.get(label) ?? 0) + 1)
+    }
+    return [...byType.entries()]
+  }, [collections])
+
+  const summary = edit.editing
+    ? 'Editing collections'
+    : collections.length === 0
+      ? 'Not in any collection'
+      : `In ${collections.length} ${collections.length === 1 ? 'collection' : 'collections'}`
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="mr-auto flex min-w-0 flex-wrap items-center gap-2">
+        <p className="text-[0.95rem] font-semibold">{summary}</p>
+        {!edit.editing &&
+          counts.map(([label, count]) => (
+            <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
+              {count} {label}
+            </Badge>
+          ))}
+      </div>
+
+      {!edit.editing && collections.length >= COLLECTION_FILTER_MIN && (
+        <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 w-full items-center gap-2 rounded-lg border px-3 focus-within:outline-2 sm:w-64">
+          <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
+          <input
+            type="search"
+            aria-label="Filter collections"
+            placeholder="Filter collections…"
+            maxLength={100}
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center gap-1.5">
+        <SectionEditControls edit={edit} what="collections" onStart={onStart} />
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-expanded={edit.editing ? addOpen : undefined}
+          className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors ${
+            edit.editing && addOpen
+              ? 'border-accent text-accent bg-accent-tint'
+              : 'border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint'
+          }`}
+        >
+          <PlusIcon width={14} height={14} />
+          Add collection
+        </button>
+      </div>
     </div>
   )
 }
 
-export function MediaPanel({ product }: { product: ProductDetail }) {
+function MediaView({ product }: { product: ProductDetail }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const slides = useMemo(
     () => toSlides(product.images, product.title),
@@ -581,23 +711,39 @@ export function MediaPanel({ product }: { product: ProductDetail }) {
 
 // --- SEO & online store ---------------------------------------------------------
 
-export function SeoPanel({ product }: { product: ProductDetail }) {
+export function SeoPanel({
+  product,
+  onSaved,
+}: {
+  product: ProductDetail
+  onSaved?: SavedHandler
+}) {
   return (
-    <DetailSection title="SEO & Online Store" count={5} icon={ExternalLinkIcon}>
-      <FieldGrid>
-        <Field label="SEO title">{product.seo?.title}</Field>
-        <Field label="SEO description">{product.seo?.description}</Field>
-        <Field label="Template suffix">{product.template_suffix}</Field>
-        <Field label="Online store">
-          <ExternalLink href={product.online_store_url}>Open live page</ExternalLink>
-        </Field>
-        <Field label="Preview">
-          <ExternalLink href={product.online_store_preview_url}>
-            Open preview
-          </ExternalLink>
-        </Field>
-      </FieldGrid>
-    </DetailSection>
+    <EditableCard
+      product={product}
+      title="SEO & Online Store"
+      count={5}
+      icon={ExternalLinkIcon}
+      what="search listing"
+      errorPrefixes={SEO_ERRORS}
+      onSaved={onSaved}
+      view={
+        <FieldGrid>
+          <Field label="SEO title">{product.seo?.title}</Field>
+          <Field label="SEO description">{product.seo?.description}</Field>
+          <Field label="Template suffix">{product.template_suffix}</Field>
+          <Field label="Online store">
+            <ExternalLink href={product.online_store_url}>Open live page</ExternalLink>
+          </Field>
+          <Field label="Preview">
+            <ExternalLink href={product.online_store_preview_url}>
+              Open preview
+            </ExternalLink>
+          </Field>
+        </FieldGrid>
+      }
+      editor={(section) => <SeoEditor {...section} />}
+    />
   )
 }
 
@@ -651,3 +797,74 @@ export function MetafieldsPanel({ product }: { product: ProductDetail }) {
 }
 
 export { RawPanel }
+
+// --- Editable tabs ----------------------------------------------------------------
+// Each tab shows its read-only view; the pencil above it turns the tab into an
+// editor in place (see EditableTab). Saving sends only what changed in that tab.
+
+interface TabProps {
+  product: ProductDetail
+  onSaved?: SavedHandler
+}
+
+export function VariantsPanel({ product, onSaved }: TabProps) {
+  return (
+    <EditableTab
+      product={product}
+      what="variants"
+      errorPrefixes={VARIANT_ERRORS}
+      onSaved={onSaved}
+      view={<VariantsView product={product} />}
+      editor={(section) => <VariantsEditor {...section} />}
+    />
+  )
+}
+
+export function CollectionsPanel({ product, onSaved }: TabProps) {
+  const [query, setQuery] = useState('')
+  // The "add by ID" box stays hidden until "Add collection" is clicked, then
+  // sits on top of the list. The pencil opens the editor without it.
+  const [addOpen, setAddOpen] = useState(false)
+
+  return (
+    <EditableTab
+      product={product}
+      what="collections"
+      errorPrefixes={COLLECTION_ERRORS}
+      onSaved={onSaved}
+      header={(edit) => (
+        <CollectionsHeader
+          product={product}
+          query={query}
+          onQuery={setQuery}
+          edit={edit}
+          addOpen={addOpen}
+          onStart={() => setAddOpen(false)}
+          onAdd={() => {
+            if (edit.editing) {
+              setAddOpen((open) => !open)
+            } else {
+              setAddOpen(true)
+              edit.start()
+            }
+          }}
+        />
+      )}
+      view={<CollectionsView product={product} query={query} />}
+      editor={(section) => <CollectionsEditor {...section} showAdd={addOpen} focusAdd />}
+    />
+  )
+}
+
+export function MediaPanel({ product, onSaved }: TabProps) {
+  return (
+    <EditableTab
+      product={product}
+      what="media"
+      errorPrefixes={MEDIA_ERRORS}
+      onSaved={onSaved}
+      view={<MediaView product={product} />}
+      editor={(section) => <MediaEditor {...section} />}
+    />
+  )
+}

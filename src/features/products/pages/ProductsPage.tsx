@@ -114,8 +114,7 @@ export function ProductsPage() {
           key={`details-${activeId}`}
           id={activeId}
           onBack={() => navigate(LIST_PATH)}
-          onEdit={() => openEdit(activeId)}
-          onPrefetchEdit={() => products.prefetchDetails(activeId)}
+          onSaved={handleSaved}
           savedStatus={savedStatus[activeId] ?? null}
         />
       )}

@@ -4,11 +4,11 @@ import {
   AlertTriangleIcon,
   ArrowLeftIcon,
   CheckCircleIcon,
-  PencilIcon,
   TagIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
+import type { SavedHandler } from '../hooks/useSectionEdit.ts'
 import { ProductSyncStatus } from './ProductSyncStatus.tsx'
 import {
   formatPriceRange,
@@ -42,10 +42,8 @@ type TabId =
 interface ProductDetailsViewProps {
   id: string
   onBack: () => void
-  /** Opens the edit form (the pencil button). */
-  onEdit: () => void
-  /** Hover/focus on the pencil: start loading what the form needs. */
-  onPrefetchEdit?: () => void
+  /** Called after any section of this product is saved in place (the page shows the notice). */
+  onSaved?: SavedHandler
   /**
    * The push status reported by the last edit saved here, or null if this
    * product wasn't edited this session. While set, the header tracks whether
@@ -63,8 +61,7 @@ interface ProductDetailsViewProps {
 export function ProductDetailsView({
   id,
   onBack,
-  onEdit,
-  onPrefetchEdit,
+  onSaved,
   savedStatus = null,
 }: ProductDetailsViewProps) {
   const details = useProductDetails(id)
@@ -239,32 +236,17 @@ export function ProductDetailsView({
               )}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={onEdit}
-              onPointerEnter={onPrefetchEdit}
-              onFocus={onPrefetchEdit}
-              aria-label="Edit product"
-              className="bg-accent text-accent-contrast hover:bg-accent-hover flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-[0.82rem] font-semibold shadow-sm transition-colors"
-            >
-              <PencilIcon width={16} height={16} />
-              <span className="hidden sm:inline" aria-hidden="true">
-                Edit
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label="Back to list"
-              className="border-border bg-bg text-text hover:border-accent flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-            >
-              <ArrowLeftIcon width={16} height={16} />
-              <span className="hidden sm:inline" aria-hidden="true">
-                Back to list
-              </span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to list"
+            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+          >
+            <ArrowLeftIcon width={16} height={16} />
+            <span className="hidden sm:inline" aria-hidden="true">
+              Back to list
+            </span>
+          </button>
         </div>
       </header>
 
@@ -307,13 +289,19 @@ export function ProductDetailsView({
         aria-labelledby={`product-tab-${tab}`}
         className="bg-surface p-3 sm:p-5"
       >
-        {tab === 'overview' && <OverviewPanel product={product} preview={preview} />}
+        {tab === 'overview' && (
+          <OverviewPanel product={product} preview={preview} onSaved={onSaved} />
+        )}
         {tab !== 'overview' && tab !== 'raw' && !product && <PanelSkeleton />}
-        {product && tab === 'variants' && <VariantsPanel product={product} />}
+        {product && tab === 'variants' && (
+          <VariantsPanel product={product} onSaved={onSaved} />
+        )}
         {product && tab === 'inventory' && <InventoryPanel product={product} />}
-        {product && tab === 'collections' && <CollectionsPanel product={product} />}
-        {product && tab === 'media' && <MediaPanel product={product} />}
-        {product && tab === 'seo' && <SeoPanel product={product} />}
+        {product && tab === 'collections' && (
+          <CollectionsPanel product={product} onSaved={onSaved} />
+        )}
+        {product && tab === 'media' && <MediaPanel product={product} onSaved={onSaved} />}
+        {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
         {product && tab === 'metafields' && <MetafieldsPanel product={product} />}
         {tab === 'raw' && (
           <RawPanel
