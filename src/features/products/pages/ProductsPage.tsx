@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import type {
+  ProductCreateResult,
   ProductDetail,
   ProductEditStatus,
   ProductListItem,
@@ -9,6 +10,8 @@ import type {
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
 import { BulkEditView } from '../components/BulkEditView.tsx'
+import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChunk.ts'
+import { ProductCreateView } from '../components/ProductCreateView.tsx'
 import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
@@ -20,7 +23,12 @@ import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
+import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
 import { useProducts } from '../hooks/useProducts.ts'
+
+/** How often, and for how long, to look for the image of a just-created product. */
+const IMAGE_POLL_MS = 4000
+const IMAGE_GIVE_UP_MS = 40_000
 
 const LIST_PATH = '/products'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
@@ -46,10 +54,19 @@ export function ProductsPage() {
   // Products edited this session → the push status their save reported (so the
   // details header can track whether the edit reached the store).
   const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
-  const [notice, setNotice] = useState<string | null>(null)
+  const [noticeState, setNoticeState] = useState<{
+    text: string
+    tone: 'success' | 'info'
+  } | null>(null)
+  const setNotice = useCallback(
+    (text: string | null) => setNoticeState(text ? { text, tone: 'success' } : null),
+    [],
+  )
   // Ticked rows (by id) and the products open in the bulk editor, if it is open.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [bulkItems, setBulkItems] = useState<ProductListItem[] | null>(null)
+  // The "Add product" form is open.
+  const [creating, setCreating] = useState(false)
   const prefetchMany = usePrefetchDetails()
   const status = useProductStatusChange()
   // Only rows on the page being shown count as selected (and get edited).
@@ -82,6 +99,31 @@ export function ProductsPage() {
     setBulkItems(items)
   }
 
+  function openCreate() {
+    setNotice(null)
+    setQuickView(null)
+    setCreating(true)
+  }
+
+  function handleCreated(
+    result: ProductCreateResult,
+    info: { previewUrl: string | null },
+  ) {
+    setCreating(false)
+    setNotice(
+      `Created “${result.title}”. ${result.message || 'It is in your store and in the list below.'}${
+        info.previewUrl ? ' Its image is being downloaded by the store.' : ''
+      }`,
+    )
+    if (info.previewUrl) {
+      setAwaitingImage({
+        id: result.product_id,
+        title: result.title,
+        previewUrl: info.previewUrl,
+      })
+    }
+  }
+
   function handleBulkSaved(saved: BulkSavedItem[]) {
     setSavedStatus((current) => ({
       ...current,
@@ -92,10 +134,50 @@ export function ProductsPage() {
   }
 
   useEffect(() => {
-    if (!notice) return undefined
-    const timer = window.setTimeout(() => setNotice(null), 8000)
+    if (!noticeState) return undefined
+    // A warning that needs reading and acting on stays longer than a confirmation.
+    const timer = window.setTimeout(
+      () => setNotice(null),
+      noticeState.tone === 'info' ? 25_000 : 8000,
+    )
     return () => window.clearTimeout(timer)
-  }, [notice])
+  }, [noticeState, setNotice])
+
+  // A product created with an image: the store downloads the file first, so the list
+  // is re-read every few seconds until the product's own image shows up (or we give up).
+  const refreshList = useRefreshProductList()
+  const [awaitingImage, setAwaitingImage] = useState<{
+    id: string
+    title: string
+    previewUrl: string
+  } | null>(null)
+  const awaitedRow = awaitingImage
+    ? products.items.find((item) => item.id === awaitingImage.id)
+    : undefined
+  // The row has an image that is not just the address that was typed in: it has arrived.
+  if (
+    awaitingImage &&
+    awaitedRow?.image_url &&
+    awaitedRow.image_url !== awaitingImage.previewUrl
+  ) {
+    setAwaitingImage(null)
+  }
+  useEffect(() => {
+    if (!awaitingImage) return undefined
+    const poll = window.setInterval(() => refreshList(false), IMAGE_POLL_MS)
+    const giveUp = window.setTimeout(() => {
+      refreshList(true)
+      setAwaitingImage(null)
+      setNoticeState({
+        tone: 'info',
+        text: `“${awaitingImage.title}” was created, but its image hasn't arrived yet. The store needs a direct, public link to an image file — if it couldn't download yours, add the image again from the product's Media tab.`,
+      })
+    }, IMAGE_GIVE_UP_MS)
+    return () => {
+      window.clearInterval(poll)
+      window.clearTimeout(giveUp)
+    }
+  }, [awaitingImage, refreshList])
 
   // The product a row's trash button asked to delete (the dialog confirms how).
   const [deleting, setDeleting] = useState<ProductListItem | null>(null)
@@ -170,6 +252,14 @@ export function ProductsPage() {
         />
       )}
 
+      {creating && (
+        <ProductCreateView
+          key="create-product"
+          onBack={() => setCreating(false)}
+          onCreated={handleCreated}
+        />
+      )}
+
       <ProductTabsBar
         tabs={tabs.tabs}
         activeId={activeId}
@@ -179,7 +269,9 @@ export function ProductsPage() {
         onClear={clearTabs}
       />
 
-      {notice && <FormMessage tone="success">{notice}</FormMessage>}
+      {noticeState && (
+        <FormMessage tone={noticeState.tone}>{noticeState.text}</FormMessage>
+      )}
 
       {activeId && (
         <ProductDetailsView
@@ -193,7 +285,9 @@ export function ProductsPage() {
 
       {/* Kept mounted but hidden while a product is open (display: none also
           removes it from tab order and screen readers). */}
-      <div className={activeId || bulkItems ? 'hidden' : 'flex flex-col gap-4'}>
+      <div
+        className={activeId || bulkItems || creating ? 'hidden' : 'flex flex-col gap-4'}
+      >
         <ProductsToolbar
           filters={filters}
           facets={products.facets}
@@ -203,8 +297,10 @@ export function ProductsPage() {
           onReset={products.resetFilters}
         />
 
-        {!products.isPending && !products.error && products.items.length > 0 && (
+        {!products.isPending && !products.error && (
           <ProductsBulkBar
+            onAdd={openCreate}
+            onAddIntent={preloadRichTextEditor}
             pageCount={products.items.length}
             selectedCount={selectedItems.length}
             onEditPage={() => openBulk(products.items)}

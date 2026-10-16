@@ -736,10 +736,15 @@ interface MediaTile {
 function MediaView({
   product,
   pending,
+  slow,
+  onDismiss,
   onDelete,
 }: {
   product: ProductDetail
   pending: ProductMediaInput[]
+  /** The store is taking longer than usual to finish the waiting files. */
+  slow: boolean
+  onDismiss: () => void
   onDelete: (image: ProductImageData, position: number) => void
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -773,6 +778,27 @@ function MediaView({
 
   return (
     <>
+      {pending.length > 0 && slow && (
+        <div
+          role="status"
+          className="bg-warning-bg text-text mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-[0.85rem]"
+        >
+          <p className="min-w-0 flex-1">
+            The store is taking longer than usual to finish{' '}
+            {pending.length === 1 ? 'this file' : 'these files'}. It only accepts a
+            direct, public link to an image file (a web page link won&apos;t work). The
+            image will appear here once the store has it, and Sync products brings it in
+            too.
+          </p>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-accent cursor-pointer border-none bg-transparent p-0 text-[0.85rem] font-semibold hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {tiles.map((tile, index) => (
           <li key={tile.image.id} className={`${CARD} relative overflow-hidden`}>
@@ -819,7 +845,7 @@ function MediaView({
               </div>
             </div>
             <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
-              Waiting for the store
+              {slow ? 'Still waiting for the store' : 'Waiting for the store'}
             </p>
           </li>
         ))}
@@ -841,18 +867,22 @@ function MediaView({
  */
 function MediaHeader({
   count,
+  waiting,
   edit,
   onAdd,
 }: {
   count: number
+  /** Files sent to the store that are not in the product yet. */
+  waiting: number
   edit: SectionEdit
   onAdd: () => void
 }) {
+  const waitingText = waiting > 0 ? `${waiting} processing` : ''
   const summary = edit.editing
     ? 'Editing media'
     : count === 0
-      ? 'No images'
-      : `${count} ${count === 1 ? 'image' : 'images'}`
+      ? waitingText || 'No images'
+      : `${count} ${count === 1 ? 'image' : 'images'}${waitingText ? ` · ${waitingText}` : ''}`
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -1039,6 +1069,7 @@ export function MediaPanel({ product, onSaved }: TabProps) {
         header={(edit) => (
           <MediaHeader
             count={product.images.length}
+            waiting={media.pending.length}
             edit={edit}
             onAdd={() => setAdding(true)}
           />
@@ -1047,6 +1078,8 @@ export function MediaPanel({ product, onSaved }: TabProps) {
           <MediaView
             product={product}
             pending={media.pending}
+            slow={media.slow}
+            onDismiss={media.dismiss}
             onDelete={(image, position) => setDeleting({ image, position })}
           />
         }

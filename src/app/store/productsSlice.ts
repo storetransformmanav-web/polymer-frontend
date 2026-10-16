@@ -9,6 +9,9 @@ import { toUserMessage } from '../../lib/api/ApiError.ts'
 import {
   api,
   type ProductDetail,
+  type ProductCreateBody,
+  type ProductCreateResult,
+  type ProductListItem,
   type ProductListParams,
   type ProductMediaInput,
   type ProductListResponse,
@@ -154,6 +157,19 @@ export interface ProductsState {
   tabs: ProductTab[]
   /** Product details, cached by id (and "id|raw" for the with-raw-data variant). */
   details: Record<string, ProductDetailsEntry>
+  /**
+   * Files added to a product by address that the store hasn't finished downloading
+   * (so the product has no copy of them yet), by product id. Kept here rather than in
+   * the Media tab so they stay on screen when the tab or product is left and come back.
+   */
+  pendingMedia: Record<string, PendingMedia>
+}
+
+export interface PendingMedia {
+  items: ProductMediaInput[]
+  /** How many images the product had when they were added. */
+  baseline: number
+  startedAt: number
 }
 
 export interface ProductTab {
@@ -179,6 +195,7 @@ const initialState: ProductsState = {
   facets: { productTypes: [], tags: [] },
   tabs: [],
   details: {},
+  pendingMedia: {},
 }
 
 interface FetchArg {
@@ -299,6 +316,87 @@ export const deleteProduct = createAsyncThunk<
   }
 })
 
+/**
+ * Creates a product. Nothing is cached here: the caller turns the answer into a
+ * list row and dispatches `productCreated`, so the new product shows at the top
+ * of the list at once (it is not retried — a repeat could create it twice).
+ */
+export const createProduct = createAsyncThunk<
+  ProductCreateResult,
+  { body: ProductCreateBody },
+  { state: ProductsRootState; rejectValue: string }
+>('products/create', async ({ body }, { rejectWithValue }) => {
+  try {
+    return await api.products.create(body)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
+/**
+ * Puts a just-created product into the cached lists, where it belongs, so it is
+ * on screen straight away: at the top of the page being shown (when that page is
+ * a plain first page that the product matches) and in every status tab's count.
+ * Every cached query is marked stale so each refreshes quietly.
+ */
+function insertCreatedProduct(state: ProductsState, item: ProductListItem) {
+  const status = (item.status ?? '').toUpperCase()
+  const shopKey = item.shop?.key ?? ''
+  const f = state.filters
+
+  const matchesShop = !f.shop || f.shop === shopKey || f.shop === item.shop?.domain
+  const matchesStatus = !f.status || f.status === status
+  const plainFirstPage =
+    f.page === 1 &&
+    !f.search.trim() &&
+    !f.productType &&
+    !f.tag &&
+    !f.stock &&
+    !f.minPrice &&
+    !f.maxPrice
+  // Newest first is where a new product belongs; other orders wait for the refetch.
+  const newestFirst = f.sort === 'created_at' && f.order === 'desc'
+
+  const current = state.entries[cacheKey(f)]
+  if (current?.data && matchesShop && matchesStatus && plainFirstPage && newestFirst) {
+    const items = [item, ...current.data.items.filter((row) => row.id !== item.id)]
+    current.data = {
+      ...current.data,
+      items: items.slice(0, f.pageSize),
+      total: current.data.total + 1,
+      total_pages: Math.max(1, Math.ceil((current.data.total + 1) / f.pageSize)),
+    }
+    if (state.lastData) state.lastData = current.data
+  }
+
+  // The status tabs' counts (one-row queries) grow by one where the product counts.
+  for (const [key, entry] of Object.entries(state.entries)) {
+    if (!entry.data) continue
+    let params: ProductListParams
+    try {
+      params = JSON.parse(key) as ProductListParams
+    } catch {
+      continue
+    }
+    const narrowed =
+      params.search ||
+      params.product_type ||
+      params.tag ||
+      params.min_price !== undefined ||
+      params.max_price !== undefined ||
+      params.in_stock !== undefined
+    if (params.page_size !== 1 || params.page !== 1 || narrowed) continue
+    if (params.shop && params.shop !== shopKey && params.shop !== item.shop?.domain)
+      continue
+    if (params.status && params.status !== status) continue
+    entry.data = { ...entry.data, total: entry.data.total + 1 }
+  }
+
+  for (const entry of Object.values(state.entries)) entry.fetchedAt = null
+  addSorted(state.facets.productTypes, [item.product_type])
+  addSorted(state.facets.tags, item.tags)
+}
+
 interface AddMediaArg {
   id: string
   items: ProductMediaInput[]
@@ -417,6 +515,10 @@ const productsSlice = createSlice({
       const cached = state.entries[cacheKey(next)]?.data
       if (cached) state.lastData = cached
     },
+    /** A product was created: show it in the cached lists at once. */
+    productCreated(state, action: PayloadAction<ProductListItem>) {
+      insertCreatedProduct(state, action.payload)
+    },
     /** "Clear all": drops every narrowing filter, keeps sort and page size. */
     filtersReset(state) {
       // The top-bar store isn't one of this page's filters, so it survives "Clear all".
@@ -449,6 +551,27 @@ const productsSlice = createSlice({
     },
     tabsCleared(state) {
       state.tabs = []
+    },
+    /** Files were sent to the store and are not in the product yet. */
+    mediaQueued(
+      state,
+      action: PayloadAction<{
+        id: string
+        items: ProductMediaInput[]
+        baseline: number
+        startedAt: number
+      }>,
+    ) {
+      const { id, items, baseline, startedAt } = action.payload
+      const existing = state.pendingMedia[id]
+      // More added while some are still waiting: they wait together, from the older baseline.
+      state.pendingMedia[id] = existing
+        ? { ...existing, items: [...existing.items, ...items] }
+        : { items, baseline, startedAt }
+    },
+    /** Nothing is waiting any more for this product (it all arrived, or it was dismissed). */
+    mediaSettled(state, action: PayloadAction<string>) {
+      delete state.pendingMedia[action.payload]
     },
   },
   extraReducers: (builder) => {
@@ -558,8 +681,16 @@ const productsSlice = createSlice({
   },
 })
 
-export const { filtersChanged, filtersReset, tabOpened, tabClosed, tabsCleared } =
-  productsSlice.actions
+export const {
+  filtersChanged,
+  filtersReset,
+  productCreated,
+  tabOpened,
+  tabClosed,
+  tabsCleared,
+  mediaQueued,
+  mediaSettled,
+} = productsSlice.actions
 export const productsReducer = productsSlice.reducer
 
 /** Warms the cache for whatever filters are currently set (e.g. on app load). */

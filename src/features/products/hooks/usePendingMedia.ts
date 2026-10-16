@@ -1,58 +1,72 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useAppDispatch } from '../../../app/store/hooks.ts'
-import { fetchProductDetails } from '../../../app/store/productsSlice.ts'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
+import {
+  fetchProductDetails,
+  mediaQueued,
+  mediaSettled,
+} from '../../../app/store/productsSlice.ts'
 import type { ProductDetail, ProductMediaInput } from '../../../lib/api/endpoints.ts'
 
-/** How often to look for the files the store has finished downloading, and for how long. */
+/** How often to look for the files the store has finished downloading. */
 const POLL_MS = 4000
-const GIVE_UP_MS = 60_000
-
-interface Queued {
-  items: ProductMediaInput[]
-  /** How many images the product had when they were added. */
-  baseline: number
-  startedAt: number
-}
+/** After this long the store is "taking longer than usual": say so, and look less often. */
+const SLOW_AFTER_MS = 60_000
+const SLOW_POLL_MS = 16_000
+/** Stop looking altogether (the files stay listed until they arrive or are dismissed). */
+const STOP_AFTER_MS = 15 * 60_000
 
 /**
  * Files just added by URL, shown as "processing" until they arrive. The store
  * downloads each file before it exists in the product (the answer to the add
  * was only "queued"), so this keeps the submitted files on screen and checks the
  * product every few seconds; each new image that shows up replaces one waiting
- * file, and after a minute the rest are dropped (they will still appear once the
- * store is done).
+ * file. The waiting files live in the store (`pendingMedia`), so they survive
+ * leaving the Media tab or the product, and they are not dropped when the store
+ * is slow — they stay, marked `slow`, until they arrive or `dismiss` is called.
  */
 export function usePendingMedia(product: ProductDetail) {
   const dispatch = useAppDispatch()
-  const [queued, setQueued] = useState<Queued | null>(null)
   const { id } = product
-  const active = queued !== null
+  const queued = useAppSelector((state) => state.products.pendingMedia[id])
+  const [now, setNow] = useState(() => Date.now())
+  const imageCount = product.images.length
+  const ticks = useRef(0)
 
   const queue = useCallback(
     (items: ProductMediaInput[]) =>
-      setQueued({ items, baseline: product.images.length, startedAt: Date.now() }),
-    [product.images.length],
+      dispatch(mediaQueued({ id, items, baseline: imageCount, startedAt: Date.now() })),
+    [dispatch, id, imageCount],
   )
+  const dismiss = useCallback(() => dispatch(mediaSettled(id)), [dispatch, id])
 
   // Everything that arrived so far has replaced a waiting file, oldest first.
-  const arrived = queued ? Math.max(0, product.images.length - queued.baseline) : 0
+  const arrived = queued ? Math.max(0, imageCount - queued.baseline) : 0
   const pending = queued ? queued.items.slice(arrived) : []
-  const done = queued !== null && pending.length === 0
+  const done = queued !== undefined && pending.length === 0
+  const startedAt = queued?.startedAt
+  const active = startedAt !== undefined && !done
+
+  useEffect(() => {
+    if (done) dispatch(mediaSettled(id))
+  }, [done, dispatch, id])
 
   useEffect(() => {
     if (!active) return undefined
+    ticks.current = 0
     const timer = window.setInterval(() => {
+      const current = Date.now()
+      setNow(current)
+      const age = current - startedAt
+      if (age > STOP_AFTER_MS) return
+      ticks.current += 1
+      // A slow store is asked less often (every fourth look).
+      if (age > SLOW_AFTER_MS && ticks.current % (SLOW_POLL_MS / POLL_MS) !== 0) return
       void dispatch(fetchProductDetails({ id, force: true }))
-      setQueued((current) =>
-        current && Date.now() - current.startedAt > GIVE_UP_MS ? null : current,
-      )
     }, POLL_MS)
     return () => window.clearInterval(timer)
-  }, [active, dispatch, id])
+  }, [active, dispatch, id, startedAt])
 
-  // Everything arrived: forget the queue now (React's "adjust state while rendering"
-  // pattern), so a later change to the product's images can't bring the tiles back.
-  if (done) setQueued(null)
+  const slow = active && now - startedAt > SLOW_AFTER_MS
 
-  return { pending, queue }
+  return { pending, queue, dismiss, slow }
 }

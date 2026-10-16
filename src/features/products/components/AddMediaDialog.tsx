@@ -1,11 +1,8 @@
 import { useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
-import { PlusIcon, SpinnerIcon, TrashIcon } from '../../../components/ui/icons.tsx'
-import { SelectField } from '../../../components/ui/SelectField.tsx'
+import { SpinnerIcon } from '../../../components/ui/icons.tsx'
 import {
-  MEDIA_TYPES,
-  type MediaType,
   type ProductDetail,
   type ProductMediaInput,
   type ProductWriteResult,
@@ -18,18 +15,10 @@ import {
   validateNewMedia,
   type NewMediaDraft,
 } from '../utils/editDraft.ts'
-import { EditField, FIELD_INPUT, ICON_BUTTON, TEXT_BUTTON } from './edit/fields.tsx'
+import { MediaRows } from './MediaRows.tsx'
 
 const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
-
-const TYPE_OPTIONS = MEDIA_TYPES.map((type) => ({
-  value: type,
-  label: type
-    .split('_')
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(' '),
-}))
 
 interface AddMediaDialogProps {
   product: ProductDetail
@@ -49,11 +38,6 @@ export function AddMediaDialog({ product, onClose, onDone }: AddMediaDialogProps
   const [showErrors, setShowErrors] = useState(false)
   const problems = validateNewMedia(rows)
   const visible = showErrors ? problems : {}
-
-  const update = (index: number, patch: Partial<NewMediaDraft>) =>
-    setRows((current) =>
-      current.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    )
 
   async function submit() {
     setShowErrors(true)
@@ -97,82 +81,14 @@ export function AddMediaDialog({ product, onClose, onDone }: AddMediaDialogProps
         it appears in the product a moment after you add it.
       </p>
 
-      <div className="text-text flex flex-col gap-3">
-        {rows.map((row, index) => (
-          <div
-            key={row.key}
-            className="border-border flex items-start gap-3 rounded-xl border p-3"
-          >
-            <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 min-[520px]:grid-cols-2">
-              <div className="min-[520px]:col-span-2">
-                <EditField
-                  id={`add-media-url-${row.key}`}
-                  label="Web address"
-                  error={visible[`${index}.url`]}
-                >
-                  <input
-                    id={`add-media-url-${row.key}`}
-                    data-autofocus={index === 0 ? '' : undefined}
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={row.url}
-                    maxLength={LIMITS.mediaUrl + 100}
-                    placeholder="https://…"
-                    aria-invalid={visible[`${index}.url`] ? true : undefined}
-                    onChange={(event) => update(index, { url: event.target.value })}
-                    className={FIELD_INPUT}
-                  />
-                </EditField>
-              </div>
-              <EditField
-                id={`add-media-alt-${row.key}`}
-                label="Alt text"
-                optional
-                error={visible[`${index}.alt`]}
-              >
-                <input
-                  id={`add-media-alt-${row.key}`}
-                  autoComplete="off"
-                  value={row.alt}
-                  onChange={(event) => update(index, { alt: event.target.value })}
-                  className={FIELD_INPUT}
-                />
-              </EditField>
-              <SelectField
-                id={`add-media-type-${row.key}`}
-                label="Type"
-                value={row.mediaType}
-                options={TYPE_OPTIONS}
-                onChange={(mediaType) =>
-                  update(index, { mediaType: mediaType as MediaType })
-                }
-              />
-            </div>
-            {rows.length > 1 && (
-              <button
-                type="button"
-                aria-label={`Remove file ${index + 1}`}
-                onClick={() =>
-                  setRows((current) => current.filter((_, i) => i !== index))
-                }
-                className={`${ICON_BUTTON} hover:text-danger`}
-              >
-                <TrashIcon width={16} height={16} />
-              </button>
-            )}
-          </div>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => setRows((current) => [...current, blankMedia()])}
-          disabled={rows.length >= LIMITS.newMedia}
-          className={`${TEXT_BUTTON} self-start disabled:pointer-events-none disabled:opacity-50`}
-        >
-          <PlusIcon width={14} height={14} />
-          Add another file
-        </button>
-      </div>
+      <MediaRows
+        rows={rows}
+        onChange={setRows}
+        errors={visible}
+        max={LIMITS.newMedia}
+        idPrefix="add-media"
+        autoFocusFirst
+      />
 
       {visible.rows && <FormMessage tone="error">{visible.rows}</FormMessage>}
       {error && <FormMessage tone="error">{error}</FormMessage>}

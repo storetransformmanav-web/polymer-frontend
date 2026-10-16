@@ -38,6 +38,10 @@ export const ENDPOINTS = {
     /** `ref` is the customer's UUID, Shopify ID or email. */
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
   },
+  inventory: {
+    /** `GET` the stock list — also names the stores' stock locations. */
+    list: '/inventory',
+  },
   sync: {
     /** `POST` starts a background sync of every product of one store. */
     products: '/sync/products',
@@ -52,6 +56,8 @@ export const ENDPOINTS = {
     update: (id: string) => `/products/${encodeURIComponent(id)}`,
     /** `DELETE` removes the product (the backend archives it by default); `id` is its CRM UUID. */
     remove: (id: string) => `/products/${encodeURIComponent(id)}`,
+    /** `POST` creates a product (in Shopify first, then read back into the CRM). */
+    create: '/products',
     /** `POST` attaches images/videos by public URL (`id` is the product's CRM UUID). */
     media: (id: string) => `/products/${encodeURIComponent(id)}/media`,
     /** `DELETE` removes one media attachment (its CRM UUID) from the product. */
@@ -638,6 +644,100 @@ const productWriteResponseSchema = z.union([
   z.object({ result: productWriteResultSchema }).transform((body) => body.result),
 ])
 
+// --- Creating a product (POST /products) ---------------------------------------
+
+/** One variant of a new product. `price` is the only required field. */
+export interface ProductCreateVariantInput {
+  /** One value per option, in option order — leave out for a product without options. */
+  option_values?: string[]
+  price: string
+  compare_at_price?: string
+  sku?: string
+  barcode?: string
+  taxable?: boolean
+  inventory_policy?: InventoryPolicy
+  /** Track stock in Shopify. */
+  tracked?: boolean
+  requires_shipping?: boolean
+  cost?: string
+  weight?: string
+  weight_unit?: WeightUnit
+  /** Opening stock per Shopify location. */
+  stock?: { location_id: number; available: number }[]
+  /** One of the product's `media` URLs, shown for this variant. */
+  image_url?: string
+}
+
+/** Body of `POST /products`: a store, a title and at least one variant with a price are required. */
+export interface ProductCreateBody {
+  /** Store key, e.g. "polymer-uk". */
+  shop: string
+  title: string
+  description_html?: string
+  vendor?: string
+  product_type?: string
+  /** New products start as DRAFT unless this says otherwise. */
+  status?: ProductEditStatus
+  /** Blank = Shopify makes one from the title. */
+  handle?: string
+  tags?: string[]
+  seo?: { title?: string; description?: string }
+  template_suffix?: string
+  /** gid://shopify/TaxonomyCategory/… */
+  category_gid?: string
+  gift_card?: boolean
+  /** Up to 3 (Size, Colour…). */
+  options?: { name: string; values: string[] }[]
+  /** 1–100. */
+  variants: ProductCreateVariantInput[]
+  /** Public https URLs, the first is featured (up to 50). */
+  media?: ProductMediaInput[]
+  /** CRM collection ids (manual collections only). */
+  collections?: string[]
+  metafields?: { namespace: string; key: string; type: string; value: string }[]
+}
+
+/** What creating a product answers with (the product is already in the CRM). */
+const productCreateResultSchema = z.object({
+  product_id: z.string(),
+  shopify_id: z.number().nullish(),
+  shopify_gid: z.string().nullish(),
+  handle: z.string().default(''),
+  title: z.string().default(''),
+  status: z.string().default(''),
+  shop: z.string().nullish(),
+  variants: z.number().default(0),
+  media: z.number().default(0),
+  message: z.string().default(''),
+})
+
+/**
+ * What `POST /products` really answers is `{ code: 201, status: "Created", message,
+ * product: { product_id, shopify_id, … } }` — the fields sit under `product`. The
+ * other wrappers this API uses (`result`) and the bare fields are accepted too, so
+ * a product that was created is never reported as a failure over a key name.
+ */
+const productCreateResponseSchema = z.union([
+  productCreateResultSchema,
+  z.object({ product: productCreateResultSchema }).transform((body) => body.product),
+  z.object({ result: productCreateResultSchema }).transform((body) => body.result),
+])
+
+export type ProductCreateResult = z.infer<typeof productCreateResultSchema>
+
+/** A Shopify location a store keeps stock at (named by the stock list). */
+const stockLocationSchema = z.object({
+  id: z.number(),
+  name: z.string().nullish(),
+  variants: z.number().default(0),
+})
+
+const stockLocationsResponseSchema = z.object({
+  locations: z.array(stockLocationSchema).default([]),
+})
+
+export type StockLocation = z.infer<typeof stockLocationSchema>
+
 /** One run of a sync (what `GET /sync/status` lists, newest first). */
 const syncRunSchema = z.object({
   id: z.string(),
@@ -819,6 +919,19 @@ export const api = {
     },
   },
 
+  inventory: {
+    /**
+     * The Shopify locations a store keeps stock at — read from the stock list
+     * (one row is enough; only its `locations` are used).
+     */
+    async locations(shop?: string | null): Promise<StockLocation[]> {
+      const data = await apiClient.get(ENDPOINTS.inventory.list, {
+        params: { page_size: 1, ...(shop ? { shop } : {}) },
+      })
+      return stockLocationsResponseSchema.parse(data).locations
+    },
+  },
+
   sync: {
     /**
      * Starts a sync of every product of a store (`shop` = its key; empty means
@@ -896,6 +1009,18 @@ export const api = {
         params: shop ? { shop } : undefined,
       })
       return productWriteResponseSchema.parse(data)
+    },
+
+    /**
+     * Creates a product with its options, variants, prices, opening stock, media,
+     * collections and metafields. Shopify is the system of record for ids, so it
+     * is created there first (1–3 seconds) and then read back into the CRM; the
+     * answer carries the new product's id. Never retried automatically — a repeat
+     * could create the product twice.
+     */
+    async create(body: ProductCreateBody): Promise<ProductCreateResult> {
+      const data = await apiClient.post(ENDPOINTS.products.create, body)
+      return productCreateResponseSchema.parse(data)
     },
 
     /**

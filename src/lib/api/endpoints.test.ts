@@ -289,3 +289,125 @@ describe('api.sync', () => {
     expect(vi.mocked(apiClient.get).mock.calls[0][1]).toEqual({ params: { limit: 10 } })
   })
 })
+
+describe('api.products.create', () => {
+  const RESULT = {
+    product_id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+    shopify_id: 999,
+    shopify_gid: 'gid://shopify/Product/999',
+    handle: 'sushi-tray',
+    title: 'Sushi Tray',
+    status: 'DRAFT',
+    shop: 'polymer-uk',
+    variants: 1,
+    media: 0,
+    message: 'Product created in Shopify and the CRM',
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.post).mockReset()
+  })
+
+  it('POSTs the body to /products', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(RESULT)
+    const body = {
+      shop: 'polymer-uk',
+      title: 'Sushi Tray',
+      variants: [{ price: '9.99' }],
+    }
+
+    const result = await api.products.create(body)
+
+    expect(apiClient.post).toHaveBeenCalledWith('/products', body)
+    expect(result.product_id).toBe('3fa85f64-5717-4562-b3fc-2c963f66afa6')
+    expect(result.handle).toBe('sushi-tray')
+  })
+
+  it('reads the answer the backend really sends: { code: 201, status, message, product: {…} }', async () => {
+    // Taken from the browser's Network tab.
+    vi.mocked(apiClient.post).mockResolvedValue({
+      code: 201,
+      status: 'Created',
+      message: 'Product created in Shopify and the CRM',
+      product: {
+        product_id: 'be5b87ed-70e8-4679-9fc3-0ce19e7bb111',
+        shopify_id: 15564782305665,
+        shopify_gid: 'gid://shopify/Product/15564782305665',
+        handle: 'kairav-test',
+        title: 'Kairav - Test',
+        status: 'DRAFT',
+        shop: 'polymer-uk',
+        variants: 1,
+        media: 0,
+        message: 'Product created in Shopify and saved',
+      },
+    })
+
+    const result = await api.products.create({
+      shop: 'polymer-uk',
+      title: 'Kairav - Test',
+      variants: [{ price: '1' }],
+    })
+
+    expect(result.product_id).toBe('be5b87ed-70e8-4679-9fc3-0ce19e7bb111')
+    expect(result.handle).toBe('kairav-test')
+    expect(result.status).toBe('DRAFT')
+    expect(result.message).toBe('Product created in Shopify and saved')
+  })
+
+  it('reads the answer from inside a { code, status, message, result } envelope', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      code: 201,
+      status: 'Created',
+      message: 'Product created in Shopify and the CRM',
+      result: RESULT,
+    })
+
+    const result = await api.products.create({
+      shop: 'polymer-uk',
+      title: 'Sushi Tray',
+      variants: [{ price: '9.99' }],
+    })
+
+    expect(result.title).toBe('Sushi Tray')
+    expect(result.variants).toBe(1)
+  })
+
+  it('rejects an answer without a product id', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ code: 201, status: 'Created' })
+
+    await expect(
+      api.products.create({ shop: 'x', title: 'y', variants: [{ price: '1' }] }),
+    ).rejects.toThrow()
+  })
+})
+
+describe('api.inventory.locations', () => {
+  it('reads the locations from the stock list, asking for one row only', async () => {
+    vi.mocked(apiClient.get).mockReset()
+    vi.mocked(apiClient.get).mockResolvedValue({
+      code: 200,
+      items: [],
+      locations: [
+        { id: 77, name: 'Warehouse', variants: 3 },
+        { id: 78, name: null, variants: 0 },
+      ],
+      total: 0,
+    })
+
+    const locations = await api.inventory.locations('polymer-uk')
+
+    expect(apiClient.get).toHaveBeenCalledWith('/inventory', {
+      params: { page_size: 1, shop: 'polymer-uk' },
+    })
+    expect(locations).toEqual([
+      { id: 77, name: 'Warehouse', variants: 3 },
+      { id: 78, name: null, variants: 0 },
+    ])
+  })
+
+  it('is an empty list when the answer names none', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ items: [] })
+    expect(await api.inventory.locations()).toEqual([])
+  })
+})

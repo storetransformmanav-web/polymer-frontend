@@ -1,4 +1,4 @@
-import { PencilIcon } from '../../../components/ui/icons.tsx'
+import { PencilIcon, PlusIcon } from '../../../components/ui/icons.tsx'
 import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 
 interface ProductsBulkBarProps {
@@ -6,6 +6,10 @@ interface ProductsBulkBarProps {
   pageCount: number
   /** Ticked products on this page. */
   selectedCount: number
+  /** Opens the "Add product" form. */
+  onAdd: () => void
+  /** The pointer reached "Add product": warm up what the form needs (the editor). */
+  onAddIntent?: () => void
   onEditPage: () => void
   onEditSelected: () => void
   onClearSelection: () => void
@@ -19,12 +23,14 @@ const ITEM =
 const plural = (count: number) => `${count} product${count === 1 ? '' : 's'}`
 
 /**
- * The strip above the list: how many rows are ticked, and the "Edit in bulk"
- * menu — edit every product on this page, or just the ticked ones.
+ * The strip above the list: how many rows are ticked, **Add product**, and the
+ * "Edit in bulk" menu — edit every product on this page, or just the ticked ones.
  */
 export function ProductsBulkBar({
   pageCount,
   selectedCount,
+  onAdd,
+  onAddIntent,
   onEditPage,
   onEditSelected,
   onClearSelection,
@@ -49,12 +55,23 @@ export function ProductsBulkBar({
         )}
       </p>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onAdd}
+          onPointerEnter={onAddIntent}
+          onFocus={onAddIntent}
+          className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border-none px-3 text-[0.85rem] font-semibold shadow-sm transition-colors"
+        >
+          <PlusIcon width={16} height={16} />
+          Add product
+        </button>
         <PopoverButton
           label="Edit in bulk"
           icon={PencilIcon}
           align="right"
           tone={selectedCount > 0 ? 'primary' : 'neutral'}
+          disabled={pageCount === 0}
           onOpen={onPrepare}
         >
           {(close) => (

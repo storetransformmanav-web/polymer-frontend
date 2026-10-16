@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -446,5 +446,94 @@ describe('adding and deleting media', () => {
       ).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Add media' })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('files the store has not finished downloading', () => {
+  const NEW_URL = 'https://cdn.example.com/new.jpg'
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    list.mockResolvedValue(LIST)
+    details.mockResolvedValue(product([]))
+    addMedia.mockResolvedValue(WRITE_OK)
+    syncHistory.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  async function addOne() {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+    await user.click(screen.getByRole('tab', { name: /^Media/ }))
+    await user.click(await screen.findByRole('button', { name: 'Add media' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add media' })
+    await user.type(within(dialog).getByLabelText('Web address'), NEW_URL)
+    await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+    await screen.findByLabelText('Processing')
+    return user
+  }
+
+  it('counts them in the header instead of saying "No images"', async () => {
+    await addOne()
+
+    expect(screen.getByText('1 processing')).toBeInTheDocument()
+    expect(screen.queryByText('No images')).not.toBeInTheDocument()
+  })
+
+  it('stay on screen when the tab is left and come back, and are not dropped when the store is slow', async () => {
+    const user = await addOne()
+
+    await user.click(screen.getByRole('tab', { name: /^Overview/ }))
+    await user.click(screen.getByRole('tab', { name: /^Media/ }))
+    expect(await screen.findByLabelText('Processing')).toBeInTheDocument()
+
+    await act(() => vi.advanceTimersByTimeAsync(65_000))
+    expect(screen.getByLabelText('Processing')).toBeInTheDocument()
+    expect(await screen.findByText(/taking longer than usual/)).toBeInTheDocument()
+    expect(screen.getByText('Still waiting for the store')).toBeInTheDocument()
+  })
+
+  it('look for the image less often once the store is slow', async () => {
+    await addOne()
+    await act(() => vi.advanceTimersByTimeAsync(61_000))
+    details.mockClear()
+
+    await act(() => vi.advanceTimersByTimeAsync(32_000))
+
+    // Every 16 s rather than every 4 s.
+    expect(details.mock.calls.length).toBeLessThanOrEqual(3)
+    expect(details.mock.calls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('are replaced by the image once it arrives, and the notice goes', async () => {
+    await addOne()
+    await act(() => vi.advanceTimersByTimeAsync(65_000))
+    expect(await screen.findByText(/taking longer than usual/)).toBeInTheDocument()
+
+    details.mockResolvedValue(
+      product([{ id: 'img-new', url: 'https://cdn.shopify.com/new.jpg', alt: 'New' }]),
+    )
+    await act(() => vi.advanceTimersByTimeAsync(17_000))
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/taking longer than usual/)).not.toBeInTheDocument()
+    expect(screen.getByText('1 image')).toBeInTheDocument()
+  })
+
+  it('can be dismissed', async () => {
+    const user = await addOne()
+    await act(() => vi.advanceTimersByTimeAsync(65_000))
+
+    await user.click(await screen.findByRole('button', { name: 'Dismiss' }))
+
+    expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument()
+    expect(screen.getByText('No images')).toBeInTheDocument()
   })
 })
