@@ -24,9 +24,12 @@ export function SectionEditControls({
   edit,
   what,
   onStart,
+  onIntent,
 }: {
   edit: SectionEdit
   what: string
+  /** The pointer reached the pencil (or it got focus): warm up whatever editing will need. */
+  onIntent?: () => void
   /** Runs just before editing begins — for a tab that remembers how editing was started. */
   onStart?: () => void
 }) {
@@ -36,6 +39,7 @@ export function SectionEditControls({
         label="Edit"
         accessibleLabel={`Edit ${what}`}
         icon={PencilIcon}
+        onIntent={onIntent}
         onClick={() => {
           onStart?.()
           edit.start()
@@ -120,6 +124,8 @@ function renderBody(edit: SectionEdit, editor: SharedProps['editor']) {
 }
 
 interface EditableCardProps extends SharedProps {
+  /** Called when the pointer reaches the pencil, so a heavy editor can be fetched before the click. */
+  onEditIntent?: () => void
   title: string
   count?: number
   icon: ComponentType<IconProps>
@@ -142,6 +148,7 @@ export function EditableCard({
   count,
   icon,
   defaultOpen,
+  onEditIntent,
 }: EditableCardProps) {
   const edit = useSectionEdit(product, { errorPrefixes, onSaved })
 
@@ -152,7 +159,7 @@ export function EditableCard({
       icon={icon}
       defaultOpen={defaultOpen}
       forceOpen={edit.editing}
-      actions={<SectionEditControls edit={edit} what={what} />}
+      actions={<SectionEditControls edit={edit} what={what} onIntent={onEditIntent} />}
     >
       {/* Only listens for Escape; every control inside stays an ordinary focusable element. */}
       <div onKeyDown={discardOnEscape(edit)}>

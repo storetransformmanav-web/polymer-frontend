@@ -77,13 +77,17 @@ describe('vercel.json security headers', () => {
   it('only allows the API calls and frames the app really needs', () => {
     // Own site (the /api proxy), the backend (for direct calls when
     // VITE_API_BASE_URL is the full backend URL), and Google sign-in — nothing else,
-    // so injected code can't send data to an attacker's server.
+    // so injected code can't send data to an attacker's server. Frames: Google sign-in,
+    // and YouTube's privacy-friendly player for videos in the description editor.
     expect(csp['connect-src']).toEqual([
       "'self'",
       'https://polymeruk-api.vercel.app',
       'https://accounts.google.com/gsi/',
     ])
-    expect(csp['frame-src']).toEqual(['https://accounts.google.com/gsi/'])
+    expect(csp['frame-src']).toEqual([
+      'https://accounts.google.com/gsi/',
+      'https://www.youtube-nocookie.com',
+    ])
   })
 
   it('allows inline styles only because Google’s sign-in button needs them (never scripts)', () => {

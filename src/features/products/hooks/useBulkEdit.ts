@@ -30,7 +30,7 @@ const LOAD_CONCURRENCY = 6
 const SAVE_CONCURRENCY = 3
 
 /** Which validation problems matter here: only the fields the bulk editor can change. */
-const EDITABLE_ERRORS = ['title', 'vendor', 'productType', 'variants'] as const
+const EDITABLE_ERRORS = ['title', 'productType', 'variants'] as const
 
 /**
  * Warms the cache with many products' details at once (a few at a time), so the

@@ -14,6 +14,8 @@ interface IconActionProps {
   disabled?: boolean
   /** Shows a spinner instead of the icon (an action is in progress). */
   busy?: boolean
+  /** The pointer reached, or keyboard focus entered, the button — a chance to warm something up. */
+  onIntent?: () => void
 }
 
 const TONES: Record<Tone, string> = {
@@ -38,6 +40,7 @@ export function IconAction({
   tone = 'neutral',
   disabled = false,
   busy = false,
+  onIntent,
 }: IconActionProps) {
   return (
     <span className="group relative inline-flex">
@@ -45,6 +48,8 @@ export function IconAction({
         type="button"
         aria-label={accessibleLabel ?? label}
         onClick={onClick}
+        onPointerEnter={onIntent}
+        onFocus={onIntent}
         disabled={disabled || busy}
         className={`inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`}
       >

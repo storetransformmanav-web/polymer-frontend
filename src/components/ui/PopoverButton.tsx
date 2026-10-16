@@ -8,6 +8,18 @@ interface PopoverButtonProps {
   /** Which edge of the button the panel lines up with. */
   align?: 'left' | 'right'
   tone?: 'neutral' | 'primary'
+  /**
+   * `toolbar`: a small borderless trigger for a toolbar (the label stays for screen
+   * readers unless `showLabel`), and pressing it does not take focus from, say, a
+   * text editor, so the editor's selection survives.
+   */
+  variant?: 'button' | 'toolbar'
+  /** Toolbar variant only: also show the label as text (e.g. the current block style). */
+  showLabel?: boolean
+  /** Show the little arrow next to the label/icon (default). Off for toolbar buttons that open a form. */
+  chevron?: boolean
+  /** Is the thing this opens in use (e.g. the text has a colour)? Styled as pressed. */
+  active?: boolean
   disabled?: boolean
   /** Called each time the panel opens (e.g. to warm a cache before a choice is made). */
   onOpen?: () => void
@@ -32,6 +44,10 @@ export function PopoverButton({
   icon: Icon,
   align = 'left',
   tone = 'neutral',
+  variant = 'button',
+  showLabel = false,
+  chevron = true,
+  active = false,
   disabled = false,
   onOpen,
   children,
@@ -73,24 +89,39 @@ export function PopoverButton({
         aria-haspopup="true"
         aria-expanded={open}
         onClick={toggle}
-        className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`}
+        onMouseDown={
+          variant === 'toolbar' ? (event) => event.preventDefault() : undefined
+        }
+        title={variant === 'toolbar' ? label : undefined}
+        aria-label={variant === 'toolbar' && !showLabel ? label : undefined}
+        className={
+          variant === 'toolbar'
+            ? `inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border-none px-1.5 text-[0.85rem] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+                active || open
+                  ? 'bg-accent-tint text-accent'
+                  : 'text-text-muted hover:bg-surface hover:text-text bg-transparent'
+              }`
+            : `inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`
+        }
       >
         {Icon && <Icon width={16} height={16} />}
-        {label}
-        <ChevronDownIcon
-          width={14}
-          height={14}
-          className={`transition-transform ${open ? 'rotate-180' : ''}`}
-        />
+        {variant === 'toolbar' && !showLabel ? null : label}
+        {chevron && (
+          <ChevronDownIcon
+            width={variant === 'toolbar' ? 12 : 14}
+            height={variant === 'toolbar' ? 12 : 14}
+            className={`transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        )}
       </button>
 
       {open && (
         <div
           role="group"
           aria-label={label}
-          className={`border-border bg-bg absolute top-full z-30 mt-1.5 min-w-64 rounded-xl border p-1.5 shadow-lg ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
+          className={`border-border bg-bg absolute top-full z-30 mt-1.5 rounded-xl border p-1.5 shadow-lg ${
+            variant === 'toolbar' ? 'min-w-44' : 'min-w-64'
+          } ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {children(() => setOpen(false))}
         </div>

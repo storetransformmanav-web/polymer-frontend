@@ -1,8 +1,9 @@
+import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
 import { SelectField, type SelectOption } from '../../../../components/ui/SelectField.tsx'
 import { PRODUCT_EDIT_STATUSES } from '../../../../lib/api/endpoints.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { statusLabel } from '../../utils/format.ts'
-import { EditField, FIELD_INPUT, FIELD_TEXTAREA, type SectionProps } from './fields.tsx'
+import { EditField, FIELD_INPUT, type SectionProps } from './fields.tsx'
 
 /**
  * The product's basic fields, one small component each, so the full "Edit
@@ -127,15 +128,13 @@ export function DescriptionField({ draft, onChange }: SectionProps) {
     <EditField
       id="edit-description"
       label="Description"
-      hint="HTML, as the store shows it. The CRM displays it as plain text."
+      hint="Formatted text, saved as HTML for the store. The CRM shows it as plain text."
     >
-      <textarea
+      <RichTextEditor
         id="edit-description"
-        rows={6}
-        spellCheck={false}
+        label="Description"
         value={draft.descriptionHtml}
-        onChange={(event) => onChange({ descriptionHtml: event.target.value })}
-        className={`${FIELD_TEXTAREA} font-mono text-[0.82rem]`}
+        onChange={(descriptionHtml) => onChange({ descriptionHtml })}
       />
     </EditField>
   )

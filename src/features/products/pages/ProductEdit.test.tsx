@@ -418,7 +418,9 @@ describe('editing a section in place', () => {
     )
 
     await user.click(pencil('description'))
-    const description = screen.getByLabelText('Description')
+    // The rich-text editor loads on demand; its raw HTML view is a plain text box.
+    await user.click(await screen.findByRole('button', { name: 'Edit HTML' }))
+    const description = screen.getByLabelText('Description (HTML)')
     await user.clear(description)
     await user.type(description, 'Brand new copy')
     await user.click(saveButton('description'))
@@ -450,7 +452,8 @@ describe('editing a section in place', () => {
     const user = await openDetails()
     await user.click(pencil('specifications'))
     await user.click(pencil('description'))
-    await user.type(screen.getByLabelText('Description'), ' — extra')
+    await user.click(await screen.findByRole('button', { name: 'Edit HTML' }))
+    await user.type(screen.getByLabelText('Description (HTML)'), ' — extra')
 
     await user.type(screen.getByLabelText('Vendor'), ' Ltd')
     await user.click(saveButton('specifications'))

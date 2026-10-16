@@ -22,8 +22,7 @@ import {
 import { statusLabel } from '../utils/format.ts'
 import { ProductImage } from './ProductImage.tsx'
 
-type ColumnId =
-  'status' | 'vendor' | 'productType' | 'price' | 'compareAtPrice' | 'sku' | 'barcode'
+type ColumnId = 'status' | 'productType' | 'price' | 'compareAtPrice' | 'sku' | 'barcode'
 
 interface Column {
   id: ColumnId
@@ -35,14 +34,13 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { id: 'status', label: 'Status', level: 'product', width: 'w-40' },
-  { id: 'vendor', label: 'Vendor', level: 'product', width: 'w-56' },
   { id: 'productType', label: 'Product type', level: 'product', width: 'w-52' },
   { id: 'price', label: 'Price', level: 'variant', width: 'w-36' },
   { id: 'compareAtPrice', label: 'Compare-at price', level: 'variant', width: 'w-44' },
   { id: 'sku', label: 'SKU', level: 'variant', width: 'w-48' },
   { id: 'barcode', label: 'Barcode', level: 'variant', width: 'w-48' },
 ]
-const DEFAULT_COLUMNS: ColumnId[] = ['status', 'vendor', 'productType', 'price']
+const DEFAULT_COLUMNS: ColumnId[] = ['status', 'productType', 'price']
 
 const NUMERIC: ColumnId[] = ['price', 'compareAtPrice']
 
@@ -247,7 +245,6 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
 
   const productValue = (id: ColumnId): [string, string] | null => {
     if (id === 'status') return [draft.status, original.status]
-    if (id === 'vendor') return [draft.vendor, original.vendor]
     if (id === 'productType') return [draft.productType, original.productType]
     return null
   }
@@ -344,11 +341,7 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
                     original={before}
                     maxLength={255}
                     error={row.errors[column.id]}
-                    onChange={(next) =>
-                      setProduct(
-                        column.id === 'vendor' ? { vendor: next } : { productType: next },
-                      )
-                    }
+                    onChange={(productType) => setProduct({ productType })}
                   />
                 )}
               </td>
@@ -404,7 +397,7 @@ interface BulkEditViewProps {
 
 /**
  * The spreadsheet-style bulk editor: every chosen product is a row, with
- * editable cells (title, status, vendor, type, and the price/SKU of each
+ * editable cells (title, status, product type, and the price/SKU of each
  * variant underneath). Nothing is sent until Save; each changed product is then
  * saved on its own, so one failure never loses the others.
  */

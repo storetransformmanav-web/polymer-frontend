@@ -35,6 +35,7 @@ import {
   Field,
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
+import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChunk.ts'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
@@ -320,6 +321,7 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             icon={CheckCircleIcon}
             defaultOpen={false}
             what="description"
+            onEditIntent={preloadRichTextEditor}
             errorPrefixes={NO_ERRORS}
             onSaved={onSaved}
             view={

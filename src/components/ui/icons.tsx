@@ -487,3 +487,149 @@ export function UserCogIcon(props: IconProps) {
     </svg>
   )
 }
+
+// --- Rich-text editor toolbar -------------------------------------------------
+
+export function BoldIcon(props: IconProps) {
+  return (
+    <svg {...base} strokeWidth={2} {...props}>
+      <path d="M6 4h4.5a3 3 0 0 1 0 6H6zM6 10h5.5a3 3 0 0 1 0 6H6z" />
+    </svg>
+  )
+}
+
+export function ItalicIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M8 4h6M6 16h6M11.5 4 8.5 16" />
+    </svg>
+  )
+}
+
+export function UnderlineIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 3.5v6a4 4 0 0 0 8 0v-6M4.5 17h11" />
+    </svg>
+  )
+}
+
+export function TextColorIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m5.5 13.5 4.5-10 4.5 10M7.2 10h5.6M4.5 17h11" />
+    </svg>
+  )
+}
+
+export function AlignLeftIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 5h12M4 9h8M4 13h12M4 17h8" />
+    </svg>
+  )
+}
+
+export function AlignCenterIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 5h12M6 9h8M4 13h12M6 17h8" />
+    </svg>
+  )
+}
+
+export function AlignRightIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 5h12M8 9h8M4 13h12M8 17h8" />
+    </svg>
+  )
+}
+
+export function AlignJustifyIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 5h12M4 9h12M4 13h12M4 17h12" />
+    </svg>
+  )
+}
+
+export function LinkIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M8.5 11.5a3 3 0 0 0 4.2 0l2.8-2.8a3 3 0 0 0-4.2-4.2l-.9.9" />
+      <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-2.8 2.8a3 3 0 0 0 4.2 4.2l.9-.9" />
+    </svg>
+  )
+}
+
+export function VideoIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="m8.5 7 4 3-4 3z" />
+    </svg>
+  )
+}
+
+export function TableIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4" width="14" height="12" rx="1.5" />
+      <path d="M3 8.5h14M3 12.5h14M8 4v12M12.5 4v12" />
+    </svg>
+  )
+}
+
+export function BulletListIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M8 5.5h8M8 10h8M8 14.5h8" />
+      <circle cx="4.5" cy="5.5" r=".6" />
+      <circle cx="4.5" cy="10" r=".6" />
+      <circle cx="4.5" cy="14.5" r=".6" />
+    </svg>
+  )
+}
+
+export function OrderedListIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M8.5 5.5h7.5M8.5 10h7.5M8.5 14.5h7.5" />
+      <path d="M3.5 4.5 5 4v3M3.5 9.2c.6-.9 2-.5 1.9.4-.1.6-1.2 1-1.9 1.6h2M3.4 13.6h1.6l-1 1.2c.8-.2 1.2.3 1.1.8-.2.7-1.2.8-1.8.3" />
+    </svg>
+  )
+}
+
+export function IndentIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 4.5h12M9 8.5h7M9 12.5h7M4 16.5h12M4 8l2.5 2.5L4 13" />
+    </svg>
+  )
+}
+
+export function OutdentIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 4.5h12M9 8.5h7M9 12.5h7M4 16.5h12M6.5 8 4 10.5 6.5 13" />
+    </svg>
+  )
+}
+
+export function ClearFormattingIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="6.5" />
+      <path d="m5.4 14.6 9.2-9.2" />
+    </svg>
+  )
+}
+
+export function CodeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m7 6-4 4 4 4M13 6l4 4-4 4M11.2 4.5 8.8 15.5" />
+    </svg>
+  )
+}
