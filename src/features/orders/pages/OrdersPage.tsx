@@ -7,9 +7,9 @@ import {
   type StatCardProps,
 } from '../../../components/ui/StatCard.tsx'
 import { Table, TableState } from '../../../components/ui/Table.tsx'
+import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import {
   AlertTriangleIcon,
-  CalendarIcon,
   ClockIcon,
   OrdersIcon,
   XIcon,
@@ -112,27 +112,15 @@ export function OrdersPage() {
           </select>
         </label>
 
-        <label className={FILTER_LABEL}>
+        <div className={`${FILTER_LABEL} w-56`}>
           <span>Date range</span>
-          <div className="border-border bg-surface text-text-muted flex items-center gap-1.5 rounded-md border px-2.5 py-1.5">
-            <CalendarIcon />
-            <input
-              type="date"
-              value={filters.from}
-              onChange={(event) => updateFilter('from', event.target.value)}
-              aria-label="From date"
-              className="text-text border-none bg-transparent py-0.5 text-[0.85rem] outline-none"
-            />
-            <span>–</span>
-            <input
-              type="date"
-              value={filters.to}
-              onChange={(event) => updateFilter('to', event.target.value)}
-              aria-label="To date"
-              className="text-text border-none bg-transparent py-0.5 text-[0.85rem] outline-none"
-            />
-          </div>
-        </label>
+          <DateRangePicker
+            label="Date range"
+            from={filters.from}
+            to={filters.to}
+            onChange={(range) => setFilters((current) => ({ ...current, ...range }))}
+          />
+        </div>
 
         <button
           type="button"

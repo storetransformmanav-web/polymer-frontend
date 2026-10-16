@@ -11,24 +11,13 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import {
-  ACTIVITY_METHODS,
-  type ActivityActionCount,
-  type ActivityMethod,
-} from '../../../lib/api/endpoints.ts'
-import type { ActivityFilters } from '../hooks/activityQueries.ts'
+import type { ActivityActionCount } from '../../../lib/api/endpoints.ts'
+import { toDateFilters, type ActivityFilters } from '../hooks/activityQueries.ts'
 import type { UserOption } from '../hooks/useActivityFilterOptions.ts'
-import { useActivityMethodCounts } from '../hooks/useActivityMethodCounts.ts'
 import { actionLabel } from '../utils/format.ts'
-
-const METHOD_TABS: { value: ActivityMethod | ''; label: string }[] = [
-  { value: '', label: 'All Methods' },
-  ...ACTIVITY_METHODS.map((method) => ({ value: method, label: method })),
-]
-
-const METHOD_VALUES = METHOD_TABS.map((tab) => tab.value)
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
 const FIELD_INPUT =
@@ -48,10 +37,10 @@ interface ActivityToolbarProps {
 }
 
 /**
- * Search, user dropdown, method tabs and the collapsible filter grid (action,
+ * Search, user dropdown, the total count and the collapsible filter grid (action,
  * entity, date range). Typing in the text boxes is instant locally and sent to
- * the API once the user pauses (see useDebouncedField); dropdowns, tabs and
- * dates apply immediately.
+ * the API once the user pauses (see useDebouncedField); dropdowns and dates
+ * apply immediately.
  */
 export function ActivityToolbar({
   filters,
@@ -67,7 +56,6 @@ export function ActivityToolbar({
 }: ActivityToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const counts = useActivityMethodCounts(filters, METHOD_VALUES)
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -157,42 +145,15 @@ export function ActivityToolbar({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="group"
-          aria-label="Filter by method"
-          className="border-border bg-surface flex max-w-full min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl border p-1 [&::-webkit-scrollbar]:hidden"
-        >
-          {METHOD_TABS.map((tab) => {
-            const active = filters.method === tab.value
-            // The open tab can fall back to the list's own total while its count loads.
-            const count = counts[tab.value] ?? (active ? total : null)
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onChange({ method: tab.value })}
-                className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap transition-colors ${
-                  active
-                    ? 'bg-bg text-text shadow-sm'
-                    : 'text-text-muted hover:text-text bg-transparent'
-                }`}
-              >
-                {tab.label}
-                {count !== null && (
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
-                      active
-                        ? 'bg-accent-tint text-accent'
-                        : 'bg-border/60 text-text-muted'
-                    }`}
-                  >
-                    {count.toLocaleString('en-GB')}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        <div className="border-border bg-surface flex max-w-full min-w-0 gap-1 rounded-xl border p-1">
+          <span className="bg-bg text-text flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap shadow-sm">
+            All Methods
+            {total !== null && (
+              <span className="bg-accent-tint text-accent rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold">
+                {total.toLocaleString('en-GB')}
+              </span>
+            )}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -280,33 +241,16 @@ export function ActivityToolbar({
               />
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
-              <label htmlFor="filter-from" className={FIELD_LABEL}>
+              <span id="filter-dates-label" className={FIELD_LABEL}>
                 <CalendarIcon width={16} height={16} className="text-text-muted" />
-                From
-              </label>
-              <input
-                id="filter-from"
-                type="datetime-local"
-                value={filters.from}
-                max={filters.to || undefined}
-                onChange={(event) => onChange({ from: event.target.value })}
-                aria-invalid={rangeInvalid ? true : undefined}
-                className={FIELD_INPUT}
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label htmlFor="filter-to" className={FIELD_LABEL}>
-                <CalendarIcon width={16} height={16} className="text-text-muted" />
-                To
-              </label>
-              <input
-                id="filter-to"
-                type="datetime-local"
-                value={filters.to}
-                min={filters.from || undefined}
-                onChange={(event) => onChange({ to: event.target.value })}
-                aria-invalid={rangeInvalid ? true : undefined}
-                className={FIELD_INPUT}
+                Date range
+              </span>
+              <DateRangePicker
+                id="filter-dates"
+                label="Date range"
+                from={filters.from.slice(0, 10)}
+                to={filters.to.slice(0, 10)}
+                onChange={(range) => onChange(toDateFilters(range))}
               />
             </div>
           </div>

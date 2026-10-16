@@ -103,8 +103,6 @@ function respond(params: ActivityListParams): ActivityListResponse {
 }
 
 const list = vi.mocked(api.activity.list)
-// One-row requests are the method tabs' counts, not pages of the list.
-const isCountQuery = (params: ActivityListParams) => params.page_size === 1
 const actions = vi.mocked(api.activity.actions)
 const usersList = vi.mocked(api.users.list)
 
@@ -142,6 +140,7 @@ describe('ActivityPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -211,8 +210,7 @@ describe('ActivityPage', () => {
       expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
 
       // Back to page 1: served from the cache with no new request.
-      const page1Calls = () =>
-        list.mock.calls.filter(([p]) => !isCountQuery(p) && p.page === 1).length
+      const page1Calls = () => list.mock.calls.filter(([p]) => p.page === 1).length
       const before = page1Calls()
       await user.click(screen.getByRole('button', { name: 'Page 1' }))
       expect(screen.getByText('Manav viewed product 1')).toBeInTheDocument()
@@ -225,8 +223,7 @@ describe('ActivityPage', () => {
       await screen.findByText('Manav viewed product 1')
 
       await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 2, page_size: 25 }))
-      const page2Calls = () =>
-        list.mock.calls.filter(([p]) => !isCountQuery(p) && p.page === 2).length
+      const page2Calls = () => list.mock.calls.filter(([p]) => p.page === 2).length
       expect(page2Calls()).toBe(1)
 
       await user.click(screen.getByRole('button', { name: 'Page 2' }))
@@ -245,7 +242,7 @@ describe('ActivityPage', () => {
       await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 2, page_size: 25 }))
       list.mockClear()
 
-      // The POST query's own answer says there is no next page.
+      // The filtered query's own answer says there is no next page.
       list.mockImplementation((params) =>
         Promise.resolve({
           ...respond(params),
@@ -254,14 +251,14 @@ describe('ActivityPage', () => {
           total_pages: 1,
         }),
       )
-      await user.click(screen.getByRole('button', { name: /^POST/ }))
+      await user.selectOptions(screen.getByLabelText('User:'), 'Manav')
       await screen.findByText(/Showing/)
 
       await waitFor(() =>
-        expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25, method: 'POST' }),
+        expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25, user_id: 'user-1' }),
       )
       expect(list).not.toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'POST', page: 2 }),
+        expect.objectContaining({ user_id: 'user-1', page: 2 }),
       )
     })
 
@@ -290,10 +287,9 @@ describe('ActivityPage', () => {
     })
 
     it('shows the backend message when loading fails, without retrying a 403, and recovers', async () => {
-      // The list request fails once; the tabs' count requests are unaffected.
       let failList = true
       list.mockImplementation((params) =>
-        failList && !isCountQuery(params)
+        failList
           ? Promise.reject(
               new ApiError('You do not have access to Activity.', { status: 403 }),
             )
@@ -310,51 +306,21 @@ describe('ActivityPage', () => {
       expect(await screen.findByText('Manav viewed product 1')).toBeInTheDocument()
     })
 
-    it('shows a count on every method tab, honouring the other filters', async () => {
-      const byMethod = { GET: 50, POST: 6, PUT: 1, PATCH: 2, DELETE: 1 }
-      list.mockImplementation((params) => {
-        const total = params.method ? byMethod[params.method] : 60
-        return Promise.resolve({ ...respond(params), total })
-      })
-      const user = userEvent.setup()
+    it('shows the total beside "All Methods", with no per-method tabs or extra count requests', async () => {
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
 
-      const tabs = screen.getByRole('group', { name: 'Filter by method' })
-      expect(
-        await within(tabs).findByRole('button', { name: /^All Methodss*60$/ }),
-      ).toBeInTheDocument()
-      for (const [method, count] of Object.entries(byMethod)) {
+      expect(await screen.findByText(/^All Methods/)).toHaveTextContent(
+        /^All Methodss*60$/,
+      )
+      for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
         expect(
-          within(tabs).getByRole('button', {
-            name: new RegExp(`^${method}\\s*${count}$`),
-          }),
-        ).toBeInTheDocument()
+          screen.queryByRole('button', { name: new RegExp(`^${method}`) }),
+        ).toBeNull()
       }
-
-      // The search narrows every tab's count (the count queries carry it).
-      await user.type(screen.getByRole('searchbox', { name: 'Search activity' }), 'login')
-      await waitFor(() =>
-        expect(list).toHaveBeenCalledWith(
-          expect.objectContaining({ search: 'login', method: 'DELETE', page_size: 1 }),
-        ),
-      )
-    })
-
-    it('does not ask for any count while the date range is backwards', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<ActivityPage />)
-      await screen.findByText('Manav viewed product 1')
-      await user.click(screen.getByRole('button', { name: 'Filters' }))
-      list.mockClear()
-
-      await user.type(screen.getByLabelText('From'), '2026-10-14T18:00')
-      await user.type(screen.getByLabelText('To'), '2026-10-14T09:00')
-      await screen.findByRole('alert')
-
-      expect(list).not.toHaveBeenCalledWith(
-        expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
-      )
+      expect(screen.queryByRole('group', { name: 'Filter by method' })).toBeNull()
+      // Only pages of the list are ever requested (no one-row count queries).
+      expect(list.mock.calls.every(([params]) => params.page_size === 25)).toBe(true)
     })
   })
 
@@ -373,7 +339,7 @@ describe('ActivityPage', () => {
       expect(document.getElementById('activity-filter-grid')).not.toHaveAttribute('inert')
     })
 
-    it('filters by user (from the Users list) and by method', async () => {
+    it('filters by user (from the Users list)', async () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
@@ -391,26 +357,13 @@ describe('ActivityPage', () => {
         ),
       )
 
-      await user.click(screen.getByRole('button', { name: /^POST/ }))
-      await waitFor(() =>
-        expect(list).toHaveBeenCalledWith(
-          expect.objectContaining({ user_id: 'user-1', method: 'POST', page: 1 }),
-        ),
-      )
-      expect(screen.getByRole('button', { name: /^POST/ })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
-
       await user.click(screen.getByRole('button', { name: 'Clear All' }))
       expect(screen.getByLabelText('User:')).toHaveValue('')
-      expect(screen.getByRole('button', { name: /^All Methods/ })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
     })
 
     it('filters by action (names with counts from the actions API), entity and date range', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-10-16T10:00:00'))
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
@@ -426,8 +379,9 @@ describe('ActivityPage', () => {
       await user.selectOptions(action, 'create_user')
       await user.type(screen.getByLabelText('Entity type'), 'user')
       await user.type(screen.getByLabelText('Entity ID'), 'fe686ca4')
-      await user.type(screen.getByLabelText('From'), '2026-10-14T09:00')
-      await user.type(screen.getByLabelText('To'), '2026-10-14T18:30')
+      await user.click(screen.getByRole('button', { name: /^Date range/ }))
+      await user.click(screen.getByRole('button', { name: '14 October 2026' }))
+      await user.click(screen.getByRole('button', { name: '16 October 2026' }))
 
       await waitFor(() =>
         expect(list).toHaveBeenCalledWith({
@@ -436,25 +390,9 @@ describe('ActivityPage', () => {
           action: 'create_user',
           entity_type: 'user',
           entity_id: 'fe686ca4',
-          from: new Date('2026-10-14T09:00').toISOString(),
-          to: new Date('2026-10-14T18:30').toISOString(),
+          from: new Date('2026-10-14T00:00:00').toISOString(),
+          to: new Date('2026-10-16T23:59:59').toISOString(),
         }),
-      )
-    })
-
-    it('warns about a backwards date range and does not ask the server', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<ActivityPage />)
-      await screen.findByText('Manav viewed product 1')
-      await user.click(screen.getByRole('button', { name: 'Filters' }))
-      list.mockClear()
-
-      await user.type(screen.getByLabelText('From'), '2026-10-14T18:00')
-      await user.type(screen.getByLabelText('To'), '2026-10-14T09:00')
-
-      expect(await screen.findByRole('alert')).toHaveTextContent(/before its start/)
-      expect(list).not.toHaveBeenCalledWith(
-        expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
       )
     })
   })

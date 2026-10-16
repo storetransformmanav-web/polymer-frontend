@@ -1,9 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import {
-  api,
-  type ActivityListParams,
-  type ActivityMethod,
-} from '../../../lib/api/endpoints.ts'
+import { api, type ActivityListParams } from '../../../lib/api/endpoints.ts'
 
 /**
  * Query definitions shared by the page's hooks and by the prefetch that runs
@@ -24,7 +20,6 @@ export interface ActivityFilters {
   userId: string
   /** An exact action name ('' = every action). */
   action: string
-  method: ActivityMethod | ''
   entityType: string
   entityId: string
   /** `datetime-local` values ("2026-10-14T09:30", the browser's local time) or ''. */
@@ -38,13 +33,26 @@ export const DEFAULT_ACTIVITY_FILTERS: ActivityFilters = {
   search: '',
   userId: '',
   action: '',
-  method: '',
   entityType: '',
   entityId: '',
   from: '',
   to: '',
   page: 1,
   pageSize: 25,
+}
+
+/**
+ * The date-range picker's whole days (`YYYY-MM-DD`, or '' for no limit) → the
+ * filter values: from the start of the first day to the last second of the last.
+ */
+export function toDateFilters(range: {
+  from: string
+  to: string
+}): Pick<ActivityFilters, 'from' | 'to'> {
+  return {
+    from: range.from ? `${range.from}T00:00:00` : '',
+    to: range.to ? `${range.to}T23:59:59` : '',
+  }
 }
 
 /** A `datetime-local` value (local time) → the ISO timestamp the API wants, or undefined. */
@@ -69,7 +77,6 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
   if (search) params.search = search
   if (filters.userId) params.user_id = filters.userId
   if (filters.action) params.action = filters.action
-  if (filters.method) params.method = filters.method
   const entityType = filters.entityType.trim()
   if (entityType) params.entity_type = entityType
   const entityId = filters.entityId.trim()
@@ -82,25 +89,12 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
   return params
 }
 
-/**
- * The query that yields one method tab's count: the same narrowing filters
- * (search, user, action, dates, ...) with that method, one row per page — only
- * `total` is read.
- */
-export function methodCountFilters(
-  filters: ActivityFilters,
-  method: ActivityFilters['method'],
-): ActivityFilters {
-  return { ...filters, method, page: 1, pageSize: 1 }
-}
-
 /** True when any narrowing filter (not paging) is applied. */
 export function hasActiveActivityFilters(filters: ActivityFilters): boolean {
   return (
     filters.search.trim() !== '' ||
     filters.userId !== '' ||
     filters.action !== '' ||
-    filters.method !== '' ||
     filters.entityType.trim() !== '' ||
     filters.entityId.trim() !== '' ||
     filters.from !== '' ||
