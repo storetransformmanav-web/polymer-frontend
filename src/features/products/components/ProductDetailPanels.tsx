@@ -7,6 +7,7 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
+  PlusCircleIcon,
   PlusIcon,
   SearchIcon,
   SpinnerIcon,
@@ -57,7 +58,7 @@ import {
 } from './edit/EditableSection.tsx'
 import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
-import { TagsSection as TagsEditor } from './edit/TagsSection.tsx'
+import { TAG_CHIP, TagsSection as TagsEditor } from './edit/TagsSection.tsx'
 import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
 import { AddMediaDialog } from './AddMediaDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
@@ -232,36 +233,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             what="specifications"
             errorPrefixes={SPEC_ERRORS}
             onSaved={onSaved}
+            // Tags belong to this card, under the fields, with an edit session of their own.
+            after={<TagsBlock product={product} onSaved={onSaved} />}
             view={
-              <>
-                <FieldGrid>
-                  {getSpecs(product).map(([label, value]) => (
-                    <Field key={label} label={label}>
-                      {value}
-                    </Field>
-                  ))}
-                </FieldGrid>
-                {product.tags.length > 0 && (
-                  <section aria-labelledby="product-tags-heading" className="mt-5">
-                    <h3
-                      id="product-tags-heading"
-                      className="mb-2 text-[0.9rem] font-semibold"
-                    >
-                      Tags
-                    </h3>
-                    <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
-                      {product.tags.map((tag) => (
-                        <li
-                          key={tag}
-                          className="bg-surface text-text border-border rounded-md border px-2.5 py-1 text-[0.8rem] font-medium"
-                        >
-                          {tag}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-              </>
+              <FieldGrid>
+                {getSpecs(product).map(([label, value]) => (
+                  <Field key={label} label={label}>
+                    {value}
+                  </Field>
+                ))}
+              </FieldGrid>
             }
             editor={(section) => (
               <div className="flex flex-col gap-5">
@@ -273,10 +254,6 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                   <HandleField {...section} />
                 </div>
                 <CategoryField {...section} />
-                <section aria-label="Tags">
-                  <h3 className="mb-2 text-[0.9rem] font-semibold">Tags</h3>
-                  <TagsEditor {...section} />
-                </section>
               </div>
             )}
           />
@@ -338,6 +315,70 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
         </div>
       )}
     </div>
+  )
+}
+
+// --- Tags -----------------------------------------------------------------------
+
+/**
+ * "Tags" in the Product Specifications card: one bordered card with every tag as a chip. The ⊕ beside the heading opens the
+ * card for editing — a box to type new tags into sits right in the card, each
+ * chip gets a ✕ — and the heading's buttons become ✓ Save / ✕ Discard.
+ */
+function TagsBlock({
+  product,
+  onSaved,
+}: {
+  product: ProductDetail
+  onSaved?: SavedHandler
+}) {
+  return (
+    <section aria-labelledby="product-tags-heading">
+      <EditableTab
+        product={product}
+        what="tags"
+        errorPrefixes={NO_ERRORS}
+        onSaved={onSaved}
+        header={(edit) => (
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="product-tags-heading" className="text-[0.95rem] font-semibold">
+              Tags
+            </h3>
+            {edit.editing ? (
+              <div className="flex items-center gap-1.5">
+                <SectionEditControls edit={edit} what="tags" />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={edit.start}
+                aria-label="Add tags"
+                title="Add tags"
+                className="text-text-muted hover:text-accent focus-visible:outline-accent inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors focus-visible:outline-2"
+              >
+                <PlusCircleIcon width={22} height={22} />
+              </button>
+            )}
+          </div>
+        )}
+        view={
+          product.tags.length > 0 ? (
+            <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
+              {product.tags.map((tag) => (
+                <li key={tag} className={TAG_CHIP}>
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
+              No tags yet.
+            </p>
+          )
+        }
+        editor={(section) => <TagsEditor {...section} />}
+      />
+    </section>
   )
 }
 

@@ -633,3 +633,12 @@ export function CodeIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function PlusCircleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 6.5v7M6.5 10h7" />
+    </svg>
+  )
+}
