@@ -4,6 +4,7 @@ import type {
   ProductCreateResult,
   ProductCreateVariantInput,
   ProductEditStatus,
+  ProductMediaInput,
   ProductListItem,
   WeightUnit,
 } from '../../../lib/api/endpoints.ts'
@@ -35,6 +36,7 @@ export const CREATE_LIMITS = {
   metafieldType: 64,
   metafieldNamespace: 255,
   metafieldValue: 65535,
+  taxCode: 50,
 } as const
 
 /** Metafield types the form offers (Shopify's common ones). */
@@ -46,6 +48,17 @@ export const METAFIELD_TYPES = [
   'boolean',
   'url',
   'json',
+  'date',
+  'date_time',
+  'color',
+  'rich_text_field',
+  // A list holds a JSON array in the value, e.g. ["Plastic", "Paper"].
+  'list.single_line_text_field',
+  'list.number_integer',
+  'list.number_decimal',
+  'list.url',
+  'list.date',
+  'list.color',
 ] as const
 
 export interface CreateOptionDraft {
@@ -62,11 +75,17 @@ export interface CreateVariantDraft {
   price: string
   compareAtPrice: string
   cost: string
+  /** This variant's weight, in the product's weight unit ('' = none). */
+  weight: string
   sku: string
   barcode: string
   /** Opening stock at the chosen location ('' = none given). */
   stock: string
-  /** One of the product's media URLs ('' = none). */
+  /**
+   * A public https address of the picture to show for this variant ('' = none).
+   * The API needs it in the product's `media` too, so one that isn't listed there
+   * is added to the media on create (see `buildCreateBody`).
+   */
   imageUrl: string
 }
 
@@ -97,10 +116,12 @@ export interface CreateDraft {
   variants: CreateVariantDraft[]
   /** What every variant shares. */
   taxable: boolean
+  /** Tax code ('' = none). */
+  taxCode: string
   requiresShipping: boolean
   tracked: boolean
   inventoryPolicy: InventoryPolicy
-  weight: string
+  /** The unit every variant's weight is in. */
   weightUnit: WeightUnit
   /** Shopify location the opening stock goes to ('' = no stock given). */
   locationId: string
@@ -121,6 +142,7 @@ export function blankVariant(optionValues: string[] = []): CreateVariantDraft {
     price: '',
     compareAtPrice: '',
     cost: '',
+    weight: '',
     sku: '',
     barcode: '',
     stock: '',
@@ -160,10 +182,10 @@ export function blankCreateDraft(shop: string): CreateDraft {
     options: [],
     variants: [blankVariant()],
     taxable: true,
+    taxCode: '',
     requiresShipping: true,
     tracked: true,
     inventoryPolicy: 'DENY',
-    weight: '',
     weightUnit: 'KILOGRAMS',
     locationId: '',
     media: [blankMedia()],
@@ -192,8 +214,8 @@ const comboKey = (values: string[]) => values.join('\u0001')
 /**
  * Re-derives the variants from the options, keeping what was already typed for a
  * combination that still exists. A new combination starts with the first
- * variant's price, compare-at price and cost (as the store admin does), so
- * adding a value to "Size" doesn't mean typing the price again.
+ * variant's price, compare-at price, cost and weight (as the store admin does),
+ * so adding a value to "Size" doesn't mean typing the price again.
  */
 export function syncVariants(draft: CreateDraft): CreateDraft {
   const existing = new Map(
@@ -209,6 +231,7 @@ export function syncVariants(draft: CreateDraft): CreateDraft {
       fresh.price = seed.price
       fresh.compareAtPrice = seed.compareAtPrice
       fresh.cost = seed.cost
+      fresh.weight = seed.weight
     }
     return fresh
   })
@@ -230,7 +253,7 @@ export function isCreateDirty(draft: CreateDraft): boolean {
       draft.seoDescription,
       draft.templateSuffix,
       draft.categoryGid,
-      draft.weight,
+      draft.taxCode,
     ].some((value) => value.trim() !== '') ||
     draft.tags.length > 0 ||
     draft.collections.length > 0 ||
@@ -246,9 +269,11 @@ export function isCreateDirty(draft: CreateDraft): boolean {
         variant.price,
         variant.compareAtPrice,
         variant.cost,
+        variant.weight,
         variant.sku,
         variant.barcode,
         variant.stock,
+        variant.imageUrl,
       ].some((value) => value.trim() !== ''),
     )
   )
@@ -258,6 +283,14 @@ export function isCreateDirty(draft: CreateDraft): boolean {
 
 const tooLong = (label: string, value: string, max: number) =>
   value.trim().length > max ? `${label} can be at most ${max} characters` : null
+
+const isJsonArray = (value: string): boolean => {
+  try {
+    return Array.isArray(JSON.parse(value))
+  } catch {
+    return false
+  }
+}
 
 /** Checks the draft against the API's limits. An empty result means it can be sent. */
 export function validateCreateDraft(draft: CreateDraft): DraftErrors {
@@ -309,8 +342,9 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
   if (draft.variants.length === 0)
     errors.variants = 'A product needs at least one variant'
 
+  put('taxCode', tooLong('The tax code', draft.taxCode, CREATE_LIMITS.taxCode))
+
   // Variants
-  const mediaUrls = new Set(draft.media.map((row) => row.url.trim()).filter(Boolean))
   draft.variants.forEach((variant, index) => {
     const at = (field: string) => `variants.${index}.${field}`
     const price = variant.price.trim()
@@ -325,6 +359,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     for (const [field, label, value] of [
       ['compareAtPrice', 'Compare-at price', variant.compareAtPrice],
       ['cost', 'Cost', variant.cost],
+      ['weight', 'Weight', variant.weight],
     ] as const) {
       if (value.trim() !== '' && !DECIMAL.test(value.trim()))
         put(at(field), `${label}: enter a number, 0 or more`)
@@ -338,16 +373,30 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     ) {
       put(at('stock'), 'Enter a whole number, 0 or more')
     }
-    if (variant.imageUrl && !mediaUrls.has(variant.imageUrl)) {
-      put(at('imageUrl'), 'Add that picture to Media first')
+    const imageUrl = variant.imageUrl.trim()
+    if (imageUrl !== '') {
+      put(
+        at('imageUrl'),
+        imageUrl.length > LIMITS.mediaUrl
+          ? `The address can be at most ${LIMITS.mediaUrl} characters`
+          : /^https:\/\/\S+$/i.test(imageUrl)
+            ? null
+            : 'Use a public https:// address',
+      )
     }
   })
+  // The variants' pictures are added to the media list, which has its own limit.
+  const mediaCount = new Set([
+    ...draft.media.map((row) => row.url.trim()).filter(Boolean),
+    ...draft.variants.map((variant) => variant.imageUrl.trim()).filter(Boolean),
+  ]).size
+  if (mediaCount > CREATE_LIMITS.media) {
+    errors['media.rows'] =
+      `Media and variant pictures together can be at most ${CREATE_LIMITS.media} files`
+  }
   if (draft.locationId !== '' && !INTEGER.test(draft.locationId)) {
     errors.locationId = 'The location ID is a number (digits only)'
   }
-  const weight = draft.weight.trim()
-  if (weight !== '' && !DECIMAL.test(weight))
-    errors.weight = 'Weight: enter a number, 0 or more'
 
   // Media (blank rows are skipped; the rest need https addresses)
   const filledMedia = draft.media.filter(
@@ -408,7 +457,10 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     put(
       at('value'),
       field.value.trim()
-        ? tooLong('The value', field.value, CREATE_LIMITS.metafieldValue)
+        ? (tooLong('The value', field.value, CREATE_LIMITS.metafieldValue) ??
+            (field.type.startsWith('list.') && !isJsonArray(field.value)
+              ? 'A list needs a JSON array, e.g. ["Plastic", "Paper"]'
+              : null))
         : 'Enter a value',
     )
   })
@@ -419,6 +471,24 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
 // --- Draft → request -----------------------------------------------------------------------
 
 const trimmed = (value: string) => value.trim()
+
+/**
+ * The product's `media` as sent: the files listed under Media, then — because the
+ * API wants a variant's picture listed in `media` as well — any variant picture
+ * that isn't there yet (once each, so the featured image stays the first one).
+ */
+function createMedia(draft: CreateDraft): ProductMediaInput[] {
+  const media = buildMediaItems(draft.media)
+  const listed = new Set(media.map((item) => item.url))
+  for (const variant of draft.variants) {
+    const url = trimmed(variant.imageUrl)
+    if (url !== '' && !listed.has(url)) {
+      listed.add(url)
+      media.push({ url, media_type: 'IMAGE' })
+    }
+  }
+  return media
+}
 
 /** The `POST /products` body for a draft that passed `validateCreateDraft`. */
 export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
@@ -435,14 +505,15 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
         tracked: draft.tracked,
         requires_shipping: draft.requiresShipping,
       }
+      if (trimmed(draft.taxCode)) input.tax_code = trimmed(draft.taxCode)
       if (variant.optionValues.length > 0) input.option_values = variant.optionValues
       if (trimmed(variant.compareAtPrice))
         input.compare_at_price = trimmed(variant.compareAtPrice)
       if (trimmed(variant.cost)) input.cost = trimmed(variant.cost)
       if (trimmed(variant.sku)) input.sku = trimmed(variant.sku)
       if (trimmed(variant.barcode)) input.barcode = trimmed(variant.barcode)
-      if (trimmed(draft.weight)) {
-        input.weight = trimmed(draft.weight)
+      if (trimmed(variant.weight)) {
+        input.weight = trimmed(variant.weight)
         input.weight_unit = draft.weightUnit
       }
       if (draft.locationId && trimmed(variant.stock) !== '') {
@@ -453,7 +524,7 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
           },
         ]
       }
-      if (variant.imageUrl) input.image_url = variant.imageUrl
+      if (trimmed(variant.imageUrl)) input.image_url = trimmed(variant.imageUrl)
       return input
     }),
   }
@@ -480,7 +551,7 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
   }))
   if (options.length > 0) body.options = options
 
-  const media = buildMediaItems(draft.media)
+  const media = createMedia(draft)
   if (media.length > 0) body.media = media
   if (draft.collections.length > 0) body.collections = draft.collections
 
@@ -510,14 +581,13 @@ export interface CreatedShop {
 const price = (value: number) => value.toFixed(2)
 
 /**
- * The first image address in the form — what the new product shows until the
- * store has downloaded the file and the CRM has its own copy's address.
+ * The first image address that will be sent (the product's own media, else a
+ * variant's picture) — what the new product shows until the store has downloaded
+ * the file and the CRM has its own copy's address.
  */
 export function firstImageUrl(draft: CreateDraft): string | null {
-  const row = draft.media.find(
-    (media) => media.url.trim() !== '' && media.mediaType === 'IMAGE',
-  )
-  return row ? row.url.trim() : null
+  const image = createMedia(draft).find((item) => item.media_type === 'IMAGE')
+  return image ? image.url : null
 }
 
 /**

@@ -3,7 +3,8 @@ import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
 import { queryClient } from '../queryClient.ts'
 import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
 import { customersReducer } from './customersSlice.ts'
-import { productsReducer } from './productsSlice.ts'
+import { loadProductMedia, saveProductMedia } from './productMediaStorage.ts'
+import { productMediaRestored, productsReducer } from './productsSlice.ts'
 import { shopReducer } from './shopSlice.ts'
 import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
 
@@ -14,6 +15,12 @@ import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
  * to get an isolated store per test instead of sharing — and having
  * to manually reset — the app's singleton.
  */
+const pickProductMedia = (products: ReturnType<typeof productsReducer>) => ({
+  pendingMedia: products.pendingMedia,
+  removedMedia: products.removedMedia,
+  previewImages: products.previewImages,
+})
+
 export function createAppStore() {
   const appStore = configureStore({
     reducer: {
@@ -30,6 +37,14 @@ export function createAppStore() {
   // mirroring what each hook used to do on its own before this state
   // moved into Redux. The auth session is persisted the same way, and
   // its token is mirrored into apiClient for the Authorization header.
+  // Images the store was still working on when the page was last left (see
+  // productMediaStorage.ts) come back, so a refresh doesn't show "No images".
+  if (appStore.getState().auth.session) {
+    const saved = loadProductMedia()
+    if (saved) appStore.dispatch(productMediaRestored(saved))
+  }
+  let previousMedia = pickProductMedia(appStore.getState().products)
+
   let previousUi = appStore.getState().ui
   let previousSession = appStore.getState().auth.session
   setAccessToken(previousSession?.accessToken ?? null)
@@ -37,7 +52,7 @@ export function createAppStore() {
   setUnauthorizedHandler(() => appStore.dispatch(sessionCleared('expired')))
 
   appStore.subscribe(() => {
-    const { ui, auth } = appStore.getState()
+    const { ui, auth, products } = appStore.getState()
 
     if (auth.session !== previousSession) {
       previousSession = auth.session
@@ -55,6 +70,16 @@ export function createAppStore() {
       } catch {
         // localStorage unavailable — the session just won't survive a reload.
       }
+    }
+
+    const media = pickProductMedia(products)
+    if (
+      media.pendingMedia !== previousMedia.pendingMedia ||
+      media.removedMedia !== previousMedia.removedMedia ||
+      media.previewImages !== previousMedia.previewImages
+    ) {
+      previousMedia = media
+      saveProductMedia(media)
     }
 
     if (ui.theme !== previousUi.theme) {

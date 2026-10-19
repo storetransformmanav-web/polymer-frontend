@@ -655,6 +655,7 @@ export interface ProductCreateVariantInput {
   sku?: string
   barcode?: string
   taxable?: boolean
+  tax_code?: string
   inventory_policy?: InventoryPolicy
   /** Track stock in Shopify. */
   tracked?: boolean
@@ -664,7 +665,7 @@ export interface ProductCreateVariantInput {
   weight_unit?: WeightUnit
   /** Opening stock per Shopify location. */
   stock?: { location_id: number; available: number }[]
-  /** One of the product's `media` URLs, shown for this variant. */
+  /** Must also be listed in `media`; shown for this variant (max 2000 characters). */
   image_url?: string
 }
 

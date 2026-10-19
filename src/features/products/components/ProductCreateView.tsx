@@ -171,7 +171,7 @@ export function ProductCreateView({ onBack, onCreated }: ProductCreateViewProps)
 
           <CreateCard
             title="Media"
-            description="Images or videos by public web address — the store downloads them. The first image is the featured one."
+            description="Pictures for the whole product, by public web address — the store downloads them, and the first image is the featured one. A variant's own picture is set in its row under Options and variants (it is added here automatically)."
           >
             <MediaRows
               rows={draft.media}

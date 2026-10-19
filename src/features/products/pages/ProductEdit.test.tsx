@@ -518,6 +518,21 @@ describe('editing a section in place', () => {
     )
   })
 
+  it('has no way to add a variant — the update API cannot manage options', async () => {
+    const user = await openDetails()
+    await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+    expect(
+      screen.queryByRole('button', { name: /add (a )?variant/i }),
+    ).not.toBeInTheDocument()
+
+    await user.click(pencil('variants'))
+    expect(
+      screen.queryByRole('button', { name: /add (a )?variant/i }),
+    ).not.toBeInTheDocument()
+    // Existing variants can still be removed.
+    expect(screen.getByRole('button', { name: /^Remove variant/ })).toBeInTheDocument()
+  })
+
   it('edits the collections tab in place', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))

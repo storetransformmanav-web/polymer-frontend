@@ -6,6 +6,7 @@ import {
   mediaSettled,
 } from '../../../app/store/productsSlice.ts'
 import type { ProductDetail, ProductMediaInput } from '../../../lib/api/endpoints.ts'
+import { useRefreshProductList } from './useRefreshProductList.ts'
 
 /** How often to look for the files the store has finished downloading. */
 const POLL_MS = 4000
@@ -46,9 +47,14 @@ export function usePendingMedia(product: ProductDetail) {
   const startedAt = queued?.startedAt
   const active = startedAt !== undefined && !done
 
+  const refreshList = useRefreshProductList()
   useEffect(() => {
-    if (done) dispatch(mediaSettled(id))
-  }, [done, dispatch, id])
+    if (!done) return
+    dispatch(mediaSettled(id))
+    // The list was read when the files were sent, before the store had them, so its
+    // row still shows no (or the old) image: read it again now that they are here.
+    refreshList(false)
+  }, [done, dispatch, id, refreshList])
 
   useEffect(() => {
     if (!active) return undefined

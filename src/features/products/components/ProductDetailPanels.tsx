@@ -22,6 +22,7 @@ import type {
   ProductVariant,
 } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
+import { sameFile } from '../../../app/store/productPatch.ts'
 import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
@@ -428,12 +429,23 @@ function VariantsView({ product }: { product: ProductDetail }) {
               className="border-border even:bg-surface border-b last:border-b-0"
             >
               <td className={TD}>
-                <span
-                  className="block max-w-64 truncate font-medium"
-                  title={variant.title ?? ''}
-                >
-                  {variant.title ?? '—'}
-                </span>
+                <div className="flex items-center gap-2.5">
+                  {variant.image_url && (
+                    <div className="h-9 w-9 shrink-0">
+                      <ProductImage
+                        src={variant.image_url}
+                        alt={variant.title ?? ''}
+                        size="thumb"
+                      />
+                    </div>
+                  )}
+                  <span
+                    className="block max-w-64 truncate font-medium"
+                    title={variant.title ?? ''}
+                  >
+                    {variant.title ?? '—'}
+                  </span>
+                </div>
               </td>
               <td className={TD}>
                 {variant.sku ? (
@@ -767,6 +779,11 @@ function MediaView({
       }),
     [product.images, product.title],
   )
+  // Every image belongs to the product; some are also the picture of one or more variants.
+  const usedBy = (image: ProductImageData) =>
+    product.variants
+      .filter((variant) => variant.image_url && sameFile(variant.image_url, image.url))
+      .map((variant) => variant.title ?? variant.display_name ?? 'Variant')
   const slides = useMemo(
     () => toSlides(product.images, product.title),
     [product.images, product.title],
@@ -819,8 +836,16 @@ function MediaView({
                 onClick={() => onDelete(tile.image, index + 1)}
               />
             </div>
-            <p className="text-text-muted truncate px-3 py-2 text-[0.75rem]">
+            <p className="text-text-muted truncate px-3 pt-2 text-[0.75rem]">
               {tile.width && tile.height ? `${tile.width} × ${tile.height}` : 'Image'}
+            </p>
+            <p
+              className="text-text truncate px-3 pb-2 text-[0.75rem] font-medium"
+              title={usedBy(tile.image).join(', ')}
+            >
+              {usedBy(tile.image).length > 0
+                ? `Variant: ${usedBy(tile.image).join(', ')}`
+                : 'Product image'}
             </p>
           </li>
         ))}

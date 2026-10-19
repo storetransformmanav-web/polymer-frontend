@@ -214,6 +214,53 @@ describe('api.products.addMedia and removeMedia', () => {
     expect(result.sync_status).toBe('pending')
   })
 
+  it('sends exactly the documented request for the three-image example', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(ENVELOPE)
+    const productId = '772859e7-64f1-4c4c-9dbf-f8ab63046aa7'
+    const items = [
+      {
+        url: 'https://placehold.co/600x600?text=Small+Carrier+Bag',
+        alt: 'Small white plastic carrier bag',
+        media_type: 'IMAGE' as const,
+      },
+      {
+        url: 'https://placehold.co/600x600?text=Large+Carrier+Bag',
+        alt: 'Large white plastic carrier bag',
+        media_type: 'IMAGE' as const,
+      },
+      {
+        url: 'https://placehold.co/600x600?text=White+Plastic+Carrier+Bag',
+        alt: 'White plastic carrier bag',
+        media_type: 'IMAGE' as const,
+      },
+    ]
+
+    await api.products.addMedia(productId, items, 'shop')
+
+    // POST /products/{product_id}/media?shop=shop   body { items: [...] }
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/products/772859e7-64f1-4c4c-9dbf-f8ab63046aa7/media',
+      { items },
+      { params: { shop: 'shop' } },
+    )
+  })
+
+  it('sends exactly the documented delete request (product id, attachment id and shop)', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue(ENVELOPE)
+
+    await api.products.removeMedia(
+      '772859e7-64f1-4c4c-9dbf-f8ab63046aa7',
+      '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      'shop',
+    )
+
+    // DELETE /products/{product_id}/media/{attachment_id}?shop=shop   (no body)
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      '/products/772859e7-64f1-4c4c-9dbf-f8ab63046aa7/media/3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      { params: { shop: 'shop' } },
+    )
+  })
+
   it('encodes both ids in the path', async () => {
     vi.mocked(apiClient.delete).mockResolvedValue(ENVELOPE.result)
 

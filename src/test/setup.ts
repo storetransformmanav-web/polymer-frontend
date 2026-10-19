@@ -1,4 +1,11 @@
 import '@testing-library/jest-dom/vitest'
+import { afterEach } from 'vitest'
+
+// Anything a test leaves in this tab's storage (e.g. images the products slice
+// remembers across a refresh) must not leak into the next test.
+afterEach(() => {
+  if (typeof window !== 'undefined') window.sessionStorage.clear()
+})
 
 // jsdom has no layout, but the rich-text editor (ProseMirror) asks ranges for their
 // rectangles when it scrolls the cursor into view. Empty answers are enough.

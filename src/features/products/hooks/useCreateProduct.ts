@@ -1,6 +1,11 @@
 import { useCallback, useState } from 'react'
 import { useAppDispatch } from '../../../app/store/hooks.ts'
-import { createProduct, productCreated } from '../../../app/store/productsSlice.ts'
+import {
+  createProduct,
+  mediaQueued,
+  previewImageSet,
+  productCreated,
+} from '../../../app/store/productsSlice.ts'
 import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
 import {
   buildCreateBody,
@@ -34,7 +39,8 @@ export function useCreateProduct() {
     ): Promise<ProductCreateResult | null> => {
       setIsCreating(true)
       setError(null)
-      const result = await dispatch(createProduct({ body: buildCreateBody(draft) }))
+      const body = buildCreateBody(draft)
+      const result = await dispatch(createProduct({ body }))
       setIsCreating(false)
 
       if (!createProduct.fulfilled.match(result)) {
@@ -42,12 +48,28 @@ export function useCreateProduct() {
         return null
       }
 
-      dispatch(productCreated(buildListItem(draft, result.payload, shop)))
+      const created = result.payload
+      dispatch(productCreated(buildListItem(draft, created, shop)))
+      const preview = firstImageUrl(draft)
+      if (preview) dispatch(previewImageSet({ id: created.product_id, url: preview }))
+      // The store downloads the media afterwards, so the product has none of it yet:
+      // queue the files as "processing" so its Media tab shows them (and each one is
+      // replaced by the real image as it arrives) instead of "No images".
+      if (body.media?.length) {
+        dispatch(
+          mediaQueued({
+            id: created.product_id,
+            items: body.media,
+            baseline: 0,
+            startedAt: Date.now(),
+          }),
+        )
+      }
       // With an image, the store is still downloading it: re-reading the list now would
       // bring back a row with no image and wipe the preview, so the page re-reads it
       // a few seconds later, and keeps doing so until the image is there.
-      if (!firstImageUrl(draft)) refreshList(true)
-      return result.payload
+      if (!preview) refreshList(true)
+      return created
     },
     [dispatch, refreshList],
   )

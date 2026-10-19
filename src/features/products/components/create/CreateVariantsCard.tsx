@@ -36,16 +36,18 @@ const TH =
 interface VariantsCardProps extends CreateSectionProps {
   /** The store's stock locations (empty when none are known). */
   locations: StockLocation[]
-  /** The picture URLs listed under Media, for choosing a variant's picture. */
+  /** The picture URLs listed under Media, offered as suggestions for a variant's picture. */
   pictures: string[]
 }
+
+const PICTURES_LIST = 'create-variant-pictures'
 
 const variantName = (variant: CreateVariantDraft) => variant.optionValues.join(' / ')
 
 /**
  * Options (Size, Colour…) and the variants they make. Without options there is
  * one variant, edited as plain fields; with options every combination of the
- * values is a row to price. What variants share — weight, tax, shipping, stock
+ * values is a row to price and weigh. What variants share — weight unit, tax, shipping, stock
  * tracking — is set once below.
  */
 export function CreateVariantsCard({
@@ -154,6 +156,12 @@ export function CreateVariantsCard({
         </p>
       )}
 
+      <datalist id={PICTURES_LIST}>
+        {pictures.map((url) => (
+          <option key={url} value={url} />
+        ))}
+      </datalist>
+
       {/* Variants */}
       {single ? (
         <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 xl:grid-cols-3">
@@ -196,6 +204,22 @@ export function CreateVariantsCard({
               autoComplete="off"
               value={draft.variants[0].cost}
               onChange={(event) => setVariant(0, { cost: event.target.value })}
+              className={FIELD_INPUT}
+            />
+          </EditField>
+          <EditField
+            id="create-weight"
+            label={`Weight (${draft.weightUnit.toLowerCase()})`}
+            optional
+            error={errors['variants.0.weight']}
+          >
+            <input
+              id="create-weight"
+              inputMode="decimal"
+              autoComplete="off"
+              value={draft.variants[0].weight}
+              aria-invalid={errors['variants.0.weight'] ? true : undefined}
+              onChange={(event) => setVariant(0, { weight: event.target.value })}
               className={FIELD_INPUT}
             />
           </EditField>
@@ -247,32 +271,44 @@ export function CreateVariantsCard({
               />
             </EditField>
           )}
-          {pictures.length > 0 && (
-            <SelectField
+          <div className="min-[520px]:col-span-2 xl:col-span-3">
+            <EditField
               id="create-variant-image"
-              label="Picture"
-              value={draft.variants[0].imageUrl}
-              options={[
-                { value: '', label: 'Product picture' },
-                ...pictures.map((url) => ({ value: url, label: url })),
-              ]}
-              onChange={(imageUrl) => setVariant(0, { imageUrl })}
-            />
-          )}
+              label="Picture address"
+              optional
+              error={errors['variants.0.imageUrl']}
+              hint="A public https:// link to this variant's picture. It is added to the product's media if it isn't listed there."
+            >
+              <input
+                id="create-variant-image"
+                type="url"
+                list={PICTURES_LIST}
+                autoComplete="off"
+                spellCheck={false}
+                value={draft.variants[0].imageUrl}
+                maxLength={LIMITS.mediaUrl + 100}
+                placeholder="https://…"
+                aria-invalid={errors['variants.0.imageUrl'] ? true : undefined}
+                onChange={(event) => setVariant(0, { imageUrl: event.target.value })}
+                className={FIELD_INPUT}
+              />
+            </EditField>
+          </div>
         </div>
       ) : (
         <div className="border-border overflow-x-auto rounded-xl border">
-          <table className="w-full min-w-[760px] border-collapse text-[0.85rem]">
+          <table className="w-full min-w-[1080px] border-collapse text-[0.85rem]">
             <thead>
               <tr>
                 <th className={TH}>Variant</th>
                 <th className={`${TH} w-28`}>Price</th>
                 <th className={`${TH} w-28`}>Compare-at</th>
                 <th className={`${TH} w-24`}>Cost</th>
+                <th className={`${TH} w-24`}>Weight</th>
                 <th className={`${TH} w-32`}>SKU</th>
                 <th className={`${TH} w-32`}>Barcode</th>
                 {stockHere && <th className={`${TH} w-24`}>Stock</th>}
-                {pictures.length > 0 && <th className={`${TH} w-40`}>Picture</th>}
+                <th className={`${TH} w-64`}>Picture address</th>
               </tr>
             </thead>
             <tbody>
@@ -329,6 +365,20 @@ export function CreateVariantsCard({
                     </td>
                     <td className="px-1.5 py-1.5">
                       <input
+                        aria-label={`Weight for ${name}`}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={variant.weight}
+                        aria-invalid={at('weight') ? true : undefined}
+                        title={at('weight')}
+                        onChange={(event) =>
+                          setVariant(index, { weight: event.target.value })
+                        }
+                        className={CELL}
+                      />
+                    </td>
+                    <td className="px-1.5 py-1.5">
+                      <input
                         aria-label={`SKU for ${name}`}
                         autoComplete="off"
                         value={variant.sku}
@@ -369,25 +419,24 @@ export function CreateVariantsCard({
                         />
                       </td>
                     )}
-                    {pictures.length > 0 && (
-                      <td className="px-1.5 py-1.5">
-                        <select
-                          aria-label={`Picture for ${name}`}
-                          value={variant.imageUrl}
-                          onChange={(event) =>
-                            setVariant(index, { imageUrl: event.target.value })
-                          }
-                          className={CELL}
-                        >
-                          <option value="">Product picture</option>
-                          {pictures.map((url, i) => (
-                            <option key={url} value={url}>
-                              {`Picture ${i + 1}`}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                    )}
+                    <td className="px-1.5 py-1.5">
+                      <input
+                        aria-label={`Picture address for ${name}`}
+                        type="url"
+                        list={PICTURES_LIST}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="https://…"
+                        value={variant.imageUrl}
+                        maxLength={LIMITS.mediaUrl + 100}
+                        aria-invalid={at('imageUrl') ? true : undefined}
+                        title={at('imageUrl')}
+                        onChange={(event) =>
+                          setVariant(index, { imageUrl: event.target.value })
+                        }
+                        className={CELL}
+                      />
+                    </td>
                   </tr>
                 )
               })}
@@ -402,26 +451,13 @@ export function CreateVariantsCard({
           Shipping, tax and stock — for every variant
         </p>
         <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_9rem] gap-2">
-            <EditField id="create-weight" label="Weight" optional error={errors.weight}>
-              <input
-                id="create-weight"
-                inputMode="decimal"
-                autoComplete="off"
-                value={draft.weight}
-                aria-invalid={errors.weight ? true : undefined}
-                onChange={(event) => update({ weight: event.target.value })}
-                className={FIELD_INPUT}
-              />
-            </EditField>
-            <SelectField
-              id="create-weight-unit"
-              label="Unit"
-              value={draft.weightUnit}
-              options={WEIGHT_OPTIONS}
-              onChange={(weightUnit) => update({ weightUnit: weightUnit as WeightUnit })}
-            />
-          </div>
+          <SelectField
+            id="create-weight-unit"
+            label="Weight unit"
+            value={draft.weightUnit}
+            options={WEIGHT_OPTIONS}
+            onChange={(weightUnit) => update({ weightUnit: weightUnit as WeightUnit })}
+          />
           {locations.length === 0 && (
             <EditField
               id="create-location-id"
@@ -460,6 +496,24 @@ export function CreateVariantsCard({
               onChange={(locationId) => update({ locationId })}
             />
           )}
+        </div>
+        <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+          <EditField
+            id="create-tax-code"
+            label="Tax code"
+            optional
+            error={errors.taxCode}
+            counter={{ value: draft.taxCode.trim().length, max: CREATE_LIMITS.taxCode }}
+          >
+            <input
+              id="create-tax-code"
+              autoComplete="off"
+              value={draft.taxCode}
+              aria-invalid={errors.taxCode ? true : undefined}
+              onChange={(event) => update({ taxCode: event.target.value })}
+              className={FIELD_INPUT}
+            />
+          </EditField>
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <CheckField

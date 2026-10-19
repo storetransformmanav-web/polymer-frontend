@@ -5,12 +5,14 @@ import {
   type InventoryPolicy,
   type MediaType,
   type ProductDetail,
+  type ProductImage,
   type ProductMediaInput,
   type ProductUpdateBody,
   type ProductVariant,
   type ProductVariantInput,
   type WeightUnit,
 } from '../../../lib/api/endpoints.ts'
+import { sameFile } from '../../../app/store/productPatch.ts'
 
 /**
  * The edit form's working copy of a product, and the two pure steps around it:
@@ -21,13 +23,11 @@ import {
  */
 
 export interface VariantDraft {
-  /** Stable React key (a new variant has no id yet). */
+  /** Stable React key. */
   key: string
-  /** The CRM variant id; null for a variant being created. */
-  id: string | null
+  /** The CRM variant id. */
+  id: string
   title: string
-  /** New variant only: one value per product option, in option order. */
-  optionValues: string[]
   price: string
   compareAtPrice: string
   sku: string
@@ -120,12 +120,24 @@ function variantLabel(variant: ProductVariant): string {
   return variant.title?.trim() || variant.display_name?.trim() || variant.sku || 'Variant'
 }
 
-export function draftFromVariant(variant: ProductVariant): VariantDraft {
+/**
+ * The product image a variant shows now: the one whose file is the variant's
+ * `image_url` ('' when it has none of the product's images).
+ */
+export function variantImageId(variant: ProductVariant, images: ProductImage[]): string {
+  const url = variant.image_url
+  if (!url) return ''
+  return images.find((image) => sameFile(image.url, url))?.id ?? ''
+}
+
+export function draftFromVariant(
+  variant: ProductVariant,
+  images: ProductImage[] = [],
+): VariantDraft {
   return {
     key: variant.id,
     id: variant.id,
     title: variantLabel(variant),
-    optionValues: [],
     price: text(variant.price),
     compareAtPrice: text(variant.compare_at_price),
     sku: text(variant.sku),
@@ -137,30 +149,7 @@ export function draftFromVariant(variant: ProductVariant): VariantDraft {
     cost: text(variant.cost),
     weight: text(variant.weight),
     weightUnit: asWeightUnit(variant.weight_unit),
-    imageId: '',
-    removed: false,
-  }
-}
-
-/** A blank variant with one empty slot per product option. */
-export function blankVariant(optionCount: number): VariantDraft {
-  return {
-    key: newKey('new-variant'),
-    id: null,
-    title: 'New variant',
-    optionValues: Array.from({ length: optionCount }, () => ''),
-    price: '',
-    compareAtPrice: '',
-    sku: '',
-    barcode: '',
-    taxable: true,
-    inventoryPolicy: 'DENY',
-    tracked: true,
-    requiresShipping: true,
-    cost: '',
-    weight: '',
-    weightUnit: 'GRAMS',
-    imageId: '',
+    imageId: variantImageId(variant, images),
     removed: false,
   }
 }
@@ -184,7 +173,9 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
     seoDescription: product.seo?.description ?? '',
     removedCollectionIds: [],
     addedCollectionIds: [],
-    variants: product.variants.map(draftFromVariant),
+    variants: product.variants.map((variant) =>
+      draftFromVariant(variant, product.images),
+    ),
     images: product.images.map((image) => ({
       id: image.id,
       url: image.url,
@@ -213,8 +204,9 @@ const sameNumber = (a: string, b: string) => {
 function variantChanges(
   original: ProductVariant,
   draft: VariantDraft,
+  images: ProductImage[],
 ): ProductVariantInput | null {
-  const base = draftFromVariant(original)
+  const base = draftFromVariant(original, images)
   const edit: ProductVariantInput = { id: draft.id ?? undefined }
   let changed = false
   const set = <K extends keyof ProductVariantInput>(
@@ -249,31 +241,12 @@ function variantChanges(
   if (draft.requiresShipping !== base.requiresShipping) {
     set('requires_shipping', draft.requiresShipping)
   }
-  if (draft.imageId) set('image_attachment_id', draft.imageId)
+  // Only a different picture is sent (the current one is preselected in the form).
+  if (draft.imageId && draft.imageId !== base.imageId) {
+    set('image_attachment_id', draft.imageId)
+  }
 
   return changed ? edit : null
-}
-
-/** A variant being created: everything the user filled in. */
-function newVariantInput(draft: VariantDraft): ProductVariantInput {
-  const input: ProductVariantInput = {
-    option_values: draft.optionValues.map((value) => value.trim()),
-    price: draft.price.trim(),
-    taxable: draft.taxable,
-    inventory_policy: draft.inventoryPolicy,
-    tracked: draft.tracked,
-    requires_shipping: draft.requiresShipping,
-  }
-  if (draft.compareAtPrice.trim()) input.compare_at_price = draft.compareAtPrice.trim()
-  if (draft.sku.trim()) input.sku = draft.sku.trim()
-  if (draft.barcode.trim()) input.barcode = draft.barcode.trim()
-  if (draft.cost.trim()) input.cost = draft.cost.trim()
-  if (draft.weight.trim()) {
-    input.weight = draft.weight.trim()
-    input.weight_unit = draft.weightUnit
-  }
-  if (draft.imageId) input.image_attachment_id = draft.imageId
-  return input
 }
 
 /**
@@ -333,16 +306,12 @@ export function buildUpdateBody(
   const variantEdits: ProductVariantInput[] = []
   const variantsRemove: string[] = []
   for (const variant of draft.variants) {
-    if (variant.id === null) {
-      if (!variant.removed) variantEdits.push(newVariantInput(variant))
-      continue
-    }
     if (variant.removed) {
       variantsRemove.push(variant.id)
       continue
     }
     const original = product.variants.find((candidate) => candidate.id === variant.id)
-    const edit = original ? variantChanges(original, variant) : null
+    const edit = original ? variantChanges(original, variant, product.images) : null
     if (edit) variantEdits.push(edit)
   }
   if (variantEdits.length) body.variants = variantEdits
@@ -453,9 +422,8 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
   draft.variants.forEach((variant, index) => {
     if (variant.removed) return
     const at = (field: string) => `variants.${index}.${field}`
-    const isNew = variant.id === null
 
-    if (isNew || variant.price.trim() !== '') {
+    if (variant.price.trim() !== '') {
       put(
         at('price'),
         variant.price.trim() === ''
@@ -475,14 +443,6 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     }
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))
     put(at('barcode'), tooLong('The barcode', variant.barcode, LIMITS.barcode))
-
-    if (isNew) {
-      const expected = product.options.length
-      const filled = variant.optionValues.every((value) => value.trim() !== '')
-      if (expected > 0 && (!filled || variant.optionValues.length !== expected)) {
-        errors[at('optionValues')] = 'Give a value for every option'
-      }
-    }
   })
 
   draft.images.forEach((image, index) => {

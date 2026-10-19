@@ -64,3 +64,29 @@ export function safeUrl(url: string | null | undefined): string | null {
     return null
   }
 }
+
+/**
+ * A heads-up for an image address the store won't take: Shopify doesn't accept
+ * SVG as a product image, and placeholder services such as placehold.co answer with
+ * an SVG unless the address ends in a raster extension (.png, .jpg …). Null when the
+ * address looks fine. Only a hint — it never blocks anything.
+ */
+export function svgImageWarning(address: string): string | null {
+  let url: URL
+  try {
+    url = new URL(address.trim())
+  } catch {
+    return null
+  }
+  const path = url.pathname.toLowerCase()
+  const raster = /\.(png|jpe?g|gif|webp|avif|heic|tiff?)$/.test(path)
+  const isSvg = path.endsWith('.svg')
+  const placeholder =
+    url.hostname === 'placehold.co' || url.hostname.endsWith('.placehold.co')
+  if (!isSvg && !(placeholder && !raster)) return null
+  return `This address gives an SVG, which the store doesn't accept as a product image. Use a .png or .jpg address${
+    placeholder
+      ? ' (for placehold.co add .png, e.g. https://placehold.co/600x600.png?text=Bag)'
+      : ''
+  }.`
+}

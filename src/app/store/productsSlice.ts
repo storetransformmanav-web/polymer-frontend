@@ -21,10 +21,13 @@ import {
   type ProductWriteResult,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
+import type { StoredProductMedia } from './productMediaStorage.ts'
 import {
   hideRemovedImages,
+  keepPreviewImages,
   patchDetail,
   patchListItem,
+  type PreviewImage,
   type RemovedImage,
 } from './productPatch.ts'
 import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
@@ -173,6 +176,12 @@ export interface ProductsState {
    * read of the product can still list them; they stay hidden until it stops doing so.
    */
   removedMedia: Record<string, RemovedImage[]>
+  /**
+   * The picture each just-created product was given, by product id: its list row shows
+   * it (instead of no image) until the store has downloaded the file and the row has an
+   * image of its own.
+   */
+  previewImages: Record<string, PreviewImage>
 }
 
 export interface PendingMedia {
@@ -207,6 +216,7 @@ const initialState: ProductsState = {
   details: {},
   pendingMedia: {},
   removedMedia: {},
+  previewImages: {},
 }
 
 interface FetchArg {
@@ -580,6 +590,19 @@ const productsSlice = createSlice({
         ? { ...existing, items: [...existing.items, ...items] }
         : { items, baseline, startedAt }
     },
+    /** A product was just created with a picture: show it on the row until the store's own arrives. */
+    previewImageSet(state, action: PayloadAction<{ id: string; url: string }>) {
+      state.previewImages[action.payload.id] = {
+        url: action.payload.url,
+        at: Date.now(),
+      }
+    },
+    /** After a page refresh: what was still in progress when the page was left. */
+    productMediaRestored(state, action: PayloadAction<StoredProductMedia>) {
+      Object.assign(state.pendingMedia, action.payload.pendingMedia)
+      Object.assign(state.removedMedia, action.payload.removedMedia)
+      Object.assign(state.previewImages, action.payload.previewImages)
+    },
     /** Nothing is waiting any more for this product (it all arrived, or it was dismissed). */
     mediaSettled(state, action: PayloadAction<string>) {
       delete state.pendingMedia[action.payload]
@@ -612,7 +635,18 @@ const productsSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         const key = cacheKey(action.meta.arg.filters)
-        const { data, fetchedAt } = action.payload
+        const { fetchedAt } = action.payload
+        // A just-created product's row keeps its preview picture until its own arrives.
+        const kept = keepPreviewImages(
+          action.payload.data.items,
+          state.previewImages,
+          Date.now(),
+        )
+        state.previewImages = kept.previews
+        const data =
+          kept.items === action.payload.data.items
+            ? action.payload.data
+            : { ...action.payload.data, items: kept.items }
         state.entries[key] = { data, fetchedAt, error: null, isFetching: false }
 
         if (key === cacheKey(state.filters)) state.lastData = data
@@ -639,9 +673,9 @@ const productsSlice = createSlice({
         const { id, raw } = action.meta.arg
         const { fetchedAt } = action.payload
         // A just-deleted image the backend still lists stays hidden.
-        const removed = state.removedMedia[action.payload.data.id]
         let data = action.payload.data
-        if (removed) {
+        const removed = data ? state.removedMedia[data.id] : undefined
+        if (data && removed) {
           const hidden = hideRemovedImages(data.images, removed, Date.now())
           if (hidden.stillListed.length > 0) {
             state.removedMedia[data.id] = hidden.stillListed
@@ -722,6 +756,8 @@ export const {
   tabsCleared,
   mediaQueued,
   mediaSettled,
+  previewImageSet,
+  productMediaRestored,
 } = productsSlice.actions
 export const productsReducer = productsSlice.reducer
 

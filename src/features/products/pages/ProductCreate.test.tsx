@@ -426,6 +426,109 @@ describe('adding a product', () => {
     })
   }, 15_000)
 
+  it('says what the store made — the variant and file counts it reports', async () => {
+    create.mockResolvedValue({ ...CREATED, variants: 2, media: 3 })
+    const { user, form } = await openForm()
+    await fillBasics(user, form)
+    await user.click(submit(form))
+
+    expect(
+      await screen.findByText(/Created “Sushi Tray” with 2 variants and 3 files./),
+    ).toBeInTheDocument()
+  })
+
+  it('gives each variant its own weight, in one shared unit', async () => {
+    const { user, form } = await openForm()
+    await fillBasics(user, form)
+    await user.click(
+      within(form).getByRole('button', { name: 'Add options like size or colour' }),
+    )
+    await user.type(within(form).getByLabelText('Option name'), 'Size')
+    await user.type(
+      within(form).getByLabelText('Add values for option 1'),
+      'Small, Large{Enter}',
+    )
+    await user.type(within(form).getByLabelText('Weight for Small'), '0.10')
+    await user.type(within(form).getByLabelText('Weight for Large'), '0.15')
+    await user.click(submit(form))
+
+    await waitFor(() => expect(create).toHaveBeenCalled())
+    expect(
+      create.mock.calls[0][0].variants.map((v) => [v.weight, v.weight_unit]),
+    ).toEqual([
+      ['0.10', 'KILOGRAMS'],
+      ['0.15', 'KILOGRAMS'],
+    ])
+  }, 15_000)
+
+  describe('variant pictures and the tax code', () => {
+    const A = 'https://cdn.example.com/a.jpg'
+    const B = 'https://cdn.example.com/b.jpg'
+
+    it('sends a single product its picture address, listing it in media too, and the tax code', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.type(within(form).getByLabelText(/^Picture address/), A)
+      await user.type(within(form).getByLabelText(/^Tax code/), 'P0000000')
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      const body = create.mock.calls[0][0]
+      expect(body.variants).toHaveLength(1)
+      expect(body.variants[0]).toMatchObject({ image_url: A, tax_code: 'P0000000' })
+      expect(body.media).toEqual([{ url: A, media_type: 'IMAGE' }])
+    }, 15_000)
+
+    it('gives each variant of a multi-variant product its own picture address', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(
+        within(form).getByRole('button', { name: 'Add options like size or colour' }),
+      )
+      await user.type(within(form).getByLabelText('Option name'), 'Size')
+      await user.type(
+        within(form).getByLabelText('Add values for option 1'),
+        'Small, Large{Enter}',
+      )
+      await user.type(within(form).getByLabelText('Picture address for Small'), A)
+      await user.type(within(form).getByLabelText('Picture address for Large'), B)
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      const body = create.mock.calls[0][0]
+      expect(body.variants.map((v) => [v.option_values, v.image_url])).toEqual([
+        [['Small'], A],
+        [['Large'], B],
+      ])
+      // Every variant picture is in media, as the API requires.
+      expect(body.media?.map((item) => item.url)).toEqual([A, B])
+    }, 15_000)
+
+    it('suggests the addresses already listed under Media', async () => {
+      const { user, form } = await openForm()
+      await user.type(within(form).getByLabelText('Web address'), A)
+
+      const suggestions = form.querySelector('datalist#create-variant-pictures')
+      expect(suggestions?.querySelectorAll('option')).toHaveLength(1)
+      expect(suggestions?.querySelector('option')?.value).toBe(A)
+    })
+
+    it('refuses a variant picture that is not an https address, and sends nothing', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.type(
+        within(form).getByLabelText(/^Picture address/),
+        'http://insecure.example.com/a.jpg',
+      )
+      await user.click(submit(form))
+
+      expect(
+        await within(form).findByText('Use a public https:// address'),
+      ).toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+    })
+  })
+
   it('refuses a media address that is not https, and a collection that is not an ID', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)

@@ -6,6 +6,7 @@ import type {
 } from '../../lib/api/endpoints.ts'
 import {
   hideRemovedImages,
+  keepPreviewImages,
   patchDetail,
   patchListItem,
   patchTags,
@@ -120,6 +121,47 @@ describe('patchDetail', () => {
 
     expect(detail.title).toBe('Old')
     expect(detail.collections).toHaveLength(2)
+  })
+})
+
+describe('keepPreviewImages', () => {
+  const NOW = 1_000_000
+  const preview = { url: 'https://cdn.example.com/typed.jpg', at: NOW - 5000 }
+  const withImage = (image_url: string | null) =>
+    ({ ...row, id: 'p1', image_url }) as unknown as ProductListItem
+
+  it('puts the preview back on a row that came back without an image', () => {
+    const result = keepPreviewImages([withImage(null)], { p1: preview }, NOW)
+
+    expect(result.items[0].image_url).toBe(preview.url)
+    expect(result.previews).toHaveProperty('p1')
+  })
+
+  it('forgets it once the row has an image of its own', () => {
+    const result = keepPreviewImages(
+      [withImage('https://cdn.shopify.com/real.jpg')],
+      { p1: preview },
+      NOW,
+    )
+
+    expect(result.items[0].image_url).toBe('https://cdn.shopify.com/real.jpg')
+    expect(result.previews).toEqual({})
+  })
+
+  it('leaves other rows and an unchanged list alone', () => {
+    const items = [{ ...withImage(null), id: 'other' }]
+    const result = keepPreviewImages(items, { p1: preview }, NOW)
+
+    expect(result.items).toBe(items)
+    expect(result.previews).toHaveProperty('p1')
+  })
+
+  it('stops showing a preview after ten minutes', () => {
+    const old = { ...preview, at: NOW - 11 * 60_000 }
+    const result = keepPreviewImages([withImage(null)], { p1: old }, NOW)
+
+    expect(result.items[0].image_url).toBeNull()
+    expect(result.previews).toEqual({})
   })
 })
 

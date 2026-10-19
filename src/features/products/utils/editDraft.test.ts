@@ -3,7 +3,6 @@ import type { ProductDetail } from '../../../lib/api/endpoints.ts'
 import {
   blankMedia,
   buildMediaItems,
-  blankVariant,
   buildUpdateBody,
   draftFromProduct,
   hasChanges,
@@ -211,6 +210,51 @@ describe('buildUpdateBody', () => {
       ])
     })
 
+    it('never sends a new variant — only existing ones are edited or removed', () => {
+      const body = edit(makeProduct(), (draft) => {
+        draft.variants[0].price = '99'
+      })
+
+      expect(body.variants).toEqual([{ id: VARIANT_A, price: '99' }])
+      expect(JSON.stringify(body)).not.toContain('option_values')
+    })
+
+    it('preselects the picture a variant already shows (matched by file), and sends nothing for it', () => {
+      const product = makeProduct()
+      product.variants[0] = makeVariant(VARIANT_A, {
+        // The store's address carries a cache-busting query the image list doesn't.
+        image_url: 'https://cdn.example.com/2.jpg?v=99',
+      })
+      const draft = draftFromProduct(product)
+
+      expect(draft.variants[0].imageId).toBe(IMAGE_2)
+      expect(draft.variants[1].imageId).toBe('')
+      expect(buildUpdateBody(product, draft)).toEqual({})
+    })
+
+    it('sends image_attachment_id only when the variant is given a different picture', () => {
+      const product = makeProduct()
+      product.variants[0] = makeVariant(VARIANT_A, {
+        image_url: 'https://cdn.example.com/2.jpg',
+      })
+
+      const same = edit(product, (draft) => {
+        draft.variants[0].imageId = IMAGE_2
+      })
+      expect(same).toEqual({})
+
+      const changed = edit(product, (draft) => {
+        draft.variants[0].imageId = IMAGE_3
+      })
+      expect(changed.variants).toEqual([{ id: VARIANT_A, image_attachment_id: IMAGE_3 }])
+
+      // A variant with no picture can be given one.
+      const given = edit(product, (draft) => {
+        draft.variants[1].imageId = IMAGE_1
+      })
+      expect(given.variants).toEqual([{ id: VARIANT_B, image_attachment_id: IMAGE_1 }])
+    })
+
     it('removes a variant, and ignores edits to a variant being removed', () => {
       const body = edit(makeProduct(), (draft) => {
         draft.variants[1].price = '99'
@@ -219,41 +263,6 @@ describe('buildUpdateBody', () => {
 
       expect(body.variants_remove).toEqual([VARIANT_B])
       expect(body.variants).toBeUndefined()
-    })
-
-    it('creates a variant with its option values and everything filled in', () => {
-      const body = edit(makeProduct(), (draft) => {
-        const variant = blankVariant(1)
-        variant.optionValues = [' L ']
-        variant.price = '31.5'
-        variant.sku = ' SKU-3 '
-        variant.weight = '200'
-        draft.variants.push(variant)
-      })
-
-      expect(body.variants).toEqual([
-        {
-          option_values: ['L'],
-          price: '31.5',
-          sku: 'SKU-3',
-          weight: '200',
-          weight_unit: 'GRAMS',
-          taxable: true,
-          inventory_policy: 'DENY',
-          tracked: true,
-          requires_shipping: true,
-        },
-      ])
-    })
-
-    it('drops a new variant that was added and then removed again', () => {
-      const body = edit(makeProduct(), (draft) => {
-        const variant = blankVariant(1)
-        variant.removed = true
-        draft.variants.push(variant)
-      })
-
-      expect(body).toEqual({})
     })
   })
 
@@ -276,6 +285,92 @@ describe('buildUpdateBody', () => {
 
       expect(body.media_order).toEqual([IMAGE_3, IMAGE_1, IMAGE_2])
     })
+  })
+})
+
+/** The fields `PUT /products/{id}` accepts (from the API's ProductUpdate / VariantIn). */
+const API_FIELDS = new Set([
+  'title',
+  'description_html',
+  'vendor',
+  'product_type',
+  'status',
+  'handle',
+  'tags',
+  'tags_add',
+  'tags_remove',
+  'seo',
+  'template_suffix',
+  'category_gid',
+  'collections_add',
+  'collections_remove',
+  'variants',
+  'variants_remove',
+  'media_add',
+  'media_update',
+  'media_remove',
+  'media_order',
+])
+const API_VARIANT_FIELDS = new Set([
+  'id',
+  'option_values',
+  'price',
+  'compare_at_price',
+  'sku',
+  'barcode',
+  'taxable',
+  'tax_code',
+  'inventory_policy',
+  'tracked',
+  'requires_shipping',
+  'cost',
+  'weight',
+  'weight_unit',
+  'image_attachment_id',
+])
+
+describe('the update body only has fields the API has', () => {
+  it('even when every editable field is changed at once', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.title = 'T'
+      draft.descriptionHtml = '<p>D</p>'
+      draft.vendor = 'V'
+      draft.productType = 'PT'
+      draft.status = 'ARCHIVED'
+      draft.handle = 'h'
+      draft.templateSuffix = 'suffix'
+      draft.categoryGid = 'gid://shopify/TaxonomyCategory/aa-1'
+      draft.tags = ['new']
+      draft.seoTitle = 'S'
+      draft.seoDescription = 'SD'
+      draft.addedCollectionIds = ['44444444-4444-4444-8444-444444444444']
+      draft.removedCollectionIds = [COLLECTION]
+      draft.images[0].alt = 'changed'
+      draft.images = [draft.images[1], draft.images[0], draft.images[2]]
+      const variant = draft.variants[0]
+      variant.price = '1'
+      variant.compareAtPrice = '2'
+      variant.sku = 'S'
+      variant.barcode = 'B'
+      variant.taxable = !variant.taxable
+      variant.inventoryPolicy = variant.inventoryPolicy === 'DENY' ? 'CONTINUE' : 'DENY'
+      variant.tracked = !variant.tracked
+      variant.requiresShipping = !variant.requiresShipping
+      variant.cost = '3'
+      variant.weight = '4'
+      variant.weightUnit = 'KILOGRAMS'
+      variant.imageId = IMAGE_1
+      draft.variants[1].removed = true
+    })
+
+    expect(Object.keys(body).length).toBeGreaterThan(10)
+    for (const key of Object.keys(body)) expect(API_FIELDS.has(key), key).toBe(true)
+    for (const variant of body.variants ?? []) {
+      for (const key of Object.keys(variant)) {
+        expect(API_VARIANT_FIELDS.has(key), `variants.${key}`).toBe(true)
+      }
+    }
+    expect(Object.keys(body.variants?.[0] ?? {}).length).toBeGreaterThan(10)
   })
 })
 
@@ -323,28 +418,17 @@ describe('validateDraft', () => {
     expect(errors['variants.1.weight']).toBeDefined()
   })
 
-  it('needs a price and every option value for a new variant', () => {
-    const errors = problems((d) => d.variants.push(blankVariant(1)))
-
-    expect(errors['variants.2.price']).toBe('Enter a price')
-    expect(errors['variants.2.optionValues']).toBeDefined()
-  })
-
   it('does not let every variant be removed', () => {
     const errors = problems((d) =>
       d.variants.forEach((variant) => (variant.removed = true)),
     )
 
     expect(errors.variants).toBe('A product needs at least one variant')
-    // ...but swapping one for a new variant is fine.
-    const swapped = problems((d) => {
-      d.variants.forEach((variant) => (variant.removed = true))
-      const fresh = blankVariant(1)
-      fresh.optionValues = ['L']
-      fresh.price = '5'
-      d.variants.push(fresh)
+    // Removing all but one is fine.
+    const some = problems((d) => {
+      d.variants[0].removed = true
     })
-    expect(swapped.variants).toBeUndefined()
+    expect(some.variants).toBeUndefined()
   })
 
   it('does not validate a variant that is being removed', () => {
@@ -363,6 +447,55 @@ describe('validateDraft', () => {
 
     expect(errors['addedCollections.0']).toBeDefined()
     expect(errors['addedCollections.1']).toBeUndefined()
+  })
+})
+
+describe('the "Add media" form, for the documented three-image example', () => {
+  const row = (url: string, alt: string) => ({ ...blankMedia(), url, alt })
+  const rows = [
+    row(
+      'https://placehold.co/600x600?text=Small+Carrier+Bag',
+      'Small white plastic carrier bag',
+    ),
+    row(
+      'https://placehold.co/600x600?text=Large+Carrier+Bag',
+      'Large white plastic carrier bag',
+    ),
+    row(
+      'https://placehold.co/600x600?text=White+Plastic+Carrier+Bag',
+      'White plastic carrier bag',
+    ),
+  ]
+
+  it('is valid, and becomes exactly the documented { items } body', () => {
+    expect(validateNewMedia(rows)).toEqual({})
+    expect(buildMediaItems(rows)).toEqual([
+      {
+        url: 'https://placehold.co/600x600?text=Small+Carrier+Bag',
+        media_type: 'IMAGE',
+        alt: 'Small white plastic carrier bag',
+      },
+      {
+        url: 'https://placehold.co/600x600?text=Large+Carrier+Bag',
+        media_type: 'IMAGE',
+        alt: 'Large white plastic carrier bag',
+      },
+      {
+        url: 'https://placehold.co/600x600?text=White+Plastic+Carrier+Bag',
+        media_type: 'IMAGE',
+        alt: 'White plastic carrier bag',
+      },
+    ])
+  })
+
+  it('takes up to 20 files in one call, the API’s limit, and no more', () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      row('https://cdn.example.com/' + i + '.jpg', ''),
+    )
+    expect(validateNewMedia(many)).toEqual({})
+    expect(
+      validateNewMedia([...many, row('https://cdn.example.com/x.jpg', '')]).rows,
+    ).toMatch(/at most 20/)
   })
 })
 

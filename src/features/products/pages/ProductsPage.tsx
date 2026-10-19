@@ -26,9 +26,17 @@ import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 
-/** How often, and for how long, to look for the image of a just-created product. */
+/**
+ * How often, and for how long, to look for the image of a just-created product:
+ * every 4 s at first; after 40 s say it is taking long and look every 16 s; stop at 10 min.
+ */
 const IMAGE_POLL_MS = 4000
 const IMAGE_GIVE_UP_MS = 40_000
+const IMAGE_SLOW_POLL_MS = 16_000
+const IMAGE_STOP_MS = 10 * 60_000
+
+const plural = (count: number, word: string) =>
+  `${count} ${word}${count === 1 ? '' : 's'}`
 
 const LIST_PATH = '/products'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
@@ -110,8 +118,13 @@ export function ProductsPage() {
     info: { previewUrl: string | null },
   ) {
     setCreating(false)
+    // What the store made, as it reports it (the counts are of what it accepted).
+    const made = [
+      result.variants > 0 ? plural(result.variants, 'variant') : '',
+      result.media > 0 ? plural(result.media, 'file') : '',
+    ].filter(Boolean)
     setNotice(
-      `Created “${result.title}”. ${result.message || 'It is in your store and in the list below.'}${
+      `Created “${result.title}”${made.length ? ` with ${made.join(' and ')}` : ''}. ${result.message || 'It is in your store and in the list below.'}${
         info.previewUrl ? ' Its image is being downloaded by the store.' : ''
       }`,
     )
@@ -164,18 +177,31 @@ export function ProductsPage() {
   }
   useEffect(() => {
     if (!awaitingImage) return undefined
-    const poll = window.setInterval(() => refreshList(false), IMAGE_POLL_MS)
-    const giveUp = window.setTimeout(() => {
-      refreshList(true)
-      setAwaitingImage(null)
+    const startedAt = Date.now()
+    let ticks = 0
+    const poll = window.setInterval(() => {
+      const age = Date.now() - startedAt
+      if (age > IMAGE_STOP_MS) {
+        setAwaitingImage(null)
+        return
+      }
+      ticks += 1
+      // Once it is taking long, look less often (every fourth time).
+      if (age > IMAGE_GIVE_UP_MS && ticks % (IMAGE_SLOW_POLL_MS / IMAGE_POLL_MS) !== 0) {
+        return
+      }
+      refreshList(false)
+    }, IMAGE_POLL_MS)
+    // The picture on the row stays (the slice keeps it) while this keeps looking.
+    const slow = window.setTimeout(() => {
       setNoticeState({
         tone: 'info',
-        text: `“${awaitingImage.title}” was created, but its image hasn't arrived yet. The store needs a direct, public link to an image file — if it couldn't download yours, add the image again from the product's Media tab.`,
+        text: `“${awaitingImage.title}” was created, but its image hasn't arrived yet. The store needs a direct, public link to an image file — it keeps checking, and if it never appears, add the image again from the product's Media tab.`,
       })
     }, IMAGE_GIVE_UP_MS)
     return () => {
       window.clearInterval(poll)
-      window.clearTimeout(giveUp)
+      window.clearTimeout(slow)
     }
   }, [awaitingImage, refreshList])
 

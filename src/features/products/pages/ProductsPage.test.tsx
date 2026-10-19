@@ -608,6 +608,23 @@ describe('ProductsPage details', () => {
     expect(screen.getByText('This product has no images.')).toBeInTheDocument()
   })
 
+  it("shows each variant's own picture beside its name in the Variants tab", async () => {
+    const detail = makeDetail('id-7')
+    detail.variants[0].image_url = 'https://cdn.example.com/variant-small.jpg'
+    details.mockResolvedValue(detail)
+    const user = userEvent.setup()
+    renderPage('/products/id-7')
+    await screen.findByRole('heading', { level: 1, name: 'Product 7' })
+
+    await user.click(screen.getByRole('tab', { name: /Variants/ }))
+
+    const cell = screen.getByRole('cell', { name: /Default Title/ })
+    expect(cell.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/variant-small.jpg',
+    )
+  })
+
   it('starts with Status & Launch and Description collapsed, Specifications open', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')

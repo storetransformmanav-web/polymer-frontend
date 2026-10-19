@@ -29,6 +29,47 @@ export function patchTags(tags: string[], body: ProductUpdateBody): string[] {
 /** The same file, ignoring a CDN's cache-busting query string (`?v=123`). */
 export const sameFile = (a: string, b: string) => a.split('?')[0] === b.split('?')[0]
 
+/** The picture a just-created product was given, shown until the store's own copy exists. */
+export interface PreviewImage {
+  url: string
+  /** When the product was created (ms). */
+  at: number
+}
+
+/** After this long a preview that was never replaced is dropped. */
+export const PREVIEW_IMAGE_TTL_MS = 10 * 60_000
+
+/**
+ * A just-created product's image is downloaded by the store afterwards, so a list
+ * read in the meantime returns its row with no image — which would wipe the
+ * picture that was on screen. This puts the preview back on such a row, and
+ * forgets a preview once the row has an image of its own (a different address),
+ * or it is too old. `items` is returned as is when nothing changed.
+ */
+export function keepPreviewImages(
+  items: ProductListItem[],
+  previews: Record<string, PreviewImage>,
+  now: number,
+): { items: ProductListItem[]; previews: Record<string, PreviewImage> } {
+  const remaining = { ...previews }
+  let changed = false
+  const next = items.map((item) => {
+    const preview = remaining[item.id]
+    if (!preview) return item
+    if (now - preview.at >= PREVIEW_IMAGE_TTL_MS) {
+      delete remaining[item.id]
+      return item
+    }
+    if (!item.image_url) {
+      changed = true
+      return { ...item, image_url: preview.url }
+    }
+    if (item.image_url !== preview.url) delete remaining[item.id]
+    return item
+  })
+  return { items: changed ? next : items, previews: remaining }
+}
+
 /** An image that was deleted, but that the backend may still list for a while. */
 export interface RemovedImage {
   id: string

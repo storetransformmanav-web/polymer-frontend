@@ -171,6 +171,19 @@ describe('adding and deleting media', () => {
       return { user, dialog: await screen.findByRole('dialog', { name: 'Add media' }) }
     }
 
+    it('warns, without blocking, that a placehold.co address without an extension gives an SVG', async () => {
+      const { user, dialog } = await openDialog()
+      await user.type(
+        within(dialog).getByLabelText('Web address'),
+        'https://placehold.co/600x600?text=Small+Carrier+Bag',
+      )
+
+      expect(
+        await within(dialog).findByText(/gives an SVG/, undefined, { timeout: 3000 }),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Add to product' })).toBeEnabled()
+    })
+
     it('opens a form with the cursor in the first address, and sends nothing yet', async () => {
       const { dialog } = await openDialog()
 
@@ -460,7 +473,68 @@ describe('adding and deleting media', () => {
     })
   })
 
+  describe('which images belong to the product and which also to variants', () => {
+    it('marks an image that is a variant’s picture, and the rest as product images', async () => {
+      const withVariants = product(TWO_IMAGES)
+      withVariants.variants = [
+        {
+          id: 'v1',
+          shopify_id: 1,
+          title: 'Small',
+          price: '5.00',
+          // Matches image 2 by file, ignoring the cache-busting query.
+          image_url: 'https://cdn.example.com/2.jpg?v=5',
+          inventory_levels: [],
+          metafields: [],
+        },
+      ] as unknown as typeof withVariants.variants
+      details.mockResolvedValue(withVariants)
+      await openMediaTab()
+
+      expect(await screen.findByText('Variant: Small')).toBeInTheDocument()
+      expect(screen.getAllByText('Product image')).toHaveLength(1)
+    })
+  })
+
   describe('editing the media in place', () => {
+    it('saves an alt-text edit as media_update only — the API field, nothing else', async () => {
+      const updateMock = vi.mocked(api.products.update)
+      updateMock.mockResolvedValue(WRITE_OK)
+      const user = await openMediaTab()
+      await user.click(await screen.findByRole('button', { name: 'Edit media' }))
+
+      const alt = screen.getByLabelText('Alt text', {
+        selector: `#edit-image-alt-${IMG_1}`,
+      })
+      await user.clear(alt)
+      await user.type(alt, 'A red bag')
+      await user.click(screen.getByRole('button', { name: 'Save media' }))
+
+      await waitFor(() =>
+        expect(updateMock).toHaveBeenCalledWith(
+          'id-1',
+          { media_update: [{ attachment_id: IMG_1, alt: 'A red bag' }] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends no order or file fields for an alt-text edit, and nothing when alt is unchanged', async () => {
+      const updateMock = vi.mocked(api.products.update)
+      updateMock.mockResolvedValue(WRITE_OK)
+      const user = await openMediaTab()
+      await user.click(await screen.findByRole('button', { name: 'Edit media' }))
+      const alt = screen.getByLabelText('Alt text', {
+        selector: `#edit-image-alt-${IMG_2}`,
+      })
+      await user.type(alt, '!')
+      await user.click(screen.getByRole('button', { name: 'Save media' }))
+
+      await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1))
+      const body = updateMock.mock.calls[0][1]
+      expect(Object.keys(body)).toEqual(['media_update'])
+    })
+
     it('is only for alt text and order now — no add or remove inside it', async () => {
       const user = await openMediaTab()
       await user.click(await screen.findByRole('button', { name: 'Edit media' }))
@@ -555,6 +629,21 @@ describe('files the store has not finished downloading', () => {
     )
     expect(screen.queryByText(/taking longer than usual/)).not.toBeInTheDocument()
     expect(screen.getByText('1 image')).toBeInTheDocument()
+  })
+
+  it('read the products list again when the image arrives, so its row gets the image too', async () => {
+    await addOne()
+    list.mockClear()
+
+    details.mockResolvedValue(
+      product([{ id: 'img-new', url: 'https://cdn.shopify.com/new.jpg', alt: 'New' }]),
+    )
+    await act(() => vi.advanceTimersByTimeAsync(4100))
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+    )
+    await waitFor(() => expect(list).toHaveBeenCalled())
   })
 
   it('can be dismissed', async () => {

@@ -22,6 +22,9 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   },
 }))
 
+// These tests type into a long form and advance fake timers: allow for a slow machine.
+vi.setConfig({ testTimeout: 20_000 })
+
 const SHOP: Shop = {
   id: 's1',
   key: 'polymer-uk',
@@ -156,6 +159,24 @@ describe('a product created with an image', () => {
     expect(newRowImage()).toHaveAttribute('src', USER_URL)
   })
 
+  it('shows a picture given only to the variant (no Media rows) on the new row, and waits for the store’s copy', async () => {
+    const { user, form } = await openForm()
+    await user.type(within(form).getByLabelText(/^Picture address/), USER_URL)
+    list.mockClear()
+    await user.click(createButton(form))
+
+    expect(await screen.findByText(/Created “Sushi Tray”/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Its image is being downloaded by the store/),
+    ).toBeInTheDocument()
+    expect(list).not.toHaveBeenCalled()
+    expect(newRowImage()).toHaveAttribute('src', USER_URL)
+
+    list.mockResolvedValue(page([row('new-id', 'Sushi Tray', STORE_URL), EXISTING]))
+    await act(() => vi.advanceTimersByTimeAsync(4100))
+    await waitFor(() => expect(newRowImage()).toHaveAttribute('src', STORE_URL))
+  })
+
   it('looks again every few seconds and swaps in the store’s own image once it exists, then stops', async () => {
     const { user, form } = await openForm()
     await user.type(within(form).getByLabelText('Web address'), USER_URL)
@@ -170,6 +191,38 @@ describe('a product created with an image', () => {
     list.mockClear()
     await act(() => vi.advanceTimersByTimeAsync(20_000))
     expect(list).not.toHaveBeenCalled()
+  })
+
+  it('keeps the picture on the new row when the list is re-read without an image yet', async () => {
+    const { user, form } = await openForm()
+    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.click(createButton(form))
+    await screen.findByText(/Created “Sushi Tray”/)
+
+    // The backend's row has no image: the picture must not vanish.
+    list.mockResolvedValue(page([row('new-id', 'Sushi Tray'), EXISTING]))
+    list.mockClear()
+    await act(() => vi.advanceTimersByTimeAsync(9000))
+    await waitFor(() => expect(list).toHaveBeenCalled())
+
+    expect(newRowImage()).toHaveAttribute('src', USER_URL)
+  })
+
+  it('keeps the picture and keeps looking, more slowly, after the first 40 seconds', async () => {
+    const { user, form } = await openForm()
+    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.click(createButton(form))
+    await screen.findByText(/Created “Sushi Tray”/)
+
+    list.mockResolvedValue(page([row('new-id', 'Sushi Tray'), EXISTING]))
+    await act(() => vi.advanceTimersByTimeAsync(45_000))
+    expect(await screen.findByText(/its image hasn't arrived yet/)).toBeInTheDocument()
+    expect(newRowImage()).toHaveAttribute('src', USER_URL)
+
+    // Still looking (every 16 s), and the store's image replaces it when it arrives.
+    list.mockResolvedValue(page([row('new-id', 'Sushi Tray', STORE_URL), EXISTING]))
+    await act(() => vi.advanceTimersByTimeAsync(17_000))
+    await waitFor(() => expect(newRowImage()).toHaveAttribute('src', STORE_URL))
   })
 
   it('keeps looking while the image has not arrived', async () => {

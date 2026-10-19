@@ -8,7 +8,7 @@ import {
   type DraftErrors,
   type NewMediaDraft,
 } from '../utils/editDraft.ts'
-import { safeUrl } from '../utils/format.ts'
+import { safeUrl, svgImageWarning } from '../utils/format.ts'
 import { EditField, FIELD_INPUT, ICON_BUTTON, TEXT_BUTTON } from './edit/fields.tsx'
 
 /**
@@ -37,14 +37,22 @@ function UrlPreview({ url }: { url: string }) {
       </p>
     )
   }
+  const svg = svgImageWarning(src)
   return (
-    <img
-      src={src}
-      alt="Preview of this image"
-      referrerPolicy="no-referrer"
-      onError={() => setBroken(src)}
-      className="border-border bg-surface h-16 w-16 rounded-lg border object-cover"
-    />
+    <div className="flex flex-col gap-1.5">
+      <img
+        src={src}
+        alt="Preview of this image"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(src)}
+        className="border-border bg-surface h-16 w-16 rounded-lg border object-cover"
+      />
+      {svg && (
+        <p role="status" className="text-warning text-[0.78rem] leading-snug">
+          {svg}
+        </p>
+      )}
+    </div>
   )
 }
 
