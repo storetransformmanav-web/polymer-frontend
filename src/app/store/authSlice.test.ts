@@ -60,3 +60,32 @@ describe('restoring a saved session', () => {
     expect(await loadSessionFromStorage(stored)).toBeNull()
   })
 })
+
+describe('how long a session lasts', () => {
+  const NOW = Date.parse('2026-10-20T10:00:00Z')
+  const DAY = 24 * 60 * 60 * 1000
+
+  async function sessionExpiry(expiresAt: string) {
+    vi.resetModules()
+    const slice = await import('./authSlice.ts')
+    return slice.sessionExpiry(expiresAt, NOW)
+  }
+
+  it('is 30 days from signing in (the backend token lasts 30)', async () => {
+    const BACKEND_30_DAYS = new Date(NOW + 30 * DAY).toISOString()
+
+    expect(await sessionExpiry(BACKEND_30_DAYS)).toBe(BACKEND_30_DAYS)
+  })
+
+  it('never outlasts the backend token, and never goes past 30 days', async () => {
+    const SHORT = new Date(NOW + 2 * 60 * 60 * 1000).toISOString()
+    expect(await sessionExpiry(SHORT)).toBe(SHORT)
+
+    const LONG = new Date(NOW + 90 * DAY).toISOString()
+    expect(await sessionExpiry(LONG)).toBe(new Date(NOW + 30 * DAY).toISOString())
+  })
+
+  it('falls back to 30 days when the backend date is unreadable', async () => {
+    expect(await sessionExpiry('soon')).toBe(new Date(NOW + 30 * DAY).toISOString())
+  })
+})

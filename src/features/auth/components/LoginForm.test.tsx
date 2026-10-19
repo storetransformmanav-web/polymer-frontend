@@ -46,6 +46,33 @@ describe('LoginForm', () => {
     window.localStorage.clear()
   })
 
+  describe('how long signing in lasts', () => {
+    const DAY = 24 * 60 * 60 * 1000
+
+    it('offers no choice (no checkbox or button) — everyone stays signed in for 30 days', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<LoginForm />)
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+      expect(screen.queryByText(/remember me/i)).not.toBeInTheDocument()
+      await goToOtpStep(user)
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('starts a session that lasts 30 days', async () => {
+      vi.mocked(api.auth.verifyOtp).mockResolvedValue(LOGIN_RESPONSE)
+      const user = userEvent.setup()
+      const { store } = renderWithProviders(<LoginForm />)
+      await goToOtpStep(user)
+      for (const digit of '123456') await user.keyboard(digit)
+      await waitFor(() => expect(store.getState().auth.session).not.toBeNull())
+
+      const left = Date.parse(store.getState().auth.session!.expiresAt) - Date.now()
+      expect(left).toBeGreaterThan(30 * DAY - 60_000)
+      expect(left).toBeLessThanOrEqual(30 * DAY)
+    })
+  })
+
   describe('email step', () => {
     it('asks only for an email — there is no password field', () => {
       renderWithProviders(<LoginForm />)

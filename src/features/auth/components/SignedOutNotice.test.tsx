@@ -11,24 +11,23 @@ describe('sign-out notice on the login form', () => {
     expect(screen.queryByText(/signed out|session has expired/i)).not.toBeInTheDocument()
   })
 
-  it.each([
-    ['idle', 'You were signed out after a period of inactivity. Please sign in again.'],
-    ['expired', 'Your session has expired. Please sign in again.'],
-  ] as const)('explains an automatic %s sign-out', (reason, message) => {
+  it('explains an automatic sign-out when the session has expired', () => {
     const { store } = renderWithProviders(<LoginForm />)
 
     act(() => {
-      store.dispatch(sessionCleared(reason))
+      store.dispatch(sessionCleared('expired'))
     })
 
-    expect(screen.getByRole('status')).toHaveTextContent(message)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your session has expired. Please sign in again.',
+    )
   })
 
   it('goes away as soon as the user starts signing in again', async () => {
     const user = userEvent.setup()
     const { store } = renderWithProviders(<LoginForm />)
     act(() => {
-      store.dispatch(sessionCleared('idle'))
+      store.dispatch(sessionCleared('expired'))
     })
     expect(screen.getByRole('status')).toBeInTheDocument()
 

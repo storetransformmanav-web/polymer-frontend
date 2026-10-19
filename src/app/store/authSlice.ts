@@ -12,8 +12,37 @@ export const SESSION_STORAGE_KEY = 'polymer-crm:session'
 
 export interface Session {
   accessToken: string
+  /** When the app ends this session: the token's expiry, or sooner (see `sessionExpiry`). */
   expiresAt: string
   user: AuthUser
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+/** Every sign-in lasts 30 days — and nothing signs you out sooner except Log out. */
+export const SESSION_DAYS = 30
+
+/**
+ * When the app ends a session that starts now: after 30 days, or when the
+ * backend's token runs out if that is sooner (the backend issues 30-day tokens).
+ */
+export function sessionExpiry(backendExpiresAt: string, now = Date.now()): string {
+  const limit = now + SESSION_DAYS * DAY_MS
+  const backend = Date.parse(backendExpiresAt)
+  return new Date(
+    Number.isFinite(backend) ? Math.min(backend, limit) : limit,
+  ).toISOString()
+}
+
+function buildSession(response: {
+  access_token: string
+  expires_at: string
+  user: AuthUser
+}): Session {
+  return {
+    accessToken: response.access_token,
+    expiresAt: sessionExpiry(response.expires_at),
+    user: response.user,
+  }
 }
 
 type RequestStatus = 'idle' | 'loading' | 'error'
@@ -40,8 +69,8 @@ export interface AuthState {
   signedOutReason: SignOutReason | null
 }
 
-/** 'idle' = inactivity timeout; 'expired' = the token ran out or was rejected. */
-export type SignOutReason = 'idle' | 'expired'
+/** 'expired' = the session ran out or the token was rejected. */
+export type SignOutReason = 'expired'
 
 type AuthRootState = { auth: AuthState }
 
@@ -191,11 +220,7 @@ export const verifyOtp = createAsyncThunk<
   async (code, { getState, rejectWithValue }) => {
     try {
       const response = await api.auth.verifyOtp(getState().auth.email, code)
-      return {
-        accessToken: response.access_token,
-        expiresAt: response.expires_at,
-        user: response.user,
-      }
+      return buildSession(response)
     } catch (error) {
       return rejectWithValue(toMessage(error))
     }
@@ -213,11 +238,7 @@ export const googleSignIn = createAsyncThunk<
   async (credential, { rejectWithValue }) => {
     try {
       const response = await api.auth.google(credential)
-      return {
-        accessToken: response.access_token,
-        expiresAt: response.expires_at,
-        user: response.user,
-      }
+      return buildSession(response)
     } catch (error) {
       return rejectWithValue(toMessage(error))
     }

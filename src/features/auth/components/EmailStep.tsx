@@ -15,7 +15,6 @@ const INVALID_EMAIL = 'Enter a valid email address'
 
 // Shown once after an automatic sign-out, so it's never a mystery.
 const SIGNED_OUT_MESSAGES = {
-  idle: 'You were signed out after a period of inactivity. Please sign in again.',
   expired: 'Your session has expired. Please sign in again.',
 } as const
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

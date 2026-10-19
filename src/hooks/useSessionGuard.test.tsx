@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { googleSignIn, SESSION_STORAGE_KEY } from '../app/store/authSlice.ts'
 import { api, type AuthUser } from '../lib/api/endpoints.ts'
 import { renderWithProviders } from '../test/renderWithProviders.tsx'
-import { IDLE_TIMEOUT_MS, useSessionGuard } from './useSessionGuard.ts'
+import { useSessionGuard } from './useSessionGuard.ts'
 
 vi.mock('../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/api/endpoints.ts')>()),
@@ -11,6 +11,7 @@ vi.mock('../lib/api/endpoints.ts', async (importOriginal) => ({
 }))
 
 const MINUTE = 60_000
+const DAY = 24 * 60 * MINUTE
 const USER: AuthUser = {
   id: 'u1',
   email: 'a@b.co',
@@ -29,7 +30,7 @@ function Probe() {
 type Store = ReturnType<typeof renderWithProviders>['store']
 
 /** Mounts the guard and signs in; the token expires `expiresInMs` from (fake) now. */
-function setup(expiresInMs = 24 * 60 * MINUTE) {
+function setup(expiresInMs = 30 * DAY) {
   const { store } = renderWithProviders(<Probe />)
   act(() => {
     store.dispatch(
@@ -62,41 +63,28 @@ describe('useSessionGuard', () => {
     window.localStorage.clear()
   })
 
-  it('signs out after the idle timeout, tells the server, and records why', async () => {
-    const store = setup()
+  it('never signs you out for inactivity — you stay signed in for the whole 30 days', async () => {
+    const store = setup(30 * DAY)
 
-    await advance(IDLE_TIMEOUT_MS - 2 * MINUTE)
+    await advance(2 * 60 * MINUTE) // two hours, no interaction at all
     expect(auth(store).session).not.toBeNull()
 
-    await advance(3 * MINUTE)
+    await advance(15 * DAY) // two weeks later, still no interaction
+    expect(auth(store).session).not.toBeNull()
+    expect(auth(store).signedOutReason).toBeNull()
+    expect(api.auth.logout).not.toHaveBeenCalled()
+  })
+
+  it('signs out, and revokes the token, when the 30 days are over', async () => {
+    const store = setup(30 * DAY)
+
+    await advance(29 * DAY)
+    expect(auth(store).session).not.toBeNull()
+
+    await advance(2 * DAY)
     expect(auth(store).session).toBeNull()
-    expect(auth(store).signedOutReason).toBe('idle')
+    expect(auth(store).signedOutReason).toBe('expired')
     expect(api.auth.logout).toHaveBeenCalledWith('session-token')
-  })
-
-  it('counts user activity: interaction restarts the idle clock', async () => {
-    const store = setup()
-
-    await advance(20 * MINUTE)
-    act(() => {
-      document.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    })
-    await advance(20 * MINUTE) // 40 min since sign-in, but only 20 since activity
-    expect(auth(store).session).not.toBeNull()
-
-    await advance(11 * MINUTE)
-    expect(auth(store).signedOutReason).toBe('idle')
-  })
-
-  it('does not sign you out while you are active in another tab', async () => {
-    const store = setup()
-
-    await advance(25 * MINUTE)
-    // Another tab records activity in shared storage.
-    window.localStorage.setItem('polymer-crm:last-activity', String(Date.now()))
-    await advance(10 * MINUTE) // 35 min here, but only 10 since the other tab's activity
-
-    expect(auth(store).session).not.toBeNull()
   })
 
   it('signs out when the token expires, without waiting for a request to fail', async () => {
@@ -108,6 +96,8 @@ describe('useSessionGuard', () => {
     await advance(2 * MINUTE)
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBe('expired')
+    // The token is revoked too (the app's own limit can be sooner than the backend's).
+    expect(api.auth.logout).toHaveBeenCalledWith('session-token')
   })
 
   it('signs out here when the session is removed in another tab', () => {
@@ -141,7 +131,7 @@ describe('useSessionGuard', () => {
   it('does nothing while signed out', async () => {
     const { store } = renderWithProviders(<Probe />)
 
-    await advance(IDLE_TIMEOUT_MS * 2)
+    await advance(2 * DAY)
 
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBeNull()
