@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   AlertTriangleIcon,
   EyeIcon,
@@ -273,17 +274,26 @@ export function ProductsList({
                       <ProductImage src={product.image_url} alt="" />
                     </button>
                   </td>
-                  <td className={TD}>
-                    <button
-                      type="button"
-                      title={product.title}
-                      onClick={() => onOpen(product)}
-                      onPointerEnter={() => onPrefetch(product.id)}
-                      onFocus={() => onPrefetch(product.id)}
-                      className="hover:text-accent focus-visible:outline-accent block max-w-64 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2 2xl:max-w-[26rem]"
-                    >
-                      {product.title}
-                    </button>
+                  <td className={`${TD} group/name`}>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        title={product.title}
+                        onClick={() => onOpen(product)}
+                        onPointerEnter={() => onPrefetch(product.id)}
+                        onFocus={() => onPrefetch(product.id)}
+                        className="hover:text-accent focus-visible:outline-accent block max-w-64 min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2 2xl:max-w-[26rem]"
+                      >
+                        {product.title}
+                      </button>
+                      {/* Appears when the name is hovered (or the button is focused by keyboard). */}
+                      <span className="opacity-0 transition-opacity group-hover/name:opacity-100 focus-within:opacity-100">
+                        <CopyButton
+                          value={product.title}
+                          label={`Copy name of ${product.title}`}
+                        />
+                      </span>
+                    </div>
                   </td>
                   <td className={`${TD} text-center`}>
                     {product.variants_count.toLocaleString('en-GB')}

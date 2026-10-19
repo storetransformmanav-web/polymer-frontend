@@ -559,6 +559,35 @@ describe('ProductsPage details', () => {
     expect(within(screen.getByRole('banner')).getByText('£25.85')).toBeInTheDocument()
   })
 
+  it('shows a copy button beside each product name, and clicking it copies just the name', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const copy = screen.getByRole('button', { name: 'Copy name of Product 1' })
+    await user.hover(screen.getByText('Product 1'))
+    await user.click(copy)
+
+    expect(await navigator.clipboard.readText()).toBe('Product 1')
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    // Copying is not opening: the product's page did not open (hovering only prefetches).
+    expect(screen.queryByRole('heading', { level: 1, name: 'Product 1' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add product' })).toBeInTheDocument()
+  })
+
+  it('has one copy button per row, each for its own product', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 2')
+
+    await user.click(screen.getByRole('button', { name: 'Copy name of Product 2' }))
+
+    expect(await navigator.clipboard.readText()).toBe('Product 2')
+    expect(
+      screen.getAllByRole('button', { name: /^Copy name of / }).length,
+    ).toBeGreaterThan(1)
+  })
+
   it('prefetches details on hover so opening needs no extra request', async () => {
     const user = userEvent.setup()
     renderPage()

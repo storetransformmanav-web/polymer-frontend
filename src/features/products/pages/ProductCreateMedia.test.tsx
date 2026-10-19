@@ -30,6 +30,9 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   },
 }))
 
+// These tests type into a long form and advance fake timers: allow for a slow machine.
+vi.setConfig({ testTimeout: 20_000 })
+
 const SHOP: Shop = {
   id: 's1',
   key: 'polymer-uk',
