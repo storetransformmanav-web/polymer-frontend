@@ -3,13 +3,19 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   AlertTriangleIcon,
+  ExternalLinkIcon,
   EyeIcon,
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
-import { formatPriceRange, statusLabel, statusTone } from '../utils/format.ts'
+import {
+  formatPriceRange,
+  shopifyAdminProductUrl,
+  statusLabel,
+  statusTone,
+} from '../utils/format.ts'
 import type { ProductEditStatus } from '../../../lib/api/endpoints.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
@@ -81,6 +87,33 @@ const MESSAGE_BUTTON =
  * below it. Handles the loading skeleton, error and empty states itself so
  * the page only passes data in.
  */
+/** Opens the product's page in the Shopify admin (a new tab). */
+function ShopifyLink({ product }: { product: ProductListItem }) {
+  const href = shopifyAdminProductUrl(product.shop, product.shopify_id)
+  if (!href) {
+    return (
+      <span
+        title="The store's address isn't known, so there is no Shopify link"
+        className="text-text-muted"
+      >
+        —
+      </span>
+    )
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${product.title} in Shopify`}
+      title="Open in Shopify"
+      className="text-text-muted hover:text-accent hover:bg-accent-tint focus-visible:outline-accent inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-2"
+    >
+      <ExternalLinkIcon />
+    </a>
+  )
+}
+
 export function ProductsList({
   items,
   isPending,
@@ -223,6 +256,7 @@ export function ProductsList({
             </th>
             <th className={`${TH} w-20`}>Image</th>
             <th className={TH}>Product</th>
+            <th className={`${TH_CENTER} w-24`}>Shopify</th>
             <th className={`${TH_CENTER} w-28`}>Variants</th>
             <th className={`${TH} w-40`}>Status</th>
             <th className={`${TH_RIGHT} w-36`}>Inventory</th>
@@ -239,7 +273,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: 9 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -294,6 +328,9 @@ export function ProductsList({
                         />
                       </span>
                     </div>
+                  </td>
+                  <td className={`${TD} text-center`}>
+                    <ShopifyLink product={product} />
                   </td>
                   <td className={`${TD} text-center`}>
                     {product.variants_count.toLocaleString('en-GB')}

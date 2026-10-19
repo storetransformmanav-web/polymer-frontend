@@ -90,3 +90,22 @@ export function svgImageWarning(address: string): string | null {
       : ''
   }.`
 }
+
+/**
+ * The address of a product's page in the Shopify admin —
+ * `https://admin.shopify.com/store/<store>/products/<shopify id>` — or null when it
+ * can't be worked out (no store address on the row, or an id that isn't a plain
+ * positive number). The store name is the part of its `*.myshopify.com` address
+ * before that suffix, and nothing else from the data is put in the link.
+ */
+export function shopifyAdminProductUrl(
+  shop: { domain?: string | null } | null | undefined,
+  shopifyId: number | null | undefined,
+): string | null {
+  const match = /^([a-z0-9][a-z0-9-]*)\.myshopify\.com$/i.exec(
+    (shop?.domain ?? '').trim(),
+  )
+  if (!match || !Number.isSafeInteger(shopifyId) || (shopifyId as number) <= 0)
+    return null
+  return `https://admin.shopify.com/store/${match[1].toLowerCase()}/products/${shopifyId}`
+}

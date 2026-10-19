@@ -203,7 +203,7 @@ describe('ProductsPage list', () => {
     expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
   })
 
-  it('lays the table out as (tick), Image, Product, Variants, Status, Inventory, Price, Actions', async () => {
+  it('lays the table out as (tick), Image, Product, Shopify, Variants, Status, Inventory, Price, Actions', async () => {
     renderPage()
     await screen.findByText('Product 1')
 
@@ -215,6 +215,7 @@ describe('ProductsPage list', () => {
       '', // the "select all on this page" checkbox
       'Image',
       'Product',
+      'Shopify',
       'Variants',
       'Status',
       'Inventory',
@@ -226,14 +227,15 @@ describe('ProductsPage list', () => {
     // Product 1: 2 variants, 10 units. Product 3 is out of stock.
     const [, row1, , row3] = within(table).getAllByRole('row')
     const cells1 = within(row1).getAllByRole('cell')
-    expect(cells1[3]).toHaveTextContent('2')
+    // (cells: tick, image, product, Shopify, variants, status, inventory, price, actions)
+    expect(cells1[4]).toHaveTextContent('2')
     // Alignment classes must not conflict (a stray text-left beat text-center).
-    expect(cells1[3]).toHaveClass('text-center')
-    expect(cells1[3]).not.toHaveClass('text-left')
-    expect(cells1[5]).toHaveClass('text-right')
-    expect(cells1[5]).not.toHaveClass('text-left')
-    expect(cells1[5]).toHaveTextContent('10')
-    expect(within(row3).getAllByRole('cell')[5]).toHaveTextContent('Out of stock')
+    expect(cells1[4]).toHaveClass('text-center')
+    expect(cells1[4]).not.toHaveClass('text-left')
+    expect(cells1[6]).toHaveClass('text-right')
+    expect(cells1[6]).not.toHaveClass('text-left')
+    expect(cells1[6]).toHaveTextContent('10')
+    expect(within(row3).getAllByRole('cell')[6]).toHaveTextContent('Out of stock')
   })
 
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
@@ -557,6 +559,78 @@ describe('ProductsPage details', () => {
       within(screen.getByRole('banner')).getByText('Total stock'),
     ).toBeInTheDocument()
     expect(within(screen.getByRole('banner')).getByText('£25.85')).toBeInTheDocument()
+  })
+
+  describe('Shopify column', () => {
+    const shop = {
+      key: 'polymer-uk',
+      name: 'Polymer UK',
+      domain: 'polymer-uk-ltd.myshopify.com',
+      currency: 'GBP',
+    }
+
+    it('links each product to its page in the Shopify admin, in a new tab', async () => {
+      list.mockImplementation((params) => {
+        const response = respond(params)
+        return Promise.resolve({
+          ...response,
+          items: response.items.map((item) => ({
+            ...item,
+            shopify_id: 15393751269761 + Number(item.id.replace('id-', '')),
+            shop,
+          })),
+        })
+      })
+      renderPage()
+      await screen.findByText('Product 1')
+
+      const link = screen.getByRole('link', { name: 'Open Product 1 in Shopify' })
+      expect(link).toHaveAttribute(
+        'href',
+        'https://admin.shopify.com/store/polymer-uk-ltd/products/15393751269762',
+      )
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+      // The Shopify column sits right before Variants.
+      const headers = within(screen.getByRole('table'))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent)
+      expect(headers.indexOf('Shopify')).toBe(headers.indexOf('Variants') - 1)
+      // Each row links to its own product.
+      expect(
+        screen.getByRole('link', { name: 'Open Product 2 in Shopify' }),
+      ).toHaveAttribute(
+        'href',
+        'https://admin.shopify.com/store/polymer-uk-ltd/products/15393751269763',
+      )
+    })
+
+    it('does not open the product in the CRM when the Shopify link is used', async () => {
+      list.mockImplementation((params) => {
+        const response = respond(params)
+        return Promise.resolve({
+          ...response,
+          items: response.items.map((item) => ({ ...item, shop })),
+        })
+      })
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Product 1')
+      const link = screen.getByRole('link', { name: 'Open Product 1 in Shopify' })
+      // Stop the browser from really navigating in the test.
+      link.addEventListener('click', (event) => event.preventDefault())
+
+      await user.click(link)
+
+      expect(screen.queryByRole('heading', { level: 1, name: 'Product 1' })).toBeNull()
+    })
+
+    it('shows a dash instead of a link when the store address is not known', async () => {
+      renderPage() // the fixture rows carry no store
+      await screen.findByText('Product 1')
+
+      expect(screen.queryByRole('link', { name: /in Shopify/ })).not.toBeInTheDocument()
+    })
   })
 
   it('shows a copy button beside each product name, and clicking it copies just the name', async () => {
