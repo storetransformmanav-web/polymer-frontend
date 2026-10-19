@@ -361,7 +361,7 @@ describe('ActivityPage', () => {
       expect(screen.getByLabelText('User:')).toHaveValue('')
     })
 
-    it('filters by action (names with counts from the actions API), entity and date range', async () => {
+    it('filters by action (names with counts from the actions API) and date range', async () => {
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(new Date('2026-10-16T10:00:00'))
       const user = userEvent.setup()
@@ -377,8 +377,6 @@ describe('ActivityPage', () => {
           .map((option) => option.textContent),
       ).toEqual(['All Actions', 'List products (227)', 'Create user (2)'])
       await user.selectOptions(action, 'create_user')
-      await user.type(screen.getByLabelText('Entity type'), 'user')
-      await user.type(screen.getByLabelText('Entity ID'), 'fe686ca4')
       await user.click(screen.getByRole('button', { name: /^Date range/ }))
       await user.click(screen.getByRole('button', { name: '14 October 2026' }))
       await user.click(screen.getByRole('button', { name: '16 October 2026' }))
@@ -388,8 +386,6 @@ describe('ActivityPage', () => {
           page: 1,
           page_size: 25,
           action: 'create_user',
-          entity_type: 'user',
-          entity_id: 'fe686ca4',
           from: new Date('2026-10-14T00:00:00').toISOString(),
           to: new Date('2026-10-16T23:59:59').toISOString(),
         }),

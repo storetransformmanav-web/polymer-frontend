@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  BoxesIcon,
   CalendarIcon,
   ChevronDownIcon,
   FilterIcon,
@@ -8,7 +7,6 @@ import {
   RefreshIcon,
   SearchIcon,
   SlidersIcon,
-  UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
@@ -20,8 +18,6 @@ import type { UserOption } from '../hooks/useActivityFilterOptions.ts'
 import { actionLabel } from '../utils/format.ts'
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
-const FIELD_INPUT =
-  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
 
 interface ActivityToolbarProps {
   filters: ActivityFilters
@@ -38,9 +34,9 @@ interface ActivityToolbarProps {
 
 /**
  * Search, user dropdown, the total count and the collapsible filter grid (action,
- * entity, date range). Typing in the text boxes is instant locally and sent to
- * the API once the user pauses (see useDebouncedField); dropdowns and dates
- * apply immediately.
+ * date range). Typing in the search box is instant locally and sent to the API
+ * once the user pauses (see useDebouncedField); dropdowns and dates apply
+ * immediately.
  */
 export function ActivityToolbar({
   filters,
@@ -59,13 +55,6 @@ export function ActivityToolbar({
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
-  )
-  const [entityType, setEntityType] = useDebouncedField(
-    filters.entityType,
-    (entityType) => onChange({ entityType }),
-  )
-  const [entityId, setEntityId] = useDebouncedField(filters.entityId, (entityId) =>
-    onChange({ entityId }),
   )
 
   const userOptions: SelectOption[] = [
@@ -203,7 +192,7 @@ export function ActivityToolbar({
         }`}
       >
         <div className="-m-1 overflow-hidden p-1">
-          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
             <SelectField
               id="filter-action"
               label="Action"
@@ -212,34 +201,6 @@ export function ActivityToolbar({
               options={actionOptions}
               onChange={(action) => onChange({ action })}
             />
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label htmlFor="filter-entity-type" className={FIELD_LABEL}>
-                <BoxesIcon width={16} height={16} className="text-text-muted" />
-                Entity type
-              </label>
-              <input
-                id="filter-entity-type"
-                maxLength={60}
-                placeholder="e.g. user"
-                value={entityType}
-                onChange={(event) => setEntityType(event.target.value)}
-                className={FIELD_INPUT}
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label htmlFor="filter-entity-id" className={FIELD_LABEL}>
-                <UsersIcon width={16} height={16} className="text-text-muted" />
-                Entity ID
-              </label>
-              <input
-                id="filter-entity-id"
-                maxLength={120}
-                placeholder="Any"
-                value={entityId}
-                onChange={(event) => setEntityId(event.target.value)}
-                className={FIELD_INPUT}
-              />
-            </div>
             <div className="flex min-w-0 flex-col gap-1.5">
               <span id="filter-dates-label" className={FIELD_LABEL}>
                 <CalendarIcon width={16} height={16} className="text-text-muted" />

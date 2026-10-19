@@ -9,7 +9,7 @@ import { useActivityFilterOptions } from '../hooks/useActivityFilterOptions.ts'
 
 /**
  * Activity Management: the CRM's audit log — who did what, when and from
- * where — with search, user/method/action/entity/date filters and paging.
+ * where — with search, user/action/date filters and paging.
  * Data comes from TanStack Query (see useActivity): pages and filters are
  * cached so revisiting one is instant, the previous rows stay on screen while
  * the next load, and the next page is fetched ahead of time.

@@ -20,8 +20,6 @@ export interface ActivityFilters {
   userId: string
   /** An exact action name ('' = every action). */
   action: string
-  entityType: string
-  entityId: string
   /** `datetime-local` values ("2026-10-14T09:30", the browser's local time) or ''. */
   from: string
   to: string
@@ -33,8 +31,6 @@ export const DEFAULT_ACTIVITY_FILTERS: ActivityFilters = {
   search: '',
   userId: '',
   action: '',
-  entityType: '',
-  entityId: '',
   from: '',
   to: '',
   page: 1,
@@ -77,10 +73,6 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
   if (search) params.search = search
   if (filters.userId) params.user_id = filters.userId
   if (filters.action) params.action = filters.action
-  const entityType = filters.entityType.trim()
-  if (entityType) params.entity_type = entityType
-  const entityId = filters.entityId.trim()
-  if (entityId) params.entity_id = entityId
   const from = toIso(filters.from)
   if (from) params.from = from
   const to = toIso(filters.to)
@@ -95,8 +87,6 @@ export function hasActiveActivityFilters(filters: ActivityFilters): boolean {
     filters.search.trim() !== '' ||
     filters.userId !== '' ||
     filters.action !== '' ||
-    filters.entityType.trim() !== '' ||
-    filters.entityId.trim() !== '' ||
     filters.from !== '' ||
     filters.to !== ''
   )
