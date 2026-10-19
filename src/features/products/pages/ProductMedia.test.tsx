@@ -319,6 +319,36 @@ describe('adding and deleting media', () => {
       expect(await screen.findByText(/Media removal queued/)).toBeInTheDocument()
     })
 
+    it('stays deleted when the backend still lists the image right after (the delete is only queued)', async () => {
+      const { user, dialog } = await askToDelete(2)
+      // The store hasn't processed the delete: the re-read still returns both images.
+      details.mockResolvedValue(product(TWO_IMAGES))
+      details.mockClear()
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(details).toHaveBeenCalled())
+      await waitFor(() => expect(syncHistory).toHaveBeenCalled())
+      expect(await screen.findByText('1 image')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Delete image 2' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('keeps it gone when the tab is left and reopened while the store is still busy', async () => {
+      const { user, dialog } = await askToDelete(2)
+      details.mockResolvedValue(product(TWO_IMAGES))
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+      expect(await screen.findByText('1 image')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: /^Overview/ }))
+      await user.click(screen.getByRole('tab', { name: /^Media/ }))
+
+      expect(await screen.findByText('1 image')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Delete image 2' }),
+      ).not.toBeInTheDocument()
+    })
+
     it('does nothing on Cancel or Escape', async () => {
       const { user, dialog } = await askToDelete()
       await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))

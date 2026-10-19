@@ -21,7 +21,12 @@ import {
   type ProductWriteResult,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
-import { patchDetail, patchListItem } from './productPatch.ts'
+import {
+  hideRemovedImages,
+  patchDetail,
+  patchListItem,
+  type RemovedImage,
+} from './productPatch.ts'
 import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
 
 /**
@@ -163,6 +168,11 @@ export interface ProductsState {
    * the Media tab so they stay on screen when the tab or product is left and come back.
    */
   pendingMedia: Record<string, PendingMedia>
+  /**
+   * Images just deleted, by product id. The store only *queues* a delete, so the next
+   * read of the product can still list them; they stay hidden until it stops doing so.
+   */
+  removedMedia: Record<string, RemovedImage[]>
 }
 
 export interface PendingMedia {
@@ -196,6 +206,7 @@ const initialState: ProductsState = {
   tabs: [],
   details: {},
   pendingMedia: {},
+  removedMedia: {},
 }
 
 interface FetchArg {
@@ -626,7 +637,19 @@ const productsSlice = createSlice({
       })
       .addCase(fetchProductDetails.fulfilled, (state, action) => {
         const { id, raw } = action.meta.arg
-        const { data, fetchedAt } = action.payload
+        const { fetchedAt } = action.payload
+        // A just-deleted image the backend still lists stays hidden.
+        const removed = state.removedMedia[action.payload.data.id]
+        let data = action.payload.data
+        if (removed) {
+          const hidden = hideRemovedImages(data.images, removed, Date.now())
+          if (hidden.stillListed.length > 0) {
+            state.removedMedia[data.id] = hidden.stillListed
+            data = { ...data, images: hidden.images }
+          } else {
+            delete state.removedMedia[data.id]
+          }
+        }
         state.details[detailsKey(id, raw)] = {
           data,
           fetchedAt,
@@ -654,6 +677,15 @@ const productsSlice = createSlice({
       })
       .addCase(removeProductMedia.fulfilled, (state, action) => {
         const { id, attachmentId } = action.meta.arg
+        const image = [state.details[detailsKey(id)], state.details[detailsKey(id, true)]]
+          .flatMap((entry) => entry?.data?.images ?? [])
+          .find((candidate) => candidate.id === attachmentId)
+        if (image) {
+          state.removedMedia[id] = [
+            ...(state.removedMedia[id] ?? []),
+            { id: attachmentId, url: image.url, at: Date.now() },
+          ]
+        }
         patchCachedProduct(state, id, { media_remove: [attachmentId] })
       })
       .addCase(fetchProductDetails.rejected, (state, action) => {

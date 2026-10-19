@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { ProductDetail, ProductListItem } from '../../lib/api/endpoints.ts'
-import { patchDetail, patchListItem, patchTags } from './productPatch.ts'
+import type {
+  ProductDetail,
+  ProductImage,
+  ProductListItem,
+} from '../../lib/api/endpoints.ts'
+import {
+  hideRemovedImages,
+  patchDetail,
+  patchListItem,
+  patchTags,
+} from './productPatch.ts'
 
 const row = {
   id: 'p1',
@@ -111,5 +120,57 @@ describe('patchDetail', () => {
 
     expect(detail.title).toBe('Old')
     expect(detail.collections).toHaveLength(2)
+  })
+})
+
+describe('hideRemovedImages', () => {
+  const image = (id: string, url: string) =>
+    ({ id, url, alt_text: null, width: null, height: null, position: 1 }) as ProductImage
+  const ONE = image('1', 'https://cdn.example.com/a.jpg?v=1')
+  const TWO = image('2', 'https://cdn.example.com/b.jpg')
+  const NOW = 1_000_000
+
+  it('hides a deleted image the backend still lists', () => {
+    const result = hideRemovedImages(
+      [ONE, TWO],
+      [{ id: '2', url: TWO.url, at: NOW - 5000 }],
+      NOW,
+    )
+
+    expect(result.images).toEqual([ONE])
+    expect(result.stillListed).toHaveLength(1)
+  })
+
+  it('matches by file when the image got a new id, ignoring the cache-busting query', () => {
+    const renamed = image('99', 'https://cdn.example.com/a.jpg?v=2')
+    const result = hideRemovedImages(
+      [renamed, TWO],
+      [{ id: '1', url: ONE.url, at: NOW - 5000 }],
+      NOW,
+    )
+
+    expect(result.images).toEqual([TWO])
+  })
+
+  it('forgets a deleted image once the backend no longer lists it', () => {
+    const result = hideRemovedImages(
+      [ONE],
+      [{ id: '2', url: TWO.url, at: NOW - 5000 }],
+      NOW,
+    )
+
+    expect(result.images).toEqual([ONE])
+    expect(result.stillListed).toEqual([])
+  })
+
+  it('gives up hiding after ten minutes, so an image that really is there is not lost', () => {
+    const result = hideRemovedImages(
+      [ONE, TWO],
+      [{ id: '2', url: TWO.url, at: NOW - 11 * 60_000 }],
+      NOW,
+    )
+
+    expect(result.images).toEqual([ONE, TWO])
+    expect(result.stillListed).toEqual([])
   })
 })

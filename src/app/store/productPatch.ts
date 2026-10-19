@@ -1,5 +1,6 @@
 import type {
   ProductDetail,
+  ProductImage,
   ProductListItem,
   ProductUpdateBody,
   ProductVariant,
@@ -23,6 +24,49 @@ export function patchTags(tags: string[], body: ProductUpdateBody): string[] {
     next = next.filter((tag) => !removed.has(tag))
   }
   return next
+}
+
+/** The same file, ignoring a CDN's cache-busting query string (`?v=123`). */
+export const sameFile = (a: string, b: string) => a.split('?')[0] === b.split('?')[0]
+
+/** An image that was deleted, but that the backend may still list for a while. */
+export interface RemovedImage {
+  id: string
+  url: string
+  /** When it was deleted (ms). */
+  at: number
+}
+
+/** After this long a deleted image that is still listed is shown again (something went wrong). */
+export const REMOVED_IMAGE_TTL_MS = 10 * 60_000
+
+/**
+ * The delete is only *queued* in the store ("Media removal queued"), so the
+ * product the backend returns a moment later still lists the image. This keeps a
+ * deleted image off the page until the backend stops listing it: it returns the
+ * images without those still-listed deleted ones, and the deleted images the
+ * backend has now dropped (or that are older than the limit) to forget.
+ */
+export function hideRemovedImages(
+  images: ProductImage[],
+  removed: RemovedImage[],
+  now: number,
+): { images: ProductImage[]; stillListed: RemovedImage[] } {
+  const stillListed = removed.filter(
+    (gone) =>
+      now - gone.at < REMOVED_IMAGE_TTL_MS &&
+      images.some((image) => image.id === gone.id || sameFile(image.url, gone.url)),
+  )
+  if (stillListed.length === 0) return { images, stillListed }
+  return {
+    images: images.filter(
+      (image) =>
+        !stillListed.some(
+          (gone) => image.id === gone.id || sameFile(image.url, gone.url),
+        ),
+    ),
+    stillListed,
+  }
 }
 
 const text = (value: string | number | null | undefined) =>

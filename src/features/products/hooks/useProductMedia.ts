@@ -12,13 +12,11 @@ import type {
   ProductMediaInput,
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { sameFile } from '../../../app/store/productPatch.ts'
 import { useRefreshAfterSave } from './useSaveProduct.ts'
 
 /** The backend's wording when it doesn't know the image id it was sent. */
 const UNKNOWN_IMAGE = /not an image|not found|does not exist|no such/i
-
-/** The same file, ignoring a CDN's cache-busting query string (`?v=123`). */
-const sameFile = (a: string, b: string) => a.split('?')[0] === b.split('?')[0]
 
 /**
  * Adding media to a product, and deleting one of its images — each its own
