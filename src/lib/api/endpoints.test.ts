@@ -272,6 +272,91 @@ describe('api.products.addMedia and removeMedia', () => {
   })
 })
 
+describe('api.auth sign-in', () => {
+  // The answer to POST /auth/otp/verify, as the backend sends it (with its envelope and permissions).
+  const LOGIN = {
+    code: 200,
+    status: 'OK',
+    message: 'Login successful',
+    access_token: 'zL7AhiYMkxpWhOaMC5j9qRDR9o1V1r_MhSF30T1a_D8',
+    token_type: 'bearer',
+    expires_at: '2026-11-20T11:31:17.119751Z',
+    user: {
+      id: 'b6862867-56b6-4153-a662-8b48b5436e89',
+      email: 'storetransformmanav@gmail.com',
+      full_name: 'Manav',
+      first_name: 'Manav',
+      last_name: '',
+      phone: null,
+      role: 'admin',
+      is_active: true,
+      last_login_at: '2026-10-21T11:31:17.119751Z',
+      permissions: {
+        products: { view: true, manage: true },
+        users: { view: true, manage: true },
+        activity: { view: true, manage: false },
+      },
+    },
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.post).mockReset()
+  })
+
+  it('verifies a code with remember_me: true, so the token lasts 30 days', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
+
+    const result = await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941')
+
+    expect(apiClient.post).toHaveBeenCalledWith('/auth/otp/verify', {
+      email: 'storetransformmanav@gmail.com',
+      code: '079941',
+      remember_me: true,
+    })
+    expect(result.access_token).toBe('zL7AhiYMkxpWhOaMC5j9qRDR9o1V1r_MhSF30T1a_D8')
+    expect(result.expires_at).toBe('2026-11-20T11:31:17.119751Z')
+    expect(result.user).toMatchObject({
+      id: 'b6862867-56b6-4153-a662-8b48b5436e89',
+      role: 'admin',
+    })
+  })
+
+  it('signs in with Google with remember_me: true as well', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
+
+    await api.auth.google('google-id-token-0123456789')
+
+    expect(apiClient.post).toHaveBeenCalledWith('/auth/google', {
+      credential: 'google-id-token-0123456789',
+      remember_me: true,
+    })
+  })
+
+  it('keeps the user’s permissions from the answer', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
+
+    const { user } = await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941')
+
+    expect(user.permissions?.products).toEqual({ view: true, manage: true })
+    expect(user.permissions?.activity).toEqual({ view: true, manage: false })
+  })
+
+  it('still accepts an answer without permissions (older backends)', async () => {
+    const { permissions: _permissions, ...user } = LOGIN.user
+    vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, user })
+
+    const result = await api.auth.verifyOtp('a@b.co', '123456')
+
+    expect(result.user.permissions).toBeUndefined()
+  })
+
+  it('refuses an answer without a token', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, access_token: '' })
+
+    await expect(api.auth.verifyOtp('a@b.co', '123456')).rejects.toThrow()
+  })
+})
+
 describe('api.customers.list', () => {
   const SAMPLE = {
     items: [

@@ -74,6 +74,12 @@ export const ENDPOINTS = {
 // Schemas — the source of truth for response types (derive with z.infer)
 // ---------------------------------------------------------------------------
 
+/** What a user may do in one area (users, products, orders…) — as the backend reports it. */
+const featureAccessSchema = z.object({
+  view: z.boolean().optional(),
+  manage: z.boolean().optional(),
+})
+
 const authUserSchema = z.object({
   id: z.string(),
   email: z.string().nullable(),
@@ -82,7 +88,16 @@ const authUserSchema = z.object({
   role: z.string(),
   is_active: z.boolean(),
   last_login_at: z.string().nullable(),
+  /** The user's access by area (`products`, `users`…). Not used to hide anything yet. */
+  permissions: z.record(z.string(), featureAccessSchema).optional(),
 })
+
+/**
+ * Sent with every sign-in: `true` = the backend issues a 30-day token, `false` (its
+ * default when left out) = a 1-day one. The app lets every sign-in last 30 days (see
+ * "Staying signed in" in CLAUDE.md), so it always asks for the long one.
+ */
+const STAY_SIGNED_IN = true
 
 const otpRequestResponseSchema = z.object({
   message: z.string(),
@@ -1142,9 +1157,13 @@ export const api = {
       return otpRequestResponseSchema.parse(data)
     },
 
-    /** Step 2 of login: exchanges the code for an access token. */
+    /** Step 2 of login: exchanges the code for an access token (30 days, see `STAY_SIGNED_IN`). */
     async verifyOtp(email: string, code: string): Promise<LoginResponse> {
-      const data = await apiClient.post(ENDPOINTS.auth.verifyOtp, { email, code })
+      const data = await apiClient.post(ENDPOINTS.auth.verifyOtp, {
+        email,
+        code,
+        remember_me: STAY_SIGNED_IN,
+      })
       return loginResponseSchema.parse(data)
     },
 
@@ -1154,7 +1173,10 @@ export const api = {
      * already belong to an active CRM user can sign in.
      */
     async google(credential: string): Promise<LoginResponse> {
-      const data = await apiClient.post(ENDPOINTS.auth.google, { credential })
+      const data = await apiClient.post(ENDPOINTS.auth.google, {
+        credential,
+        remember_me: STAY_SIGNED_IN,
+      })
       return loginResponseSchema.parse(data)
     },
 
