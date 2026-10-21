@@ -34,7 +34,6 @@ import {
   DETAIL_TH as TH,
   DetailEmpty as Empty,
   DetailSkeleton as PanelSkeleton,
-  RawJsonPanel as RawPanel,
   DetailTable as TableWrap,
   Field,
   FieldGrid,
@@ -1028,8 +1027,6 @@ export function MetafieldsPanel({ product }: { product: ProductDetail }) {
     </TableWrap>
   )
 }
-
-export { RawPanel }
 
 // --- Editable tabs ----------------------------------------------------------------
 // Each tab shows its read-only view; the pencil above it turns the tab into an

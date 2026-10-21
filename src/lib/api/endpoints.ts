@@ -457,6 +457,7 @@ const customerAddressSchema = z.object({
 })
 
 const customerDetailSchema = z.object({
+  shop: shopRefSchema.nullish(),
   id: z.string(),
   shopify_id: z.number().nullish(),
   shopify_gid: z.string().nullish(),
@@ -513,6 +514,9 @@ const customerDetailSchema = z.object({
 })
 
 const customerDetailResponseSchema = z.object({ customer: customerDetailSchema })
+
+/** What deleting a customer answers (the spec doesn't say; only a message is used, if there is one). */
+const customerDeleteAnswerSchema = z.object({ message: z.string().nullish() })
 
 export type CustomerDetail = z.infer<typeof customerDetailSchema>
 export type CustomerAddress = z.infer<typeof customerAddressSchema>
@@ -939,6 +943,20 @@ export const api = {
      * Everything about one customer. `includeRaw` also returns Shopify's
      * original payload (large) — leave it off unless it's going to be shown.
      */
+    /**
+     * Deletes a customer in the store AND the CRM — permanent. Shopify only allows it
+     * for a customer without orders (the backend then answers with its reason).
+     * `ref` is the customer's UUID, Shopify id or email; `shop` the store key. Never
+     * retried automatically.
+     */
+    async remove(ref: string, shop?: string | null): Promise<{ message: string }> {
+      const data = await apiClient.delete(ENDPOINTS.customers.detail(ref), {
+        params: shop ? { shop } : undefined,
+      })
+      const parsed = customerDeleteAnswerSchema.safeParse(data)
+      return { message: parsed.success ? (parsed.data.message ?? '') : '' }
+    },
+
     async details(ref: string, includeRaw = false): Promise<CustomerDetail> {
       const data = await apiClient.get(ENDPOINTS.customers.detail(ref), {
         params: { include_raw: includeRaw },

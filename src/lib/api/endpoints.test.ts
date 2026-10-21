@@ -272,6 +272,71 @@ describe('api.products.addMedia and removeMedia', () => {
   })
 })
 
+describe('api.customers.remove', () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.delete).mockReset()
+  })
+
+  it('DELETEs /customers/{customer_ref} for the store, with no body', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({
+      code: 200,
+      message: 'Customer deleted',
+    })
+
+    const result = await api.customers.remove(
+      '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      'polymer-uk',
+    )
+
+    expect(apiClient.delete).toHaveBeenCalledWith(
+      '/customers/3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      { params: { shop: 'polymer-uk' } },
+    )
+    expect(result).toEqual({ message: 'Customer deleted' })
+  })
+
+  it('leaves the store out when there is none', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({})
+
+    await api.customers.remove('c1')
+    await api.customers.remove('c2', null)
+
+    expect(vi.mocked(apiClient.delete).mock.calls[0][1]).toEqual({ params: undefined })
+    expect(vi.mocked(apiClient.delete).mock.calls[1][1]).toEqual({ params: undefined })
+  })
+
+  it('encodes the reference in the path (an email works as a reference too)', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({})
+
+    await api.customers.remove('a+b@example.com')
+
+    expect(vi.mocked(apiClient.delete).mock.calls[0][0]).toBe(
+      '/customers/a%2Bb%40example.com',
+    )
+  })
+
+  it('takes whatever the backend answers: a message if there is one, otherwise none', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({
+      message: 'Deleted in Shopify too',
+    })
+    expect(await api.customers.remove('c1')).toEqual({
+      message: 'Deleted in Shopify too',
+    })
+
+    for (const answer of [{}, null, '', 'ok', undefined, [], { message: null }]) {
+      vi.mocked(apiClient.delete).mockResolvedValueOnce(answer)
+      expect(await api.customers.remove('c1')).toEqual({ message: '' })
+    }
+  })
+
+  it('lets a refusal through, for the page to show (never retried here)', async () => {
+    vi.mocked(apiClient.delete).mockRejectedValue(new Error('refused'))
+
+    await expect(api.customers.remove('c1')).rejects.toThrow('refused')
+    expect(apiClient.delete).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('api.auth sign-in', () => {
   // The answer to POST /auth/otp/verify, as the backend sends it (with its envelope and permissions).
   const LOGIN = {

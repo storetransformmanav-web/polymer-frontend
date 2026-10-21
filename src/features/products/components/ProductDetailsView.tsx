@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   AlertTriangleIcon,
@@ -22,7 +22,6 @@ import {
   MediaPanel,
   MetafieldsPanel,
   OverviewPanel,
-  RawPanel,
   SeoPanel,
   VariantsPanel,
 } from './ProductDetailPanels.tsx'
@@ -30,14 +29,7 @@ import { ProductImage } from './ProductImage.tsx'
 import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
 type TabId =
-  | 'overview'
-  | 'variants'
-  | 'inventory'
-  | 'collections'
-  | 'media'
-  | 'seo'
-  | 'metafields'
-  | 'raw'
+  'overview' | 'variants' | 'inventory' | 'collections' | 'media' | 'seo' | 'metafields'
 
 interface ProductDetailsViewProps {
   id: string
@@ -67,12 +59,6 @@ export function ProductDetailsView({
   const details = useProductDetails(id)
   const { product, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
-  const { loadRaw } = details
-
-  // The raw Shopify payload is big, so only fetch it when its tab opens.
-  useEffect(() => {
-    if (tab === 'raw') loadRaw()
-  }, [tab, loadRaw])
 
   // The push history needs the product's store, known from the list row or the loaded record.
   const shop = product?.shop?.key ?? preview?.shop?.key
@@ -113,7 +99,6 @@ export function ProductDetailsView({
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
       : []),
-    { id: 'raw', label: 'Raw data' },
   ]
 
   if (details.error) {
@@ -291,7 +276,7 @@ export function ProductDetailsView({
         {tab === 'overview' && (
           <OverviewPanel product={product} preview={preview} onSaved={onSaved} />
         )}
-        {tab !== 'overview' && tab !== 'raw' && !product && <PanelSkeleton />}
+        {tab !== 'overview' && !product && <PanelSkeleton />}
         {product && tab === 'variants' && (
           <VariantsPanel product={product} onSaved={onSaved} />
         )}
@@ -302,14 +287,6 @@ export function ProductDetailsView({
         {product && tab === 'media' && <MediaPanel product={product} onSaved={onSaved} />}
         {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
         {product && tab === 'metafields' && <MetafieldsPanel product={product} />}
-        {tab === 'raw' && (
-          <RawPanel
-            raw={details.raw}
-            isLoading={details.isRawLoading}
-            error={details.rawError}
-            onRetry={details.loadRaw}
-          />
-        )}
       </div>
     </article>
   )

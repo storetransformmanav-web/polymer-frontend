@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton, RawJsonPanel } from '../../../components/ui/DetailSection.tsx'
-import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  TrashIcon,
+} from '../../../components/ui/icons.tsx'
 import { initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
 import {
@@ -24,6 +28,8 @@ type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields' | 'raw'
 interface CustomerDetailsViewProps {
   id: string
   onBack: () => void
+  /** Ask to delete this customer (the page shows the confirmation). */
+  onDelete: (customer: { name: string; shop: string | null; ordersCount: number }) => void
 }
 
 /**
@@ -32,7 +38,7 @@ interface CustomerDetailsViewProps {
  * full record loads, so nothing waits on the network when you come from the
  * list.
  */
-export function CustomerDetailsView({ id, onBack }: CustomerDetailsViewProps) {
+export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsViewProps) {
   const details = useCustomerDetails(id)
   const { customer, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
@@ -124,6 +130,25 @@ export function CustomerDetailsView({ id, onBack }: CustomerDetailsViewProps) {
             )}
           </div>
         </div>
+        {known && (
+          <button
+            type="button"
+            onClick={() =>
+              onDelete({
+                name,
+                shop: known.shop?.key ?? null,
+                ordersCount: known.orders_count,
+              })
+            }
+            aria-label={`Delete ${name}`}
+            className="border-border bg-bg text-text-muted hover:text-danger hover:border-danger flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+          >
+            <TrashIcon width={16} height={16} />
+            <span className="hidden sm:inline" aria-hidden="true">
+              Delete
+            </span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onBack}

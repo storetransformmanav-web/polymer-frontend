@@ -976,16 +976,15 @@ describe('ProductsPage details', () => {
     }, 20000)
   })
 
-  it('loads the raw Shopify data only when its tab is opened', async () => {
-    const user = userEvent.setup()
+  it('has no Raw data tab, and never asks for the raw Shopify payload', async () => {
     renderPage('/products/id-7')
     await screen.findByText('Home > Desks')
+
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent)
+    expect(tabs.some((label) => /raw/i.test(label ?? ''))).toBe(false)
+    expect(screen.queryByRole('tab', { name: 'Raw data' })).not.toBeInTheDocument()
     expect(details).not.toHaveBeenCalledWith('id-7', true)
-
-    await user.click(screen.getByRole('tab', { name: 'Raw data' }))
-
-    expect(await screen.findByText(/RAW-VENDOR/)).toBeInTheDocument()
-    expect(details).toHaveBeenCalledWith('id-7', true)
+    expect(details).toHaveBeenCalledWith('id-7', false)
   })
 
   it('labels a tab opened from a bare URL once the product loads', async () => {

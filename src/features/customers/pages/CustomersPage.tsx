@@ -1,9 +1,16 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import {
+  CustomerDeleteDialog,
+  type CustomerToDelete,
+} from '../components/CustomerDeleteDialog.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useCustomers } from '../hooks/useCustomers.ts'
+import { customerName } from '../utils/format.ts'
 
 const LIST_PATH = '/customers'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
@@ -26,6 +33,26 @@ export function CustomersPage() {
   // `/customers/<id>[/…]` → the customer id; `/customers` → null (the list).
   const activeId = splat ? splat.split('/')[0] || null : null
 
+  // The customer a trash button asked to delete (the dialog confirms), and what to say after.
+  const [deleting, setDeleting] = useState<CustomerToDelete | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const closeDelete = useCallback(() => setDeleting(null), [])
+
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = window.setTimeout(() => setNotice(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  function handleDeleted(customer: CustomerToDelete, message: string) {
+    setDeleting(null)
+    setNotice(
+      `Deleted “${customer.name}”. ${message || 'It is also deleted in Shopify.'}`,
+    )
+    // Deleted from its own page: there is nothing left to show, so go back to the list.
+    if (activeId === customer.id) navigate(LIST_PATH)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {activeId && (
@@ -33,8 +60,14 @@ export function CustomersPage() {
           key={activeId}
           id={activeId}
           onBack={() => navigate(LIST_PATH)}
+          onDelete={(customer) => {
+            setNotice(null)
+            setDeleting({ id: activeId, ...customer })
+          }}
         />
       )}
+
+      {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       {/* Kept mounted but hidden while a customer is open (display: none also
           removes it from tab order and screen readers). */}
@@ -70,6 +103,15 @@ export function CustomersPage() {
             isStale={customers.isShowingPrevious}
             onOpen={(customer) => navigate(detailsPath(customer.id))}
             onPrefetch={customers.prefetchDetails}
+            onDelete={(customer) => {
+              setNotice(null)
+              setDeleting({
+                id: customer.id,
+                name: customerName(customer),
+                shop: customer.shop?.key ?? null,
+                ordersCount: customer.orders_count,
+              })
+            }}
             onRetry={customers.retry}
             onClearFilters={customers.resetFilters}
           />
@@ -86,6 +128,15 @@ export function CustomersPage() {
           )}
         </section>
       </div>
+
+      {deleting && (
+        <CustomerDeleteDialog
+          key={`delete-${deleting.id}`}
+          customer={deleting}
+          onClose={closeDelete}
+          onDone={(message) => handleDeleted(deleting, message)}
+        />
+      )}
     </div>
   )
 }

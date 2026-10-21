@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  EyeIcon,
+  SearchIcon,
+  TrashIcon,
+} from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
@@ -34,6 +39,8 @@ interface CustomersListProps {
   onOpen: (customer: CustomerListItem) => void
   /** Hover/focus: start loading details so opening is instant. */
   onPrefetch: (id: string) => void
+  /** The trash button of a row: ask to delete this customer. */
+  onDelete: (customer: CustomerListItem) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -119,6 +126,7 @@ export function CustomersList({
   isStale,
   onOpen,
   onPrefetch,
+  onDelete,
   onRetry,
   onClearFilters,
 }: CustomersListProps) {
@@ -244,7 +252,7 @@ export function CustomersList({
             <th className={TH}>Joined</th>
             <th className={`${TH} ${FROM_2XL}`}>Tags</th>
             <th className={`${TH} ${FROM_2XL}`}>Last Login</th>
-            <th className={TH_CENTER}>View</th>
+            <th className={TH_CENTER}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -327,16 +335,27 @@ export function CustomersList({
                       {dateOrDash(customer.last_login_at)}
                     </td>
                     <td className={`${TD} text-center`}>
-                      <button
-                        type="button"
-                        aria-label={`View ${name}`}
-                        onClick={() => onOpen(customer)}
-                        onPointerEnter={() => onPrefetch(customer.id)}
-                        onFocus={() => onPrefetch(customer.id)}
-                        className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
-                      >
-                        <EyeIcon />
-                      </button>
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label={`View ${name}`}
+                          onClick={() => onOpen(customer)}
+                          onPointerEnter={() => onPrefetch(customer.id)}
+                          onFocus={() => onPrefetch(customer.id)}
+                          className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                        >
+                          <EyeIcon />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${name}`}
+                          title="Delete"
+                          onClick={() => onDelete(customer)}
+                          className="text-text-muted hover:text-danger inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 )

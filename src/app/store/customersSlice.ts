@@ -246,6 +246,40 @@ export const fetchCustomerDetails = createAsyncThunk<
   },
 )
 
+interface DeleteCustomerArg {
+  id: string
+  /** The customer's store key (sent as `shop=`), when known. */
+  shop?: string | null
+}
+
+/**
+ * Deletes a customer in the store and the CRM. On success it leaves every cached
+ * list and details copy at once (see the `fulfilled` case below). Never retried.
+ */
+export const deleteCustomer = createAsyncThunk<
+  { message: string },
+  DeleteCustomerArg,
+  { state: CustomersRootState; rejectValue: string }
+>('customers/delete', async ({ id, shop }, { rejectWithValue }) => {
+  try {
+    return await api.customers.remove(id, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
+/** Takes a deleted customer out of a cached page, keeping its totals right. */
+function withoutCustomer(data: CustomerListResponse, id: string): CustomerListResponse {
+  if (!data.items.some((item) => item.id === id)) return data
+  const total = Math.max(0, data.total - 1)
+  return {
+    ...data,
+    items: data.items.filter((item) => item.id !== id),
+    total,
+    total_pages: Math.max(1, Math.ceil(total / Math.max(1, data.page_size))),
+  }
+}
+
 function addSorted(list: string[], values: (string | null | undefined)[]) {
   let changed = false
   for (const value of values) {
@@ -353,6 +387,19 @@ const customersSlice = createSlice({
           error: action.payload ?? 'Something went wrong. Please try again.',
           isFetching: false,
         }
+      })
+      // A deleted customer disappears from every cached page and from the details cache
+      // at once; every page is marked stale so each is re-read quietly (other rows may
+      // move up, and the role counts change).
+      .addCase(deleteCustomer.fulfilled, (state, action) => {
+        const { id } = action.meta.arg
+        for (const entry of Object.values(state.entries)) {
+          if (entry.data) entry.data = withoutCustomer(entry.data, id)
+          entry.fetchedAt = null
+        }
+        if (state.lastData) state.lastData = withoutCustomer(state.lastData, id)
+        delete state.details[customerDetailsKey(id)]
+        delete state.details[customerDetailsKey(id, true)]
       })
       .addCase(fetchCustomers.rejected, (state, action) => {
         if (action.meta.condition) return

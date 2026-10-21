@@ -17,13 +17,11 @@ import {
  *    while the rest loads;
  *  - cached data is refreshed quietly in the background once it's stale.
  *
- * The Shopify "raw data" payload is large, so it's only requested on
- * demand via `loadRaw()` (the Raw data tab).
+ * The large Shopify "raw data" payload is never requested here (there is no Raw data tab).
  */
 export function useProductDetails(id: string) {
   const dispatch = useAppDispatch()
   const entry = useAppSelector((state) => state.products.details[detailsKey(id)])
-  const rawEntry = useAppSelector((state) => state.products.details[detailsKey(id, true)])
   const preview = useAppSelector(
     (state) => state.products.lastData?.items.find((item) => item.id === id) ?? null,
   )
@@ -37,10 +35,6 @@ export function useProductDetails(id: string) {
     () => void dispatch(fetchProductDetails({ id, force: true })),
     [dispatch, id],
   )
-  const loadRaw = useCallback(
-    () => void dispatch(fetchProductDetails({ id, raw: true })),
-    [dispatch, id],
-  )
 
   return {
     product: entry?.data ?? null,
@@ -50,10 +44,5 @@ export function useProductDetails(id: string) {
     isRefreshing: Boolean(entry?.isFetching && entry.data),
     error: entry?.data ? null : (entry?.error ?? null),
     retry,
-
-    raw: rawEntry?.data?.raw_json ?? null,
-    isRawLoading: rawEntry?.isFetching ?? false,
-    rawError: rawEntry?.data ? null : (rawEntry?.error ?? null),
-    loadRaw,
   }
 }
