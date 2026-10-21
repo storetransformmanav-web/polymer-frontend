@@ -23,7 +23,9 @@ import type {
 } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
+import { readDescriptionSections } from '../utils/descriptionSections.ts'
 import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
+import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -150,6 +152,8 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const description = useMemo(() => htmlToText(product?.description_html), [product])
+  // The description sections the store's description app saves in the `apd` metafield.
+  const sections = useMemo(() => readDescriptionSections(product), [product])
 
   // The lightbox pages through every product image. The hero image is normally
   // one of them; if it isn't (still loading, or a featured image that isn't in
@@ -303,7 +307,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             errorPrefixes={NO_ERRORS}
             onSaved={onSaved}
             view={
-              description ? (
+              sections ? (
+                <div className="flex flex-col gap-2.5">
+                  <DescriptionAccordion {...sections} />
+                  <p className="text-text-muted text-[0.78rem]">
+                    Shown as on the store: from the description app&apos;s sections
+                    (metafield apd). The pencil edits the product&apos;s own description
+                    text.
+                  </p>
+                </div>
+              ) : description ? (
                 <p className="text-[0.9rem] leading-relaxed whitespace-pre-line">
                   {description}
                 </p>

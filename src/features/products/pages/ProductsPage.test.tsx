@@ -728,6 +728,86 @@ describe('ProductsPage details', () => {
     )
   })
 
+  describe('description sections from the apd metafield', () => {
+    const SETTINGS = {
+      accordian_multi: false,
+      sections: [
+        {
+          title: 'Product Description',
+          content: '<p>These Hippo Microwave Containers with Lids are dependable.</p>',
+          position: 0,
+        },
+        {
+          title: 'Product Information',
+          content:
+            '<p><strong>Capacity:</strong></p><table><tbody><tr><td>MC01H</td><td>500ml</td></tr></tbody></table>',
+          position: 1,
+        },
+      ],
+    }
+
+    function withApd(settings: unknown) {
+      const detail = makeDetail('id-7')
+      detail.metafields = [
+        {
+          namespace: 'apd',
+          key: 'apd',
+          type: 'json_string',
+          value: JSON.stringify(settings),
+        },
+      ]
+      detail.description_html = '<p>The plain store description</p>'
+      details.mockResolvedValue(detail)
+    }
+
+    it('shows them as an accordion in the Description card, instead of the plain text', async () => {
+      withApd(SETTINGS)
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('button', { name: /^Description/ }))
+
+      const first = screen.getByRole('button', { name: /^Product Description/ })
+      const second = screen.getByRole('button', { name: /^Product Information/ })
+      expect(first).toHaveAttribute('aria-expanded', 'false')
+      expect(second).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByText('The plain store description')).not.toBeInTheDocument()
+
+      await user.click(second)
+      const region = screen.getByRole('region', { name: 'Product Information' })
+      expect(within(region).getByRole('table')).toBeInTheDocument()
+      expect(within(region).getByText('500ml')).toBeInTheDocument()
+    })
+
+    it('falls back to the product description text when there are no sections', async () => {
+      const detail = makeDetail('id-7')
+      detail.description_html = '<p>The plain store description</p>'
+      details.mockResolvedValue(detail)
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('button', { name: /^Description/ }))
+
+      expect(screen.getByText('The plain store description')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Product Information/ })).toBeNull()
+    })
+
+    it('ignores a damaged apd value and shows the plain description', async () => {
+      const detail = makeDetail('id-7')
+      detail.description_html = '<p>The plain store description</p>'
+      detail.metafields = [
+        { namespace: 'apd', key: 'apd', type: 'json_string', value: '{not json' },
+      ]
+      details.mockResolvedValue(detail)
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('button', { name: /^Description/ }))
+
+      expect(screen.getByText('The plain store description')).toBeInTheDocument()
+    })
+  })
+
   it('starts with Status & Launch and Description collapsed, Specifications open', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')
