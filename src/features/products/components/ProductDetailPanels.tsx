@@ -39,6 +39,7 @@ import {
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
 import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChunk.ts'
+import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
@@ -306,25 +307,21 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             errorPrefixes={NO_ERRORS}
             onSaved={onSaved}
             view={
-              sections ? (
-                <div className="flex flex-col gap-2.5">
-                  <DescriptionAccordion {...sections} />
-                  <p className="text-text-muted text-[0.78rem]">
-                    Shown as on the store: from the description app&apos;s sections
-                    (metafield apd). The pencil edits the product&apos;s own description
-                    text.
-                  </p>
-                </div>
-              ) : description ? (
-                <p className="text-[0.9rem] leading-relaxed whitespace-pre-line">
-                  {description}
-                </p>
+              description ? (
+                // The product's own description (description_html), with its structure.
+                <SafeHtml
+                  html={product.description_html ?? ''}
+                  className="text-[0.9rem] leading-relaxed"
+                />
               ) : (
                 <p className="text-text-muted text-[0.9rem]">No description.</p>
               )
             }
             editor={(section) => <DescriptionField {...section} />}
           />
+
+          {/* Outside the card: the description app's sections (metafield apd), all closed. */}
+          {sections && <DescriptionAccordion {...sections} />}
         </div>
       )}
     </div>

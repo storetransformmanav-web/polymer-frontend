@@ -687,12 +687,14 @@ describe('ProductsPage details', () => {
     ).toBeInTheDocument()
     expect(details).toHaveBeenCalledWith('id-7', false) // raw payload not requested up front
 
-    // Overview: specs, price, description stripped to plain text (no markup/script).
+    // Overview: specs, price, description shown with its structure (bold kept) but no script.
     expect(await screen.findByText('Home > Desks')).toBeInTheDocument()
     expect(screen.getByText('£25.85')).toBeInTheDocument()
-    const description = screen.getByText('Sturdy walnut desk')
-    expect(description.querySelector('strong, script')).toBeNull()
-    expect(description).not.toHaveTextContent('alert')
+    const bold = screen.getByText('walnut')
+    expect(bold.tagName).toBe('STRONG')
+    expect(bold.parentElement).toHaveTextContent('Sturdy walnut desk')
+    expect(bold.parentElement).not.toHaveTextContent('alert')
+    expect(document.querySelector('script')).toBeNull()
     // The header no longer shows a SKU; it lives in the Variants tab.
     expect(screen.queryByText('SKU-7')).not.toBeInTheDocument()
 
@@ -760,18 +762,25 @@ describe('ProductsPage details', () => {
       details.mockResolvedValue(detail)
     }
 
-    it('shows them as an accordion in the Description card, instead of the plain text', async () => {
+    it('shows them as an accordion outside the Description card, below it, with no need to open the card', async () => {
       withApd(SETTINGS)
       const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
-      await user.click(screen.getByRole('button', { name: /^Description/ }))
+      const card = screen.getByRole('button', { name: /^Description/ })
+      expect(card).toHaveAttribute('aria-expanded', 'false')
 
       const first = screen.getByRole('button', { name: /^Product Description/ })
       const second = screen.getByRole('button', { name: /^Product Information/ })
       expect(first).toHaveAttribute('aria-expanded', 'false')
       expect(second).toHaveAttribute('aria-expanded', 'false')
-      expect(screen.queryByText('The plain store description')).not.toBeInTheDocument()
+      // The product's own description (description_html) stays in the card, above the sections.
+      const own = screen.getByText('The plain store description')
+      expect(own.closest('section, article, div')).not.toContainElement(first)
+      expect(
+        own.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(screen.queryByText(/Hippo Microwave/)).not.toBeInTheDocument()
 
       await user.click(second)
       const region = screen.getByRole('region', { name: 'Product Information' })
