@@ -12,6 +12,9 @@ import {
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
+// The Delete button is hidden for now (utils/flags.ts); these tests are about the feature itself.
+vi.mock('../utils/flags.ts', () => ({ SHOW_PRODUCT_DELETE: true }))
+
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {

@@ -10,6 +10,7 @@ import type {
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
 import { BulkEditView } from '../components/BulkEditView.tsx'
+import { ConfirmUpdateDialog } from '../components/ConfirmUpdateDialog.tsx'
 import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChunk.ts'
 import { ProductCreateView } from '../components/ProductCreateView.tsx'
 import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
@@ -24,6 +25,7 @@ import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
+import { statusLabel } from '../utils/format.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 
 /**
@@ -221,7 +223,19 @@ export function ProductsPage() {
     setNotice(`“${product.title}”: ${result.message || 'Product deleted.'}`)
   }
 
+  // A status picked in the list, waiting for "Yes, update" (it is also changed in Shopify).
+  const [statusChange, setStatusChange] = useState<{
+    product: ProductListItem
+    next: ProductEditStatus
+  } | null>(null)
+
+  function askStatusChange(product: ProductListItem, next: ProductEditStatus) {
+    if (next === product.status?.toUpperCase()) return
+    setStatusChange({ product, next })
+  }
+
   async function changeStatus(product: ProductListItem, next: ProductEditStatus) {
+    setStatusChange(null)
     if (next === product.status?.toUpperCase()) return
     const result = await status.change(product, next)
     // Track whether the change reached the store, if this product's details are opened.
@@ -364,7 +378,7 @@ export function ProductsPage() {
             isStale={products.isShowingPrevious}
             onOpen={openProduct}
             onQuickView={setQuickView}
-            onStatusChange={changeStatus}
+            onStatusChange={askStatusChange}
             statusPending={status.pending}
             statusErrors={status.errors}
             onDelete={askDelete}
@@ -395,6 +409,15 @@ export function ProductsPage() {
           product={deleting}
           onClose={closeDelete}
           onDone={(result) => handleDeleted(deleting, result)}
+        />
+      )}
+
+      {statusChange && (
+        <ConfirmUpdateDialog
+          key={`status-${statusChange.product.id}`}
+          title={`Change “${statusChange.product.title}” to ${statusLabel(statusChange.next)}?`}
+          onConfirm={() => void changeStatus(statusChange.product, statusChange.next)}
+          onCancel={() => setStatusChange(null)}
         />
       )}
 

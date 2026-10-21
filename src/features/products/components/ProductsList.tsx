@@ -17,6 +17,7 @@ import {
   statusTone,
 } from '../utils/format.ts'
 import type { ProductEditStatus } from '../../../lib/api/endpoints.ts'
+import { SHOW_PRODUCT_DELETE } from '../utils/flags.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
@@ -363,15 +364,17 @@ export function ProductsList({
                       >
                         <EyeIcon />
                       </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${product.title}`}
-                        title="Delete"
-                        onClick={() => onDelete(product)}
-                        className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
-                      >
-                        <TrashIcon />
-                      </button>
+                      {SHOW_PRODUCT_DELETE && (
+                        <button
+                          type="button"
+                          aria-label={`Delete ${product.title}`}
+                          title="Delete"
+                          onClick={() => onDelete(product)}
+                          className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
                     </span>
                   </td>
                 </tr>

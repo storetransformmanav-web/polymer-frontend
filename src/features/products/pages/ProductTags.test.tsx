@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -189,6 +190,8 @@ describe('the Tags block on the product page', () => {
     expect(screen.getByLabelText('Vendor')).toHaveValue('Polymer Ltd')
 
     await user.click(screen.getByRole('button', { name: 'Save specifications' }))
+
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         'id-1',
@@ -199,6 +202,7 @@ describe('the Tags block on the product page', () => {
     // The half-finished tag edit is untouched by that save.
     expect(within(block).getByText('Eco')).toBeInTheDocument()
     await user.click(save())
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenLastCalledWith(
         'id-1',
@@ -244,6 +248,7 @@ describe('the Tags block on the product page', () => {
     expect(within(block).getByRole('textbox', { name: 'Add tags' })).toHaveValue('')
     expect(save()).toBeEnabled()
     await user.click(save())
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -270,6 +275,7 @@ describe('the Tags block on the product page', () => {
         .map((item) => item.textContent),
     ).toEqual([...TAGS, 'a', 'b'])
     await user.click(save())
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith('id-1', { tags_add: ['a', 'b'] }, 'polymer-uk'),
     )
@@ -282,6 +288,7 @@ describe('the Tags block on the product page', () => {
       within(block).getByRole('button', { name: 'Remove tag Material_Plastic' }),
     )
     await user.click(save())
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -333,6 +340,7 @@ describe('the Tags block on the product page', () => {
     await user.click(within(block).getByRole('button', { name: 'Add tags' }))
     await user.keyboard('One more{Enter}')
     await user.click(save())
+    await confirmUpdate(user)
 
     expect(await screen.findByText('Too many tags.')).toBeInTheDocument()
     expect(within(block).getByText('One more')).toBeInTheDocument()

@@ -14,6 +14,7 @@ import {
   type SavedHandler,
   type SectionEdit,
 } from '../../hooks/useSectionEdit.ts'
+import { ConfirmUpdateDialog } from '../ConfirmUpdateDialog.tsx'
 import type { SectionProps } from './fields.tsx'
 
 /**
@@ -57,7 +58,7 @@ export function SectionEditControls({
         tone="primary"
         disabled={!edit.dirty}
         busy={edit.isSaving}
-        onClick={() => void edit.commit()}
+        onClick={edit.commit}
       />
       <IconAction
         label="Discard"
@@ -98,10 +99,22 @@ interface SharedProps {
   header?: (edit: SectionEdit) => ReactNode
 }
 
+/** Asked before a section's save is sent, since the change also goes to Shopify. */
+function ConfirmSave({ edit, title }: { edit: SectionEdit; title: string }) {
+  if (!edit.confirming) return null
+  return (
+    <ConfirmUpdateDialog
+      title={`Update “${title}”?`}
+      onConfirm={() => void edit.confirmSave()}
+      onCancel={edit.cancelConfirm}
+    />
+  )
+}
+
 /** Escape discards the section being edited. */
 function discardOnEscape(edit: SectionEdit) {
   return (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && edit.editing) {
+    if (event.key === 'Escape' && edit.editing && !edit.confirming) {
       event.stopPropagation()
       edit.discard()
     }
@@ -160,20 +173,23 @@ export function EditableCard({
   const edit = useSectionEdit(product, { errorPrefixes, onSaved })
 
   return (
-    <DetailSection
-      title={title}
-      count={count}
-      icon={icon}
-      defaultOpen={defaultOpen}
-      forceOpen={edit.editing}
-      actions={<SectionEditControls edit={edit} what={what} onIntent={onEditIntent} />}
-    >
-      {/* Only listens for Escape; every control inside stays an ordinary focusable element. */}
-      <div onKeyDown={discardOnEscape(edit)}>
-        {edit.editing ? renderBody(edit, editor) : view}
-      </div>
-      {after && <div className="mt-5">{after}</div>}
-    </DetailSection>
+    <>
+      <DetailSection
+        title={title}
+        count={count}
+        icon={icon}
+        defaultOpen={defaultOpen}
+        forceOpen={edit.editing}
+        actions={<SectionEditControls edit={edit} what={what} onIntent={onEditIntent} />}
+      >
+        {/* Only listens for Escape; every control inside stays an ordinary focusable element. */}
+        <div onKeyDown={discardOnEscape(edit)}>
+          {edit.editing ? renderBody(edit, editor) : view}
+        </div>
+        {after && <div className="mt-5">{after}</div>}
+      </DetailSection>
+      <ConfirmSave edit={edit} title={product.title} />
+    </>
   )
 }
 
@@ -193,20 +209,23 @@ export function EditableTab({
   const edit = useSectionEdit(product, { errorPrefixes, onSaved })
 
   return (
-    <div className="flex flex-col gap-4" onKeyDown={discardOnEscape(edit)}>
-      {header ? (
-        header(edit)
-      ) : (
-        <div className="flex min-h-8 items-center justify-end gap-1.5">
-          {edit.editing && (
-            <p className="text-text-muted mr-auto text-[0.82rem] font-medium">
-              Editing {what}
-            </p>
-          )}
-          <SectionEditControls edit={edit} what={what} />
-        </div>
-      )}
-      {edit.editing ? renderBody(edit, editor) : view}
-    </div>
+    <>
+      <div className="flex flex-col gap-4" onKeyDown={discardOnEscape(edit)}>
+        {header ? (
+          header(edit)
+        ) : (
+          <div className="flex min-h-8 items-center justify-end gap-1.5">
+            {edit.editing && (
+              <p className="text-text-muted mr-auto text-[0.82rem] font-medium">
+                Editing {what}
+              </p>
+            )}
+            <SectionEditControls edit={edit} what={what} />
+          </div>
+        )}
+        {edit.editing ? renderBody(edit, editor) : view}
+      </div>
+      <ConfirmSave edit={edit} title={product.title} />
+    </>
   )
 }

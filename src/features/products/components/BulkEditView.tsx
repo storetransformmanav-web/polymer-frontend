@@ -20,6 +20,7 @@ import {
   type VariantDraft,
 } from '../utils/editDraft.ts'
 import { statusLabel } from '../utils/format.ts'
+import { ConfirmUpdateDialog } from './ConfirmUpdateDialog.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
 type ColumnId = 'status' | 'productType' | 'price' | 'compareAtPrice' | 'sku' | 'barcode'
@@ -404,6 +405,7 @@ interface BulkEditViewProps {
 export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
   const ids = useMemo(() => items.map((item) => item.id), [items])
   const edit = useBulkEdit(ids)
+  const [confirming, setConfirming] = useState(false)
   const [visible, setVisible] = useState<ColumnId[]>(DEFAULT_COLUMNS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [summary, setSummary] = useState<{
@@ -428,6 +430,7 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
   }
 
   async function save() {
+    setConfirming(false)
     setSummary(null)
     const outcome = await edit.saveAll()
     if (outcome.blocked > 0) {
@@ -522,7 +525,7 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
 
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => setConfirming(true)}
             disabled={edit.dirtyCount === 0 || edit.isSaving}
             className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 min-w-20 cursor-pointer items-center justify-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-50"
           >
@@ -533,6 +536,14 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
           </button>
         </div>
       </div>
+
+      {confirming && (
+        <ConfirmUpdateDialog
+          title={`Update ${plural(edit.dirtyCount, 'product')}?`}
+          onConfirm={() => void save()}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
 
       {summary && (
         <div className="px-4 pt-3">

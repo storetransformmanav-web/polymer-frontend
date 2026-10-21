@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -187,13 +188,17 @@ describe('editing a product', () => {
   })
 
   describe('opening', () => {
-    it('has View and Delete in every row under an Actions column — no Edit pencil', async () => {
+    it('has only View in every row under an Actions column — no Edit pencil, and Delete is hidden for now', async () => {
       renderPage()
       await screen.findByText('Hippo Bag')
 
       expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'View Hippo Bag' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Delete Hippo Bag' })).toBeInTheDocument()
+      // Temporarily hidden (utils/flags.ts → SHOW_PRODUCT_DELETE).
+      expect(
+        screen.queryByRole('button', { name: 'Delete Hippo Bag' }),
+      ).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Delete / })).not.toBeInTheDocument()
       expect(
         screen.queryByRole('button', { name: 'Edit Hippo Bag' }),
       ).not.toBeInTheDocument()
@@ -219,6 +224,7 @@ describe('editing a product', () => {
       await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
       await user.type(screen.getByLabelText('Vendor'), ' Ltd')
       await user.click(screen.getByRole('button', { name: 'Save specifications' }))
+      await confirmUpdate(user)
       await waitFor(() =>
         expect(
           screen.queryByRole('button', { name: 'Save specifications' }),
@@ -368,6 +374,7 @@ describe('editing a section in place', () => {
     await user.clear(title)
     await user.type(title, 'Hippo Carrier Bag')
     await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -376,10 +383,78 @@ describe('editing a section in place', () => {
         'polymer-uk',
       ),
     )
-    // Back to read-only — and no dialog came or went.
+    // Back to read-only.
     await waitFor(() => expect(pencil('specifications')).toBeInTheDocument())
     expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
     expect(await screen.findByText(/Saved “Hippo Carrier Bag”/)).toBeInTheDocument()
+  })
+
+  describe('asking "are you sure?" before a save', () => {
+    async function startEditingVendor() {
+      const user = await openDetails()
+      await user.click(pencil('specifications'))
+      await user.type(screen.getByLabelText('Vendor'), ' Ltd')
+      await user.click(saveButton('specifications'))
+      const dialog = await screen.findByRole('alertdialog', {
+        name: 'Update “Hippo Bag”?',
+      })
+      return { user, dialog }
+    }
+
+    it('says the change also goes to Shopify, and sends nothing until "Yes, update"', async () => {
+      const { user, dialog } = await startEditingVendor()
+
+      expect(
+        within(dialog).getByText('Are you sure you want to update this?'),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByText(/also be updated in Shopify/)).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      expect(update).not.toHaveBeenCalled()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          expect.objectContaining({ vendor: expect.stringContaining('Ltd') }),
+          'polymer-uk',
+        ),
+      )
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+
+    it('keeps everything typed and sends nothing on Cancel', async () => {
+      const { user, dialog } = await startEditingVendor()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      // Still editing, with the typed text, ready to save again or discard.
+      expect(screen.getByLabelText('Vendor')).toHaveValue('Polymer Ltd')
+      expect(saveButton('specifications')).toBeEnabled()
+    })
+
+    it('closes on Escape without discarding the edit or sending anything', async () => {
+      const { user } = await startEditingVendor()
+
+      await user.keyboard('{Escape}')
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Vendor')).toHaveValue('Polymer Ltd')
+    })
+
+    it('does not ask while a field is invalid — the problem is shown instead', async () => {
+      const user = await openDetails()
+      await user.click(pencil('specifications'))
+      await user.clear(screen.getByLabelText('Title'))
+      await user.click(saveButton('specifications'))
+
+      expect(screen.getByText('Enter a title')).toBeInTheDocument()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
   })
 
   it('throws the changes away on Discard, without asking the server anything', async () => {
@@ -413,6 +488,7 @@ describe('editing a section in place', () => {
     await user.click(pencil('status'))
     await user.selectOptions(screen.getByLabelText('Status'), 'DRAFT')
     await user.click(saveButton('status'))
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenLastCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
     )
@@ -424,6 +500,7 @@ describe('editing a section in place', () => {
     await user.clear(description)
     await user.type(description, 'Brand new copy')
     await user.click(saveButton('description'))
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenLastCalledWith(
         'id-1',
@@ -438,6 +515,7 @@ describe('editing a section in place', () => {
     await user.clear(seoTitle)
     await user.type(seoTitle, 'Hippo carrier bag')
     await user.click(saveButton('search listing'))
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenLastCalledWith(
         'id-1',
@@ -457,6 +535,7 @@ describe('editing a section in place', () => {
 
     await user.type(screen.getByLabelText('Vendor'), ' Ltd')
     await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
 
     // Only the vendor went; the half-typed description is still an open draft.
     await waitFor(() =>
@@ -474,6 +553,7 @@ describe('editing a section in place', () => {
     await user.click(pencil('specifications'))
     await user.clear(screen.getByLabelText('Title'))
     await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
 
     expect(screen.getByText('Enter a title')).toBeInTheDocument()
     expect(screen.getByText('Fix the highlighted fields to save.')).toBeInTheDocument()
@@ -490,6 +570,7 @@ describe('editing a section in place', () => {
     await user.click(pencil('specifications'))
     await user.type(screen.getByLabelText('Handle'), '-2')
     await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
 
     expect(
       await screen.findByText('A product with this handle already exists.'),
@@ -508,6 +589,7 @@ describe('editing a section in place', () => {
     await user.clear(price)
     await user.type(price, '27.5')
     await user.click(saveButton('variants'))
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -539,6 +621,7 @@ describe('editing a section in place', () => {
     await user.click(pencil('collections'))
     await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
     await user.click(saveButton('collections'))
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -604,6 +687,8 @@ describe('editing a section in place', () => {
     expect(items[1]).toHaveTextContent('Best Sellers')
 
     await user.click(saveButton('collections'))
+
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         'id-1',
@@ -627,6 +712,7 @@ describe('editing a section in place', () => {
     await user.click(pencil('media'))
     await user.click(screen.getByRole('button', { name: 'Move image 2 up' }))
     await user.click(saveButton('media'))
+    await confirmUpdate(user)
 
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
@@ -647,6 +733,7 @@ describe('editing a section in place', () => {
     await user.clear(vendor)
     await user.type(vendor, 'Acme Packaging')
     await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
 
     // Both the header and the specifications show it — patched into the cache at once.
     expect((await screen.findAllByText('Acme Packaging')).length).toBeGreaterThanOrEqual(

@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -262,6 +263,12 @@ describe('editing products in bulk', () => {
     expect(screen.getByText('2 unsaved')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
+    // First it asks, and nothing is sent yet.
+    const dialog = await screen.findByRole('alertdialog', { name: 'Update 2 products?' })
+    expect(within(dialog).getByText(/also be updated in Shopify/)).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
     expect(update).toHaveBeenCalledWith('id-1', { product_type: 'Acme' }, 'polymer-uk')
     expect(update).toHaveBeenCalledWith(
@@ -283,9 +290,29 @@ describe('editing products in bulk', () => {
     await user.clear(type)
     await user.type(type, 'Lids')
     await user.click(screen.getByRole('button', { name: 'Save' }))
+    await confirmUpdate(user)
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
     expect(update).toHaveBeenCalledWith('id-2', { product_type: 'Lids' }, 'polymer-uk')
+  })
+
+  it('keeps the edits and sends nothing when the confirmation is cancelled', async () => {
+    const user = await openPageEditor()
+    const productType = screen.getByLabelText('Product type for Hippo Bag')
+    await user.clear(productType)
+    await user.type(productType, 'Acme')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Cancel',
+      }),
+    )
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+    expect(screen.getByText('1 unsaved')).toBeInTheDocument()
+    expect(screen.getByLabelText('Product type for Hippo Bag')).toHaveValue('Acme')
   })
 
   it('changes the status of several products', async () => {
@@ -293,6 +320,7 @@ describe('editing products in bulk', () => {
     await user.selectOptions(screen.getByLabelText('Status for Hippo Bag'), 'DRAFT')
     await user.selectOptions(screen.getByLabelText('Status for Foil Lid'), 'ARCHIVED')
     await user.click(screen.getByRole('button', { name: 'Save' }))
+    await confirmUpdate(user)
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
     expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk')
@@ -308,6 +336,7 @@ describe('editing products in bulk', () => {
     await user.type(screen.getByLabelText('Product type for Hippo Bag'), '!')
     await user.type(screen.getByLabelText('Product type for Foil Lid'), '!')
     await user.click(screen.getByRole('button', { name: 'Save' }))
+    await confirmUpdate(user)
 
     expect(await screen.findByText('Handle already taken.')).toBeInTheDocument()
     expect(screen.getByText(/Saved 1 of 2 products/)).toBeInTheDocument()
@@ -323,6 +352,7 @@ describe('editing products in bulk', () => {
     await user.clear(price)
     await user.type(price, 'abc')
     await user.click(screen.getByRole('button', { name: 'Save' }))
+    await confirmUpdate(user)
 
     expect(
       await screen.findByText(/Fix the highlighted cells in 1 product/),
@@ -386,6 +416,7 @@ describe('editing products in bulk', () => {
       items: [{ ...HIPPO, title: 'Hippo Carrier Bag' }, LID],
     })
     await user.click(screen.getByRole('button', { name: 'Save' }))
+    await confirmUpdate(user)
     await screen.findByText(/Saved 1 product/)
 
     await user.click(screen.getByRole('button', { name: 'Back' }))

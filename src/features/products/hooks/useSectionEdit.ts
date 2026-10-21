@@ -46,6 +46,8 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
     draft: ProductDraft
   } | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  // Save was pressed and the changes are valid: waiting for "Yes, update".
+  const [confirming, setConfirming] = useState(false)
   const { save, isSaving, error, clearError } = useSaveProduct()
 
   const body = useMemo<ProductUpdateBody>(
@@ -75,6 +77,7 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
     if (isSaving) return
     clearError()
     setShowErrors(false)
+    setConfirming(false)
     setSession(null)
   }
 
@@ -85,10 +88,22 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
     if (error) clearError()
   }
 
-  async function commit() {
+  /** Save was pressed: check the fields, then ask before anything is sent. */
+  function commit() {
     if (!session || !dirty || isSaving) return
     setShowErrors(true)
     if (hasProblems) return
+    setConfirming(true)
+  }
+
+  function cancelConfirm() {
+    setConfirming(false)
+  }
+
+  /** "Yes, update": save it (the product is then also updated in Shopify). */
+  async function confirmSave() {
+    setConfirming(false)
+    if (!session || !dirty || isSaving) return
 
     const result = await save({
       id: session.baseline.id,
@@ -115,10 +130,14 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
     isSaving,
     /** The backend's message when the save failed. */
     error,
+    /** Asking "are you sure?" before the save is sent. */
+    confirming,
     start,
     discard,
     change,
     commit,
+    cancelConfirm,
+    confirmSave,
   }
 }
 

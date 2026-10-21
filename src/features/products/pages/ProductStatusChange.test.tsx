@@ -9,6 +9,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -125,6 +126,7 @@ describe('changing a status from the products table', () => {
   ) {
     await user.click(statusOf(title))
     await user.click(screen.getByRole('option', { name: label }))
+    await confirmUpdate(user)
   }
 
   it('shows every product’s status as a pill with a dropdown arrow', async () => {
@@ -175,6 +177,33 @@ describe('changing a status from the products table', () => {
     expect(unlisted).toHaveAttribute('aria-disabled', 'true')
     await user.click(unlisted)
     expect(update).not.toHaveBeenCalled()
+  })
+
+  it('asks "are you sure?" first — it also changes in Shopify — and Cancel leaves everything as it was', async () => {
+    const user = await openList()
+    await user.click(statusOf('Hippo Bag'))
+    await user.click(screen.getByRole('option', { name: 'Draft' }))
+
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Change “Hippo Bag” to Draft?',
+    })
+    expect(within(dialog).getByText(/also be updated in Shopify/)).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Active')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+    expect(statusOf('Hippo Bag')).toHaveTextContent('Active')
+
+    // Choosing it again and saying yes does save.
+    await user.click(statusOf('Hippo Bag'))
+    await user.click(screen.getByRole('option', { name: 'Draft' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, update' }))
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
+    )
   })
 
   it('saves the chosen status at once, for the product’s store, and keeps it on screen', async () => {
@@ -243,6 +272,7 @@ describe('changing a status from the products table', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument()
 
     await user.keyboard('{ArrowDown}{Enter}')
+    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
     )

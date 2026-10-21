@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
@@ -509,6 +510,7 @@ describe('adding and deleting media', () => {
       await user.clear(alt)
       await user.type(alt, 'A red bag')
       await user.click(screen.getByRole('button', { name: 'Save media' }))
+      await confirmUpdate(user)
 
       await waitFor(() =>
         expect(updateMock).toHaveBeenCalledWith(
@@ -529,6 +531,7 @@ describe('adding and deleting media', () => {
       })
       await user.type(alt, '!')
       await user.click(screen.getByRole('button', { name: 'Save media' }))
+      await confirmUpdate(user)
 
       await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1))
       const body = updateMock.mock.calls[0][1]
