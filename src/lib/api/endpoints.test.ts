@@ -272,6 +272,113 @@ describe('api.products.addMedia and removeMedia', () => {
   })
 })
 
+describe('api.customers.list', () => {
+  const SAMPLE = {
+    items: [
+      {
+        shop: {
+          key: 'polymer-uk',
+          name: 'Polymer UK',
+          domain: 'polymer-uk-ltd.myshopify.com',
+          currency: 'GBP',
+        },
+        id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        shopify_id: 9001,
+        email: 'a@b.co',
+        full_name: 'Ada Lovelace',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+        phone: '+44 20 7946 0000',
+        role: 'subscriber',
+        is_active: true,
+        shopify_state: 'ENABLED',
+        accepts_marketing: true,
+        orders_count: 3,
+        total_spent: '45.70',
+        currency: 'GBP',
+        tags: ['vip'],
+        city: 'London',
+        country: 'United Kingdom',
+        last_order_name: '#1042',
+        shopify_created_at: '2026-10-21T05:17:20.481Z',
+        last_login_at: '2026-10-21T05:17:20.481Z',
+      },
+    ],
+    page: 1,
+    page_size: 20,
+    total: 1,
+    total_pages: 1,
+    has_next: false,
+    sort: 'created_at',
+    order: 'desc',
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.get).mockReset()
+  })
+
+  it('GETs /customers with the query as sent, and reads the documented response', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(SAMPLE)
+    const params = {
+      search: 'ada',
+      role: 'all' as const,
+      source: 'shopify' as const,
+      state: 'ENABLED' as const,
+      accepts_marketing: true,
+      has_orders: true,
+      tag: 'vip',
+      country: 'GB',
+      min_spent: 10,
+      max_spent: 500,
+      sort: 'total_spent' as const,
+      order: 'asc' as const,
+      page: 2,
+      page_size: 50,
+      shop: 'polymer-uk',
+    }
+
+    const result = await api.customers.list(params)
+
+    expect(apiClient.get).toHaveBeenCalledWith('/customers', { params })
+    expect(result.items[0]).toMatchObject({
+      id: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      full_name: 'Ada Lovelace',
+      orders_count: 3,
+      total_spent: '45.70',
+      shop: { key: 'polymer-uk', name: 'Polymer UK' },
+      last_login_at: '2026-10-21T05:17:20.481Z',
+    })
+    expect(result).toMatchObject({ page: 1, total: 1, has_next: false })
+  })
+
+  it('accepts customers created in the CRM: no Shopify id, no store, nothing optional', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      ...SAMPLE,
+      items: [
+        {
+          id: 'c1',
+          shopify_id: null,
+          shop: null,
+          email: null,
+          role: 'administrator',
+          is_active: true,
+          orders_count: 0,
+        },
+      ],
+    })
+
+    const result = await api.customers.list({ role: 'all' })
+
+    expect(result.items[0]).toMatchObject({ id: 'c1', shopify_id: null, tags: [] })
+  })
+
+  it('refuses an answer that is not a customer list', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ items: 'nope' })
+
+    await expect(api.customers.list({})).rejects.toThrow()
+  })
+})
+
 describe('api.sync', () => {
   beforeEach(() => {
     vi.mocked(apiClient.post).mockReset()

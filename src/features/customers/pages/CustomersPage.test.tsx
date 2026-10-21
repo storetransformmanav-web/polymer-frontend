@@ -86,7 +86,9 @@ describe('CustomersPage', () => {
     renderWithProviders(<CustomersPage />)
 
     expect(await screen.findByText('Customer 2')).toBeInTheDocument()
+    // Every role is asked for explicitly: the API's own default is 'subscriber' only.
     expect(list).toHaveBeenCalledWith({
+      role: 'all',
       sort: 'created_at',
       order: 'desc',
       page: 1,
@@ -192,6 +194,63 @@ describe('CustomersPage', () => {
 
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('shows which store each customer belongs to, from the response', async () => {
+    list.mockImplementation((params) => {
+      const response = respond(params)
+      return Promise.resolve({
+        ...response,
+        items: response.items.map((item, index) => ({
+          ...item,
+          shop:
+            index % 2 === 0
+              ? {
+                  key: 'polymer-uk',
+                  name: 'Polymer UK',
+                  domain: 'polymer-uk-ltd.myshopify.com',
+                  currency: 'GBP',
+                }
+              : null,
+        })),
+      })
+    })
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    const table = screen.getByRole('table')
+    expect(within(table).getByRole('columnheader', { name: 'Store' })).toBeInTheDocument()
+    expect(within(table).getAllByText('Polymer UK').length).toBeGreaterThan(0)
+  })
+
+  it('asks for every role on "All Customers", and for just one on the other tabs', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ role: 'all', page: 1 }))
+    // Never an un-roled request for the list itself (the API would default to subscribers).
+    expect(list.mock.calls.filter(([params]) => params.role === undefined)).toHaveLength(
+      0,
+    )
+
+    await user.click(screen.getByRole('button', { name: /^Administrators/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'administrator', page: 1, page_size: 25 }),
+      ),
+    )
+    await user.click(screen.getByRole('button', { name: /^Subscribers/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'subscriber', page: 1, page_size: 25 }),
+      ),
+    )
+    // Back to "All Customers": shown at once from the cache.
+    await user.click(screen.getByRole('button', { name: /^All Customers/ }))
+    expect(screen.getByRole('button', { name: /^All Customers/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('has no Source filter', async () => {
@@ -313,8 +372,8 @@ describe('CustomersPage', () => {
 
   it('shows a count on every role tab, honouring the other filters', async () => {
     list.mockImplementation((params) => {
-      const byRole = { administrator: 7, subscriber: 53 }
-      const total = params.role ? byRole[params.role] : 60
+      const byRole = { administrator: 7, subscriber: 53, all: 60 }
+      const total = params.role ? byRole[params.role] : 53
       return Promise.resolve({ ...respond(params), total })
     })
     const user = userEvent.setup()

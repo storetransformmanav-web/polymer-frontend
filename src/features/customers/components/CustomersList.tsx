@@ -209,9 +209,9 @@ export function CustomersList({
                         </span>
                         <span className="font-semibold">{money(customer)}</span>
                       </span>
-                      {location && (
+                      {(customer.shop?.name || location) && (
                         <span className="text-text-muted truncate text-[0.78rem]">
-                          {location}
+                          {[customer.shop?.name, location].filter(Boolean).join(' · ')}
                         </span>
                       )}
                     </span>
@@ -234,6 +234,7 @@ export function CustomersList({
         <thead>
           <tr>
             <th className={TH}>Customer</th>
+            <th className={`${TH} ${FROM_XL}`}>Store</th>
             <th className={TH}>Role</th>
             <th className={TH}>State</th>
             <th className={TH_RIGHT}>Orders</th>
@@ -283,6 +284,14 @@ export function CustomersList({
                             {customer.email ?? '—'}
                           </span>
                         </span>
+                      </span>
+                    </td>
+                    <td className={`${TD} ${FROM_XL}`}>
+                      <span
+                        className="block max-w-40 truncate"
+                        title={customer.shop?.name ?? ''}
+                      >
+                        {customer.shop?.name || '—'}
                       </span>
                     </td>
                     <td className={TD}>

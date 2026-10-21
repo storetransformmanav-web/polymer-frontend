@@ -33,6 +33,7 @@ export interface CustomerFilters {
   search: string
   /** The store picked in the top bar ('' = all). Set by `shopSelected`, not by this page's toolbar. */
   shop: string
+  /** '' = every role (sent to the API as 'all'). */
   role: CustomerRole | ''
   state: CustomerState | ''
   marketing: '' | 'yes' | 'no'
@@ -76,7 +77,8 @@ export function toCustomerParams(filters: CustomerFilters): CustomerListParams {
   const search = filters.search.trim()
   if (search) params.search = search
   if (filters.shop) params.shop = filters.shop
-  if (filters.role) params.role = filters.role
+  // The API defaults to 'subscriber' when no role is sent, so "every role" must say so.
+  params.role = filters.role || 'all'
   if (filters.state) params.state = filters.state
   if (filters.marketing) params.accepts_marketing = filters.marketing === 'yes'
   if (filters.orders) params.has_orders = filters.orders === 'yes'
