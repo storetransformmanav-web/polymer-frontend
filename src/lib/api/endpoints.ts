@@ -380,6 +380,9 @@ const customerListItemSchema = z.object({
   total_spent: z.string().nullish(),
   currency: z.string().nullish(),
   tags: z.array(z.string()).default([]),
+  // The merchant's note about the customer. The list does not return it yet (only the
+  // details do); the Note column fills in as soon as the backend adds it here.
+  note: z.string().nullish(),
   city: z.string().nullish(),
   country: z.string().nullish(),
   last_order_name: z.string().nullish(),

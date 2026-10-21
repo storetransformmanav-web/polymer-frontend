@@ -9,6 +9,7 @@ import {
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
+import type { OptionalColumn } from '../utils/columns.ts'
 import {
   capitalize,
   customerLocation,
@@ -23,9 +24,6 @@ const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
 const TD = 'px-3.5 py-2.5 text-left whitespace-nowrap'
-// Wider-screen-only columns, so the table never needs sideways scrolling on laptops.
-const FROM_XL = 'hidden xl:table-cell'
-const FROM_2XL = 'hidden 2xl:table-cell'
 const SKELETON_ROWS = 8
 
 interface CustomersListProps {
@@ -35,6 +33,8 @@ interface CustomersListProps {
   hasFilters: boolean
   /** Rows belong to the previous query while the new one loads. */
   isStale: boolean
+  /** The extra columns switched on in the Columns menu (the default set is always shown). */
+  columns: ReadonlySet<OptionalColumn>
   /** Opens a customer's details page (View button / card). */
   onOpen: (customer: CustomerListItem) => void
   /** Hover/focus: start loading details so opening is instant. */
@@ -73,7 +73,7 @@ function Marketing({ value }: { value: boolean | null | undefined }) {
   return value ? (
     <Badge tone="success">Subscribed</Badge>
   ) : (
-    <span className="text-text-muted">No</span>
+    <span className="text-text-muted">Not subscribed</span>
   )
 }
 
@@ -124,6 +124,7 @@ export function CustomersList({
   error,
   hasFilters,
   isStale,
+  columns,
   onOpen,
   onPrefetch,
   onDelete,
@@ -131,6 +132,9 @@ export function CustomersList({
   onClearFilters,
 }: CustomersListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const has = (column: OptionalColumn) => columns.has(column)
+  // name, note, subscription, location, orders, spent, actions + the extras.
+  const columnCount = 7 + columns.size
 
   if (error) {
     return (
@@ -241,17 +245,18 @@ export function CustomersList({
       >
         <thead>
           <tr>
-            <th className={TH}>Customer</th>
-            <th className={`${TH} ${FROM_XL}`}>Store</th>
-            <th className={TH}>Role</th>
-            <th className={TH}>State</th>
+            <th className={TH}>Customer name</th>
+            {has('store') && <th className={TH}>Store</th>}
+            <th className={TH}>Note</th>
+            <th className={TH}>Email subscription</th>
+            <th className={TH}>Location</th>
             <th className={TH_RIGHT}>Orders</th>
-            <th className={TH_RIGHT}>Total Spent</th>
-            <th className={`${TH} ${FROM_XL}`}>Location</th>
-            <th className={TH}>Marketing</th>
-            <th className={TH}>Joined</th>
-            <th className={`${TH} ${FROM_2XL}`}>Tags</th>
-            <th className={`${TH} ${FROM_2XL}`}>Last Login</th>
+            <th className={TH_RIGHT}>Amount spent</th>
+            {has('role') && <th className={TH}>Role</th>}
+            {has('state') && <th className={TH}>State</th>}
+            {has('joined') && <th className={TH}>Joined</th>}
+            {has('tags') && <th className={TH}>Tags</th>}
+            {has('lastLogin') && <th className={TH}>Last login</th>}
             <th className={TH_CENTER}>Actions</th>
           </tr>
         </thead>
@@ -264,7 +269,7 @@ export function CustomersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: columnCount }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -273,6 +278,7 @@ export function CustomersList({
               ))
             : items.map((customer) => {
                 const name = customerName(customer)
+                const location = customerLocation(customer)
                 return (
                   <tr
                     key={customer.id}
@@ -294,21 +300,31 @@ export function CustomersList({
                         </span>
                       </span>
                     </td>
-                    <td className={`${TD} ${FROM_XL}`}>
+                    {has('store') && (
+                      <td className={TD}>
+                        <span
+                          className="block max-w-40 truncate"
+                          title={customer.shop?.name ?? ''}
+                        >
+                          {customer.shop?.name || '—'}
+                        </span>
+                      </td>
+                    )}
+                    <td className={TD}>
                       <span
-                        className="block max-w-40 truncate"
-                        title={customer.shop?.name ?? ''}
+                        className="block max-w-56 truncate"
+                        title={customer.note ?? ''}
                       >
-                        {customer.shop?.name || '—'}
+                        {customer.note?.trim() || '—'}
                       </span>
                     </td>
                     <td className={TD}>
-                      <Badge tone={roleTone(customer.role)}>
-                        {capitalize(customer.role)}
-                      </Badge>
+                      <Marketing value={customer.accepts_marketing} />
                     </td>
                     <td className={TD}>
-                      <StateBadge customer={customer} />
+                      <span className="block max-w-48 truncate" title={location}>
+                        {location || '—'}
+                      </span>
                     </td>
                     <td className={`${TD} text-right`}>
                       {customer.orders_count.toLocaleString('en-GB')}
@@ -316,24 +332,29 @@ export function CustomersList({
                     <td className={`${TD} text-right font-semibold`}>
                       {money(customer)}
                     </td>
-                    <td className={`${TD} ${FROM_XL}`}>
-                      <span
-                        className="block max-w-48 truncate"
-                        title={customerLocation(customer)}
-                      >
-                        {customerLocation(customer) || '—'}
-                      </span>
-                    </td>
-                    <td className={TD}>
-                      <Marketing value={customer.accepts_marketing} />
-                    </td>
-                    <td className={TD}>{dateOrDash(customer.shopify_created_at)}</td>
-                    <td className={`${TD} ${FROM_2XL}`}>
-                      <Tags tags={customer.tags} />
-                    </td>
-                    <td className={`${TD} ${FROM_2XL}`}>
-                      {dateOrDash(customer.last_login_at)}
-                    </td>
+                    {has('role') && (
+                      <td className={TD}>
+                        <Badge tone={roleTone(customer.role)}>
+                          {capitalize(customer.role)}
+                        </Badge>
+                      </td>
+                    )}
+                    {has('state') && (
+                      <td className={TD}>
+                        <StateBadge customer={customer} />
+                      </td>
+                    )}
+                    {has('joined') && (
+                      <td className={TD}>{dateOrDash(customer.shopify_created_at)}</td>
+                    )}
+                    {has('tags') && (
+                      <td className={TD}>
+                        <Tags tags={customer.tags} />
+                      </td>
+                    )}
+                    {has('lastLogin') && (
+                      <td className={TD}>{dateOrDash(customer.last_login_at)}</td>
+                    )}
                     <td className={`${TD} text-center`}>
                       <span className="inline-flex items-center justify-center gap-0.5">
                         <button

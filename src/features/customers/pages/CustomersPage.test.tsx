@@ -98,26 +98,87 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows each customer’s role, account state, spend and marketing status', async () => {
+  it('shows these columns by default: Customer name, Note, Email subscription, Location, Orders, Amount spent', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
     const table = within(screen.getByRole('table'))
-    // #1: a CRM-created administrator (no Shopify state, no currency, no marketing flag).
+    const headers = table.getAllByRole('columnheader').map((header) => header.textContent)
+    expect(headers).toEqual([
+      'Customer name',
+      'Note',
+      'Email subscription',
+      'Location',
+      'Orders',
+      'Amount spent',
+      'Actions',
+    ])
+    expect(table.queryByRole('checkbox')).toBeNull()
+
+    // #2: Shopify subscriber with money spent and a marketing opt-in.
+    const row = table.getByText('Customer 2').closest('tr')!
+    expect(within(row).getByText('customer2@example.com')).toBeInTheDocument()
+    expect(within(row).getByText('Subscribed')).toBeInTheDocument()
+    expect(within(row).getByText('United Kingdom')).toBeInTheDocument()
+    expect(within(row).getByText('£45.70')).toBeInTheDocument()
+    // #3 has not subscribed; #1 (CRM) has no marketing flag at all.
+    expect(
+      within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not subscribed'),
+    ).toBeInTheDocument()
+    // The rest (role, state, store…) is behind the Columns menu.
+    expect(table.queryByText('Subscriber')).not.toBeInTheDocument()
+    expect(table.queryByText('Enabled')).not.toBeInTheDocument()
+  })
+
+  it('shows the customer’s note in the Note column when the API sends one', async () => {
+    list.mockImplementation((params) => {
+      const response = respond(params)
+      return Promise.resolve({
+        ...response,
+        items: response.items.map((item) =>
+          item.id === 'cust-2' ? { ...item, note: 'Prefers phone calls' } : item,
+        ),
+      })
+    })
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    const table = within(screen.getByRole('table'))
+    expect(
+      within(table.getByText('Customer 2').closest('tr')!).getByText(
+        'Prefers phone calls',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('adds role, state, joined, tags and last login from the Columns menu', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    await user.click(screen.getByRole('button', { name: 'Columns' }))
+    for (const name of ['Role', 'State', 'Joined', 'Tags', 'Last login']) {
+      await user.click(screen.getByRole('checkbox', { name }))
+    }
+
+    const table = within(screen.getByRole('table'))
     const crmRow = table.getByText('Customer 1').closest('tr')!
     expect(within(crmRow).getByText('Administrator')).toBeInTheDocument()
     expect(within(crmRow).getByText('CRM')).toBeInTheDocument()
-    // #2: Shopify subscriber with money spent and a marketing opt-in.
     const row = table.getByText('Customer 2').closest('tr')!
     expect(within(row).getByText('Subscriber')).toBeInTheDocument()
     expect(within(row).getByText('Enabled')).toBeInTheDocument()
-    expect(within(row).getByText('£45.70')).toBeInTheDocument()
-    expect(within(row).getByText('Subscribed')).toBeInTheDocument()
     expect(within(row).getByText('+1')).toBeInTheDocument() // 3 tags: two shown, +1
     // #5 is invited.
     expect(
       within(table.getByText('Customer 5').closest('tr')!).getByText('Invited'),
     ).toBeInTheDocument()
+
+    // And they go away again.
+    await user.click(screen.getByRole('checkbox', { name: 'Role' }))
+    expect(
+      within(screen.getByRole('table')).queryByRole('columnheader', { name: 'Role' }),
+    ).toBeNull()
   })
 
   it('falls back to first + last name, then the email, when there is no full name', async () => {
@@ -215,10 +276,15 @@ describe('CustomersPage', () => {
         })),
       })
     })
+    const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
+    // Not a default column: switched on from the Columns menu.
     const table = screen.getByRole('table')
+    expect(within(table).queryByRole('columnheader', { name: 'Store' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Columns' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Store' }))
     expect(within(table).getByRole('columnheader', { name: 'Store' })).toBeInTheDocument()
     expect(within(table).getAllByText('Polymer UK').length).toBeGreaterThan(0)
   })

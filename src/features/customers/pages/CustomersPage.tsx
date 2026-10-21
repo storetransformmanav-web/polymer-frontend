@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { ColumnsIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 import {
   CustomerDeleteDialog,
   type CustomerToDelete,
@@ -10,6 +12,7 @@ import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useCustomers } from '../hooks/useCustomers.ts'
+import { OPTIONAL_COLUMNS, type OptionalColumn } from '../utils/columns.ts'
 import { customerName } from '../utils/format.ts'
 
 const LIST_PATH = '/customers'
@@ -37,6 +40,17 @@ export function CustomersPage() {
   const [deleting, setDeleting] = useState<CustomerToDelete | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const closeDelete = useCallback(() => setDeleting(null), [])
+
+  // The extra columns switched on in the Columns menu. The default columns are always there.
+  const [columns, setColumns] = useState<ReadonlySet<OptionalColumn>>(() => new Set())
+
+  function toggleColumn(id: OptionalColumn) {
+    setColumns((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!notice) return undefined
@@ -81,6 +95,32 @@ export function CustomersPage() {
           onReset={customers.resetFilters}
         />
 
+        <div className="flex justify-end">
+          <PopoverButton label="Columns" icon={ColumnsIcon} align="right">
+            {() => (
+              <div className="flex flex-col">
+                <p className="text-text-muted px-2.5 pt-1.5 pb-1 text-[0.72rem] font-bold tracking-wide uppercase">
+                  Show more columns
+                </p>
+                {OPTIONAL_COLUMNS.map((column) => (
+                  <label
+                    key={column.id}
+                    className="hover:bg-accent-tint/60 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.85rem]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={columns.has(column.id)}
+                      onChange={() => toggleColumn(column.id)}
+                      className="accent-accent h-4 w-4 cursor-pointer"
+                    />
+                    {column.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </PopoverButton>
+        </div>
+
         <section
           aria-label="Customers"
           className="border-border bg-bg relative overflow-hidden rounded-2xl border"
@@ -101,6 +141,7 @@ export function CustomersPage() {
             error={customers.error}
             hasFilters={customers.hasFilters}
             isStale={customers.isShowingPrevious}
+            columns={columns}
             onOpen={(customer) => navigate(detailsPath(customer.id))}
             onPrefetch={customers.prefetchDetails}
             onDelete={(customer) => {
