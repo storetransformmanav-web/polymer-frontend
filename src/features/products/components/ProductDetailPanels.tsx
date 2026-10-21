@@ -23,7 +23,10 @@ import type {
 } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
-import { readDescriptionSections } from '../utils/descriptionSections.ts'
+import {
+  readDescriptionSections,
+  type DescriptionSections,
+} from '../utils/descriptionSections.ts'
 import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
 import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
@@ -54,6 +57,7 @@ import {
   VendorField,
 } from './edit/BasicsSection.tsx'
 import { CollectionsSection as CollectionsEditor } from './edit/CollectionsSection.tsx'
+import { DescriptionSectionsSection as DescriptionSectionsEditor } from './edit/DescriptionSectionsSection.tsx'
 import {
   EditableCard,
   EditableTab,
@@ -79,6 +83,7 @@ const SPEC_ERRORS = [
 ] as const
 const NO_ERRORS = [] as const
 const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
+const SECTIONS_ERRORS = ['descriptionSections'] as const
 const VARIANT_ERRORS = ['variants'] as const
 const COLLECTION_ERRORS = ['addedCollections'] as const
 const MEDIA_ERRORS = ['images'] as const
@@ -321,10 +326,60 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
           />
 
           {/* Outside the card: the description app's sections (metafield apd), all closed. */}
-          {sections && <DescriptionAccordion {...sections} />}
+          {sections && (
+            <DescriptionSectionsBlock
+              product={product}
+              sections={sections}
+              onSaved={onSaved}
+            />
+          )}
         </div>
       )}
     </div>
+  )
+}
+
+// --- Description sections ---------------------------------------------------------
+
+/**
+ * The description sections as an accordion, with a pencil that turns them into an
+ * editor in place (titles, formatted text, order, add / remove). Saving sends the
+ * product's `apd` metafield (`metafields` of `PUT /products/{id}`).
+ */
+function DescriptionSectionsBlock({
+  product,
+  sections,
+  onSaved,
+}: {
+  product: ProductDetail
+  sections: DescriptionSections
+  onSaved?: SavedHandler
+}) {
+  return (
+    <section aria-labelledby="product-sections-heading">
+      <EditableTab
+        product={product}
+        what="description sections"
+        errorPrefixes={SECTIONS_ERRORS}
+        onSaved={onSaved}
+        header={(edit) => (
+          <div className="flex min-h-8 items-center justify-between gap-3">
+            <h3 id="product-sections-heading" className="text-[0.95rem] font-semibold">
+              Description sections
+            </h3>
+            <div className="flex items-center gap-1.5">
+              <SectionEditControls
+                edit={edit}
+                what="description sections"
+                onIntent={preloadRichTextEditor}
+              />
+            </div>
+          </div>
+        )}
+        view={<DescriptionAccordion {...sections} />}
+        editor={(section) => <DescriptionSectionsEditor {...section} />}
+      />
+    </section>
   )
 }
 

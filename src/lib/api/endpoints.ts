@@ -855,6 +855,23 @@ export interface ProductVariantInput {
   weight_unit?: WeightUnit
   /** Product image (CRM attachment id) to show for this variant. */
   image_attachment_id?: string | null
+  /** Variant metafields to set / delete. */
+  metafields?: ProductMetafieldInput[]
+  metafields_remove?: ProductMetafieldRemoval[]
+}
+
+/** A metafield to set (created, or its value replaced). `type` is Shopify's, e.g. `json_string`. */
+export interface ProductMetafieldInput {
+  namespace: string
+  key: string
+  type: string
+  value: string
+}
+
+/** A metafield to delete. */
+export interface ProductMetafieldRemoval {
+  namespace: string
+  key: string
 }
 
 /** A picture or video to attach, by public https URL. */
@@ -887,9 +904,14 @@ export interface ProductUpdateBody {
   /** CRM collection ids. */
   collections_add?: string[]
   collections_remove?: string[]
+  /** New product options (Size → Small, Large). */
+  options_add?: { name: string; values: string[] }[]
   variants?: ProductVariantInput[]
   /** CRM variant ids to delete in Shopify. */
   variants_remove?: string[]
+  /** Product metafields to set (created, or the value replaced) / delete. */
+  metafields?: ProductMetafieldInput[]
+  metafields_remove?: ProductMetafieldRemoval[]
   media_add?: ProductMediaInput[]
   /** Change the alt text of existing images. */
   media_update?: { attachment_id: string; alt: string }[]

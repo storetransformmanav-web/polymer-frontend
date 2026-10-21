@@ -310,6 +310,7 @@ const API_FIELDS = new Set([
   'media_update',
   'media_remove',
   'media_order',
+  'metafields',
 ])
 const API_VARIANT_FIELDS = new Set([
   'id',

@@ -26,6 +26,32 @@ export function patchTags(tags: string[], body: ProductUpdateBody): string[] {
   return next
 }
 
+/** The metafields after `metafields` (set: replaces the value or adds it) / `metafields_remove`. */
+export function patchMetafields(
+  metafields: ProductDetail['metafields'],
+  body: ProductUpdateBody,
+): ProductDetail['metafields'] {
+  if (!body.metafields?.length && !body.metafields_remove?.length) return metafields
+  const same = (
+    a: { namespace: string; key: string },
+    b: { namespace: string; key: string },
+  ) => a.namespace === b.namespace && a.key === b.key
+  const removed = body.metafields_remove ?? []
+  let next = metafields.filter((field) => !removed.some((gone) => same(field, gone)))
+  for (const set of body.metafields ?? []) {
+    const exists = next.some((field) => same(field, set))
+    next = exists
+      ? next.map((field) =>
+          same(field, set) ? { ...field, type: set.type, value: set.value } : field,
+        )
+      : [
+          ...next,
+          { namespace: set.namespace, key: set.key, type: set.type, value: set.value },
+        ]
+  }
+  return next
+}
+
 /** The same file, ignoring a CDN's cache-busting query string (`?v=123`). */
 export const sameFile = (a: string, b: string) => a.split('?')[0] === b.split('?')[0]
 
@@ -181,6 +207,7 @@ export function patchDetail(
   }
 
   const collectionsRemoved = new Set(body.collections_remove ?? [])
+  const metafields = patchMetafields(product.metafields, body)
 
   return {
     ...product,
@@ -192,6 +219,7 @@ export function patchDetail(
     handle: body.handle ?? product.handle,
     template_suffix: body.template_suffix ?? product.template_suffix,
     tags: patchTags(product.tags, body),
+    metafields,
     seo: body.seo ? { ...product.seo, ...body.seo } : product.seo,
     collections: product.collections.filter(
       (collection) => !collectionsRemoved.has(collection.id),

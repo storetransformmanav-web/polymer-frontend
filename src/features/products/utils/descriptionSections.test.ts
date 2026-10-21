@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { readDescriptionSections } from './descriptionSections.ts'
+import {
+  blankSection,
+  buildSectionsMetafield,
+  draftSections,
+  readDescriptionSections,
+} from './descriptionSections.ts'
 
 /** The `apd` metafield as the API returns it (a JSON string inside the JSON answer). */
 const INFORMATION_HTML =
@@ -109,5 +114,80 @@ describe('readDescriptionSections', () => {
     )
 
     expect(result?.sections).toEqual([{ title: 'Delivery', content: '' }])
+  })
+})
+
+describe('editing the sections', () => {
+  const sent = (...args: Parameters<typeof buildSectionsMetafield>) =>
+    buildSectionsMetafield(...args)
+
+  it('sends nothing when nothing changed (the HTML is never re-written)', () => {
+    const p = product(field(SETTINGS))
+    expect(sent(p, draftSections(p))).toBeNull()
+    // Spaces around a title are not a change either.
+    const drafts = draftSections(p)
+    drafts[0].title = '  Product Description '
+    expect(sent(p, drafts)).toBeNull()
+  })
+
+  it('sends the whole apd metafield, keeping every setting and each section’s own settings', () => {
+    const p = product(field(SETTINGS))
+    const drafts = draftSections(p)
+    drafts[1].title = 'Details'
+    drafts[1].content = '<p>New</p>'
+
+    const metafield = sent(p, drafts)!
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+    expect(JSON.parse(metafield.value)).toEqual({
+      ...SETTINGS,
+      sections: [
+        SETTINGS.sections[0],
+        { ...SETTINGS.sections[1], title: 'Details', content: '<p>New</p>', position: 1 },
+      ],
+    })
+  })
+
+  it('writes the new order into each section’s position', () => {
+    const p = product(field(SETTINGS))
+    const drafts = draftSections(p).reverse()
+
+    const value = JSON.parse(sent(p, drafts)!.value)
+    expect(
+      value.sections.map((s: { title: string; position: number }) => [
+        s.title,
+        s.position,
+      ]),
+    ).toEqual([
+      ['Product Information', 0],
+      ['Product Description', 1],
+    ])
+  })
+
+  it('adds and removes sections', () => {
+    const p = product(field(SETTINGS))
+    const drafts = [
+      ...draftSections(p).slice(0, 1),
+      { ...blankSection(), title: 'Delivery' },
+    ]
+
+    const value = JSON.parse(sent(p, drafts)!.value)
+    expect(value.sections.map((s: { title: string }) => s.title)).toEqual([
+      'Product Description',
+      'Delivery',
+    ])
+    expect(value.sections[1]).toEqual({ title: 'Delivery', content: '', position: 1 })
+  })
+
+  it('uses the metafield’s own type, and does nothing for a product without sections', () => {
+    const p = product(field(SETTINGS, { type: 'json' }))
+    const drafts = draftSections(p)
+    drafts[0].title = 'X'
+    expect(sent(p, drafts)?.type).toBe('json')
+
+    expect(draftSections(product())).toEqual([])
+    expect(sent(product(), [{ ...blankSection(), title: 'X' }])).toBeNull()
+    expect(
+      sent(product(field('{not json')), [{ ...blankSection(), title: 'X' }]),
+    ).toBeNull()
   })
 })

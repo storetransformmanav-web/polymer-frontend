@@ -128,7 +128,7 @@ export function DescriptionField({ draft, onChange }: SectionProps) {
     <EditField
       id="edit-description"
       label="Description"
-      hint="Formatted text, saved as HTML for the store. The CRM shows it as plain text."
+      hint="Formatted text, saved as HTML for the store."
     >
       <RichTextEditor
         id="edit-description"

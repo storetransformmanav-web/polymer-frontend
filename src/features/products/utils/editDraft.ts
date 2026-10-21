@@ -13,6 +13,13 @@ import {
   type WeightUnit,
 } from '../../../lib/api/endpoints.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
+import {
+  APD_MAX_LENGTH,
+  buildSectionsMetafield,
+  draftSections,
+  SECTION_TITLE_MAX,
+  type SectionDraft,
+} from './descriptionSections.ts'
 
 /**
  * The edit form's working copy of a product, and the two pure steps around it:
@@ -81,6 +88,8 @@ export interface ProductDraft {
   variants: VariantDraft[]
   /** Existing images in their current order (reordering changes this order). */
   images: ImageDraft[]
+  /** The description sections (metafield apd), in order; [] when the product has none. */
+  descriptionSections: SectionDraft[]
 }
 
 /** The limits the API enforces (from its schema). */
@@ -181,6 +190,7 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
       url: image.url,
       alt: image.alt_text ?? '',
     })),
+    descriptionSections: draftSections(product),
   }
 }
 
@@ -331,6 +341,10 @@ export function buildUpdateBody(
     .filter((id) => order.includes(id))
   if (order.some((id, index) => id !== originalOrder[index])) body.media_order = order
 
+  // The description sections are one metafield (a JSON string): sent whole, only if changed.
+  const sections = buildSectionsMetafield(product, draft.descriptionSections)
+  if (sections) body.metafields = [sections]
+
   return body
 }
 
@@ -448,6 +462,19 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
   draft.images.forEach((image, index) => {
     put(`images.${index}.alt`, tooLong('The alt text', image.alt, LIMITS.mediaAlt))
   })
+
+  draft.descriptionSections.forEach((section, index) => {
+    put(
+      `descriptionSections.${index}.title`,
+      section.title.trim()
+        ? tooLong('The title', section.title, SECTION_TITLE_MAX)
+        : 'Enter a title',
+    )
+  })
+  const sectionsValue = buildSectionsMetafield(product, draft.descriptionSections)?.value
+  if (sectionsValue && sectionsValue.length > APD_MAX_LENGTH) {
+    errors.descriptionSections = 'There is too much text in the sections to save'
+  }
 
   return errors
 }

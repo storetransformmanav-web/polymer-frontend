@@ -9,6 +9,7 @@ import {
   keepPreviewImages,
   patchDetail,
   patchListItem,
+  patchMetafields,
   patchTags,
 } from './productPatch.ts'
 
@@ -214,5 +215,60 @@ describe('hideRemovedImages', () => {
 
     expect(result.images).toEqual([ONE, TWO])
     expect(result.stillListed).toEqual([])
+  })
+})
+
+describe('patchMetafields', () => {
+  const fields = [
+    { namespace: 'apd', key: 'apd', type: 'json_string', value: 'old' },
+    {
+      namespace: 'custom',
+      key: 'material',
+      type: 'single_line_text_field',
+      value: 'PET',
+    },
+  ]
+
+  it('replaces the value of one that exists, and adds one that does not', () => {
+    const next = patchMetafields(fields, {
+      metafields: [
+        { namespace: 'apd', key: 'apd', type: 'json_string', value: 'new' },
+        {
+          namespace: 'custom',
+          key: 'colour',
+          type: 'single_line_text_field',
+          value: 'Red',
+        },
+      ],
+    })
+
+    expect(next.map((field) => [field.key, field.value])).toEqual([
+      ['apd', 'new'],
+      ['material', 'PET'],
+      ['colour', 'Red'],
+    ])
+  })
+
+  it('removes the ones named in metafields_remove', () => {
+    const next = patchMetafields(fields, {
+      metafields_remove: [{ namespace: 'custom', key: 'material' }],
+    })
+
+    expect(next.map((field) => field.key)).toEqual(['apd'])
+  })
+
+  it('returns the same list when the edit has no metafields', () => {
+    expect(patchMetafields(fields, { title: 'x' })).toBe(fields)
+  })
+
+  it('is applied to a cached product by patchDetail', () => {
+    const next = patchDetail(
+      { ...detail, metafields: fields } as unknown as ProductDetail,
+      {
+        metafields: [{ namespace: 'apd', key: 'apd', type: 'json_string', value: 'new' }],
+      },
+    )
+
+    expect(next.metafields[0].value).toBe('new')
   })
 })
