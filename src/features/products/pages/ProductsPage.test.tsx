@@ -761,21 +761,24 @@ describe('ProductsPage details', () => {
       details.mockResolvedValue(detail)
     }
 
-    it('shows them as an accordion outside the Description card, below it, with no need to open the card', async () => {
+    it('shows them in one “Product Details” card below the Description card, as an accordion, closed', async () => {
       withApd(SETTINGS)
       const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
-      const card = screen.getByRole('button', { name: /^Description/ })
-      expect(card).toHaveAttribute('aria-expanded', 'false')
 
+      const card = screen.getByRole('button', { name: /^Description/ })
+      const details = screen.getByRole('button', { name: /^Product Details/ })
       const first = screen.getByRole('button', { name: /^Product Description/ })
       const second = screen.getByRole('button', { name: /^Product Information/ })
+      expect(card).toHaveAttribute('aria-expanded', 'false')
       expect(first).toHaveAttribute('aria-expanded', 'false')
       expect(second).toHaveAttribute('aria-expanded', 'false')
-      // The product's own description (description_html) stays in the card, above the sections.
+      // Both rows live in the one card, below the product's own description card.
+      expect(details.closest('section')).toContainElement(first)
+      expect(details.closest('section')).toContainElement(second)
       const own = screen.getByText('The plain store description')
-      expect(own.closest('section, article, div')).not.toContainElement(first)
+      expect(own.closest('section')).not.toContainElement(first)
       expect(
         own.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy()
@@ -785,6 +788,10 @@ describe('ProductsPage details', () => {
       const region = screen.getByRole('region', { name: 'Product Information' })
       expect(within(region).getByRole('table')).toBeInTheDocument()
       expect(within(region).getByText('500ml')).toBeInTheDocument()
+      // `accordian_multi: false`: opening one closes the other.
+      await user.click(first)
+      expect(second).toHaveAttribute('aria-expanded', 'false')
+      expect(first).toHaveAttribute('aria-expanded', 'true')
     })
 
     it('falls back to the product description text when there are no sections', async () => {

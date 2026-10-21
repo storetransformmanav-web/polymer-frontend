@@ -14,9 +14,10 @@ import {
 } from './fields.tsx'
 
 /**
- * The description sections (Product Description, Product Information…) the store
- * shows as an accordion: each has a title and formatted text. They can be edited,
- * reordered, removed and added; saving sends them as the product's `apd` metafield.
+ * The description sections (Product Description, Product Information…) of the
+ * "Product Details" card being edited: each has a title and formatted text, and
+ * they can be reordered, removed and added. Saving sends them as the product's
+ * `apd` metafield.
  */
 export function DescriptionSectionsSection({ draft, errors, onChange }: SectionProps) {
   const sections = draft.descriptionSections
@@ -39,6 +40,7 @@ export function DescriptionSectionsSection({ draft, errors, onChange }: SectionP
         const titleId = `edit-section-title-${section.key}`
         const contentId = `edit-section-content-${section.key}`
         const titleError = errors[`descriptionSections.${index}.title`]
+        const name = section.title.trim() || `section ${index + 1}`
         return (
           <fieldset
             key={section.key}
@@ -66,7 +68,7 @@ export function DescriptionSectionsSection({ draft, errors, onChange }: SectionP
               <div className="flex shrink-0 items-center pb-1">
                 <button
                   type="button"
-                  aria-label={`Move ${section.title.trim() || `section ${index + 1}`} up`}
+                  aria-label={`Move ${name} up`}
                   title="Move up"
                   disabled={index === 0}
                   onClick={() => move(index, -1)}
@@ -76,7 +78,7 @@ export function DescriptionSectionsSection({ draft, errors, onChange }: SectionP
                 </button>
                 <button
                   type="button"
-                  aria-label={`Move ${section.title.trim() || `section ${index + 1}`} down`}
+                  aria-label={`Move ${name} down`}
                   title="Move down"
                   disabled={index === sections.length - 1}
                   onClick={() => move(index, 1)}
@@ -86,9 +88,9 @@ export function DescriptionSectionsSection({ draft, errors, onChange }: SectionP
                 </button>
                 <button
                   type="button"
-                  aria-label={`Remove ${section.title.trim() || `section ${index + 1}`}`}
+                  aria-label={`Remove ${name}`}
                   title="Remove section"
-                  // A product keeps at least one section (it would have nothing left to edit).
+                  // At least one section stays (the card would have nothing left to edit).
                   disabled={sections.length <= 1}
                   onClick={() => update(sections.filter((_, at) => at !== index))}
                   className={`${ICON_BUTTON} hover:text-danger`}

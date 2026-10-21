@@ -28,7 +28,6 @@ import {
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
 import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
-import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -67,6 +66,7 @@ import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
 import { TAG_CHIP, TagsSection as TagsEditor } from './edit/TagsSection.tsx'
 import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
+import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { AddMediaDialog } from './AddMediaDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
 import { ProductImage } from './ProductImage.tsx'
@@ -325,13 +325,9 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             editor={(section) => <DescriptionField {...section} />}
           />
 
-          {/* Outside the card: the description app's sections (metafield apd), all closed. */}
+          {/* Below it: the description app's sections (metafield apd), as an accordion in one card. */}
           {sections && (
-            <DescriptionSectionsBlock
-              product={product}
-              sections={sections}
-              onSaved={onSaved}
-            />
+            <ProductDetailsCard product={product} sections={sections} onSaved={onSaved} />
           )}
         </div>
       )}
@@ -339,14 +335,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   )
 }
 
-// --- Description sections ---------------------------------------------------------
+// --- Product details (description sections) ----------------------------------------
 
 /**
- * The description sections as an accordion, with a pencil that turns them into an
- * editor in place (titles, formatted text, order, add / remove). Saving sends the
- * product's `apd` metafield (`metafields` of `PUT /products/{id}`).
+ * "Product Details": one card, like the ones above, holding the description sections
+ * (Product Description, Product Information…) as an accordion, closed to begin with.
+ * Its pencil turns all the sections into an editor in place (titles, formatted text,
+ * order, add / remove). Saving sends the product's `apd` metafield (`metafields` of
+ * `PUT /products/{id}`).
  */
-function DescriptionSectionsBlock({
+function ProductDetailsCard({
   product,
   sections,
   onSaved,
@@ -356,30 +354,18 @@ function DescriptionSectionsBlock({
   onSaved?: SavedHandler
 }) {
   return (
-    <section aria-labelledby="product-sections-heading">
-      <EditableTab
-        product={product}
-        what="description sections"
-        errorPrefixes={SECTIONS_ERRORS}
-        onSaved={onSaved}
-        header={(edit) => (
-          <div className="flex min-h-8 items-center justify-between gap-3">
-            <h3 id="product-sections-heading" className="text-[0.95rem] font-semibold">
-              Description sections
-            </h3>
-            <div className="flex items-center gap-1.5">
-              <SectionEditControls
-                edit={edit}
-                what="description sections"
-                onIntent={preloadRichTextEditor}
-              />
-            </div>
-          </div>
-        )}
-        view={<DescriptionAccordion {...sections} />}
-        editor={(section) => <DescriptionSectionsEditor {...section} />}
-      />
-    </section>
+    <EditableCard
+      product={product}
+      title="Product Details"
+      count={sections.sections.length}
+      icon={BoxesIcon}
+      what="product details"
+      onEditIntent={preloadRichTextEditor}
+      errorPrefixes={SECTIONS_ERRORS}
+      onSaved={onSaved}
+      view={<DescriptionAccordion {...sections} />}
+      editor={(section) => <DescriptionSectionsEditor {...section} />}
+    />
   )
 }
 
