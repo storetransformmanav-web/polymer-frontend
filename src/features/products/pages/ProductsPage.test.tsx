@@ -308,12 +308,12 @@ describe('ProductsPage list', () => {
     renderPage()
     await screen.findByText('Product 1')
 
-    await user.click(screen.getByRole('button', { name: /^Unlisted/ }))
+    await user.click(screen.getByRole('button', { name: /^Archived/ }))
 
     await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(expect.objectContaining({ status: 'UNLISTED' })),
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ status: 'ARCHIVED' })),
     )
-    expect(screen.getByRole('button', { name: /^Unlisted/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^Archived/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -340,9 +340,8 @@ describe('ProductsPage list', () => {
     expect(
       within(tabs).getByRole('button', { name: /^Archived\s*5$/ }),
     ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Unlisted\s*0$/ }),
-    ).toBeInTheDocument()
+    // There is no Unlisted tab.
+    expect(within(tabs).queryByRole('button', { name: /^Unlisted/ })).toBeNull()
 
     // The search narrows the counts too (the fake server ignores it, so only
     // check that the count queries carry it).

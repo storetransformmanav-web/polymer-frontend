@@ -11,7 +11,7 @@ import type { ProductWriteResult } from '../../../lib/api/endpoints.ts'
 import { productSyncPrefix } from './useProductSyncHistory.ts'
 
 /** Every status tab, so their counts can be refreshed (a removal moves a product between them). */
-const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED'] as const
 
 interface DeleteArg {
   id: string

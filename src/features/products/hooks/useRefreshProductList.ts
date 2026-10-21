@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import { fetchProducts, statusCountFilters } from '../../../app/store/productsSlice.ts'
 
 /** Every status tab, so their counts can be refreshed together. */
-const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED'] as const
 
 /**
  * Refreshes the products list for the current filters — and, with

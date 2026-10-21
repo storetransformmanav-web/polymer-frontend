@@ -24,7 +24,6 @@ const STATUS_TABS: { value: ProductStatus | ''; label: string }[] = [
   { value: 'ACTIVE', label: 'Active' },
   { value: 'DRAFT', label: 'Draft' },
   { value: 'ARCHIVED', label: 'Archived' },
-  { value: 'UNLISTED', label: 'Unlisted' },
 ]
 const STATUS_VALUES = STATUS_TABS.map((tab) => tab.value)
 

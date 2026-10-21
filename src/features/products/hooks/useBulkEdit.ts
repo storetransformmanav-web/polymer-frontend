@@ -61,7 +61,7 @@ function editableErrors(product: ProductDetail, draft: ProductDraft): DraftError
   )
 }
 
-const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
+const STATUS_TABS = ['', 'ACTIVE', 'DRAFT', 'ARCHIVED'] as const
 
 /** What happened to a row on the last Save. */
 export type RowResult =
