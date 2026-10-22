@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { PencilIcon, PlusIcon } from '../../../components/ui/icons.tsx'
 import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 
@@ -6,6 +7,8 @@ interface ProductsBulkBarProps {
   pageCount: number
   /** Ticked products on this page. */
   selectedCount: number
+  /** Buttons that go first in the strip (the Export button and its progress). */
+  leadingActions?: ReactNode
   /** Opens the "Add product" form. */
   onAdd: () => void
   /** The pointer reached "Add product": warm up what the form needs (the editor). */
@@ -29,6 +32,7 @@ const plural = (count: number) => `${count} product${count === 1 ? '' : 's'}`
 export function ProductsBulkBar({
   pageCount,
   selectedCount,
+  leadingActions,
   onAdd,
   onAddIntent,
   onEditPage,
@@ -55,7 +59,8 @@ export function ProductsBulkBar({
         )}
       </p>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {leadingActions}
         <button
           type="button"
           onClick={onAdd}

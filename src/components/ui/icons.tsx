@@ -642,3 +642,78 @@ export function PlusCircleIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 3v9.5M6.5 9.5 10 13l3.5-3.5M3.5 14.5v1.2a1.3 1.3 0 0 0 1.3 1.3h10.4a1.3 1.3 0 0 0 1.3-1.3v-1.2" />
+    </svg>
+  )
+}
+
+/** A stack of discs: data / a database. */
+export function DatabaseIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <ellipse cx="10" cy="5" rx="6" ry="2.5" />
+      <path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5" />
+    </svg>
+  )
+}
+
+/** A spreadsheet file (Excel): a tile with a cross-through "X". Filled, 32px. */
+export function ExcelFileIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 32 32" width={32} height={32} aria-hidden="true" {...props}>
+      <rect
+        x="5"
+        y="3"
+        width="22"
+        height="26"
+        rx="3.5"
+        fill="currentColor"
+        opacity="0.16"
+      />
+      <rect x="2" y="9" width="17" height="17" rx="3.5" fill="currentColor" />
+      <path
+        d="m7.3 14.8 6.4 6.4m0-6.4-6.4 6.4"
+        fill="none"
+        stroke="var(--color-accent-contrast)"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M22 10h3M22 14.5h3M22 19h3M22 23.5h3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+/** A text/CSV file: a page with a folded corner and "CSV" on it. Filled, 32px. */
+export function CsvFileIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 32 32" width={32} height={32} aria-hidden="true" {...props}>
+      <path
+        d="M9 3h10.5L26 9.5V27a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+        fill="currentColor"
+        opacity="0.18"
+      />
+      <path d="M19.5 3v5a1.5 1.5 0 0 0 1.5 1.5h5" fill="currentColor" opacity="0.35" />
+      <text
+        x="16.5"
+        y="23.5"
+        textAnchor="middle"
+        fontSize="7.5"
+        fontWeight="700"
+        fontFamily="inherit"
+        fill="currentColor"
+      >
+        CSV
+      </text>
+    </svg>
+  )
+}

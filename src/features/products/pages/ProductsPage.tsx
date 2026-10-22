@@ -19,6 +19,7 @@ import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ProductsBulkBar } from '../components/ProductsBulkBar.tsx'
+import { ProductsExport } from '../components/ProductsExport.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
@@ -339,6 +340,15 @@ export function ProductsPage() {
 
         {!products.isPending && !products.error && (
           <ProductsBulkBar
+            leadingActions={
+              <ProductsExport
+                items={products.items}
+                page={data?.page ?? filters.page}
+                filters={filters}
+                total={data?.total ?? 0}
+                facets={products.facets}
+              />
+            }
             onAdd={openCreate}
             onAddIntent={preloadRichTextEditor}
             pageCount={products.items.length}

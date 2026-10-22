@@ -13,6 +13,7 @@ import {
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
+import { STOCK_OPTIONS, withAll } from '../utils/filterOptions.ts'
 import {
   PRODUCT_SORTS,
   type ProductSort,
@@ -44,20 +45,6 @@ const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
 ]
-const STOCK_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Any stock' },
-  { value: 'in', label: 'In stock' },
-  { value: 'out', label: 'Out of stock' },
-]
-
-/** "All X" plus every value seen so far; the selected value is always listed. */
-function withAll(allLabel: string, values: string[], selected: string): SelectOption[] {
-  const list = selected && !values.includes(selected) ? [...values, selected] : values
-  return [
-    { value: '', label: allLabel },
-    ...list.map((value) => ({ value, label: value })),
-  ]
-}
 
 const FIELD_INPUT =
   'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
