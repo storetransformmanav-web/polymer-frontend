@@ -145,7 +145,7 @@ export function OrdersToolbar({
               <CalendarIcon width={16} height={16} className="text-text-muted" />
               Order Date
             </span>
-            <div className="min-w-0 flex-1 lg:w-52 lg:flex-none">
+            <div className="min-w-0">
               <DateRangePicker
                 label="Date range"
                 from={filters.from}

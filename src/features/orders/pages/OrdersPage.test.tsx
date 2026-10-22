@@ -381,11 +381,7 @@ describe('OrdersPage', () => {
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     await user.click(screen.getByRole('button', { name: /^Date range:/ }))
-    await user.click(
-      within(screen.getByRole('dialog', { name: 'Date range' })).getByRole('button', {
-        name: 'Last 7 days',
-      }),
-    )
+    await user.click(screen.getByRole('option', { name: 'Last 7 Days' }))
 
     await waitFor(() => {
       const withDates = pageCalls().find(([params]) => params.from && params.to)

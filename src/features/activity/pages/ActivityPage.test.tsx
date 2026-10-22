@@ -378,7 +378,8 @@ describe('ActivityPage', () => {
       ).toEqual(['All Actions', 'List products (227)', 'Create user (2)'])
       await user.selectOptions(action, 'create_user')
       await user.click(screen.getByRole('button', { name: /^Date range/ }))
-      await user.click(screen.getByRole('button', { name: '14 October 2026' }))
+      await user.click(screen.getByRole('option', { name: 'Custom Range' }))
+      await user.click(await screen.findByRole('button', { name: '14 October 2026' }))
       await user.click(screen.getByRole('button', { name: '16 October 2026' }))
 
       await waitFor(() =>

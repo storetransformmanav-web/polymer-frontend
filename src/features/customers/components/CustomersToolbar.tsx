@@ -6,13 +6,11 @@ import type {
 import {
   ArrowUpDownIcon,
   ChevronDownIcon,
-  DollarSignIcon,
   FilterIcon,
   MailIcon,
   OrdersIcon,
   SearchIcon,
   SlidersIcon,
-  TagIcon,
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
@@ -58,8 +56,6 @@ const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
 ]
-const FIELD_INPUT =
-  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
 
 interface CustomersToolbarProps {
   filters: CustomerFilters
@@ -72,7 +68,7 @@ interface CustomersToolbarProps {
 
 /**
  * Search, country, role tabs and the collapsible filter grid. Typing in the
- * search/spend boxes is instant locally and sent to the API once the user
+ * search box is instant locally and sent to the API once the user
  * pauses (see useDebouncedField); selects apply immediately.
  */
 export function CustomersToolbar({
@@ -89,12 +85,6 @@ export function CustomersToolbar({
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
-  )
-  const [minSpent, setMinSpent] = useDebouncedField(filters.minSpent, (minSpent) =>
-    onChange({ minSpent }),
-  )
-  const [maxSpent, setMaxSpent] = useDebouncedField(filters.maxSpent, (maxSpent) =>
-    onChange({ maxSpent }),
   )
 
   return (
@@ -218,8 +208,9 @@ export function CustomersToolbar({
         }`}
       >
         <div className="-m-1 overflow-hidden p-1">
-          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9">
             <SelectField
+              compact
               id="filter-state"
               label="Account State"
               icon={UsersIcon}
@@ -228,6 +219,7 @@ export function CustomersToolbar({
               onChange={(state) => onChange({ state: state as CustomerState | '' })}
             />
             <SelectField
+              compact
               id="filter-marketing"
               label="Marketing"
               icon={MailIcon}
@@ -238,6 +230,7 @@ export function CustomersToolbar({
               }
             />
             <SelectField
+              compact
               id="filter-orders"
               label="Orders"
               icon={OrdersIcon}
@@ -248,52 +241,7 @@ export function CustomersToolbar({
               }
             />
             <SelectField
-              id="filter-tag"
-              label="Tag"
-              icon={TagIcon}
-              value={filters.tag}
-              options={withAll('All Tags', facets.tags, filters.tag)}
-              onChange={(tag) => onChange({ tag })}
-            />
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label
-                htmlFor="filter-min-spent"
-                className="text-text flex items-center gap-1.5 text-[0.82rem] font-semibold"
-              >
-                <DollarSignIcon width={16} height={16} className="text-text-muted" />
-                Min spent
-              </label>
-              <input
-                id="filter-min-spent"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                placeholder="0.00"
-                value={minSpent}
-                onChange={(event) => setMinSpent(event.target.value)}
-                className={FIELD_INPUT}
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label
-                htmlFor="filter-max-spent"
-                className="text-text flex items-center gap-1.5 text-[0.82rem] font-semibold"
-              >
-                <DollarSignIcon width={16} height={16} className="text-text-muted" />
-                Max spent
-              </label>
-              <input
-                id="filter-max-spent"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                placeholder="Any"
-                value={maxSpent}
-                onChange={(event) => setMaxSpent(event.target.value)}
-                className={FIELD_INPUT}
-              />
-            </div>
-            <SelectField
+              compact
               id="filter-sort"
               label="Sort by"
               icon={ArrowUpDownIcon}
@@ -302,6 +250,7 @@ export function CustomersToolbar({
               onChange={(sort) => onChange({ sort: sort as CustomerSort })}
             />
             <SelectField
+              compact
               id="filter-order"
               label="Order"
               value={filters.order}

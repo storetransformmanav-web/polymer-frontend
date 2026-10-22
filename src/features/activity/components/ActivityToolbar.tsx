@@ -201,7 +201,7 @@ export function ActivityToolbar({
               options={actionOptions}
               onChange={(action) => onChange({ action })}
             />
-            <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex min-w-0 flex-col gap-1.5 min-[480px]:col-span-2">
               <span id="filter-dates-label" className={FIELD_LABEL}>
                 <CalendarIcon width={16} height={16} className="text-text-muted" />
                 Date range

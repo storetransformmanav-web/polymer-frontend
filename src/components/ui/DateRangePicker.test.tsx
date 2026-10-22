@@ -24,6 +24,15 @@ function Harness({
 }
 
 const chosen = () => screen.getByLabelText('chosen').textContent
+const trigger = (name = /^Date range:/) => screen.getByRole('button', { name })
+const fromBox = () => screen.getByLabelText('From date')
+const toBox = () => screen.getByLabelText('To date')
+const day = (name: string) => screen.getByRole('button', { name })
+
+async function chooseCustom(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(trigger())
+  await user.click(screen.getByRole('option', { name: 'Custom Range' }))
+}
 
 describe('DateRangePicker', () => {
   beforeEach(() => {
@@ -35,111 +44,194 @@ describe('DateRangePicker', () => {
     vi.useRealTimers()
   })
 
-  it('says "All Time" until a range is chosen, and opens on this month', async () => {
+  it('shows "All Time" with no date boxes, and a menu of the quick choices', async () => {
     const user = userEvent.setup()
     render(<Harness />)
 
-    const trigger = screen.getByRole('button', { name: 'Date range: All Time' })
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    await user.click(trigger)
+    expect(trigger()).toHaveAccessibleName('Date range: All Time')
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByLabelText('From date')).toBeNull()
 
-    const panel = screen.getByRole('dialog', { name: 'Date range' })
-    expect(within(panel).getByText('October')).toBeInTheDocument()
-    expect(within(panel).getByText('2026')).toBeInTheDocument()
-    expect(within(panel).getByRole('button', { name: 'All Time' })).toHaveAttribute(
-      'aria-pressed',
+    await user.click(trigger())
+    const options = screen.getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual([
+      'All Time',
+      'Today',
+      'Last 7 Days',
+      'Last 30 Days',
+      'Last 60 Days',
+      'Custom Range',
+    ])
+    // The chosen one is ticked.
+    expect(screen.getByRole('option', { name: 'All Time' })).toHaveAttribute(
+      'aria-selected',
       'true',
     )
-    // Monday first, six weeks.
-    expect(
-      within(panel)
-        .getAllByText(/^(Mo|Tu|We|Th|Fr|Sa|Su)$/)
-        .map((el) => el.textContent),
-    ).toEqual(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'])
-  })
-
-  it('applies a quick choice at once and closes', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-    await user.click(screen.getByRole('button', { name: 'Last 7 days' }))
-
-    expect(chosen()).toBe('2026-10-10|2026-10-16')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Date range: Last 7 days' })).toHaveFocus()
-  })
-
-  it('picks a range with two clicks, and reports nothing after the first', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-    await user.click(screen.getByRole('button', { name: '14 October 2026' }))
-    expect(chosen()).toBe('|')
-    expect(screen.getByText(/pick the last day/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: '20 October 2026' }))
-    expect(chosen()).toBe('2026-10-14|2026-10-20')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Date range: 14 Oct 2026 – 20 Oct 2026' }),
-    ).toBeInTheDocument()
-  })
-
-  it('puts the two days in order whichever is clicked first', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-    await user.click(screen.getByRole('button', { name: '20 October 2026' }))
-    await user.click(screen.getByRole('button', { name: '14 October 2026' }))
-
-    expect(chosen()).toBe('2026-10-14|2026-10-20')
-  })
-
-  it('moves between months, and shows the days either side', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-    await user.click(screen.getByRole('button', { name: 'Previous month' }))
-    expect(screen.getByText('September')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '30 September 2026' }))
-    // 1 October is shown in September's last row.
-    await user.click(screen.getByRole('button', { name: '1 October 2026' }))
-
-    expect(chosen()).toBe('2026-09-30|2026-10-01')
-  })
-
-  it('marks the chosen range, and reopens on its month', async () => {
-    const user = userEvent.setup()
-    render(<Harness initial={{ from: '2026-09-10', to: '2026-09-12' }} />)
-
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-
-    expect(screen.getByText('September')).toBeInTheDocument()
-    for (const day of ['10', '11', '12']) {
-      expect(
-        screen.getByRole('button', { name: `${day} September 2026` }),
-      ).toHaveAttribute('aria-pressed', 'true')
-    }
-    expect(screen.getByRole('button', { name: '13 September 2026' })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('option', { name: 'Today' })).toHaveAttribute(
+      'aria-selected',
       'false',
     )
   })
 
-  it('clears with All Time, and closes on Escape', async () => {
+  it('applies a quick choice at once and closes the menu', async () => {
     const user = userEvent.setup()
-    render(<Harness initial={{ from: '2026-09-10', to: '2026-09-12' }} />)
+    render(<Harness />)
 
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
+    await user.click(trigger())
+    await user.click(screen.getByRole('option', { name: 'Last 7 Days' }))
+
+    expect(chosen()).toBe('2026-10-10|2026-10-16')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(trigger()).toHaveAccessibleName('Date range: Last 7 Days')
+    expect(screen.queryByLabelText('From date')).toBeNull()
+
+    await user.click(trigger())
+    await user.click(screen.getByRole('option', { name: 'Last 60 Days' }))
+    expect(chosen()).toBe('2026-08-18|2026-10-16')
+  })
+
+  it('Custom Range shows two yyyy-mm-dd boxes and a Sunday-first calendar under the first', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await chooseCustom(user)
+
+    expect(trigger()).toHaveAccessibleName('Date range: Custom Range')
+    expect(fromBox()).toHaveAttribute('placeholder', 'yyyy-mm-dd')
+    expect(toBox()).toHaveAttribute('placeholder', 'yyyy-mm-dd')
+    expect(fromBox()).toHaveFocus()
+
+    const panel = await screen.findByRole('dialog', { name: 'Date range' })
+    expect(within(panel).getByLabelText('Month')).toHaveValue('9')
+    expect(within(panel).getByLabelText('Year')).toHaveValue('2026')
+    expect(
+      within(panel)
+        .getAllByText(/^(Su|Mo|Tu|We|Th|Fr|Sa)$/)
+        .map((el) => el.textContent),
+    ).toEqual(['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'])
+    expect(day('16 October 2026')).toHaveAttribute('aria-current', 'date')
+    // Choosing it changed nothing yet.
+    expect(chosen()).toBe('|')
+  })
+
+  it('opens already in Custom Range for a range that is not a quick choice', () => {
+    render(<Harness initial={{ from: '2026-10-14', to: '2026-10-20' }} />)
+
+    expect(trigger()).toHaveAccessibleName('Date range: Custom Range')
+    expect(fromBox()).toHaveValue('2026-10-14')
+    expect(toBox()).toHaveValue('2026-10-20')
+  })
+
+  it('picks the first day, moves on to the last day and greys out the days before it', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+    await chooseCustom(user)
+
+    await user.click(await screen.findByRole('button', { name: '15 October 2026' }))
+
+    // Applied at once, open-ended; the cursor is now in the last-day box.
+    expect(chosen()).toBe('2026-10-15|')
+    expect(fromBox()).toHaveValue('2026-10-15')
+    expect(toBox()).toHaveFocus()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(day('14 October 2026')).toBeDisabled()
+    expect(day('15 October 2026')).toBeEnabled()
+
+    await user.click(day('20 October 2026'))
+    expect(chosen()).toBe('2026-10-15|2026-10-20')
+    expect(toBox()).toHaveValue('2026-10-20')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows the range, and greys out days after the last day when changing the first', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={{ from: '2026-10-10', to: '2026-10-12' }} />)
+
+    await user.click(fromBox())
+
+    for (const name of ['10', '11', '12']) {
+      expect(day(`${name} October 2026`)).toHaveAttribute('aria-pressed', 'true')
+    }
+    expect(day('13 October 2026')).toBeDisabled()
+
+    await user.click(day('8 October 2026'))
+    expect(chosen()).toBe('2026-10-08|2026-10-12')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('moves between months with the arrows and the month and year boxes', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={{ from: '2026-10-01', to: '' }} />)
+
+    await user.click(fromBox())
+    await user.click(screen.getByRole('button', { name: 'Previous month' }))
+    expect(screen.getByLabelText('Month')).toHaveValue('8')
+    await user.click(day('30 September 2026'))
+    expect(chosen()).toBe('2026-09-30|')
+
+    await user.selectOptions(screen.getByLabelText('Month'), 'March')
+    await user.selectOptions(screen.getByLabelText('Year'), '2027')
+    await user.click(day('31 March 2027'))
+    expect(chosen()).toBe('2026-09-30|2027-03-31')
+  })
+
+  it('applies a typed day as soon as it is a real one, and ignores half-typed text', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={{ from: '2026-10-01', to: '' }} />)
+
+    await user.clear(fromBox())
+    expect(chosen()).toBe('|')
+    await user.type(fromBox(), '2026-10-1')
+    expect(chosen()).toBe('|')
+    await user.type(fromBox(), '4')
+    expect(chosen()).toBe('2026-10-14|')
+
+    await user.type(toBox(), '2026-02-30')
+    expect(chosen()).toBe('2026-10-14|')
+  })
+
+  it('clears each box with its red cross, and the whole range with the pill’s cross', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={{ from: '2026-10-14', to: '2026-10-20' }} />)
+
+    await user.click(screen.getByRole('button', { name: 'Clear to date' }))
+    expect(chosen()).toBe('2026-10-14|')
+    expect(toBox()).toHaveValue('')
+
+    await user.click(screen.getByRole('button', { name: 'Clear date range' }))
+    expect(chosen()).toBe('|')
+    expect(trigger()).toHaveAccessibleName('Date range: All Time')
+    expect(screen.queryByLabelText('From date')).toBeNull()
+  })
+
+  it('moves through the menu with the arrow keys, and closes it on Escape', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(trigger())
+    expect(screen.getByRole('option', { name: 'All Time' })).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('option', { name: 'Today' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(chosen()).toBe('2026-10-16|2026-10-16')
+
+    await user.click(trigger())
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('closes the calendar on Escape and when clicking elsewhere', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={{ from: '2026-10-14', to: '2026-10-20' }} />)
+
+    await user.click(toBox())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /^Date range/ }))
-    await user.click(screen.getByRole('button', { name: 'All Time' }))
-    expect(chosen()).toBe('|')
+    await user.click(fromBox())
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.click(document.body)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

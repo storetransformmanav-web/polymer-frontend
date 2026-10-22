@@ -9,7 +9,6 @@ import {
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
-import type { OptionalColumn } from '../utils/columns.ts'
 import {
   capitalize,
   customerLocation,
@@ -19,11 +18,13 @@ import {
 } from '../utils/format.ts'
 
 const TH_BASE =
-  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
-const TD = 'px-3.5 py-2.5 text-left whitespace-nowrap'
+const TD = 'overflow-hidden px-3 py-3 text-left align-middle whitespace-nowrap'
+// The pills (subscription, role): one width, centred in their column, so they line up.
+const PILL = 'w-28 justify-center'
 const SKELETON_ROWS = 8
 
 interface CustomersListProps {
@@ -33,8 +34,6 @@ interface CustomersListProps {
   hasFilters: boolean
   /** Rows belong to the previous query while the new one loads. */
   isStale: boolean
-  /** The extra columns switched on in the Columns menu (the default set is always shown). */
-  columns: ReadonlySet<OptionalColumn>
   /** Opens a customer's details page (View button / card). */
   onOpen: (customer: CustomerListItem) => void
   /** Hover/focus: start loading details so opening is instant. */
@@ -71,36 +70,19 @@ function Marketing({ value }: { value: boolean | null | undefined }) {
   if (value === null || value === undefined)
     return <span className="text-text-muted">—</span>
   return value ? (
-    <Badge tone="success">Subscribed</Badge>
+    <Badge tone="success" className={PILL}>
+      Subscribed
+    </Badge>
   ) : (
-    <span className="text-text-muted">Not subscribed</span>
+    <Badge tone="neutral" className={PILL}>
+      Not subscribed
+    </Badge>
   )
 }
 
 const money = (customer: CustomerListItem) =>
   formatPrice(customer.total_spent ?? '0', customer.currency)
 const dateOrDash = (value: string | null | undefined) => (value ? formatDate(value) : '—')
-
-function Tags({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <span className="text-text-muted">—</span>
-  return (
-    <span className="flex items-center gap-1">
-      {tags.slice(0, 2).map((tag) => (
-        <span
-          key={tag}
-          className="bg-surface border-border max-w-24 truncate rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
-        >
-          {tag}
-        </span>
-      ))}
-      {tags.length > 2 && (
-        <span className="text-text-muted text-[0.7rem]" title={tags.slice(2).join(', ')}>
-          +{tags.length - 2}
-        </span>
-      )}
-    </span>
-  )
-}
 
 function Message({ children }: { children: ReactNode }) {
   return (
@@ -124,7 +106,6 @@ export function CustomersList({
   error,
   hasFilters,
   isStale,
-  columns,
   onOpen,
   onPrefetch,
   onDelete,
@@ -132,9 +113,8 @@ export function CustomersList({
   onClearFilters,
 }: CustomersListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  const has = (column: OptionalColumn) => columns.has(column)
-  // name, note, subscription, location, orders, spent, actions + the extras.
-  const columnCount = 7 + columns.size
+  // name, subscription, orders, spent, role, joined, last login, actions.
+  const columnCount = 8
 
   if (error) {
     return (
@@ -241,23 +221,18 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[720px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[960px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={TH}>Customer name</th>
-            {has('store') && <th className={TH}>Store</th>}
-            <th className={TH}>Note</th>
-            <th className={TH}>Email subscription</th>
-            <th className={TH}>Location</th>
-            <th className={TH_RIGHT}>Orders</th>
-            <th className={TH_RIGHT}>Amount spent</th>
-            {has('role') && <th className={TH}>Role</th>}
-            {has('state') && <th className={TH}>State</th>}
-            {has('joined') && <th className={TH}>Joined</th>}
-            {has('tags') && <th className={TH}>Tags</th>}
-            {has('lastLogin') && <th className={TH}>Last login</th>}
-            <th className={TH_CENTER}>Actions</th>
+            <th className={`${TH_CENTER} w-44`}>Email subscription</th>
+            <th className={`${TH_RIGHT} w-24`}>Orders</th>
+            <th className={`${TH_RIGHT} w-36 pr-8`}>Amount spent</th>
+            <th className={`${TH_CENTER} w-36`}>Role</th>
+            <th className={`${TH_CENTER} w-32`}>Joined</th>
+            <th className={`${TH_CENTER} w-32`}>Last login</th>
+            <th className={`${TH_CENTER} w-24`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -278,21 +253,20 @@ export function CustomersList({
               ))
             : items.map((customer) => {
                 const name = customerName(customer)
-                const location = customerLocation(customer)
                 return (
                   <tr
                     key={customer.id}
                     className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                   >
                     <td className={TD}>
-                      <span className="flex items-center gap-3">
+                      <span className="flex min-w-0 items-center gap-3">
                         <Avatar name={name} />
                         <span className="flex min-w-0 flex-col">
-                          <span className="max-w-56 truncate font-semibold" title={name}>
+                          <span className="truncate font-semibold" title={name}>
                             {name}
                           </span>
                           <span
-                            className="text-text-muted max-w-56 truncate text-[0.78rem]"
+                            className="text-text-muted truncate text-[0.78rem]"
                             title={customer.email ?? ''}
                           >
                             {customer.email ?? '—'}
@@ -300,61 +274,26 @@ export function CustomersList({
                         </span>
                       </span>
                     </td>
-                    {has('store') && (
-                      <td className={TD}>
-                        <span
-                          className="block max-w-40 truncate"
-                          title={customer.shop?.name ?? ''}
-                        >
-                          {customer.shop?.name || '—'}
-                        </span>
-                      </td>
-                    )}
-                    <td className={TD}>
-                      <span
-                        className="block max-w-56 truncate"
-                        title={customer.note ?? ''}
-                      >
-                        {customer.note?.trim() || '—'}
-                      </span>
-                    </td>
-                    <td className={TD}>
+                    <td className={`${TD} text-center`}>
                       <Marketing value={customer.accepts_marketing} />
-                    </td>
-                    <td className={TD}>
-                      <span className="block max-w-48 truncate" title={location}>
-                        {location || '—'}
-                      </span>
                     </td>
                     <td className={`${TD} text-right`}>
                       {customer.orders_count.toLocaleString('en-GB')}
                     </td>
-                    <td className={`${TD} text-right font-semibold`}>
+                    <td className={`${TD} pr-8 text-right font-semibold`}>
                       {money(customer)}
                     </td>
-                    {has('role') && (
-                      <td className={TD}>
-                        <Badge tone={roleTone(customer.role)}>
-                          {capitalize(customer.role)}
-                        </Badge>
-                      </td>
-                    )}
-                    {has('state') && (
-                      <td className={TD}>
-                        <StateBadge customer={customer} />
-                      </td>
-                    )}
-                    {has('joined') && (
-                      <td className={TD}>{dateOrDash(customer.shopify_created_at)}</td>
-                    )}
-                    {has('tags') && (
-                      <td className={TD}>
-                        <Tags tags={customer.tags} />
-                      </td>
-                    )}
-                    {has('lastLogin') && (
-                      <td className={TD}>{dateOrDash(customer.last_login_at)}</td>
-                    )}
+                    <td className={`${TD} text-center`}>
+                      <Badge tone={roleTone(customer.role)} className={PILL}>
+                        {capitalize(customer.role)}
+                      </Badge>
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      {dateOrDash(customer.shopify_created_at)}
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      {dateOrDash(customer.last_login_at)}
+                    </td>
                     <td className={`${TD} text-center`}>
                       <span className="inline-flex items-center justify-center gap-0.5">
                         <button

@@ -98,7 +98,7 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows these columns by default: Customer name, Note, Email subscription, Location, Orders, Amount spent', async () => {
+  it('shows every column by default: Customer name, Email subscription, Orders, Amount spent, Role, Joined, Last login, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
@@ -106,11 +106,12 @@ describe('CustomersPage', () => {
     const headers = table.getAllByRole('columnheader').map((header) => header.textContent)
     expect(headers).toEqual([
       'Customer name',
-      'Note',
       'Email subscription',
-      'Location',
       'Orders',
       'Amount spent',
+      'Role',
+      'Joined',
+      'Last login',
       'Actions',
     ])
     expect(table.queryByRole('checkbox')).toBeNull()
@@ -119,66 +120,30 @@ describe('CustomersPage', () => {
     const row = table.getByText('Customer 2').closest('tr')!
     expect(within(row).getByText('customer2@example.com')).toBeInTheDocument()
     expect(within(row).getByText('Subscribed')).toBeInTheDocument()
-    expect(within(row).getByText('United Kingdom')).toBeInTheDocument()
     expect(within(row).getByText('£45.70')).toBeInTheDocument()
     // #3 has not subscribed; #1 (CRM) has no marketing flag at all.
     expect(
       within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not subscribed'),
     ).toBeInTheDocument()
-    // The rest (role, state, store…) is behind the Columns menu.
-    expect(table.queryByText('Subscriber')).not.toBeInTheDocument()
-    expect(table.queryByText('Enabled')).not.toBeInTheDocument()
-  })
-
-  it('shows the customer’s note in the Note column when the API sends one', async () => {
-    list.mockImplementation((params) => {
-      const response = respond(params)
-      return Promise.resolve({
-        ...response,
-        items: response.items.map((item) =>
-          item.id === 'cust-2' ? { ...item, note: 'Prefers phone calls' } : item,
-        ),
-      })
-    })
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
-
-    const table = within(screen.getByRole('table'))
-    expect(
-      within(table.getByText('Customer 2').closest('tr')!).getByText(
-        'Prefers phone calls',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('adds role, state, joined, tags and last login from the Columns menu', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
-
-    await user.click(screen.getByRole('button', { name: 'Columns' }))
-    for (const name of ['Role', 'State', 'Joined', 'Tags', 'Last login']) {
-      await user.click(screen.getByRole('checkbox', { name }))
+    // Store, note, location, state and tags are not columns at all.
+    for (const name of ['Store', 'Note', 'Location', 'State', 'Tags']) {
+      expect(table.queryByRole('columnheader', { name })).toBeNull()
     }
+    expect(within(row).queryByText('United Kingdom')).toBeNull()
+    expect(within(row).getByText('Subscriber')).toBeInTheDocument()
+  })
+
+  it('has no Columns menu: every column is always shown', async () => {
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+
+    expect(screen.queryByRole('button', { name: 'Columns' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
 
     const table = within(screen.getByRole('table'))
     const crmRow = table.getByText('Customer 1').closest('tr')!
     expect(within(crmRow).getByText('Administrator')).toBeInTheDocument()
-    expect(within(crmRow).getByText('CRM')).toBeInTheDocument()
-    const row = table.getByText('Customer 2').closest('tr')!
-    expect(within(row).getByText('Subscriber')).toBeInTheDocument()
-    expect(within(row).getByText('Enabled')).toBeInTheDocument()
-    expect(within(row).getByText('+1')).toBeInTheDocument() // 3 tags: two shown, +1
-    // #5 is invited.
-    expect(
-      within(table.getByText('Customer 5').closest('tr')!).getByText('Invited'),
-    ).toBeInTheDocument()
-
-    // And they go away again.
-    await user.click(screen.getByRole('checkbox', { name: 'Role' }))
-    expect(
-      within(screen.getByRole('table')).queryByRole('columnheader', { name: 'Role' }),
-    ).toBeNull()
+    expect(table.getByRole('columnheader', { name: 'Last login' })).toBeInTheDocument()
   })
 
   it('falls back to first + last name, then the email, when there is no full name', async () => {
@@ -257,38 +222,6 @@ describe('CustomersPage', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('shows which store each customer belongs to, from the response', async () => {
-    list.mockImplementation((params) => {
-      const response = respond(params)
-      return Promise.resolve({
-        ...response,
-        items: response.items.map((item, index) => ({
-          ...item,
-          shop:
-            index % 2 === 0
-              ? {
-                  key: 'polymer-uk',
-                  name: 'Polymer UK',
-                  domain: 'polymer-uk-ltd.myshopify.com',
-                  currency: 'GBP',
-                }
-              : null,
-        })),
-      })
-    })
-    const user = userEvent.setup()
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
-
-    // Not a default column: switched on from the Columns menu.
-    const table = screen.getByRole('table')
-    expect(within(table).queryByRole('columnheader', { name: 'Store' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Columns' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Store' }))
-    expect(within(table).getByRole('columnheader', { name: 'Store' })).toBeInTheDocument()
-    expect(within(table).getAllByText('Polymer UK').length).toBeGreaterThan(0)
-  })
-
   it('asks for every role on "All Customers", and for just one on the other tabs', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
@@ -330,7 +263,23 @@ describe('CustomersPage', () => {
     expect(screen.getByLabelText('Account State')).toBeInTheDocument()
   })
 
-  it('sends state, marketing, orders, sort and spend filters', async () => {
+  it('has no Tag, Min spent or Max spent filter', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    expect(screen.queryByLabelText('Tag')).toBeNull()
+    expect(screen.queryByLabelText('Min spent')).toBeNull()
+    expect(screen.queryByLabelText('Max spent')).toBeNull()
+    expect(
+      ['Account State', 'Marketing', 'Orders', 'Sort by', 'Order'].every((name) =>
+        screen.queryByLabelText(name),
+      ),
+    ).toBe(true)
+  })
+
+  it('sends state, marketing, orders and sort filters', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
@@ -341,7 +290,6 @@ describe('CustomersPage', () => {
     await user.selectOptions(screen.getByLabelText('Orders'), 'no')
     await user.selectOptions(screen.getByLabelText('Sort by'), 'total_spent')
     await user.selectOptions(screen.getByLabelText('Order'), 'asc')
-    await user.type(screen.getByLabelText('Min spent'), '10')
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
@@ -351,14 +299,13 @@ describe('CustomersPage', () => {
           has_orders: false,
           sort: 'total_spent',
           order: 'asc',
-          min_spent: 10,
           page: 1,
         }),
       ),
     )
   })
 
-  it('offers countries and tags seen so far and filters by them', async () => {
+  it('offers countries seen so far and filters by them', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
@@ -367,9 +314,6 @@ describe('CustomersPage', () => {
       within(screen.getByLabelText('Country:')).getByRole('option', {
         name: 'United Kingdom',
       }),
-    ).toBeInTheDocument()
-    expect(
-      within(screen.getByLabelText('Tag')).getByRole('option', { name: 'VIP' }),
     ).toBeInTheDocument()
 
     await user.selectOptions(screen.getByLabelText('Country:'), 'United Kingdom')

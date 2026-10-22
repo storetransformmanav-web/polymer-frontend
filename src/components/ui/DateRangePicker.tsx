@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react'
 import { createPortal } from 'react-dom'
-import { CalendarIcon, ChevronDownIcon, ChevronRightIcon } from './icons.tsx'
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from './icons.tsx'
 import {
   RANGE_PRESETS,
-  describeRange,
   formatDayLong,
   matchingPreset,
   monthGrid,
@@ -11,23 +17,42 @@ import {
   toYmd,
 } from './dateRange.ts'
 
-const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
-/** Space kept between the panel and the edges of the window. */
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const MONTHS = Array.from({ length: 12 }, (_, month) =>
+  new Date(2026, month, 1).toLocaleDateString('en-GB', { month: 'long' }),
+)
+const CUSTOM = 'Custom Range'
+/** Space kept between a popup and the edges of the window. */
 const EDGE = 12
 
+const CONTROL =
+  'border-border bg-bg text-text hover:border-accent focus-within:border-accent focus-within:outline-accent-tint relative flex h-10 min-w-0 items-center rounded-lg border text-[0.85rem] font-medium transition-colors focus-within:outline-2'
+const CLEAR_BUTTON =
+  'absolute top-1/2 right-2 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0'
+const SELECT_RESET =
+  'text-text min-w-0 cursor-pointer appearance-none border-none bg-transparent font-bold outline-none'
+
 interface DateRangePickerProps {
-  /** The button's accessible name (e.g. "Date range"). */
+  /** The group's accessible name (e.g. "Date range"). */
   label: string
   id?: string
-  /** `YYYY-MM-DD` or '' — both empty means "All Time". */
+  /** `YYYY-MM-DD` or '' — both empty means "All Time". Either side may stay empty. */
   from: string
   to: string
   onChange: (range: { from: string; to: string }) => void
 }
 
+type Side = 'from' | 'to'
+
 interface Month {
   year: number
   month: number
+}
+
+interface Place {
+  top: number
+  left: number
+  minWidth?: number
 }
 
 const monthOf = (date: Date): Month => ({
@@ -36,43 +61,37 @@ const monthOf = (date: Date): Month => ({
 })
 
 /**
- * A date-range filter: one button that opens a panel with quick choices (Today,
- * Last 7 days, This month…) beside a month calendar. Click a day, then a second
- * day, to pick any range; a quick choice applies at once. The range is only
- * reported when it is complete, so a half-picked range never reaches a query.
+ * Puts a portalled popup under its anchor (or above it, or against the other edge, when
+ * there is no room) and keeps it there while the page scrolls or resizes — so no
+ * container with `overflow: hidden` (a collapsing filter grid, a table's scroll area)
+ * can clip it. `anchor` is the element to line up with (the input's box, for a field).
  */
-export function DateRangePicker({ label, id, from, to, onChange }: DateRangePickerProps) {
-  const [open, setOpen] = useState(false)
-  const [view, setView] = useState<Month>(() => monthOf(new Date()))
-  // The first day of a range being picked, waiting for the second.
-  const [anchor, setAnchor] = useState<string | null>(null)
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
-  const root = useRef<HTMLDivElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const panel = useRef<HTMLDivElement>(null)
-
-  // The panel is portalled to the page and positioned from the button, so no
-  // container with `overflow: hidden` (a collapsing filter grid, a table's
-  // scroll area) can clip it. It lines up under the button, moves to the other
-  // edge or above it when there isn't room, and follows scrolling and resizing.
-  const place = useCallback(() => {
-    const trigger = button.current?.getBoundingClientRect()
-    const box = panel.current
-    if (!trigger || !box) return
-    const { offsetWidth: width, offsetHeight: height } = box
-    let left = trigger.left
-    if (left + width > window.innerWidth - EDGE) {
-      left = Math.max(EDGE, trigger.right - width)
-    }
-    let top = trigger.bottom + 6
-    if (top + height > window.innerHeight - EDGE && trigger.top - 6 - height >= EDGE) {
-      top = trigger.top - 6 - height
-    }
-    setPosition({ top, left })
-  }, [])
+function usePopupPlace(
+  open: boolean,
+  anchor: RefObject<HTMLElement | null>,
+  popup: RefObject<HTMLDivElement | null>,
+  useParent = false,
+): Place | null {
+  const [position, setPosition] = useState<Place | null>(null)
 
   useLayoutEffect(() => {
     if (!open) return undefined
+    function place() {
+      const element = useParent ? anchor.current?.parentElement : anchor.current
+      const trigger = element?.getBoundingClientRect()
+      const box = popup.current
+      if (!trigger || !box) return
+      const { offsetWidth: width, offsetHeight: height } = box
+      let left = trigger.left
+      if (left + width > window.innerWidth - EDGE) {
+        left = Math.max(EDGE, trigger.right - width)
+      }
+      let top = trigger.bottom + 6
+      if (top + height > window.innerHeight - EDGE && trigger.top - 6 - height >= EDGE) {
+        top = trigger.top - 6 - height
+      }
+      setPosition({ top, left, minWidth: trigger.width })
+    }
     place()
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
@@ -80,186 +99,470 @@ export function DateRangePicker({ label, id, from, to, onChange }: DateRangePick
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [open, place])
+  }, [open, anchor, popup, useParent])
+
+  return position
+}
+
+interface DateFieldProps {
+  side: Side
+  label: string
+  value: string
+  invalid: boolean
+  inputRef: RefObject<HTMLInputElement | null>
+  onOpen: (side: Side) => void
+  onCommit: (value: string) => void
+}
+
+/** A typed `yyyy-mm-dd` box. It applies a value as soon as it is a real day (or empty). */
+function DateField({
+  side,
+  label,
+  value,
+  invalid,
+  inputRef,
+  onOpen,
+  onCommit,
+}: DateFieldProps) {
+  // What is being typed; null = show the chosen day.
+  const [draft, setDraft] = useState<string | null>(null)
+
+  return (
+    <div className={`${CONTROL} w-36`}>
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={10}
+        placeholder="yyyy-mm-dd"
+        aria-label={label}
+        aria-invalid={invalid || undefined}
+        value={draft ?? value}
+        onFocus={() => onOpen(side)}
+        onClick={() => onOpen(side)}
+        onBlur={() => setDraft(null)}
+        onChange={(event) => {
+          const next = event.target.value
+          setDraft(next)
+          if (next === '') onCommit('')
+          else if (parseYmd(next)) onCommit(next)
+        }}
+        className="text-text placeholder:text-text-muted h-full min-w-0 flex-1 rounded-lg border-none bg-transparent pr-8 pl-3 outline-none"
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label={`Clear ${label.toLowerCase()}`}
+          onClick={() => {
+            setDraft(null)
+            onCommit('')
+            inputRef.current?.focus()
+          }}
+          className={`${CLEAR_BUTTON} text-danger hover:bg-danger-bg`}
+        >
+          <XIcon width={12} height={12} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A date-range filter in the style of the order-management design: a dropdown of quick
+ * choices — All Time, Today, Last 7/30/60 Days, **Custom Range**. Choosing Custom Range
+ * (or opening a range that isn't one of the quick choices) shows two typed `yyyy-mm-dd`
+ * boxes beside it, with a month calendar that opens under the active box: choose the
+ * first day, the calendar moves on to the last day and greys out the days before the
+ * first. A choice applies as soon as it is made, and either end may be left open.
+ */
+export function DateRangePicker({ label, id, from, to, onChange }: DateRangePickerProps) {
+  const today = new Date()
+  const todayYmd = toYmd(today)
+  const hasRange = Boolean(from || to)
+  const preset = matchingPreset({ from, to }, today)
+
+  // "Custom Range" stays chosen while its days are being typed, even when they happen
+  // to equal a quick choice; a range that isn't a quick choice is always custom.
+  const [customChosen, setCustomChosen] = useState(false)
+  const custom = customChosen || (hasRange && !preset)
+  const current = custom ? CUSTOM : (preset?.label ?? CUSTOM)
+
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [side, setSide] = useState<Side>('from')
+  const [view, setView] = useState<Month>(() => monthOf(new Date()))
+  const root = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  const calendar = useRef<HTMLDivElement>(null)
+  const fromInput = useRef<HTMLInputElement>(null)
+  const focusFrom = useRef(false)
+  const toInput = useRef<HTMLInputElement>(null)
+
+  const menuPosition = usePopupPlace(menuOpen, trigger, menu)
+  const calendarPosition = usePopupPlace(
+    calendarOpen,
+    side === 'from' ? fromInput : toInput,
+    calendar,
+    true,
+  )
+  const wrongOrder = Boolean(from && to && from > to)
 
   useEffect(() => {
-    if (!open) return undefined
+    if (!menuOpen && !calendarOpen) return undefined
     function onPointerDown(event: PointerEvent) {
       const target = event.target as Node
-      if (!root.current?.contains(target) && !panel.current?.contains(target)) {
-        setOpen(false)
+      if (
+        !root.current?.contains(target) &&
+        !menu.current?.contains(target) &&
+        !calendar.current?.contains(target)
+      ) {
+        setMenuOpen(false)
+        setCalendarOpen(false)
       }
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
+  }, [menuOpen, calendarOpen])
 
-  const today = new Date()
-  const active = matchingPreset({ from, to }, today)
+  // The menu's first focus goes to the chosen option.
+  useEffect(() => {
+    if (!menuOpen) return
+    const options = menu.current?.querySelectorAll<HTMLElement>('[role="option"]')
+    const chosen = menu.current?.querySelector<HTMLElement>('[aria-selected="true"]')
+    ;(chosen ?? options?.[0])?.focus()
+  }, [menuOpen])
 
-  function toggle() {
-    if (!open) {
-      const start = parseYmd(from) ?? new Date()
-      setView(monthOf(start))
-      setAnchor(null)
+  // "Custom Range" was just chosen: once its boxes exist, the cursor goes to the first.
+  useEffect(() => {
+    if (focusFrom.current && fromInput.current) {
+      focusFrom.current = false
+      fromInput.current.focus()
     }
-    setOpen((current) => !current)
+  })
+
+  function openCalendarFor(next: Side) {
+    setSide(next)
+    if (!calendarOpen || next !== side) {
+      const day = parseYmd(next === 'from' ? from || to : to || from)
+      setView(monthOf(day ?? new Date()))
+    }
+    setMenuOpen(false)
+    setCalendarOpen(true)
   }
 
-  function apply(range: { from: string; to: string }) {
-    onChange(range)
-    setAnchor(null)
-    setOpen(false)
-    button.current?.focus()
+  function choose(name: string) {
+    setMenuOpen(false)
+    if (name === CUSTOM) {
+      setCustomChosen(true)
+      // The cursor goes to the first box, which opens the calendar under it.
+      if (fromInput.current) fromInput.current.focus()
+      else focusFrom.current = true
+      return
+    }
+    const quick = RANGE_PRESETS.find((item) => item.label === name)
+    if (!quick) return
+    setCustomChosen(false)
+    setCalendarOpen(false)
+    onChange(quick.range(today))
+    trigger.current?.focus()
+  }
+
+  function clearAll() {
+    setCustomChosen(false)
+    setCalendarOpen(false)
+    onChange({ from: '', to: '' })
+    trigger.current?.focus()
+  }
+
+  function setDay(which: Side, value: string) {
+    setCustomChosen(true)
+    onChange(which === 'from' ? { from: value, to } : { from, to: value })
   }
 
   function pick(day: Date) {
     const ymd = toYmd(day)
-    if (anchor === null) {
-      setAnchor(ymd)
-      return
+    setCustomChosen(true)
+    if (side === 'from') {
+      onChange({ from: ymd, to })
+      if (to) {
+        setCalendarOpen(false)
+      } else {
+        // On to the last day, with the calendar left open.
+        setSide('to')
+        toInput.current?.focus()
+      }
+    } else {
+      onChange({ from, to: ymd })
+      setCalendarOpen(false)
     }
-    apply(anchor <= ymd ? { from: anchor, to: ymd } : { from: ymd, to: anchor })
   }
 
   function step(delta: number) {
     setView(({ year, month }) => monthOf(new Date(year, month + delta, 1)))
   }
 
-  // What the calendar highlights: the range being picked, or the chosen one.
-  const low = anchor ?? (from || to)
-  const high = anchor ?? (to || from)
-  const todayYmd = toYmd(today)
-  const title = new Date(view.year, view.month, 1)
+  function onMenuKey(event: KeyboardEvent) {
+    const options = [
+      ...(menu.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []),
+    ]
+    const index = options.indexOf(document.activeElement as HTMLElement)
+    const move = (to: number) => {
+      event.preventDefault()
+      options[(to + options.length) % options.length]?.focus()
+    }
+    if (event.key === 'ArrowDown') move(index + 1)
+    else if (event.key === 'ArrowUp') move(index - 1)
+    else if (event.key === 'Home') move(0)
+    else if (event.key === 'End') move(options.length - 1)
+  }
+
+  // What the calendar highlights: the chosen range.
+  const low = from || to
+  const high = to || from
+  const firstYear = Math.min(today.getFullYear() - 10, view.year)
+  const lastYear = Math.max(today.getFullYear() + 2, view.year)
+  const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
+  const choices = [...RANGE_PRESETS.map((item) => item.label), CUSTOM]
 
   return (
     <div
       ref={root}
-      className="relative"
+      role="group"
+      aria-label={label}
+      className="flex flex-wrap items-center gap-2"
       onKeyDown={(event) => {
-        if (event.key === 'Escape' && open) {
+        if (event.key === 'Escape' && (menuOpen || calendarOpen)) {
           event.stopPropagation()
-          setOpen(false)
-          button.current?.focus()
+          setMenuOpen(false)
+          setCalendarOpen(false)
+          if (menuOpen) trigger.current?.focus()
         }
       }}
     >
-      <button
-        ref={button}
-        id={id}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`${label}: ${describeRange({ from, to }, today)}`}
-        onClick={toggle}
-        className="border-border bg-bg text-text hover:border-accent focus-visible:border-accent focus-visible:outline-accent-tint flex h-10 w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border px-3 text-left text-[0.85rem] font-medium transition-colors focus-visible:outline-2"
+      <div
+        className={`${CONTROL} ${menuOpen ? 'border-accent outline-accent-tint outline-2' : ''} ${
+          custom ? 'w-44' : 'w-40'
+        }`}
       >
-        <CalendarIcon width={16} height={16} className="text-text-muted shrink-0" />
-        <span className="min-w-0 flex-1 truncate">
-          {describeRange({ from, to }, today)}
-        </span>
-        <ChevronDownIcon
-          width={14}
-          height={14}
-          className={`text-text-muted shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+        <button
+          ref={trigger}
+          id={id}
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={menuOpen}
+          aria-label={`${label}: ${current}`}
+          onClick={() => {
+            setCalendarOpen(false)
+            setMenuOpen((open) => !open)
+          }}
+          className="text-text h-full min-w-0 flex-1 cursor-pointer rounded-lg border-none bg-transparent pr-8 pl-3 text-left font-bold"
+        >
+          <span className="block truncate">{current}</span>
+        </button>
+        {custom ? (
+          <button
+            type="button"
+            aria-label="Clear date range"
+            onClick={clearAll}
+            className={`${CLEAR_BUTTON} text-text-muted hover:text-danger hover:bg-danger-bg`}
+          >
+            <XIcon width={14} height={14} />
+          </button>
+        ) : (
+          <ChevronDownIcon
+            width={14}
+            height={14}
+            className={`text-text-muted pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 transition-transform ${
+              menuOpen ? 'rotate-180' : ''
+            }`}
+          />
+        )}
+      </div>
 
-      {open &&
+      {custom && (
+        <>
+          <DateField
+            side="from"
+            label="From date"
+            value={from}
+            invalid={wrongOrder}
+            inputRef={fromInput}
+            onOpen={openCalendarFor}
+            onCommit={(value) => setDay('from', value)}
+          />
+          <span aria-hidden="true" className="text-text-muted font-semibold">
+            -
+          </span>
+          <DateField
+            side="to"
+            label="To date"
+            value={to}
+            invalid={wrongOrder}
+            inputRef={toInput}
+            onOpen={openCalendarFor}
+            onCommit={(value) => setDay('to', value)}
+          />
+        </>
+      )}
+
+      {menuOpen &&
         createPortal(
           <div
-            ref={panel}
+            ref={menu}
+            role="listbox"
+            aria-label={`${label} quick choices`}
+            onKeyDown={onMenuKey}
+            style={{
+              top: menuPosition?.top ?? 0,
+              left: menuPosition?.left ?? 0,
+              minWidth: Math.max(menuPosition?.minWidth ?? 0, 176),
+            }}
+            className="border-border bg-bg fixed z-50 flex flex-col gap-0.5 rounded-xl border p-1.5 shadow-lg"
+          >
+            {choices.map((name) => {
+              const selected = name === current
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => choose(name)}
+                  className={`hover:bg-accent-tint focus-visible:bg-accent-tint flex h-9 cursor-pointer items-center justify-between gap-3 rounded-lg border-none px-3 text-left text-[0.85rem] font-semibold outline-none ${
+                    selected ? 'bg-accent-tint text-text' : 'text-text bg-transparent'
+                  }`}
+                >
+                  {name}
+                  {selected && (
+                    <CheckIcon width={14} height={14} className="text-accent" />
+                  )}
+                </button>
+              )
+            })}
+          </div>,
+          document.body,
+        )}
+
+      {calendarOpen &&
+        createPortal(
+          <div
+            ref={calendar}
             role="dialog"
             aria-label={label}
-            style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
-            className="border-border bg-bg fixed z-50 flex w-[min(34rem,calc(100vw-1.5rem))] flex-col gap-3 rounded-xl border p-3 shadow-lg sm:flex-row"
+            style={{
+              top: calendarPosition?.top ?? 0,
+              left: calendarPosition?.left ?? 0,
+            }}
+            className="border-border bg-bg fixed z-50 w-[min(18.5rem,calc(100vw-1.5rem))] rounded-xl border p-4 shadow-lg"
           >
-            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:w-40 sm:shrink-0 sm:flex-col">
-              {RANGE_PRESETS.map((preset) => {
-                const selected = preset === active
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                aria-label="Previous month"
+                onClick={() => step(-1)}
+                className="text-text-muted hover:text-accent hover:bg-accent-tint flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
+              >
+                <ChevronRightIcon width={16} height={16} className="rotate-180" />
+              </button>
+              <div className="flex items-center gap-3 text-[0.88rem]">
+                <span className="relative flex items-center gap-1">
+                  <select
+                    aria-label="Month"
+                    value={view.month}
+                    onChange={(event) =>
+                      setView({ ...view, month: Number(event.target.value) })
+                    }
+                    className={`${SELECT_RESET} pr-4`}
+                  >
+                    {MONTHS.map((name, month) => (
+                      <option key={name} value={month}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon
+                    width={11}
+                    height={11}
+                    className="text-text-muted pointer-events-none absolute right-0"
+                  />
+                </span>
+                <span className="relative flex items-center gap-1">
+                  <select
+                    aria-label="Year"
+                    value={view.year}
+                    onChange={(event) =>
+                      setView({ ...view, year: Number(event.target.value) })
+                    }
+                    className={`${SELECT_RESET} pr-4`}
+                  >
+                    {years.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon
+                    width={11}
+                    height={11}
+                    className="text-text-muted pointer-events-none absolute right-0"
+                  />
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="Next month"
+                onClick={() => step(1)}
+                className="text-text-muted hover:text-accent hover:bg-accent-tint flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
+              >
+                <ChevronRightIcon width={16} height={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-y-1 text-center">
+              {WEEKDAYS.map((day) => (
+                <span
+                  key={day}
+                  className="text-text-muted py-1.5 text-[0.74rem] font-semibold"
+                >
+                  {day}
+                </span>
+              ))}
+              {monthGrid(view.year, view.month).map((day) => {
+                const ymd = toYmd(day)
+                const inMonth = day.getMonth() === view.month
+                const isEdge = ymd === low || ymd === high
+                const inRange = !!low && !!high && ymd >= low && ymd <= high
+                // The last day can't come before the first, nor the first after the last.
+                const blocked = side === 'to' ? !!from && ymd < from : !!to && ymd > to
                 return (
                   <button
-                    key={preset.label}
+                    key={ymd}
                     type="button"
-                    aria-pressed={selected}
-                    onClick={() => apply(preset.range(today))}
-                    className={`h-9 cursor-pointer rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors ${
-                      selected
-                        ? 'border-accent bg-accent-tint text-accent'
-                        : 'border-border bg-bg text-text hover:border-accent hover:text-accent'
+                    disabled={blocked}
+                    aria-label={formatDayLong(day)}
+                    aria-pressed={inRange}
+                    aria-current={ymd === todayYmd ? 'date' : undefined}
+                    onClick={() => pick(day)}
+                    className={`mx-auto h-9 w-9 rounded-lg border text-[0.85rem] font-medium transition-colors ${
+                      blocked
+                        ? 'bg-surface text-text-muted/40 cursor-not-allowed border-transparent'
+                        : isEdge
+                          ? 'bg-accent text-accent-contrast cursor-pointer border-transparent font-bold'
+                          : inRange
+                            ? 'bg-accent-tint text-accent cursor-pointer border-transparent'
+                            : `hover:bg-accent-tint cursor-pointer bg-transparent ${
+                                ymd === todayYmd
+                                  ? 'border-accent text-text font-bold'
+                                  : 'border-transparent'
+                              } ${inMonth ? 'text-text' : 'text-text-muted/60'}`
                     }`}
                   >
-                    {preset.label}
+                    {day.getDate()}
                   </button>
                 )
               })}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() => step(-1)}
-                  className="text-text-muted hover:text-accent hover:bg-accent-tint flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
-                >
-                  <ChevronRightIcon width={16} height={16} className="rotate-180" />
-                </button>
-                <p aria-live="polite" className="text-[0.95rem] font-bold">
-                  <span className="text-accent">
-                    {title.toLocaleDateString('en-GB', { month: 'long' })}
-                  </span>{' '}
-                  <span className="text-text-muted">{view.year}</span>
-                </p>
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() => step(1)}
-                  className="text-text-muted hover:text-accent hover:bg-accent-tint flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
-                >
-                  <ChevronRightIcon width={16} height={16} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-y-0.5 text-center">
-                {WEEKDAYS.map((day) => (
-                  <span key={day} className="text-text py-1.5 text-[0.78rem] font-bold">
-                    {day}
-                  </span>
-                ))}
-                {monthGrid(view.year, view.month).map((day) => {
-                  const ymd = toYmd(day)
-                  const inMonth = day.getMonth() === view.month
-                  const isEdge = ymd === low || ymd === high
-                  const inRange = !!low && !!high && ymd >= low && ymd <= high
-                  return (
-                    <button
-                      key={ymd}
-                      type="button"
-                      aria-label={formatDayLong(day)}
-                      aria-pressed={inRange}
-                      onClick={() => pick(day)}
-                      className={`mx-auto h-9 w-full cursor-pointer border-none text-[0.85rem] font-medium transition-colors ${
-                        isEdge
-                          ? 'bg-accent text-accent-contrast rounded-lg font-bold'
-                          : inRange
-                            ? 'bg-accent-tint text-accent'
-                            : `hover:bg-accent-tint rounded-lg bg-transparent ${
-                                inMonth ? 'text-text' : 'text-text-muted/50'
-                              }`
-                      } ${ymd === todayYmd && !isEdge ? 'text-accent font-bold' : ''}`}
-                    >
-                      {day.getDate()}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {anchor !== null && (
-                <p className="text-text-muted mt-2 text-[0.78rem]">
-                  Now pick the last day of the range.
-                </p>
-              )}
             </div>
           </div>,
           document.body,
