@@ -22,7 +22,7 @@ const VALUE_TONE = {
   default: 'text-text',
   good: 'text-accent',
   warning: 'text-warning',
-}
+}  
 
 /**
  * The four figures the API's `totals` gives for every order that matches the filters
