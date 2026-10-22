@@ -10,10 +10,11 @@ import {
   TagIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { withAll } from '../../../components/ui/selectOptions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
-import { STOCK_OPTIONS, withAll } from '../utils/filterOptions.ts'
+import { STOCK_OPTIONS } from '../utils/filterOptions.ts'
 import {
   PRODUCT_SORTS,
   type ProductSort,

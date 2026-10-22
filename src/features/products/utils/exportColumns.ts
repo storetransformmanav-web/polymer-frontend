@@ -1,4 +1,5 @@
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
+import type { ExportColumn } from '../../../lib/tableExport.ts'
 import { shopifyAdminProductUrl, statusLabel } from './format.ts'
 
 /**
@@ -30,20 +31,10 @@ export type ExportColumnId =
   | 'updatedAt'
   | 'syncedAt'
 
-export type ExportCell = string | number | null | undefined
+/** A column of the products file. */
+export type ProductExportColumn = ExportColumn<ProductListItem, ExportColumnId>
 
-export interface ExportColumn {
-  id: ExportColumnId
-  /** The column's heading in the file, and its name in the picker. */
-  header: string
-  /** How an Excel file writes it: a whole number, a price with two decimals, or text. */
-  kind: 'text' | 'integer' | 'decimal'
-  /** Column width in the Excel file, in characters. */
-  width: number
-  value: (item: ProductListItem) => ExportCell
-}
-
-export const EXPORT_COLUMNS: readonly ExportColumn[] = [
+export const EXPORT_COLUMNS: readonly ProductExportColumn[] = [
   { id: 'id', header: 'Product ID', kind: 'text', width: 38, value: (item) => item.id },
   {
     id: 'shopifyId',
@@ -188,14 +179,3 @@ export const EXPORT_COLUMNS: readonly ExportColumn[] = [
     value: (item) => item.synced_at,
   },
 ]
-
-/** What the picker starts with: every column. */
-export const DEFAULT_EXPORT_COLUMNS: readonly ExportColumnId[] = EXPORT_COLUMNS.map(
-  (column) => column.id,
-)
-
-/** The chosen columns, in the file's fixed order (a duplicate or unknown id is ignored). */
-export function pickColumns(ids: Iterable<ExportColumnId>): ExportColumn[] {
-  const wanted = new Set(ids)
-  return EXPORT_COLUMNS.filter((column) => wanted.has(column.id))
-}

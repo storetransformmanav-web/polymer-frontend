@@ -179,25 +179,9 @@ describe('exporting products', () => {
       ).not.toBeChecked()
     })
 
-    it('searches the columns, selects all or none, and resets to the default', async () => {
+    it('selects all or none of the columns, and resets to the default — with no search box in it', async () => {
       const { user, dialog } = await openDialog()
-      const search = () =>
-        within(dialog).getByRole('searchbox', { name: 'Search columns' })
-
-      await user.type(search(), 'price')
-      expect(
-        within(dialog).getByRole('checkbox', { name: 'Price from' }),
-      ).toBeInTheDocument()
-      expect(
-        within(dialog).getByRole('checkbox', { name: 'Price to' }),
-      ).toBeInTheDocument()
-      expect(
-        within(dialog).queryByRole('checkbox', { name: 'Title' }),
-      ).not.toBeInTheDocument()
-      await user.clear(search())
-      await user.type(search(), 'zzz')
-      expect(within(dialog).getByText(/No column matches/)).toBeInTheDocument()
-      await user.clear(search())
+      expect(within(dialog).queryByRole('searchbox')).not.toBeInTheDocument()
 
       await user.click(within(dialog).getByRole('button', { name: 'Clear' }))
       expect(within(dialog).getByText('0 selected')).toBeInTheDocument()
@@ -316,15 +300,14 @@ describe('exporting products', () => {
 
       await user.click(screen.getByRole('button', { name: 'Export' }))
       const dialog = await screen.findByRole('dialog', { name: 'Export products' })
-      // The advanced filters start from the list's own.
+      // The advanced filters start from the list's own (there is no search box in them:
+      // the list's search is simply kept).
       await user.click(within(dialog).getByRole('button', { name: /Advanced filters/ }))
-      expect(within(dialog).getByRole('searchbox', { name: 'Search' })).toHaveValue(
-        'desk',
-      )
+      expect(within(dialog).queryByRole('searchbox', { name: 'Search' })).toBeNull()
       expect(within(dialog).getByRole('combobox', { name: 'Status' })).toHaveValue(
         'ARCHIVED',
       )
-      expect(within(dialog).getByText('2 applied')).toBeInTheDocument()
+      expect(within(dialog).getByText('1 applied')).toBeInTheDocument()
 
       await user.click(within(dialog).getByRole('radio', { name: 'CSV (.csv)' }))
       await user.click(within(dialog).getByRole('checkbox', { name: /Export all/ }))
@@ -358,7 +341,7 @@ describe('exporting products', () => {
       for (const name of ['Status', 'Stock', 'Product type', 'Tag']) {
         expect(within(dialog).getByRole('combobox', { name })).toBeEnabled()
       }
-      expect(within(dialog).getByRole('searchbox', { name: 'Search' })).toBeEnabled()
+      expect(within(dialog).queryByRole('searchbox', { name: 'Search' })).toBeNull()
       expect(within(dialog).getByLabelText('Min price')).toBeEnabled()
       expect(within(dialog).getByLabelText('Max price')).toBeEnabled()
       await user.selectOptions(
@@ -366,8 +349,8 @@ describe('exporting products', () => {
         'in',
       )
       expect(within(dialog).getByRole('combobox', { name: 'Stock' })).toHaveValue('in')
-      await user.type(within(dialog).getByRole('searchbox', { name: 'Search' }), 'bag')
-      expect(within(dialog).getByRole('searchbox', { name: 'Search' })).toHaveValue('bag')
+      await user.type(within(dialog).getByLabelText('Max price'), '50')
+      expect(within(dialog).getByLabelText('Max price')).toHaveValue(50)
 
       await user.click(toggle)
       expect(toggle).toHaveAttribute('aria-expanded', 'false')

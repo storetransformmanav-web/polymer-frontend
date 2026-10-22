@@ -16,9 +16,15 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { withAll } from '../../../components/ui/selectOptions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useCustomerRoleCounts } from '../hooks/useCustomerRoleCounts.ts'
+import {
+  MARKETING_OPTIONS,
+  ORDERS_OPTIONS,
+  STATE_OPTIONS,
+} from '../utils/filterOptions.ts'
 import {
   CUSTOMER_SORTS,
   type CustomerRole,
@@ -52,33 +58,6 @@ const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
 ]
-const STATE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'All States' },
-  { value: 'ENABLED', label: 'Enabled' },
-  { value: 'DISABLED', label: 'Disabled' },
-  { value: 'INVITED', label: 'Invited' },
-  { value: 'DECLINED', label: 'Declined' },
-]
-const MARKETING_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Any' },
-  { value: 'yes', label: 'Subscribed' },
-  { value: 'no', label: 'Not subscribed' },
-]
-const ORDERS_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Any' },
-  { value: 'yes', label: 'Has orders' },
-  { value: 'no', label: 'No orders' },
-]
-
-/** "All X" plus every value seen so far; the selected value is always listed. */
-function withAll(allLabel: string, values: string[], selected: string): SelectOption[] {
-  const list = selected && !values.includes(selected) ? [...values, selected] : values
-  return [
-    { value: '', label: allLabel },
-    ...list.map((value) => ({ value, label: value })),
-  ]
-}
-
 const FIELD_INPUT =
   'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
 

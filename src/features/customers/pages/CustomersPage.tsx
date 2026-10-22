@@ -9,6 +9,7 @@ import {
   type CustomerToDelete,
 } from '../components/CustomerDeleteDialog.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
+import { CustomersExport } from '../components/CustomersExport.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useCustomers } from '../hooks/useCustomers.ts'
@@ -95,7 +96,14 @@ export function CustomersPage() {
           onReset={customers.resetFilters}
         />
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <CustomersExport
+            items={customers.items}
+            page={data?.page ?? filters.page}
+            filters={filters}
+            total={data?.total ?? 0}
+            facets={customers.facets}
+          />
           <PopoverButton label="Columns" icon={ColumnsIcon} align="right">
             {() => (
               <div className="flex flex-col">
