@@ -1,28 +1,26 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { AlertTriangleIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatDateTime, formatPrice } from '../../../lib/format.ts'
+import { formatDate, formatPrice } from '../../../lib/format.ts'
 import {
   financialTone,
   fulfillmentTone,
-  hasRefund,
   humanize,
+  orderCustomer,
   orderLabel,
-  orderCustomerName,
-  orderEmail,
-  sourceLabel,
 } from '../utils/format.ts'
 
 const TH_BASE =
   'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
-const TD = 'overflow-hidden px-3 py-2.5 text-left align-middle'
-// Wide-screen-only columns, so the table rarely needs to scroll sideways.
-const FROM_2XL = 'hidden 2xl:table-cell'
+const TH_CENTER = `${TH_BASE} text-center`
+const TD = 'overflow-hidden px-3 py-3 text-left align-middle'
 const SKELETON_ROWS = 8
+// The payment pills: one width, centred in their column, so they line up.
+const PILL = 'w-32 justify-center'
 
 interface OrdersListProps {
   items: OrderListItem[]
@@ -31,6 +29,10 @@ interface OrdersListProps {
   hasFilters: boolean
   /** Rows belong to the previous query while the new one loads. */
   isStale: boolean
+  /** Opens an order's details page (the eye button). */
+  onOpen: (order: OrderListItem) => void
+  /** Hover/focus: start loading the details so opening is instant. */
+  onPrefetch: (order: OrderListItem) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -55,13 +57,6 @@ function StatusBadges({ order }: { order: OrderListItem }) {
   )
 }
 
-/** The first product of the order, and how many more lines it has. */
-function previewText(order: OrderListItem): string {
-  const [first, ...rest] = order.line_items_preview
-  if (!first) return ''
-  return rest.length > 0 ? `${first} +${rest.length} more` : first
-}
-
 function Message({ children }: { children: ReactNode }) {
   return (
     <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.9rem]">
@@ -76,8 +71,10 @@ const MESSAGE_BUTTON =
 /**
  * The results area: from `lg` up a table in its own scrolling box — it takes the height
  * the page gives it, scrolls up and down under a sticky header, and sideways when the
- * window is narrower than its columns — and cards below that. Handles the loading
- * skeleton, error and empty states itself so the page only passes data in.
+ * window is narrower than its columns — and cards below that. The table shows the order
+ * number, the customer's name and email, the store, the currency, the financial and
+ * fulfillment status, the item count, the total price and a **View** (eye) button. Handles the
+ * loading skeleton, error and empty states itself so the page only passes data in.
  */
 export function OrdersList({
   items,
@@ -85,6 +82,8 @@ export function OrdersList({
   error,
   hasFilters,
   isStale,
+  onOpen,
+  onPrefetch,
   onRetry,
   onClearFilters,
 }: OrdersListProps) {
@@ -144,33 +143,34 @@ export function OrdersList({
               />
             ))
           : items.map((order) => (
-              <li
-                key={order.id}
-                className="border-border bg-bg flex min-w-0 flex-col gap-1.5 rounded-xl border p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="text-[0.92rem] font-semibold">
-                    {orderLabel(order)}
+              <li key={order.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(order)}
+                  onPointerEnter={() => onPrefetch(order)}
+                  onFocus={() => onPrefetch(order)}
+                  aria-label={`View order ${orderLabel(order)}`}
+                  className="border-border bg-bg hover:border-accent flex w-full min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors"
+                >
+                  <span className="flex w-full items-start justify-between gap-3">
+                    <span className="text-[0.92rem] font-semibold">
+                      {orderLabel(order)}
+                    </span>
+                    <span className="text-[0.88rem] font-semibold">
+                      {formatPrice(order.total_price, order.currency)}
+                    </span>
                   </span>
-                  <span className="text-[0.88rem] font-semibold">
-                    {formatPrice(order.total_price, order.currency)}
+                  <span className="truncate text-[0.82rem]">
+                    {orderCustomer(order)?.name ?? '—'}
                   </span>
-                </div>
-                <span className="truncate text-[0.82rem]">
-                  {orderCustomerName(order)}
-                </span>
-                <span className="text-text-muted text-[0.78rem]">
-                  {dateOrDash(order.shopify_created_at)} · {itemsLabel(order)}
-                  {order.shop?.name ? ` · ${order.shop.name}` : ''}
-                </span>
-                <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <StatusBadges order={order} />
-                </span>
-                {previewText(order) && (
-                  <span className="text-text-muted truncate text-[0.78rem]">
-                    {previewText(order)}
+                  <span className="text-text-muted text-[0.78rem]">
+                    {dateOrDash(order.shopify_created_at)} · {itemsLabel(order)}
+                    {order.shop?.name ? ` · ${order.shop.name}` : ''}
                   </span>
-                )}
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <StatusBadges order={order} />
+                  </span>
+                </button>
               </li>
             ))}
       </ul>
@@ -180,18 +180,20 @@ export function OrdersList({
   return (
     <div aria-busy={isPending || isStale} className="min-h-0 flex-1 overflow-auto">
       <table
-        className={`w-full min-w-[880px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1180px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={`${TH} w-44`}>Order</th>
-            <th className={`${TH} w-28`}>Date</th>
-            <th className={TH}>Customer</th>
-            <th className={`${TH} w-40`}>Payment</th>
-            <th className={`${TH} w-36`}>Fulfillment</th>
-            <th className={`${TH_RIGHT} w-32`}>Total</th>
-            <th className={`${TH} w-36 ${FROM_2XL}`}>Store</th>
-            <th className={`${TH} w-32 ${FROM_2XL}`}>Source</th>
+            <th className={`${TH} w-24`}>Order</th>
+            <th className={TH}>Customer name</th>
+            <th className={TH}>Email</th>
+            <th className={`${TH} w-44`}>Store</th>
+            <th className={`${TH_CENTER} w-24`}>Currency</th>
+            <th className={`${TH_CENTER} w-40`}>Financial status</th>
+            <th className={`${TH_CENTER} w-40`}>Fulfillment status</th>
+            <th className={`${TH_RIGHT} w-20`}>Items</th>
+            <th className={`${TH_RIGHT} w-28`}>Total price</th>
+            <th className={`${TH_CENTER} w-20`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -203,7 +205,7 @@ export function OrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 6 }, (_, cell) => (
+                  {Array.from({ length: 10 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -211,94 +213,83 @@ export function OrdersList({
                 </tr>
               ))
             : items.map((order) => {
-                const preview = previewText(order)
-                const email = orderEmail(order)
-                const name = orderCustomerName(order)
+                const name = order.customer?.full_name?.trim() ?? ''
+                const email = order.customer?.email?.trim() ?? ''
                 return (
                   <tr
                     key={order.id}
                     className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                   >
                     <td className={TD}>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate font-semibold">
-                          {orderLabel(order)}
-                        </span>
-                        {preview && (
-                          <span
-                            className="text-text-muted truncate text-[0.78rem]"
-                            title={order.line_items_preview.join(', ')}
-                          >
-                            {preview}
-                          </span>
-                        )}
+                      <span className="block truncate font-semibold">
+                        {orderLabel(order)}
                       </span>
                     </td>
-                    <td
-                      className={`${TD} whitespace-nowrap`}
-                      title={
-                        order.shopify_created_at
-                          ? formatDateTime(order.shopify_created_at)
-                          : undefined
-                      }
-                    >
-                      {dateOrDash(order.shopify_created_at)}
-                    </td>
                     <td className={TD}>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate font-medium" title={name}>
+                      {name ? (
+                        <span className="block truncate" title={name}>
                           {name}
                         </span>
-                        {email && email !== name && (
-                          <span
-                            className="text-text-muted truncate text-[0.78rem]"
-                            title={email}
-                          >
-                            {email}
-                          </span>
-                        )}
-                      </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
                     <td className={TD}>
-                      <span className="flex flex-wrap items-center gap-1">
-                        <Badge tone={financialTone(order.financial_status)}>
-                          {humanize(order.financial_status) || '—'}
-                        </Badge>
-                        {order.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
-                      </span>
+                      {email ? (
+                        <span className="block truncate" title={email}>
+                          {email}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
                     <td className={TD}>
-                      <Badge tone={fulfillmentTone(order.fulfillment_status)}>
-                        {humanize(order.fulfillment_status) || '—'}
-                      </Badge>
-                    </td>
-                    <td className={`${TD} text-right`}>
-                      <span
-                        className="flex flex-col items-end"
-                        title={order.line_items_preview.join(', ')}
-                      >
-                        <span className="font-semibold">
-                          {formatPrice(order.total_price, order.currency)}
-                        </span>
-                        <span className="text-text-muted text-[0.75rem]">
-                          {itemsLabel(order)}
-                        </span>
-                        {hasRefund(order) && (
-                          <span className="text-text-muted text-[0.75rem]">
-                            Refunded {formatPrice(order.total_refunded, order.currency)}
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td className={`${TD} ${FROM_2XL}`}>
                       <span className="block truncate" title={order.shop?.name ?? ''}>
                         {order.shop?.name || '—'}
                       </span>
                     </td>
-                    <td className={`${TD} ${FROM_2XL}`}>
-                      <span className="block truncate">
-                        {sourceLabel(order.source_name) || '—'}
+                    <td className={`${TD} text-center`}>{order.currency || '—'}</td>
+                    <td className={`${TD} text-center`}>
+                      <span className="flex flex-col items-center gap-1">
+                        <Badge
+                          tone={financialTone(order.financial_status)}
+                          className={PILL}
+                        >
+                          {humanize(order.financial_status) || '—'}
+                        </Badge>
+                        {order.cancelled_at && (
+                          <Badge tone="danger" className={PILL}>
+                            Cancelled
+                          </Badge>
+                        )}
                       </span>
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      <Badge
+                        tone={fulfillmentTone(order.fulfillment_status)}
+                        className={PILL}
+                      >
+                        {humanize(order.fulfillment_status) || '—'}
+                      </Badge>
+                    </td>
+                    <td className={`${TD} text-right tabular-nums`}>
+                      {order.items_count.toLocaleString('en-GB')}
+                    </td>
+                    <td className={`${TD} text-right font-semibold tabular-nums`}>
+                      {formatPrice(order.total_price, order.currency)}
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      <button
+                        type="button"
+                        aria-label={`View order ${orderLabel(order)}`}
+                        title="View"
+                        onClick={() => onOpen(order)}
+                        onPointerEnter={() => onPrefetch(order)}
+                        onFocus={() => onPrefetch(order)}
+                        className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                      >
+                        <EyeIcon />
+                      </button>
                     </td>
                   </tr>
                 )

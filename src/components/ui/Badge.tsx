@@ -6,16 +6,18 @@ export type { BadgeTone }
 export interface BadgeProps {
   tone?: BadgeTone
   children: ReactNode
+  /** Extra classes — e.g. a fixed width with `justify-center` so a column of pills lines up. */
+  className?: string
 }
 
 /**
  * Small status pill (order/fulfillment/product status, etc). Generic
  * tone-based coloring, same tone vocabulary as StatCard.
  */
-export function Badge({ tone = 'default', children }: BadgeProps) {
+export function Badge({ tone = 'default', children, className = '' }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${BADGE_TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${BADGE_TONE_CLASSES[tone]} ${className}`}
     >
       {children}
     </span>

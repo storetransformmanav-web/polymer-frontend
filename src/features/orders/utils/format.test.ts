@@ -5,8 +5,11 @@ import {
   hasRefund,
   humanize,
   orderLabel,
-  orderCustomerName,
-  orderEmail,
+  orderPath,
+  orderRef,
+  formatAddressLines,
+  recordFields,
+  orderCustomer,
   sourceLabel,
 } from './format.ts'
 
@@ -69,41 +72,48 @@ describe('sourceLabel', () => {
 })
 
 describe('the order’s customer', () => {
-  it('is the customer’s name, then their email, then the email the order was placed with', () => {
+  it('is the customer object’s name and email — no more', () => {
     expect(
-      orderCustomerName({
-        customer: { ...NO_CUSTOMER, full_name: ' Ada Lovelace ', email: 'a@b.co' },
-        email: 'order@b.co',
+      orderCustomer({
+        customer: {
+          ...NO_CUSTOMER,
+          id: 'c1',
+          full_name: ' Ada Lovelace ',
+          email: ' a@b.co ',
+          phone: '+44 20 7946 0000',
+          orders_count: 3,
+        },
       }),
-    ).toBe('Ada Lovelace')
-    expect(
-      orderCustomerName({
-        customer: { ...NO_CUSTOMER, email: 'a@b.co' },
-        email: 'order@b.co',
-      }),
-    ).toBe('a@b.co')
-    expect(orderCustomerName({ customer: NO_CUSTOMER, email: 'guest@b.co' })).toBe(
-      'guest@b.co',
-    )
-    expect(orderCustomerName({ customer: null, email: null })).toBe('—')
+    ).toEqual({ name: 'Ada Lovelace', email: 'a@b.co' })
   })
 
-  it('has an email: the order’s own, else the customer’s', () => {
+  it('is the customer’s email, shown once, when they have no name', () => {
+    expect(orderCustomer({ customer: { ...NO_CUSTOMER, email: 'a@b.co' } })).toEqual({
+      name: 'a@b.co',
+      email: '',
+    })
+  })
+
+  it('is nobody for a guest checkout (every field null) — the order’s own email is not the customer', () => {
+    expect(orderCustomer({ customer: NO_CUSTOMER })).toBeNull()
+    expect(orderCustomer({ customer: null })).toBeNull()
+    expect(orderCustomer({ customer: undefined })).toBeNull()
     expect(
-      orderEmail({ customer: { ...NO_CUSTOMER, email: 'c@b.co' }, email: 'o@b.co' }),
-    ).toBe('o@b.co')
-    expect(
-      orderEmail({ customer: { ...NO_CUSTOMER, email: 'c@b.co' }, email: null }),
-    ).toBe('c@b.co')
-    expect(orderEmail({ customer: NO_CUSTOMER, email: null })).toBe('')
+      orderCustomer({ customer: { ...NO_CUSTOMER, full_name: '  ', email: '' } }),
+    ).toBeNull()
   })
 })
 
 describe('orderLabel', () => {
-  it('shows the order number without the hashtag', () => {
-    expect(orderLabel({ name: '#17516' })).toBe('17516')
-    expect(orderLabel({ name: '17516' })).toBe('17516')
-    expect(orderLabel({ name: 'D#12' })).toBe('D#12')
+  it('is the order number (17516), not the name (#17516)', () => {
+    expect(orderLabel({ order_number: 17516, name: '#17516' })).toBe('17516')
+    expect(orderLabel({ order_number: 17516, name: 'Other name' })).toBe('17516')
+  })
+
+  it('falls back to the name without its hashtag when there is no number', () => {
+    expect(orderLabel({ order_number: null, name: '#17516' })).toBe('17516')
+    expect(orderLabel({ order_number: undefined, name: '17516' })).toBe('17516')
+    expect(orderLabel({ order_number: null, name: 'D#12' })).toBe('D#12')
   })
 })
 
@@ -113,5 +123,47 @@ describe('hasRefund', () => {
     expect(hasRefund({ total_refunded: '0.00' })).toBe(false)
     expect(hasRefund({ total_refunded: null })).toBe(false)
     expect(hasRefund({ total_refunded: undefined })).toBe(false)
+  })
+})
+
+describe('order details helpers', () => {
+  it('orderRef / orderPath use the order number and keep the store', () => {
+    const shop = { key: 'polymer-uk', name: 'P', domain: 'd', currency: 'GBP' }
+    expect(orderRef({ order_number: 17516, id: 'abc' })).toBe('17516')
+    expect(orderRef({ order_number: null, id: 'abc' })).toBe('abc')
+    expect(orderPath({ order_number: 17516, id: 'abc', shop })).toBe(
+      '/orders/17516?shop=polymer-uk',
+    )
+    expect(orderPath({ order_number: null, id: 'a b', shop: null })).toBe('/orders/a%20b')
+  })
+
+  it('formatAddressLines lists only the parts that exist', () => {
+    expect(
+      formatAddressLines({
+        address1: '55 Buckshaft Road',
+        address2: null,
+        city: 'Cinderford',
+        zip: 'GL14 3DT',
+        country: 'United Kingdom',
+      }),
+    ).toEqual(['55 Buckshaft Road', 'Cinderford GL14 3DT', 'United Kingdom'])
+    expect(formatAddressLines(null)).toEqual([])
+  })
+
+  it('recordFields shows plain values only, with readable names', () => {
+    expect(
+      recordFields({
+        gift_card: true,
+        code: 'ABC',
+        n: 2,
+        empty: '',
+        gone: null,
+        nested: { a: 1 },
+      }),
+    ).toEqual([
+      ['Gift card', 'Yes'],
+      ['Code', 'ABC'],
+      ['N', '2'],
+    ])
   })
 })

@@ -66,9 +66,10 @@ const CANCELLED_OPTIONS: SelectOption[] = [
   { value: 'yes', label: 'Cancelled' },
 ]
 
+// The filter grid is compact: narrower columns, shorter controls, smaller text.
 const FIELD_INPUT =
-  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
-const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
+  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-8 w-full min-w-0 rounded-lg border px-2.5 text-[0.76rem] font-medium transition-colors outline-none focus:outline-2'
+const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.72rem] font-semibold'
 
 interface OrdersToolbarProps {
   filters: OrderFilters
@@ -140,7 +141,7 @@ export function OrdersToolbar({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`${FIELD_LABEL} whitespace-nowrap`}>
+            <span className="text-text flex items-center gap-1.5 text-[0.82rem] font-semibold whitespace-nowrap">
               <CalendarIcon width={16} height={16} className="text-text-muted" />
               Order Date
             </span>
@@ -230,8 +231,9 @@ export function OrdersToolbar({
           }`}
         >
           <div className="-m-1 overflow-hidden p-1">
-            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9">
               <SelectField
+                compact
                 id="filter-payment"
                 label="Payment"
                 icon={DollarSignIcon}
@@ -242,6 +244,7 @@ export function OrdersToolbar({
                 }
               />
               <SelectField
+                compact
                 id="filter-source"
                 label="Source"
                 icon={OrdersIcon}
@@ -250,6 +253,7 @@ export function OrdersToolbar({
                 onChange={(source) => onChange({ source: source as OrderSource | '' })}
               />
               <SelectField
+                compact
                 id="filter-gateway"
                 label="Payment gateway"
                 icon={DollarSignIcon}
@@ -258,6 +262,7 @@ export function OrdersToolbar({
                 onChange={(gateway) => onChange({ gateway })}
               />
               <SelectField
+                compact
                 id="filter-tag"
                 label="Tag"
                 icon={TagIcon}
@@ -266,6 +271,7 @@ export function OrdersToolbar({
                 onChange={(tag) => onChange({ tag })}
               />
               <SelectField
+                compact
                 id="filter-cancelled"
                 label="Cancelled"
                 icon={BoxesIcon}
@@ -275,9 +281,9 @@ export function OrdersToolbar({
                   onChange({ cancelled: cancelled as OrderFilters['cancelled'] })
                 }
               />
-              <div className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor="filter-min-total" className={FIELD_LABEL}>
-                  <DollarSignIcon width={16} height={16} className="text-text-muted" />
+                  <DollarSignIcon width={14} height={14} className="text-text-muted" />
                   Min total
                 </label>
                 <input
@@ -291,9 +297,9 @@ export function OrdersToolbar({
                   className={FIELD_INPUT}
                 />
               </div>
-              <div className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor="filter-max-total" className={FIELD_LABEL}>
-                  <DollarSignIcon width={16} height={16} className="text-text-muted" />
+                  <DollarSignIcon width={14} height={14} className="text-text-muted" />
                   Max total
                 </label>
                 <input
@@ -308,6 +314,7 @@ export function OrdersToolbar({
                 />
               </div>
               <SelectField
+                compact
                 id="filter-sort"
                 label="Sort by"
                 icon={ArrowUpDownIcon}
@@ -316,6 +323,7 @@ export function OrdersToolbar({
                 onChange={(sort) => onChange({ sort: sort as OrderSort })}
               />
               <SelectField
+                compact
                 id="filter-order"
                 label="Order"
                 value={filters.order}

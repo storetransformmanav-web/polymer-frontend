@@ -35,6 +35,8 @@ export const ENDPOINTS = {
   },
   orders: {
     list: '/orders',
+    /** `ref` is the order number (17516) — add `shop` when two stores could share one. */
+    detail: (ref: string) => `/orders/${encodeURIComponent(ref)}`,
   },
   customers: {
     list: '/customers',
@@ -438,7 +440,129 @@ const orderListResponseSchema = z.object({
   order: z.string(),
 })
 
+const looseRecordSchema = z.record(z.string(), z.unknown())
+
+const orderAddressSchema = z.object({
+  kind: z.string().nullish(),
+  first_name: z.string().nullish(),
+  last_name: z.string().nullish(),
+  name: z.string().nullish(),
+  company: z.string().nullish(),
+  address1: z.string().nullish(),
+  address2: z.string().nullish(),
+  city: z.string().nullish(),
+  province: z.string().nullish(),
+  province_code: z.string().nullish(),
+  country: z.string().nullish(),
+  country_code: z.string().nullish(),
+  zip: z.string().nullish(),
+  phone: z.string().nullish(),
+})
+
+const orderLineItemSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  /** The CRM product / variant (UUIDs) — the product page can be opened from them. */
+  product_id: z.string().nullish(),
+  variant_id: z.string().nullish(),
+  title: z.string().nullish(),
+  variant_title: z.string().nullish(),
+  sku: z.string().nullish(),
+  vendor: z.string().nullish(),
+  image_url: z.string().nullish(),
+  quantity: z.number().nullish(),
+  current_quantity: z.number().nullish(),
+  fulfillable_quantity: z.number().nullish(),
+  fulfillment_status: z.string().nullish(),
+  price: z.string().nullish(),
+  total_discount: z.string().nullish(),
+  discounted_total: z.string().nullish(),
+  original_total: z.string().nullish(),
+  gift_card: z.boolean().nullish(),
+  taxable: z.boolean().nullish(),
+  requires_shipping: z.boolean().nullish(),
+})
+
+const orderTransactionSchema = z.object({
+  id: z.string(),
+  kind: z.string().nullish(),
+  status: z.string().nullish(),
+  gateway: z.string().nullish(),
+  amount: z.string().nullish(),
+  currency: z.string().nullish(),
+  payment_method: z.string().nullish(),
+  card_brand: z.string().nullish(),
+  card_last4: z.string().nullish(),
+  card_wallet: z.string().nullish(),
+  error_code: z.string().nullish(),
+  message: z.string().nullish(),
+  processed_at: z.string().nullish(),
+  shopify_created_at: z.string().nullish(),
+})
+
+const orderShippingLineSchema = z.object({
+  title: z.string().nullish(),
+  code: z.string().nullish(),
+  source: z.string().nullish(),
+  price: z.string().nullish(),
+  discounted_price: z.string().nullish(),
+})
+
+const orderTaxLineSchema = z.object({
+  title: z.string().nullish(),
+  // "0.20000" in the list of tax lines, 0.2 inside a line item.
+  rate: z.union([z.string(), z.number()]).nullish(),
+  price: z.string().nullish(),
+})
+
+const orderDetailSchema = orderListItemSchema.extend({
+  contact_email: z.string().nullish(),
+  phone: z.string().nullish(),
+  presentment_currency: z.string().nullish(),
+  total_line_items_price: z.string().nullish(),
+  total_duties: z.string().nullish(),
+  total_tip: z.string().nullish(),
+  total_outstanding: z.string().nullish(),
+  current_total_price: z.string().nullish(),
+  taxes_included: z.boolean().nullish(),
+  confirmed: z.boolean().nullish(),
+  test: z.boolean().nullish(),
+  note: z.string().nullish(),
+  note_attributes: z
+    .array(z.object({ key: z.string(), value: z.string().nullish() }))
+    .default([]),
+  po_number: z.string().nullish(),
+  cancel_reason: z.string().nullish(),
+  processed_at: z.string().nullish(),
+  billing_address: orderAddressSchema.nullish(),
+  shipping_address: orderAddressSchema.nullish(),
+  line_items: z.array(orderLineItemSchema).default([]),
+  transactions: z.array(orderTransactionSchema).default([]),
+  // The shapes of these are not documented: kept as they come, shown field by field.
+  refunds: z.array(looseRecordSchema).default([]),
+  fulfillments: z.array(looseRecordSchema).default([]),
+  discounts: z.array(looseRecordSchema).default([]),
+  events: z.array(looseRecordSchema).default([]),
+  shipping_lines: z.array(orderShippingLineSchema).default([]),
+  tax_lines: z.array(orderTaxLineSchema).default([]),
+  /** Shopify's original payload — only present when asked for (`include_raw=true`). */
+  raw_json: looseRecordSchema.nullish(),
+})
+
+/** `GET /orders/{ref}` answers `{ order: {…} }` (a bare order is accepted too). */
+const orderDetailResponseSchema = z.preprocess(
+  (value) =>
+    value && typeof value === 'object' && 'order' in value
+      ? (value as { order: unknown }).order
+      : value,
+  orderDetailSchema,
+)
+
 export type OrderListItem = z.infer<typeof orderListItemSchema>
+export type OrderDetail = z.infer<typeof orderDetailSchema>
+export type OrderAddress = z.infer<typeof orderAddressSchema>
+export type OrderLineItem = z.infer<typeof orderLineItemSchema>
+export type OrderTransaction = z.infer<typeof orderTransactionSchema>
 export type OrderListResponse = z.infer<typeof orderListResponseSchema>
 
 /** Query parameters accepted by `GET /orders` (all optional). */
@@ -1087,6 +1211,17 @@ export const api = {
     async list(params: OrderListParams): Promise<OrderListResponse> {
       const data = await apiClient.get(ENDPOINTS.orders.list, { params })
       return orderListResponseSchema.parse(data)
+    },
+
+    /**
+     * Everything about one order. `include_raw` is always sent: the API's own default
+     * returns Shopify's large original payload, which the page never shows.
+     */
+    async details(ref: string, shop?: string | null): Promise<OrderDetail> {
+      const data = await apiClient.get(ENDPOINTS.orders.detail(ref), {
+        params: { include_raw: false, ...(shop ? { shop } : {}) },
+      })
+      return orderDetailResponseSchema.parse(data)
     },
   },
   customers: {

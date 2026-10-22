@@ -18,6 +18,8 @@ export interface SelectFieldProps {
   /** Keep the label for screen readers only (when context makes it obvious). */
   hideLabel?: boolean
   disabled?: boolean
+  /** A smaller control (shorter, smaller text) for a dense grid of filters. */
+  compact?: boolean
 }
 
 /**
@@ -34,16 +36,29 @@ export function SelectField({
   inline = false,
   hideLabel = false,
   disabled = false,
+  compact = false,
 }: SelectFieldProps) {
   return (
-    <div className={inline ? 'flex items-center gap-2' : 'flex min-w-0 flex-col gap-1.5'}>
+    <div
+      className={
+        inline
+          ? 'flex items-center gap-2'
+          : `flex min-w-0 flex-col ${compact ? 'gap-1' : 'gap-1.5'}`
+      }
+    >
       <label
         htmlFor={id}
-        className={`text-text flex shrink-0 items-center gap-1.5 text-[0.82rem] font-semibold ${
-          hideLabel ? 'sr-only' : ''
-        }`}
+        className={`text-text flex shrink-0 items-center gap-1.5 font-semibold ${
+          compact ? 'text-[0.72rem]' : 'text-[0.82rem]'
+        } ${hideLabel ? 'sr-only' : ''}`}
       >
-        {Icon && <Icon width={16} height={16} className="text-text-muted" />}
+        {Icon && (
+          <Icon
+            width={compact ? 14 : 16}
+            height={compact ? 14 : 16}
+            className="text-text-muted"
+          />
+        )}
         {label}
         {inline && ':'}
       </label>
@@ -53,7 +68,9 @@ export function SelectField({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          className="border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border pr-9 pl-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`border-border bg-bg text-text focus:border-accent focus:outline-accent-tint w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+            compact ? 'h-8 pr-7 pl-2.5 text-[0.76rem]' : 'h-10 pr-9 pl-3 text-[0.85rem]'
+          }`}
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>
@@ -62,9 +79,11 @@ export function SelectField({
           ))}
         </select>
         <ChevronDownIcon
-          width={16}
-          height={16}
-          className="text-text-muted pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+          width={compact ? 14 : 16}
+          height={compact ? 14 : 16}
+          className={`text-text-muted pointer-events-none absolute top-1/2 -translate-y-1/2 ${
+            compact ? 'right-2' : 'right-3'
+          }`}
         />
       </div>
     </div>

@@ -13,6 +13,9 @@
   --color-bg: #ffffff;
   --color-surface: #fcfcfd;
   --color-border: #e5ebe5;
+  /* A darker shade of the row-hover tint: outlines and scrollbars of data tables. */
+  --color-border-strong: #b4c9b8;
+  --color-scrollbar: #93ae99;
   --color-accent: #648c6e;
   --color-accent-hover: #4a5a4e;
   --color-accent-tint: #eef7ef;
@@ -51,6 +54,8 @@
     --color-bg: #14151a;
     --color-surface: #1c1e24;
     --color-border: #2b2d34;
+    --color-border-strong: #44514a;
+    --color-scrollbar: #5d7064;
     --color-accent: #8fb59a;
     --color-accent-hover: #a9c9b2;
     --color-accent-tint: #202a23;
@@ -69,6 +74,8 @@
   --color-bg: #14151a;
   --color-surface: #1c1e24;
   --color-border: #2b2d34;
+  --color-border-strong: #44514a;
+  --color-scrollbar: #5d7064;
   --color-accent: #8fb59a;
   --color-accent-hover: #a9c9b2;
   --color-accent-tint: #202a23;
@@ -78,6 +85,11 @@
   --color-danger-bg: #3a1c1c;
   --color-warning: #f0b849;
   --color-warning-bg: #3a2c14;
+}
+
+/* One size for every page: text and spacing are in rem, so this scales them all together (15px, not 16px). */
+html {
+  font-size: 93.75%;
 }
 
 body {

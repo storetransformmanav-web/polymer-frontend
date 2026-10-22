@@ -1,8 +1,8 @@
 import type { ComponentType, ReactNode } from 'react'
 import {
   CheckCircleIcon,
-  DollarSignIcon,
   OrdersIcon,
+  PoundIcon,
   RefreshIcon,
   type IconProps,
 } from '../../../components/ui/icons.tsx'
@@ -41,26 +41,26 @@ function kpis(data: OrderListResponse | null): Kpi[] {
     {
       label: 'Orders',
       value: orders === null ? '—' : orders.toLocaleString('en-GB'),
-      note: 'matching filters',
+      // note: 'matching filters',
       icon: OrdersIcon,
     },
     {
       label: 'Total price',
       value: money(totals?.total_price),
-      note: 'of all orders',
-      icon: DollarSignIcon,
+      // note: 'of all orders',
+      icon: PoundIcon,
     },
     {
       label: 'Total refunded',
       value: money(totals?.total_refunded),
-      note: 'returned to customers',
+      // note: 'returned to customers',
       icon: RefreshIcon,
       tone: 'warning',
     },
     {
       label: 'Net payment',
       value: money(totals?.net_payment),
-      note: 'paid, after refunds',
+      // note: 'paid, after refunds',
       icon: CheckCircleIcon,
       tone: 'good',
     },

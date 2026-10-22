@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
+  fetchOrderDetails,
   fetchOrders,
   hasActiveOrderFilters,
   orderFiltersChanged,
@@ -64,5 +65,9 @@ export function useOrders() {
       dispatch(orderFiltersChanged(changes)),
     resetFilters: () => dispatch(orderFiltersReset()),
     retry: () => dispatch(fetchOrders({ filters, force: true })),
+
+    /** Start loading an order's details (e.g. on hover) so opening it is instant. */
+    prefetchDetails: (ref: string, shop?: string | null) =>
+      void dispatch(fetchOrderDetails({ ref, shop })),
   }
 }

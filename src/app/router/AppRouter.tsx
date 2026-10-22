@@ -33,7 +33,8 @@ const router = createBrowserRouter([
         element: <DashboardLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
-          { path: 'orders', element: <OrdersPage /> },
+          // `*` lets OrdersPage also serve /orders/:number (the details page).
+          { path: 'orders/*', element: <OrdersPage /> },
           // `*` lets ProductsPage also serve /products/:id (the details page).
           { path: 'products/*', element: <ProductsPage /> },
           // `*` lets CustomersPage also serve /customers/:id (the details page).

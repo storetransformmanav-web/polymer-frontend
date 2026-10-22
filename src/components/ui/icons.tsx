@@ -363,6 +363,16 @@ export function DollarSignIcon(props: IconProps) {
   )
 }
 
+export function PoundIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M13.5 5.5c-.5-1.3-1.8-2-3.2-2-2 0-3.3 1.4-3.3 3.3v3.4" />
+      <path d="M4.5 10.2h7" />
+      <path d="M7 10.2v2.4c0 1.6-.7 2.8-2 3.9h10" />
+    </svg>
+  )
+}
+
 export function FilterIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

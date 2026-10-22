@@ -205,3 +205,32 @@ describe('api.orders.list', () => {
     expect(apiClient.get).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('api.orders.details', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('asks for one order without the raw payload, for its store, and unwraps { order }', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      code: 200,
+      status: 'success',
+      message: 'ok',
+      order: { ...GUEST, line_items: [], note: 'Hi' },
+    })
+
+    const order = await api.orders.details('17516', 'polymer-uk')
+
+    expect(apiClient.get).toHaveBeenCalledWith('/orders/17516', {
+      params: { include_raw: false, shop: 'polymer-uk' },
+    })
+    expect(order.order_number).toBe(17516)
+    expect(order.note).toBe('Hi')
+  })
+
+  it('leaves shop out when there is none', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ order: GUEST })
+    await api.orders.details('a/b')
+    expect(apiClient.get).toHaveBeenCalledWith('/orders/a%2Fb', {
+      params: { include_raw: false },
+    })
+  })
+})

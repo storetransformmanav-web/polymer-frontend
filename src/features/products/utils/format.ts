@@ -52,18 +52,7 @@ export function htmlToText(html: string | null | undefined): string {
   return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-/** Only http(s) links are ever rendered as hrefs (never `javascript:` etc). */
-export function safeUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      ? parsed.href
-      : null
-  } catch {
-    return null
-  }
-}
+export { safeUrl } from '../../../lib/safeUrl.ts'
 
 /**
  * A heads-up for an image address the store won't take: Shopify doesn't accept

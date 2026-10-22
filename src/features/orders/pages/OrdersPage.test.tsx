@@ -142,7 +142,7 @@ describe('OrdersPage', () => {
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
   })
 
-  it('shows each order: number, product, date, customer, payment, fulfillment, items and total', async () => {
+  it('shows these columns: order number, customer name, email, store, currency, financial and fulfillment status, items, total price, and the view button', async () => {
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
 
@@ -152,60 +152,79 @@ describe('OrdersPage', () => {
       table.getAllByRole('columnheader').map((header) => header.textContent),
     ).toEqual([
       'Order',
-      'Date',
-      'Customer',
-      'Payment',
-      'Fulfillment',
-      'Total',
+      'Customer name',
+      'Email',
       'Store',
-      'Source',
+      'Currency',
+      'Financial status',
+      'Fulfillment status',
+      'Items',
+      'Total price',
+      'Actions',
     ])
 
-    // #3: paid and fulfilled, 4 items, £193.50.
-    const paid = row('17003')
-    expect(within(paid).getByText('Customer 3')).toBeInTheDocument()
-    expect(within(paid).getByText('buyer3@example.com')).toBeInTheDocument()
-    expect(within(paid).getByText('Paid')).toBeInTheDocument()
-    expect(within(paid).getByText('Fulfilled')).toBeInTheDocument()
-    expect(within(paid).getByText('£193.50')).toBeInTheDocument()
-    expect(within(paid).getByText('4 items')).toBeInTheDocument()
-    expect(
-      within(paid).getByText('Pizza Box White Plain, Square +1 more'),
-    ).toBeInTheDocument()
-    expect(within(paid).getByText('22 Oct 2026')).toBeInTheDocument()
-    expect(within(paid).getByText('Packaging By Polymer')).toBeInTheDocument()
-    expect(within(paid).getByText('Online store')).toBeInTheDocument()
+    // #3: Customer 3, paid and fulfilled, 4 items, £193.50, GBP, Packaging By Polymer.
+    const paid = within(row('17003'))
+    const cells = paid.getAllByRole('cell').map((cell) => cell.textContent)
+    expect(cells.slice(0, 9)).toEqual([
+      '17003',
+      'Customer 3',
+      'buyer3@example.com',
+      'Packaging By Polymer',
+      'GBP',
+      'Paid',
+      'Fulfilled',
+      '4',
+      '£193.50',
+    ])
+    expect(paid.getByRole('button', { name: 'View order 17003' })).toBeInTheDocument()
 
-    // #5: pending, on hold, placed through an app.
-    const pending = row('17005')
-    expect(within(pending).getByText('Pending')).toBeInTheDocument()
-    expect(within(pending).getByText('On hold')).toBeInTheDocument()
-    expect(within(pending).getByText('App 4974139')).toBeInTheDocument()
-    // #4: partly fulfilled.
+    // Nothing else of the order is in the table: no date, source, products.
+    expect(paid.queryByText('22 Oct 2026')).toBeNull()
+    expect(paid.queryByText('Online store')).toBeNull()
+    expect(paid.queryByText(/Pizza Box/)).toBeNull()
+    // #5 is pending and on hold; #4 is partly fulfilled.
+    expect(within(row('17005')).getByText('Pending')).toBeInTheDocument()
+    expect(within(row('17005')).getByText('On hold')).toBeInTheDocument()
     expect(within(row('17004')).getByText('Partially fulfilled')).toBeInTheDocument()
-    // #6: a draft order.
-    expect(within(row('17006')).getByText('Draft order')).toBeInTheDocument()
   })
 
-  it('shows the customer’s name, or the email of a guest checkout who has none', async () => {
-    renderWithProviders(<OrdersPage />)
-    await screen.findByText('17001')
-
-    const guest = screen.getByText('17001').closest('tr')!
-    // Only the email is known: shown once, as the name.
-    expect(within(guest).getAllByText('buyer1@example.com')).toHaveLength(1)
-  })
-
-  it('marks a cancelled order, and shows what was refunded', async () => {
+  it('shows the order number only in the Order column — no hashtag, no products', async () => {
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
 
-    const row = screen.getByText('17002').closest('tr')!
-    expect(within(row).getByText('Cancelled')).toBeInTheDocument()
-    expect(within(row).getByText('Partially refunded')).toBeInTheDocument()
-    expect(within(row).getByText('Refunded £5.00')).toBeInTheDocument()
+    const cell = screen.getByText('17002').closest('td')!
+    expect(cell).toHaveTextContent(/^17002$/)
+    expect(screen.queryByText(/Pizza Box White Plain/)).toBeNull()
+    expect(screen.queryByText(/White Paper Carrier Bag/)).toBeNull()
+  })
+
+  it('shows the customer object’s name and email, and dashes for a guest checkout — not the order’s own email', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17001')
+
+    const customer = within(screen.getByText('17002').closest('tr')!)
+    expect(customer.getByText('Customer 2')).toBeInTheDocument()
+    expect(customer.getByText('buyer2@example.com')).toBeInTheDocument()
+
+    // #1 was placed by someone who is not a customer in the CRM (every field null): its own
+    // email (buyer1@…) is not shown as the customer. Name and email are dashes.
+    const guest = screen.getByText('17001').closest('tr')!
+    expect(within(guest).queryByText('buyer1@example.com')).toBeNull()
+    const cells = within(guest).getAllByRole('cell')
+    expect(cells[1]).toHaveTextContent('—')
+    expect(cells[2]).toHaveTextContent('—')
+  })
+
+  it('marks a cancelled order, and a part-refunded one, by its payment pill', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    const row = within(screen.getByText('17002').closest('tr')!)
+    expect(row.getByText('Cancelled')).toBeInTheDocument()
+    expect(row.getByText('Partially refunded')).toBeInTheDocument()
     expect(
-      within(screen.getByText('17003').closest('tr')!).queryByText(/Refunded/),
+      within(screen.getByText('17003').closest('tr')!).queryByText('Cancelled'),
     ).toBeNull()
   })
 
@@ -215,7 +234,8 @@ describe('OrdersPage', () => {
 
     // The four figures of the API's `totals`, in its order: orders, total_price,
     // total_refunded, net_payment (the fake server's totals say 60 orders).
-    const card = (label: string) => screen.getByText(label).parentElement!.parentElement!
+    const card = (label: string) =>
+      screen.getAllByText(label)[0].parentElement!.parentElement!
     expect(within(card('Orders')).getByText('60')).toBeInTheDocument()
     expect(within(card('Total price')).getByText('£593,213.32')).toBeInTheDocument()
     expect(within(card('Total refunded')).getByText('£1,452.65')).toBeInTheDocument()
@@ -562,7 +582,7 @@ describe('OrdersPage', () => {
 
     const order = (element: HTMLElement) =>
       [...document.querySelectorAll('*')].indexOf(element)
-    const kpi = screen.getByText('Total price')
+    const kpi = screen.getAllByText('Total price')[0]
     const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
     const search = screen.getByRole('searchbox', { name: 'Search orders' })
     const table = screen.getByRole('table')
@@ -596,7 +616,7 @@ describe('OrdersPage', () => {
     expect(box.className).toContain('flex-1')
     expect(box.className).toContain('min-h-0')
     // Wider than a narrow window: it scrolls sideways instead of squeezing.
-    expect(table.className).toContain('min-w-[880px]')
+    expect(table.className).toContain('min-w-[1180px]')
     // The header stays put while the rows scroll.
     for (const header of within(table).getAllByRole('columnheader')) {
       expect(header.className).toContain('sticky')
@@ -625,5 +645,67 @@ describe('OrdersPage', () => {
     await screen.findByText('17002')
 
     expect(document.documentElement).not.toHaveAttribute('data-hide-scrollbar')
+  })
+
+  it('keeps the filter grid compact: narrow columns, short controls, small text', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    const grid = document.getElementById('order-filter-grid')!.querySelector('.grid')!
+    expect(grid.className).toContain('xl:grid-cols-6')
+    expect(grid.className).toContain('2xl:grid-cols-9')
+    for (const label of [
+      'Payment',
+      'Source',
+      'Payment gateway',
+      'Tag',
+      'Cancelled',
+      'Sort by',
+      'Order',
+    ]) {
+      const select = screen.getByLabelText(label)
+      expect(select.className, label).toContain('h-8')
+      expect(select.className, label).toContain('text-[0.76rem]')
+    }
+    for (const label of ['Min total', 'Max total']) {
+      const input = screen.getByLabelText(label)
+      expect(input.className, label).toContain('h-8')
+      expect(input.className, label).toContain('text-[0.76rem]')
+    }
+  })
+
+  it('lines up the status pills: one width, centred in their columns', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    const table = within(screen.getByRole('table'))
+    const payment = table.getByRole('columnheader', { name: 'Financial status' })
+    expect(payment.className).toContain('text-center')
+    expect(payment.className).toContain('w-40')
+
+    const fulfillment = table.getByRole('columnheader', { name: 'Fulfillment status' })
+    expect(fulfillment.className).toContain('text-center')
+    expect(fulfillment.className).toContain('w-40')
+
+    // Every pill in the two columns has the same width and is centred in its cell.
+    const widths = new Set<string>()
+    for (const row of table.getAllByRole('row').slice(1)) {
+      for (const index of [5, 6]) {
+        const cell = within(row).getAllByRole('cell')[index]
+        expect(cell.className).toContain('text-center')
+        for (const pill of cell.querySelectorAll('span.rounded-full')) {
+          expect(pill.className).toContain('justify-center')
+          widths.add(pill.className.match(/w-\d+/)![0])
+        }
+      }
+    }
+    expect([...widths]).toEqual(['w-32'])
+    // The Cancelled pill sits under the payment one, the same size.
+    const cancelled = within(table.getByText('17002').closest('tr')!).getByText(
+      'Cancelled',
+    )
+    expect(cancelled.className).toContain('w-32')
   })
 })

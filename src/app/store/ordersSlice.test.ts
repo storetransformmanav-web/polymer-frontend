@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { OrderListResponse } from '../../lib/api/endpoints.ts'
+import type { OrderDetail, OrderListResponse } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
 import {
   DEFAULT_ORDER_FILTERS,
+  fetchOrderDetails,
   fetchOrders,
   fulfillmentCountFilters,
   hasActiveOrderFilters,
   orderFiltersChanged,
+  orderDetailsKey,
   orderFiltersReset,
   ordersCacheKey,
   ordersReducer,
@@ -263,5 +265,48 @@ describe('the orders reducer', () => {
     const cleared = ordersReducer(loaded, sessionCleared())
     expect(cleared.entries).toEqual({})
     expect(cleared.lastData).toBeNull()
+  })
+})
+
+describe('order details cache', () => {
+  const arg = { ref: '17516', shop: 'polymer-uk' }
+  const order = { id: 'o1', order_number: 17516 } as unknown as OrderDetail
+
+  it('keys by store and number, so two stores never share an order', () => {
+    expect(orderDetailsKey('17516', 'polymer-uk')).not.toBe(
+      orderDetailsKey('17516', 'other'),
+    )
+    expect(orderDetailsKey('17516', null)).toBe('|17516')
+  })
+
+  it('keeps the cached order while it reloads, and while a reload fails', () => {
+    let state = ordersReducer(
+      undefined,
+      fetchOrderDetails.fulfilled({ data: order, fetchedAt: 1 }, 'r1', arg),
+    )
+    const key = orderDetailsKey(arg.ref, arg.shop)
+    expect(state.details[key].data).toBe(order)
+
+    state = ordersReducer(state, fetchOrderDetails.pending('r2', arg))
+    expect(state.details[key]).toMatchObject({
+      data: order,
+      isFetching: true,
+      error: null,
+    })
+
+    state = ordersReducer(state, fetchOrderDetails.rejected(null, 'r2', arg, 'Boom'))
+    expect(state.details[key]).toMatchObject({
+      data: order,
+      isFetching: false,
+      error: 'Boom',
+    })
+  })
+
+  it('is cleared with the session', () => {
+    const state = ordersReducer(
+      undefined,
+      fetchOrderDetails.fulfilled({ data: order, fetchedAt: 1 }, 'r1', arg),
+    )
+    expect(ordersReducer(state, sessionCleared()).details).toEqual({})
   })
 })

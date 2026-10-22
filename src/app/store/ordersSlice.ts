@@ -8,6 +8,7 @@ import {
 import { toUserMessage } from '../../lib/api/ApiError.ts'
 import {
   api,
+  type OrderDetail,
   type OrderFinancialStatus,
   type OrderFulfillmentStatus,
   type OrderListParams,
@@ -163,6 +164,18 @@ export interface OrdersFacets {
   gateways: string[]
 }
 
+export interface OrderDetailsEntry {
+  data: OrderDetail | null
+  error: string | null
+  isFetching: boolean
+  fetchedAt: number | null
+}
+
+/** Cache key of one order's details: the store (when known) and the order number. */
+export function orderDetailsKey(ref: string, shop?: string | null): string {
+  return `${shop ?? ''}|${ref}`
+}
+
 export interface OrdersState {
   filters: OrderFilters
   entries: Record<string, OrdersEntry>
@@ -170,6 +183,8 @@ export interface OrdersState {
   lastData: OrderListResponse | null
   /** Distinct values seen so far — the API has no "list options" endpoint. */
   facets: OrdersFacets
+  /** Order details, cached by `orderDetailsKey`. */
+  details: Record<string, OrderDetailsEntry>
 }
 
 type OrdersRootState = { orders: OrdersState }
@@ -179,6 +194,7 @@ const initialState: OrdersState = {
   entries: {},
   lastData: null,
   facets: { tags: [], gateways: [] },
+  details: {},
 }
 
 interface FetchArg {
@@ -207,6 +223,40 @@ export const fetchOrders = createAsyncThunk<
     // Skip if the same page is already in flight, or cached and still fresh.
     condition: ({ filters, force }, { getState }) => {
       const entry = getState().orders.entries[ordersCacheKey(filters)]
+      if (entry?.isFetching) return false
+      const isFresh =
+        entry?.data != null &&
+        entry.fetchedAt !== null &&
+        Date.now() - entry.fetchedAt < ORDERS_STALE_MS
+      return force || !isFresh
+    },
+  },
+)
+
+interface FetchDetailsArg {
+  /** The order number (17516) — or the order's id. */
+  ref: string
+  /** The order's store key, when known. */
+  shop?: string | null
+  force?: boolean
+}
+
+export const fetchOrderDetails = createAsyncThunk<
+  { data: OrderDetail; fetchedAt: number },
+  FetchDetailsArg,
+  { state: OrdersRootState; rejectValue: string }
+>(
+  'orders/fetchDetails',
+  async ({ ref, shop }, { rejectWithValue }) => {
+    try {
+      return { data: await api.orders.details(ref, shop), fetchedAt: Date.now() }
+    } catch (error) {
+      return rejectWithValue(toUserMessage(error))
+    }
+  },
+  {
+    condition: ({ ref, shop, force }, { getState }) => {
+      const entry = getState().orders.details[orderDetailsKey(ref, shop)]
       if (entry?.isFetching) return false
       const isFresh =
         entry?.data != null &&
@@ -293,6 +343,32 @@ const ordersSlice = createSlice({
           state.facets.gateways,
           data.items.flatMap((item) => item.payment_gateway_names),
         )
+      })
+      .addCase(fetchOrderDetails.pending, (state, action) => {
+        const key = orderDetailsKey(action.meta.arg.ref, action.meta.arg.shop)
+        const entry = state.details[key]
+        state.details[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: null,
+          isFetching: true,
+        }
+      })
+      .addCase(fetchOrderDetails.fulfilled, (state, action) => {
+        const key = orderDetailsKey(action.meta.arg.ref, action.meta.arg.shop)
+        const { data, fetchedAt } = action.payload
+        state.details[key] = { data, fetchedAt, error: null, isFetching: false }
+      })
+      .addCase(fetchOrderDetails.rejected, (state, action) => {
+        if (action.meta.condition) return
+        const key = orderDetailsKey(action.meta.arg.ref, action.meta.arg.shop)
+        const entry = state.details[key]
+        state.details[key] = {
+          data: entry?.data ?? null,
+          fetchedAt: entry?.fetchedAt ?? null,
+          error: action.payload ?? 'Something went wrong. Please try again.',
+          isFetching: false,
+        }
       })
       .addCase(fetchOrders.rejected, (state, action) => {
         if (action.meta.condition) return
