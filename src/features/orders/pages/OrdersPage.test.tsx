@@ -1,30 +1,557 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { shopSelected } from '../../../app/store/shopSlice.ts'
+import { ApiError } from '../../../lib/api/ApiError.ts'
+import {
+  api,
+  type OrderListItem,
+  type OrderListParams,
+  type OrderListResponse,
+} from '../../../lib/api/endpoints.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { OrdersPage } from './OrdersPage.tsx'
 
-describe('OrdersPage', () => {
-  it('shows a loading state, then the mock orders', async () => {
-    renderWithProviders(<OrdersPage />)
+vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
+  api: { orders: { list: vi.fn() }, products: {}, customers: {}, auth: {} },
+}))
 
-    expect(screen.getByText('Loading orders…')).toBeInTheDocument()
-    expect(await screen.findByText('#1040')).toBeInTheDocument()
+const TOTAL = 60
+const SHOP = {
+  key: 'polymer-uk',
+  name: 'Packaging By Polymer',
+  domain: 'polymer-uk-ltd.myshopify.com',
+  currency: 'GBP',
+}
+
+/**
+ * Order #N: #1 is a guest checkout (no customer in the CRM), #2 was partly refunded and
+ * cancelled, #3 is paid and fulfilled, #5 is pending and on hold; the rest are authorized.
+ */
+function makeOrder(n: number): OrderListItem {
+  const guest = n === 1
+  return {
+    id: `order-${n}`,
+    shopify_id: 14000000000000 + n,
+    name: `#${17000 + n}`,
+    order_number: 17000 + n,
+    email: `buyer${n}@example.com`,
+    customer: guest
+      ? { id: null, full_name: null, email: null, phone: null, orders_count: null }
+      : {
+          id: `cust-${n}`,
+          full_name: `Customer ${n}`,
+          email: `buyer${n}@example.com`,
+          phone: null,
+          orders_count: n,
+        },
+    shop: SHOP,
+    currency: 'GBP',
+    subtotal_price: '12.50',
+    total_discounts: '0.00',
+    total_shipping: '9.58',
+    total_tax: '4.42',
+    total_price: n === 3 ? '193.50' : '26.50',
+    total_refunded: n === 2 ? '5.00' : '0.00',
+    net_payment: n === 3 ? '193.50' : '0.00',
+    financial_status:
+      n === 3
+        ? 'PAID'
+        : n === 5
+          ? 'PENDING'
+          : n === 2
+            ? 'PARTIALLY_REFUNDED'
+            : 'AUTHORIZED',
+    fulfillment_status:
+      n === 3
+        ? 'FULFILLED'
+        : n === 5
+          ? 'ON_HOLD'
+          : n === 4
+            ? 'PARTIALLY_FULFILLED'
+            : 'UNFULFILLED',
+    return_status: 'NO_RETURN',
+    payment_gateway_names: [n === 5 ? 'manual' : 'shopify_payments'],
+    source_name: n === 5 ? '4974139' : n === 6 ? 'shopify_draft_order' : 'web',
+    tags:
+      n === 6
+        ? ['b2b', 'Expected Delivery Day: Wednesday', 'VIP']
+        : ['Expected Delivery Day: Wednesday'],
+    items_count: n + 1,
+    line_items_preview: ['Pizza Box White Plain, Square', 'White Paper Carrier Bag'],
+    shopify_created_at: '2026-10-22T07:48:51Z',
+    shopify_updated_at: '2026-10-22T07:48:59Z',
+    cancelled_at: n === 2 ? '2026-10-22T09:00:00Z' : null,
+    closed_at: null,
+  }
+}
+
+/** A fake server: 60 orders, paged by the request's page/page_size, with the API's `totals`. */
+function respond(params: OrderListParams): OrderListResponse {
+  const page = params.page ?? 1
+  const pageSize = params.page_size ?? 20
+  const matches = params.search === 'nomatch' ? 0 : TOTAL
+  const start = (page - 1) * pageSize
+  const count = Math.max(0, Math.min(pageSize, matches - start))
+
+  return {
+    items: Array.from({ length: count }, (_, i) => makeOrder(start + i + 1)),
+    totals: {
+      orders: matches,
+      total_price: '593213.32',
+      total_refunded: '1452.65',
+      net_payment: '375118.93',
+    },
+    page,
+    page_size: pageSize,
+    total: matches,
+    total_pages: Math.max(1, Math.ceil(matches / pageSize)),
+    has_next: start + count < matches,
+    sort: params.sort ?? 'created_at',
+    order: params.order ?? 'desc',
+  }
+}
+
+const list = vi.mocked(api.orders.list)
+// One-row requests are the fulfillment tabs' counts, not pages of the list.
+const isCountQuery = (params: OrderListParams) => params.page_size === 1
+const pageCalls = () => list.mock.calls.filter(([params]) => !isCountQuery(params))
+const callsForPage = (page: number) =>
+  pageCalls().filter(([params]) => params.page === page).length
+
+describe('OrdersPage', () => {
+  beforeEach(() => {
+    list.mockImplementation((params) => Promise.resolve(respond(params)))
   })
 
-  it('filters orders by customer type', async () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('loads the first page from the API with the default query', async () => {
+    renderWithProviders(<OrdersPage />)
+
+    expect(await screen.findByText('#17002')).toBeInTheDocument()
+    expect(list).toHaveBeenCalledWith({
+      sort: 'created_at',
+      order: 'desc',
+      page: 1,
+      page_size: 25,
+    })
+    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
+  })
+
+  it('shows each order: number, product, date, customer, payment, fulfillment, items and total', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    const table = within(screen.getByRole('table'))
+    const row = (name: string) => table.getByText(name).closest('tr')!
+    expect(
+      table.getAllByRole('columnheader').map((header) => header.textContent),
+    ).toEqual([
+      'Order',
+      'Date',
+      'Customer',
+      'Payment',
+      'Fulfillment',
+      'Items',
+      'Total',
+      'Store',
+      'Source',
+      'Tags',
+    ])
+
+    // #3: paid and fulfilled, 4 items, £193.50.
+    const paid = row('#17003')
+    expect(within(paid).getByText('Customer 3')).toBeInTheDocument()
+    expect(within(paid).getByText('buyer3@example.com')).toBeInTheDocument()
+    expect(within(paid).getByText('Paid')).toBeInTheDocument()
+    expect(within(paid).getByText('Fulfilled')).toBeInTheDocument()
+    expect(within(paid).getByText('£193.50')).toBeInTheDocument()
+    expect(within(paid).getByText('4')).toBeInTheDocument()
+    expect(
+      within(paid).getByText('Pizza Box White Plain, Square +1 more'),
+    ).toBeInTheDocument()
+    expect(within(paid).getByText('22 Oct 2026')).toBeInTheDocument()
+    expect(within(paid).getByText('Packaging By Polymer')).toBeInTheDocument()
+    expect(within(paid).getByText('Online store')).toBeInTheDocument()
+
+    // #5: pending, on hold, placed through an app.
+    const pending = row('#17005')
+    expect(within(pending).getByText('Pending')).toBeInTheDocument()
+    expect(within(pending).getByText('On hold')).toBeInTheDocument()
+    expect(within(pending).getByText('App 4974139')).toBeInTheDocument()
+    // #4: partly fulfilled.
+    expect(within(row('#17004')).getByText('Partially fulfilled')).toBeInTheDocument()
+    // #6: a draft order with three tags: two shown, +1.
+    const draft = row('#17006')
+    expect(within(draft).getByText('Draft order')).toBeInTheDocument()
+    expect(within(draft).getByText('+1')).toBeInTheDocument()
+  })
+
+  it('shows the customer’s name, or the email of a guest checkout who has none', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17001')
+
+    const guest = screen.getByText('#17001').closest('tr')!
+    // Only the email is known: shown once, as the name.
+    expect(within(guest).getAllByText('buyer1@example.com')).toHaveLength(1)
+  })
+
+  it('marks a cancelled order, and shows what was refunded', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    const row = screen.getByText('#17002').closest('tr')!
+    expect(within(row).getByText('Cancelled')).toBeInTheDocument()
+    expect(within(row).getByText('Partially refunded')).toBeInTheDocument()
+    expect(within(row).getByText('Refunded £5.00')).toBeInTheDocument()
+    expect(
+      within(screen.getByText('#17003').closest('tr')!).queryByText(/Refunded/),
+    ).toBeNull()
+  })
+
+  it('shows the totals of every matching order, from the API', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    expect(screen.getByText('£593,213.32')).toBeInTheDocument()
+    expect(screen.getByText('£1,452.65')).toBeInTheDocument()
+    expect(screen.getByText('£375,118.93')).toBeInTheDocument()
+    expect(screen.getByText('Total sales')).toBeInTheDocument()
+    expect(screen.getAllByText('Refunded').length).toBeGreaterThan(0)
+    expect(screen.getByText('Net payment')).toBeInTheDocument()
+  })
+
+  it('searches after a short pause, returns to page 1, and recovers from an empty result', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search orders' }), 'nomatch')
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'nomatch', page: 1 }),
+      ),
+    )
+    expect(await screen.findByText('No orders found')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
+    expect(await screen.findByText('#17002')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search orders' })).toHaveValue('')
+  })
+
+  it('filters by fulfillment tab and by payment', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ fulfillment_status: 'UNFULFILLED', page_size: 25 }),
+      ),
+    )
+    expect(screen.getByRole('button', { name: /^Unfulfilled/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.selectOptions(screen.getByLabelText('Payment:'), 'PAID')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fulfillment_status: 'UNFULFILLED',
+          financial_status: 'PAID',
+          page: 1,
+        }),
+      ),
+    )
+  })
+
+  it('asks for no status on "All Orders"', async () => {
+    const user = userEvent.setup()
+    const { store } = renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: /^On hold/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ fulfillment_status: 'ON_HOLD' }),
+      ),
+    )
+
+    await user.click(screen.getByRole('button', { name: /^All Orders/ }))
+
+    // Cached already, so it shows at once; the filter is simply cleared.
+    expect(screen.getByRole('button', { name: /^All Orders/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(store.getState().orders.filters.fulfillment).toBe('')
+    expect(screen.getByText('#17002')).toBeInTheDocument()
+  })
+
+  it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    const toggle = screen.getByRole('button', { name: 'Filters' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(document.getElementById('order-filter-grid')).toHaveAttribute('inert')
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(document.getElementById('order-filter-grid')).not.toHaveAttribute('inert')
+  })
+
+  it('sends source, cancelled, total, sort and order filters', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    await user.selectOptions(screen.getByLabelText('Source'), 'draft_order')
+    await user.selectOptions(screen.getByLabelText('Cancelled'), 'yes')
+    await user.type(screen.getByLabelText('Min total'), '100')
+    await user.type(screen.getByLabelText('Max total'), '1000')
+    await user.selectOptions(screen.getByLabelText('Sort by'), 'total')
+    await user.selectOptions(screen.getByLabelText('Order'), 'asc')
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'draft_order',
+          cancelled: true,
+          min_total: 100,
+          max_total: 1000,
+          sort: 'total',
+          order: 'asc',
+          page: 1,
+        }),
+      ),
+    )
+  })
+
+  it('"Not cancelled" is sent as cancelled=false, and "Any" leaves it out', async () => {
+    const user = userEvent.setup()
+    const { store } = renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    await user.selectOptions(screen.getByLabelText('Cancelled'), 'no')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false })),
+    )
+
+    await user.selectOptions(screen.getByLabelText('Cancelled'), '')
+    expect(store.getState().orders.filters.cancelled).toBe('')
+    expect(screen.getByLabelText('Cancelled')).toHaveValue('')
+    expect(screen.getByText('#17002')).toBeInTheDocument()
+  })
+
+  it('filters by a date range, sent as the first and last moment of the days', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    await user.click(screen.getByRole('button', { name: /^Date range:/ }))
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'Date range' })).getByRole('button', {
+        name: 'Last 7 days',
+      }),
+    )
+
+    await waitFor(() => {
+      const withDates = pageCalls().find(([params]) => params.from && params.to)
+      expect(withDates).toBeDefined()
+      const { from, to } = withDates![0]
+      // Whole days in the user's time zone: 00:00:00 … 23:59:59 local.
+      expect(new Date(from!).getHours()).toBe(0)
+      expect(new Date(from!).getMinutes()).toBe(0)
+      expect(new Date(to!).getHours()).toBe(23)
+      expect(new Date(to!).getMinutes()).toBe(59)
+      expect(new Date(to!).getTime()).toBeGreaterThan(new Date(from!).getTime())
+    })
+  })
+
+  it('offers tags and payment gateways seen so far and filters by them', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    const tag = screen.getByLabelText('Tag')
+    expect(within(tag).getByRole('option', { name: 'b2b' })).toBeInTheDocument()
+    await user.selectOptions(tag, 'b2b')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ tag: 'b2b' })),
+    )
+
+    const gateway = screen.getByLabelText('Payment gateway')
+    expect(within(gateway).getByRole('option', { name: 'manual' })).toBeInTheDocument()
+    await user.selectOptions(gateway, 'manual')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ tag: 'b2b', gateway: 'manual' }),
+      ),
+    )
+  })
+
+  it('queries the store picked in the top bar', async () => {
+    const { store } = renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    expect(list.mock.calls.every(([params]) => !('shop' in params))).toBe(true)
+
+    store.dispatch(shopSelected('polymer-uk'))
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ shop: 'polymer-uk', page: 1 }),
+      ),
+    )
+  })
+
+  it('shows the next page instantly (prefetched) and re-visits pages from cache', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    // Page 2 is requested in the background without being asked for.
+    await waitFor(() => expect(callsForPage(2)).toBe(1))
+    const callsBefore = pageCalls().length
+
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    // No await/findBy: the rows are there in the same render as the click.
+    expect(screen.getByText('#17026')).toBeInTheDocument()
+    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
+
+    await user.click(screen.getByRole('button', { name: 'Page 1' }))
+    expect(screen.getByText('#17002')).toBeInTheDocument()
+
+    // Page 1 was never fetched a second time; only page 3 was prefetched.
+    expect(callsForPage(1)).toBe(1)
+    expect(pageCalls().length - callsBefore).toBeLessThanOrEqual(1)
+  })
+
+  it('shows a tab visited before again with no loading, from the cache', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+    await user.click(screen.getByRole('button', { name: /^Fulfilled/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ fulfillment_status: 'FULFILLED', page_size: 25 }),
+      ),
+    )
+    await screen.findByText('#17002')
+
+    list.mockClear()
+    await user.click(screen.getByRole('button', { name: /^All Orders/ }))
+
+    // The rows are there in the same render, with no loading state in between.
+    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.queryByText('Loading orders…')).not.toBeInTheDocument()
+    expect(callsForPage(1)).toBe(0)
+  })
+
+  it('changes the page size', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    await user.selectOptions(screen.getByLabelText('Entries per page'), '10')
+
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ page_size: 10, page: 1 }),
+      ),
+    )
+    expect(await screen.findByText(/Showing/)).toHaveTextContent('Showing 1 to 10 of 60')
+  })
+
+  it('shows the backend error and recovers on retry', async () => {
+    // The list request fails once; the tabs' count requests are unaffected.
+    let failList = true
+    list.mockImplementation((params) =>
+      failList && !isCountQuery(params)
+        ? Promise.reject(new ApiError('Not logged in.', { status: 401 }))
+        : Promise.resolve(respond(params)),
+    )
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
 
-    await screen.findByText('#1040')
-    expect(screen.getByText('#1042')).toBeInTheDocument()
+    expect(await screen.findByText("Couldn't load orders")).toBeInTheDocument()
+    expect(screen.getByText('Not logged in.')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('Customer'), 'retail')
+    failList = false
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('#17002')).toBeInTheDocument()
+  })
 
-    expect(screen.queryByText('#1040')).not.toBeInTheDocument()
-    expect(screen.getByText('#1042')).toBeInTheDocument()
+  it('shows a count on every fulfillment tab, honouring the other filters', async () => {
+    list.mockImplementation((params) => {
+      const byStatus = {
+        UNFULFILLED: 30,
+        PARTIALLY_FULFILLED: 5,
+        FULFILLED: 20,
+        ON_HOLD: 1,
+      }
+      const total = params.fulfillment_status ? byStatus[params.fulfillment_status] : 56
+      return Promise.resolve({ ...respond(params), total })
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
 
-    await user.click(screen.getByRole('button', { name: /clear all/i }))
-    expect(screen.getByText('#1040')).toBeInTheDocument()
+    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
+    expect(
+      await within(tabs).findByRole('button', { name: /^All Orders\s*56$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Unfulfilled\s*30$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Partially fulfilled\s*5$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^Fulfilled\s*20$/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(tabs).getByRole('button', { name: /^On hold\s*1$/ }),
+    ).toBeInTheDocument()
+
+    // The search narrows every tab's count (the count queries carry it).
+    await user.type(screen.getByRole('searchbox', { name: 'Search orders' }), '1001')
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          search: '1001',
+          fulfillment_status: 'UNFULFILLED',
+          page_size: 1,
+        }),
+      ),
+    )
+  })
+
+  it('keeps the previous results on screen, dimmed, while a new query loads', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('#17002')
+
+    // Anything new never arrives (the tab counts still do).
+    list.mockImplementation((params) =>
+      isCountQuery(params)
+        ? Promise.resolve(respond(params))
+        : new Promise<never>(() => undefined),
+    )
+    await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
+
+    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByRole('table').parentElement).toHaveAttribute('aria-busy', 'true')
   })
 })

@@ -33,6 +33,9 @@ export const ENDPOINTS = {
     /** Distinct action names with counts — feeds the action dropdown. */
     actions: '/activity/actions',
   },
+  orders: {
+    list: '/orders',
+  },
   customers: {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
@@ -343,6 +346,128 @@ const productListResponseSchema = z.object({
   sort: z.string(),
   order: z.string(),
 })
+
+// --- Orders (GET /orders) ------------------------------------------------------
+
+export const ORDER_FINANCIAL_STATUSES = [
+  'PAID',
+  'PENDING',
+  'AUTHORIZED',
+  'PARTIALLY_REFUNDED',
+  'REFUNDED',
+  'VOIDED',
+] as const
+export const ORDER_FULFILLMENT_STATUSES = [
+  'UNFULFILLED',
+  'PARTIALLY_FULFILLED',
+  'FULFILLED',
+  'ON_HOLD',
+] as const
+export const ORDER_SOURCES = ['web', 'pos', 'shopify', 'draft_order'] as const
+export const ORDER_SORTS = [
+  'created_at',
+  'updated_at',
+  'total',
+  'name',
+  'customer',
+] as const
+
+export type OrderFinancialStatus = (typeof ORDER_FINANCIAL_STATUSES)[number]
+export type OrderFulfillmentStatus = (typeof ORDER_FULFILLMENT_STATUSES)[number]
+export type OrderSource = (typeof ORDER_SOURCES)[number]
+export type OrderSort = (typeof ORDER_SORTS)[number]
+
+const orderListItemSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  /** "#17516". */
+  name: z.string(),
+  order_number: z.number().nullish(),
+  email: z.string().nullish(),
+  /** All null when the order's customer isn't in the CRM (a guest checkout). */
+  customer: z
+    .object({
+      id: z.string().nullish(),
+      full_name: z.string().nullish(),
+      email: z.string().nullish(),
+      phone: z.string().nullish(),
+      orders_count: z.number().nullish(),
+    })
+    .nullish(),
+  shop: shopRefSchema.nullish(),
+  currency: z.string().nullish(),
+  // Amounts arrive as decimal strings (e.g. "26.50").
+  subtotal_price: z.string().nullish(),
+  total_discounts: z.string().nullish(),
+  total_shipping: z.string().nullish(),
+  total_tax: z.string().nullish(),
+  total_price: z.string().nullish(),
+  total_refunded: z.string().nullish(),
+  net_payment: z.string().nullish(),
+  financial_status: z.string().nullish(),
+  fulfillment_status: z.string().nullish(),
+  return_status: z.string().nullish(),
+  payment_gateway_names: z.array(z.string()).default([]),
+  source_name: z.string().nullish(),
+  tags: z.array(z.string()).default([]),
+  items_count: z.number().default(0),
+  line_items_preview: z.array(z.string()).default([]),
+  shopify_created_at: z.string().nullish(),
+  shopify_updated_at: z.string().nullish(),
+  cancelled_at: z.string().nullish(),
+  closed_at: z.string().nullish(),
+})
+
+const orderListResponseSchema = z.object({
+  items: z.array(orderListItemSchema),
+  /** Sums over every order that matches the filters (not just this page). */
+  totals: z
+    .object({
+      orders: z.number().nullish(),
+      total_price: z.string().nullish(),
+      total_refunded: z.string().nullish(),
+      net_payment: z.string().nullish(),
+    })
+    .nullish(),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+  sort: z.string(),
+  order: z.string(),
+})
+
+export type OrderListItem = z.infer<typeof orderListItemSchema>
+export type OrderListResponse = z.infer<typeof orderListResponseSchema>
+
+/** Query parameters accepted by `GET /orders` (all optional). */
+export interface OrderListParams {
+  /** Order number (#1001 or 1001), customer name, email, SKU or product title (≤ 200). */
+  search?: string
+  financial_status?: OrderFinancialStatus
+  fulfillment_status?: OrderFulfillmentStatus
+  /** Orders of one customer / containing one product (UUIDs; the page has no filter for these). */
+  customer_id?: string
+  product_id?: string
+  tag?: string
+  /** Payment gateway, e.g. shopify_payments, paypal. */
+  gateway?: string
+  source?: OrderSource
+  /** ISO date-times: orders created from / up to. */
+  from?: string
+  to?: string
+  min_total?: number
+  max_total?: number
+  cancelled?: boolean
+  sort?: OrderSort
+  order?: 'asc' | 'desc'
+  page?: number
+  /** 1–100. */
+  page_size?: number
+  /** Store key or domain; omit for every store. */
+  shop?: string
+}
 
 // --- Customers (GET /customers) ------------------------------------------------
 
@@ -957,6 +1082,13 @@ export type LoginResponse = z.infer<typeof loginResponseSchema>
 // ---------------------------------------------------------------------------
 
 export const api = {
+  orders: {
+    /** One page of orders, filtered/sorted server-side. Needs a signed-in session. */
+    async list(params: OrderListParams): Promise<OrderListResponse> {
+      const data = await apiClient.get(ENDPOINTS.orders.list, { params })
+      return orderListResponseSchema.parse(data)
+    },
+  },
   customers: {
     /** One page of customers, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: CustomerListParams): Promise<CustomerListResponse> {

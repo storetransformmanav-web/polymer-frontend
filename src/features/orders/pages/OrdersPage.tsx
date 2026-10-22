@@ -1,185 +1,116 @@
-import { useMemo, useState } from 'react'
-import { Badge, type BadgeTone } from '../../../components/ui/Badge.tsx'
-import { PageHeader } from '../../../components/ui/PageHeader.tsx'
+import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { StatCard, type StatCardProps } from '../../../components/ui/StatCard.tsx'
 import {
-  StatCard,
-  StatGrid,
-  type StatCardProps,
-} from '../../../components/ui/StatCard.tsx'
-import { Table, TableState } from '../../../components/ui/Table.tsx'
-import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
-import {
-  AlertTriangleIcon,
-  ClockIcon,
+  CheckCircleIcon,
+  DollarSignIcon,
   OrdersIcon,
-  XIcon,
+  RefreshIcon,
 } from '../../../components/ui/icons.tsx'
-import { formatCurrency, formatDate } from '../../../lib/format.ts'
+import type { OrderListResponse } from '../../../lib/api/endpoints.ts'
+import { formatPrice } from '../../../lib/format.ts'
+import { OrdersList } from '../components/OrdersList.tsx'
+import { OrdersToolbar } from '../components/OrdersToolbar.tsx'
 import { useOrders } from '../hooks/useOrders.ts'
-import type {
-  CustomerType,
-  FinancialStatus,
-  FulfillmentStatus,
-  Order,
-} from '../api/mockOrders.ts'
 
-const FINANCIAL_STATUS_TONE: Record<FinancialStatus, BadgeTone> = {
-  paid: 'success',
-  pending: 'warning',
-  refunded: 'neutral',
-}
-const FULFILLMENT_STATUS_TONE: Record<FulfillmentStatus, BadgeTone> = {
-  fulfilled: 'success',
-  partial: 'warning',
-  unfulfilled: 'neutral',
-}
-
-const FILTER_LABEL = 'text-text-muted flex flex-col gap-1 text-[0.72rem] font-semibold'
-const FILTER_SELECT =
-  'border-border bg-surface text-text min-w-40 rounded-md border px-2.5 py-1.5 text-[0.85rem]'
-const CLEAR_BUTTON =
-  'border-border bg-bg text-text-muted hover:text-danger hover:border-danger flex items-center gap-1.5 rounded-md border px-3 py-2 text-[0.82rem]'
-
-interface Filters {
-  customer: CustomerType | 'all'
-  from: string
-  to: string
-}
-
-const DEFAULT_FILTERS: Filters = { customer: 'all', from: '', to: '' }
-
-function buildStats(orders: Order[]): StatCardProps[] {
+/**
+ * The sums over every order that matches the filters (from the API's `totals`, not just
+ * this page). The API gives no currency for them, so the first order's is used.
+ */
+function summaryCards(data: OrderListResponse | null): StatCardProps[] {
+  const totals = data?.totals
+  const currency = data?.items[0]?.currency
+  const money = (value: string | null | undefined) =>
+    value === null || value === undefined ? '—' : formatPrice(value, currency)
   return [
     {
       icon: OrdersIcon,
-      label: 'Total orders',
-      value: orders.length,
+      label: 'Orders',
+      value: (totals?.orders ?? data?.total)?.toLocaleString('en-GB') ?? '—',
       meta: 'Matching filters',
     },
     {
-      icon: ClockIcon,
-      label: 'Unfulfilled',
-      value: orders.filter((order) => order.fulfillmentStatus !== 'fulfilled').length,
-      meta: 'Needs action',
+      icon: DollarSignIcon,
+      label: 'Total sales',
+      value: money(totals?.total_price),
+      meta: 'Order totals',
+    },
+    {
+      icon: RefreshIcon,
+      label: 'Refunded',
+      value: money(totals?.total_refunded),
+      meta: 'Returned to customers',
       tone: 'warning',
     },
     {
-      icon: AlertTriangleIcon,
-      label: 'Awaiting payment',
-      value: orders.filter((order) => order.financialStatus === 'pending').length,
-      meta: 'Pending payment',
-      tone: 'danger',
+      icon: CheckCircleIcon,
+      label: 'Net payment',
+      value: money(totals?.net_payment),
+      meta: 'Paid, after refunds',
     },
   ]
 }
 
+/**
+ * Orders: the list at `/orders`, read from the API with the same caching as products
+ * and customers (see ordersSlice.ts) — cached pages show at once, the previous results
+ * stay on screen while a new query loads, and the next page is already in the cache.
+ */
 export function OrdersPage() {
-  const { orders, status } = useOrders()
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
-
-  function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }))
-  }
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      if (filters.customer !== 'all' && order.customer.type !== filters.customer) {
-        return false
-      }
-      if (filters.from && order.createdAt < filters.from) return false
-      if (filters.to && order.createdAt > `${filters.to}T23:59:59`) return false
-      return true
-    })
-  }, [orders, filters])
+  const orders = useOrders()
+  const { filters, data } = orders
 
   return (
-    <div className="flex flex-col gap-7">
-      <PageHeader title="Orders" description="Order pipeline at a glance." />
+    <div className="flex flex-col gap-4">
+      <OrdersToolbar
+        filters={filters}
+        facets={orders.facets}
+        total={data?.total ?? null}
+        hasFilters={orders.hasFilters}
+        onChange={orders.setFilters}
+        onReset={orders.resetFilters}
+      />
 
-      <div className="border-border bg-bg flex flex-wrap items-end gap-4 rounded-xl border p-5">
-        <label className={FILTER_LABEL}>
-          <span>Customer</span>
-          <select
-            value={filters.customer}
-            onChange={(event) =>
-              updateFilter('customer', event.target.value as Filters['customer'])
-            }
-            className={FILTER_SELECT}
-          >
-            <option value="all">All customers</option>
-            <option value="retail">Retail</option>
-            <option value="wholesale">Wholesale</option>
-          </select>
-        </label>
-
-        <div className={`${FILTER_LABEL} w-56`}>
-          <span>Date range</span>
-          <DateRangePicker
-            label="Date range"
-            from={filters.from}
-            to={filters.to}
-            onChange={(range) => setFilters((current) => ({ ...current, ...range }))}
-          />
-        </div>
-
-        <button
-          type="button"
-          className={CLEAR_BUTTON}
-          onClick={() => setFilters(DEFAULT_FILTERS)}
-        >
-          <XIcon />
-          Clear all
-        </button>
+      <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 xl:grid-cols-4">
+        {summaryCards(data).map((card) => (
+          <StatCard key={card.label} {...card} />
+        ))}
       </div>
 
-      <StatGrid>
-        {buildStats(filteredOrders).map((stat) => (
-          <StatCard key={stat.label} {...stat} />
-        ))}
-      </StatGrid>
+      <section
+        aria-label="Orders"
+        className="border-border bg-bg relative overflow-hidden rounded-2xl border"
+      >
+        {/* Thin activity bar: results stay on screen while a refresh runs. */}
+        <div
+          aria-hidden="true"
+          className={`bg-accent absolute inset-x-0 top-0 z-[2] h-0.5 origin-left transition-opacity duration-200 ${
+            orders.isFetching && !orders.isPending
+              ? 'animate-pulse opacity-100'
+              : 'opacity-0'
+          }`}
+        />
 
-      <Table>
-        <thead>
-          <tr>
-            <th>Order</th>
-            <th>Customer</th>
-            <th>Date</th>
-            <th>Payment</th>
-            <th>Fulfillment</th>
-            <th>Items</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {status === 'loading' && <TableState colSpan={7}>Loading orders…</TableState>}
-          {status === 'error' && (
-            <TableState colSpan={7}>Couldn't load orders. Try again later.</TableState>
-          )}
-          {status === 'success' && filteredOrders.length === 0 && (
-            <TableState colSpan={7}>No orders match these filters.</TableState>
-          )}
-          {status === 'success' &&
-            filteredOrders.map((order) => (
-              <tr key={order.id}>
-                <td>{order.orderNumber}</td>
-                <td>{order.customer.name}</td>
-                <td>{formatDate(order.createdAt)}</td>
-                <td>
-                  <Badge tone={FINANCIAL_STATUS_TONE[order.financialStatus]}>
-                    {order.financialStatus}
-                  </Badge>
-                </td>
-                <td>
-                  <Badge tone={FULFILLMENT_STATUS_TONE[order.fulfillmentStatus]}>
-                    {order.fulfillmentStatus}
-                  </Badge>
-                </td>
-                <td>{order.lineItemCount}</td>
-                <td>{formatCurrency(order.total, order.currency)}</td>
-              </tr>
-            ))}
-        </tbody>
-      </Table>
+        <OrdersList
+          items={orders.items}
+          isPending={orders.isPending}
+          error={orders.error}
+          hasFilters={orders.hasFilters}
+          isStale={orders.isShowingPrevious}
+          onRetry={orders.retry}
+          onClearFilters={orders.resetFilters}
+        />
+
+        {data && data.total > 0 && (
+          <PaginationFooter
+            page={data.page}
+            pageSize={filters.pageSize}
+            total={data.total}
+            totalPages={data.total_pages}
+            onPageChange={(page) => orders.setFilters({ page })}
+            onPageSizeChange={(pageSize) => orders.setFilters({ pageSize })}
+          />
+        )}
+      </section>
     </div>
   )
 }

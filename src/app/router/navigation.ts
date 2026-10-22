@@ -50,7 +50,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     label: 'Shopify Management',
     icon: StoreIcon,
     items: [
-      { to: '/orders', label: 'Orders', icon: OrdersIcon },
+      { to: '/orders', label: 'Orders', icon: OrdersIcon, shopScoped: true },
       {
         to: '/products',
         label: 'Products',
