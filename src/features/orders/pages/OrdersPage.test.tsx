@@ -132,7 +132,7 @@ describe('OrdersPage', () => {
   it('loads the first page from the API with the default query', async () => {
     renderWithProviders(<OrdersPage />)
 
-    expect(await screen.findByText('#17002')).toBeInTheDocument()
+    expect(await screen.findByText('17002')).toBeInTheDocument()
     expect(list).toHaveBeenCalledWith({
       sort: 'created_at',
       order: 'desc',
@@ -144,7 +144,7 @@ describe('OrdersPage', () => {
 
   it('shows each order: number, product, date, customer, payment, fulfillment, items and total', async () => {
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     const table = within(screen.getByRole('table'))
     const row = (name: string) => table.getByText(name).closest('tr')!
@@ -156,21 +156,19 @@ describe('OrdersPage', () => {
       'Customer',
       'Payment',
       'Fulfillment',
-      'Items',
       'Total',
       'Store',
       'Source',
-      'Tags',
     ])
 
     // #3: paid and fulfilled, 4 items, £193.50.
-    const paid = row('#17003')
+    const paid = row('17003')
     expect(within(paid).getByText('Customer 3')).toBeInTheDocument()
     expect(within(paid).getByText('buyer3@example.com')).toBeInTheDocument()
     expect(within(paid).getByText('Paid')).toBeInTheDocument()
     expect(within(paid).getByText('Fulfilled')).toBeInTheDocument()
     expect(within(paid).getByText('£193.50')).toBeInTheDocument()
-    expect(within(paid).getByText('4')).toBeInTheDocument()
+    expect(within(paid).getByText('4 items')).toBeInTheDocument()
     expect(
       within(paid).getByText('Pizza Box White Plain, Square +1 more'),
     ).toBeInTheDocument()
@@ -179,56 +177,58 @@ describe('OrdersPage', () => {
     expect(within(paid).getByText('Online store')).toBeInTheDocument()
 
     // #5: pending, on hold, placed through an app.
-    const pending = row('#17005')
+    const pending = row('17005')
     expect(within(pending).getByText('Pending')).toBeInTheDocument()
     expect(within(pending).getByText('On hold')).toBeInTheDocument()
     expect(within(pending).getByText('App 4974139')).toBeInTheDocument()
     // #4: partly fulfilled.
-    expect(within(row('#17004')).getByText('Partially fulfilled')).toBeInTheDocument()
-    // #6: a draft order with three tags: two shown, +1.
-    const draft = row('#17006')
-    expect(within(draft).getByText('Draft order')).toBeInTheDocument()
-    expect(within(draft).getByText('+1')).toBeInTheDocument()
+    expect(within(row('17004')).getByText('Partially fulfilled')).toBeInTheDocument()
+    // #6: a draft order.
+    expect(within(row('17006')).getByText('Draft order')).toBeInTheDocument()
   })
 
   it('shows the customer’s name, or the email of a guest checkout who has none', async () => {
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17001')
+    await screen.findByText('17001')
 
-    const guest = screen.getByText('#17001').closest('tr')!
+    const guest = screen.getByText('17001').closest('tr')!
     // Only the email is known: shown once, as the name.
     expect(within(guest).getAllByText('buyer1@example.com')).toHaveLength(1)
   })
 
   it('marks a cancelled order, and shows what was refunded', async () => {
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
-    const row = screen.getByText('#17002').closest('tr')!
+    const row = screen.getByText('17002').closest('tr')!
     expect(within(row).getByText('Cancelled')).toBeInTheDocument()
     expect(within(row).getByText('Partially refunded')).toBeInTheDocument()
     expect(within(row).getByText('Refunded £5.00')).toBeInTheDocument()
     expect(
-      within(screen.getByText('#17003').closest('tr')!).queryByText(/Refunded/),
+      within(screen.getByText('17003').closest('tr')!).queryByText(/Refunded/),
     ).toBeNull()
   })
 
   it('shows the totals of every matching order, from the API', async () => {
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
-    expect(screen.getByText('£593,213.32')).toBeInTheDocument()
-    expect(screen.getByText('£1,452.65')).toBeInTheDocument()
-    expect(screen.getByText('£375,118.93')).toBeInTheDocument()
-    expect(screen.getByText('Total sales')).toBeInTheDocument()
-    expect(screen.getAllByText('Refunded').length).toBeGreaterThan(0)
-    expect(screen.getByText('Net payment')).toBeInTheDocument()
+    // The four figures of the API's `totals`, in its order: orders, total_price,
+    // total_refunded, net_payment (the fake server's totals say 60 orders).
+    const card = (label: string) => screen.getByText(label).parentElement!.parentElement!
+    expect(within(card('Orders')).getByText('60')).toBeInTheDocument()
+    expect(within(card('Total price')).getByText('£593,213.32')).toBeInTheDocument()
+    expect(within(card('Total refunded')).getByText('£1,452.65')).toBeInTheDocument()
+    expect(within(card('Net payment')).getByText('£375,118.93')).toBeInTheDocument()
+    // Exactly four figures, and no worked-out ones.
+    expect(screen.queryByText('Avg order value')).not.toBeInTheDocument()
+    expect(screen.queryByText('Revenue')).not.toBeInTheDocument()
   })
 
   it('searches after a short pause, returns to page 1, and recovers from an empty result', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     await user.type(screen.getByRole('searchbox', { name: 'Search orders' }), 'nomatch')
 
@@ -240,14 +240,14 @@ describe('OrdersPage', () => {
     expect(await screen.findByText('No orders found')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
-    expect(await screen.findByText('#17002')).toBeInTheDocument()
+    expect(await screen.findByText('17002')).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search orders' })).toHaveValue('')
   })
 
   it('filters by fulfillment tab and by payment', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
     await waitFor(() =>
@@ -260,7 +260,8 @@ describe('OrdersPage', () => {
       'true',
     )
 
-    await user.selectOptions(screen.getByLabelText('Payment:'), 'PAID')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Payment'), 'PAID')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,7 +276,7 @@ describe('OrdersPage', () => {
   it('asks for no status on "All Orders"', async () => {
     const user = userEvent.setup()
     const { store } = renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: /^On hold/ }))
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
@@ -291,13 +292,13 @@ describe('OrdersPage', () => {
       'true',
     )
     expect(store.getState().orders.filters.fulfillment).toBe('')
-    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByText('17002')).toBeInTheDocument()
   })
 
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     const toggle = screen.getByRole('button', { name: 'Filters' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -311,7 +312,7 @@ describe('OrdersPage', () => {
   it('sends source, cancelled, total, sort and order filters', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     await user.selectOptions(screen.getByLabelText('Source'), 'draft_order')
@@ -339,7 +340,7 @@ describe('OrdersPage', () => {
   it('"Not cancelled" is sent as cancelled=false, and "Any" leaves it out', async () => {
     const user = userEvent.setup()
     const { store } = renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     await user.selectOptions(screen.getByLabelText('Cancelled'), 'no')
@@ -350,13 +351,13 @@ describe('OrdersPage', () => {
     await user.selectOptions(screen.getByLabelText('Cancelled'), '')
     expect(store.getState().orders.filters.cancelled).toBe('')
     expect(screen.getByLabelText('Cancelled')).toHaveValue('')
-    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByText('17002')).toBeInTheDocument()
   })
 
   it('filters by a date range, sent as the first and last moment of the days', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     await user.click(screen.getByRole('button', { name: /^Date range:/ }))
@@ -382,7 +383,7 @@ describe('OrdersPage', () => {
   it('offers tags and payment gateways seen so far and filters by them', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     const tag = screen.getByLabelText('Tag')
@@ -404,7 +405,7 @@ describe('OrdersPage', () => {
 
   it('queries the store picked in the top bar', async () => {
     const { store } = renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     expect(list.mock.calls.every(([params]) => !('shop' in params))).toBe(true)
 
     store.dispatch(shopSelected('polymer-uk'))
@@ -419,7 +420,7 @@ describe('OrdersPage', () => {
   it('shows the next page instantly (prefetched) and re-visits pages from cache', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     // Page 2 is requested in the background without being asked for.
     await waitFor(() => expect(callsForPage(2)).toBe(1))
@@ -427,11 +428,11 @@ describe('OrdersPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Page 2' }))
     // No await/findBy: the rows are there in the same render as the click.
-    expect(screen.getByText('#17026')).toBeInTheDocument()
+    expect(screen.getByText('17026')).toBeInTheDocument()
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
 
     await user.click(screen.getByRole('button', { name: 'Page 1' }))
-    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByText('17002')).toBeInTheDocument()
 
     // Page 1 was never fetched a second time; only page 3 was prefetched.
     expect(callsForPage(1)).toBe(1)
@@ -441,20 +442,20 @@ describe('OrdersPage', () => {
   it('shows a tab visited before again with no loading, from the cache', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: /^Fulfilled/ }))
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({ fulfillment_status: 'FULFILLED', page_size: 25 }),
       ),
     )
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     list.mockClear()
     await user.click(screen.getByRole('button', { name: /^All Orders/ }))
 
     // The rows are there in the same render, with no loading state in between.
-    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByText('17002')).toBeInTheDocument()
     expect(screen.queryByText('Loading orders…')).not.toBeInTheDocument()
     expect(callsForPage(1)).toBe(0)
   })
@@ -462,7 +463,7 @@ describe('OrdersPage', () => {
   it('changes the page size', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     await user.selectOptions(screen.getByLabelText('Entries per page'), '10')
 
@@ -490,7 +491,7 @@ describe('OrdersPage', () => {
 
     failList = false
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('#17002')).toBeInTheDocument()
+    expect(await screen.findByText('17002')).toBeInTheDocument()
   })
 
   it('shows a count on every fulfillment tab, honouring the other filters', async () => {
@@ -506,7 +507,7 @@ describe('OrdersPage', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
     expect(
@@ -541,7 +542,7 @@ describe('OrdersPage', () => {
   it('keeps the previous results on screen, dimmed, while a new query loads', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
-    await screen.findByText('#17002')
+    await screen.findByText('17002')
 
     // Anything new never arrives (the tab counts still do).
     list.mockImplementation((params) =>
@@ -551,7 +552,78 @@ describe('OrdersPage', () => {
     )
     await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
 
-    expect(screen.getByText('#17002')).toBeInTheDocument()
+    expect(screen.getByText('17002')).toBeInTheDocument()
     expect(screen.getByRole('table').parentElement).toHaveAttribute('aria-busy', 'true')
+  })
+
+  it('has the order-management layout: figures, then one card with the search row (with the order date) and the tabs, then the table', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    const order = (element: HTMLElement) =>
+      [...document.querySelectorAll('*')].indexOf(element)
+    const kpi = screen.getByText('Total price')
+    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
+    const search = screen.getByRole('searchbox', { name: 'Search orders' })
+    const table = screen.getByRole('table')
+    expect(order(kpi)).toBeLessThan(order(search))
+    expect(order(search)).toBeLessThan(order(tabs))
+    expect(order(tabs)).toBeLessThan(order(table))
+    // The tabs are in the same card as the search, like the products list.
+    expect(search.closest('section')).toContainElement(tabs)
+    expect(search.closest('section')).toContainElement(
+      screen.getByRole('button', { name: 'Filters' }),
+    )
+    // The date range is in the search row, not in the collapsed grid.
+    expect(screen.getByText('Order Date')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Date range:/ })).toBeVisible()
+    expect(document.getElementById('order-filter-grid')).toHaveAttribute('inert')
+  })
+
+  it('fills the height it is given, with the table scrolling in its own box under a sticky header', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    // The page and the orders card take the height the layout gives them (lg and up)…
+    const card = screen.getByRole('region', { name: 'Orders' })
+    expect(card.className).toContain('lg:flex-1')
+    expect(card.className).toContain('lg:min-h-0')
+    expect(card.parentElement!.className).toContain('lg:flex-1')
+    // …and the table scrolls inside its own box, so the page does not have to.
+    const table = screen.getByRole('table')
+    const box = table.parentElement!
+    expect(box.className).toContain('overflow-auto')
+    expect(box.className).toContain('flex-1')
+    expect(box.className).toContain('min-h-0')
+    // Wider than a narrow window: it scrolls sideways instead of squeezing.
+    expect(table.className).toContain('min-w-[880px]')
+    // The header stays put while the rows scroll.
+    for (const header of within(table).getAllByRole('columnheader')) {
+      expect(header.className).toContain('sticky')
+    }
+    // The paging is outside the scrolling box, so it stays in view.
+    expect(box.contains(screen.getByText(/Showing/))).toBe(false)
+  })
+
+  it('draws the tabs like the products list’s: a segmented pill group, the open one raised', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
+    expect(tabs.className).toContain('rounded-xl')
+    expect(tabs.className).toContain('bg-surface')
+    const open = within(tabs).getByRole('button', { name: /^All Orders/ })
+    expect(open.className).toContain('bg-bg')
+    expect(open.className).toContain('shadow-sm')
+    const other = within(tabs).getByRole('button', { name: /^Fulfilled/ })
+    expect(other.className).toContain('bg-transparent')
+    expect(other.className).not.toContain('shadow-sm')
+  })
+
+  it('draws no hidden scrollbar any more: the page leaves its own scrollbar alone', async () => {
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    expect(document.documentElement).not.toHaveAttribute('data-hide-scrollbar')
   })
 })

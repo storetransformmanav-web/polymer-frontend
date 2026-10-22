@@ -49,6 +49,11 @@ export function sourceLabel(source: string | null | undefined): string {
   }
 }
 
+/** The order number as the page shows it: the API's name ("#17516") without the hashtag. */
+export function orderLabel(order: Pick<OrderListItem, 'name'>): string {
+  return order.name.replace(/^#/, '')
+}
+
 /** The customer to show: their name, else the email the order was placed with. */
 export function orderCustomerName(
   order: Pick<OrderListItem, 'customer' | 'email'>,

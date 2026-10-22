@@ -1,8 +1,7 @@
-import { useLocation, matchPath } from 'react-router-dom'
 import { SyncProductsButton } from '../../features/products/index.ts'
 import { useShops } from '../../hooks/useShops.ts'
-import { NAV_ITEMS } from '../router/navigation.ts'
 import { ShopSwitcher } from './ShopSwitcher.tsx'
+import { useActiveNavItem } from './useActiveNavItem.ts'
 import { UserMenu } from './UserMenu.tsx'
 
 /**
@@ -12,10 +11,7 @@ import { UserMenu } from './UserMenu.tsx'
  * Add cross-page actions here, not in feature pages.
  */
 export function AppBar() {
-  const { pathname } = useLocation()
-  const activeItem = NAV_ITEMS.find((item) =>
-    matchPath({ path: item.to, end: item.end ?? false }, pathname),
-  )
+  const activeItem = useActiveNavItem()
   // Loaded here (the bar is always mounted) so the list is ready when a page needs it.
   const shops = useShops()
 

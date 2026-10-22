@@ -4,6 +4,7 @@ import {
   fulfillmentTone,
   hasRefund,
   humanize,
+  orderLabel,
   orderCustomerName,
   orderEmail,
   sourceLabel,
@@ -95,6 +96,14 @@ describe('the order’s customer', () => {
       orderEmail({ customer: { ...NO_CUSTOMER, email: 'c@b.co' }, email: null }),
     ).toBe('c@b.co')
     expect(orderEmail({ customer: NO_CUSTOMER, email: null })).toBe('')
+  })
+})
+
+describe('orderLabel', () => {
+  it('shows the order number without the hashtag', () => {
+    expect(orderLabel({ name: '#17516' })).toBe('17516')
+    expect(orderLabel({ name: '17516' })).toBe('17516')
+    expect(orderLabel({ name: 'D#12' })).toBe('D#12')
   })
 })
 

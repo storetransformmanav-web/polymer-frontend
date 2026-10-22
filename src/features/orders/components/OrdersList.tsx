@@ -9,18 +9,18 @@ import {
   fulfillmentTone,
   hasRefund,
   humanize,
+  orderLabel,
   orderCustomerName,
   orderEmail,
   sourceLabel,
 } from '../utils/format.ts'
 
 const TH_BASE =
-  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
-const TD = 'px-3.5 py-2.5 text-left whitespace-nowrap'
-// Wider-screen-only columns, so the table never needs sideways scrolling on laptops.
-const FROM_XL = 'hidden xl:table-cell'
+const TD = 'overflow-hidden px-3 py-2.5 text-left align-middle'
+// Wide-screen-only columns, so the table rarely needs to scroll sideways.
 const FROM_2XL = 'hidden 2xl:table-cell'
 const SKELETON_ROWS = 8
 
@@ -37,6 +37,9 @@ interface OrdersListProps {
 
 const dateOrDash = (value: string | null | undefined) => (value ? formatDate(value) : '—')
 
+const itemsLabel = (order: OrderListItem) =>
+  `${order.items_count.toLocaleString('en-GB')} ${order.items_count === 1 ? 'item' : 'items'}`
+
 /** The order's status pills: payment, fulfillment, and "Cancelled" when it was. */
 function StatusBadges({ order }: { order: OrderListItem }) {
   return (
@@ -49,28 +52,6 @@ function StatusBadges({ order }: { order: OrderListItem }) {
       </Badge>
       {order.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
     </>
-  )
-}
-
-function Tags({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <span className="text-text-muted">—</span>
-  return (
-    <span className="flex items-center gap-1">
-      {tags.slice(0, 2).map((tag) => (
-        <span
-          key={tag}
-          className="bg-surface border-border max-w-32 truncate rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
-          title={tag}
-        >
-          {tag}
-        </span>
-      ))}
-      {tags.length > 2 && (
-        <span className="text-text-muted text-[0.7rem]" title={tags.slice(2).join(', ')}>
-          +{tags.length - 2}
-        </span>
-      )}
-    </span>
   )
 }
 
@@ -93,9 +74,10 @@ const MESSAGE_BUTTON =
   'border-border bg-bg text-text hover:border-accent cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors'
 
 /**
- * The results area: a sticky-header table from `md` up, stacked cards below it.
- * Handles the loading skeleton, error and empty states itself so the page only
- * passes data in.
+ * The results area: from `lg` up a table in its own scrolling box — it takes the height
+ * the page gives it, scrolls up and down under a sticky header, and sideways when the
+ * window is narrower than its columns — and cards below that. Handles the loading
+ * skeleton, error and empty states itself so the page only passes data in.
  */
 export function OrdersList({
   items,
@@ -106,7 +88,7 @@ export function OrdersList({
   onRetry,
   onClearFilters,
 }: OrdersListProps) {
-  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const isTable = useMediaQuery('(min-width: 1024px)')
 
   if (error) {
     return (
@@ -142,11 +124,11 @@ export function OrdersList({
 
   const dim = isStale ? 'opacity-60' : ''
 
-  if (!isDesktop) {
+  if (!isTable) {
     return (
       <ul
         aria-busy={isPending || isStale}
-        className={`flex flex-col gap-2.5 p-3 transition-opacity duration-150 ${dim}`}
+        className={`grid grid-cols-1 gap-2.5 p-3 transition-opacity duration-150 md:grid-cols-2 ${dim}`}
       >
         {isPending && (
           <li role="status" className="sr-only">
@@ -164,10 +146,12 @@ export function OrdersList({
           : items.map((order) => (
               <li
                 key={order.id}
-                className="border-border bg-bg flex flex-col gap-1.5 rounded-xl border p-3"
+                className="border-border bg-bg flex min-w-0 flex-col gap-1.5 rounded-xl border p-3"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="text-[0.92rem] font-semibold">{order.name}</span>
+                  <span className="text-[0.92rem] font-semibold">
+                    {orderLabel(order)}
+                  </span>
                   <span className="text-[0.88rem] font-semibold">
                     {formatPrice(order.total_price, order.currency)}
                   </span>
@@ -176,8 +160,7 @@ export function OrdersList({
                   {orderCustomerName(order)}
                 </span>
                 <span className="text-text-muted text-[0.78rem]">
-                  {dateOrDash(order.shopify_created_at)} · {order.items_count}{' '}
-                  {order.items_count === 1 ? 'item' : 'items'}
+                  {dateOrDash(order.shopify_created_at)} · {itemsLabel(order)}
                   {order.shop?.name ? ` · ${order.shop.name}` : ''}
                 </span>
                 <span className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -195,25 +178,20 @@ export function OrdersList({
   }
 
   return (
-    <div
-      aria-busy={isPending || isStale}
-      className="max-h-[min(68svh,760px)] overflow-auto"
-    >
+    <div aria-busy={isPending || isStale} className="min-h-0 flex-1 overflow-auto">
       <table
-        className={`w-full min-w-[720px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[880px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={TH}>Order</th>
-            <th className={TH}>Date</th>
+            <th className={`${TH} w-44`}>Order</th>
+            <th className={`${TH} w-28`}>Date</th>
             <th className={TH}>Customer</th>
-            <th className={TH}>Payment</th>
-            <th className={TH}>Fulfillment</th>
-            <th className={TH_RIGHT}>Items</th>
-            <th className={TH_RIGHT}>Total</th>
-            <th className={`${TH} ${FROM_XL}`}>Store</th>
-            <th className={`${TH} ${FROM_2XL}`}>Source</th>
-            <th className={`${TH} ${FROM_2XL}`}>Tags</th>
+            <th className={`${TH} w-40`}>Payment</th>
+            <th className={`${TH} w-36`}>Fulfillment</th>
+            <th className={`${TH_RIGHT} w-32`}>Total</th>
+            <th className={`${TH} w-36 ${FROM_2XL}`}>Store</th>
+            <th className={`${TH} w-32 ${FROM_2XL}`}>Source</th>
           </tr>
         </thead>
         <tbody>
@@ -225,7 +203,7 @@ export function OrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 7 }, (_, cell) => (
+                  {Array.from({ length: 6 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -235,6 +213,7 @@ export function OrdersList({
             : items.map((order) => {
                 const preview = previewText(order)
                 const email = orderEmail(order)
+                const name = orderCustomerName(order)
                 return (
                   <tr
                     key={order.id}
@@ -242,10 +221,12 @@ export function OrdersList({
                   >
                     <td className={TD}>
                       <span className="flex min-w-0 flex-col">
-                        <span className="font-semibold">{order.name}</span>
+                        <span className="truncate font-semibold">
+                          {orderLabel(order)}
+                        </span>
                         {preview && (
                           <span
-                            className="text-text-muted max-w-56 truncate text-[0.78rem]"
+                            className="text-text-muted truncate text-[0.78rem]"
                             title={order.line_items_preview.join(', ')}
                           >
                             {preview}
@@ -254,7 +235,7 @@ export function OrdersList({
                       </span>
                     </td>
                     <td
-                      className={TD}
+                      className={`${TD} whitespace-nowrap`}
                       title={
                         order.shopify_created_at
                           ? formatDateTime(order.shopify_created_at)
@@ -265,15 +246,12 @@ export function OrdersList({
                     </td>
                     <td className={TD}>
                       <span className="flex min-w-0 flex-col">
-                        <span
-                          className="max-w-56 truncate font-medium"
-                          title={orderCustomerName(order)}
-                        >
-                          {orderCustomerName(order)}
+                        <span className="truncate font-medium" title={name}>
+                          {name}
                         </span>
-                        {email && email !== orderCustomerName(order) && (
+                        {email && email !== name && (
                           <span
-                            className="text-text-muted max-w-56 truncate text-[0.78rem]"
+                            className="text-text-muted truncate text-[0.78rem]"
                             title={email}
                           >
                             {email}
@@ -282,7 +260,7 @@ export function OrdersList({
                       </span>
                     </td>
                     <td className={TD}>
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex flex-wrap items-center gap-1">
                         <Badge tone={financialTone(order.financial_status)}>
                           {humanize(order.financial_status) || '—'}
                         </Badge>
@@ -294,16 +272,16 @@ export function OrdersList({
                         {humanize(order.fulfillment_status) || '—'}
                       </Badge>
                     </td>
-                    <td
-                      className={`${TD} text-right`}
-                      title={order.line_items_preview.join(', ')}
-                    >
-                      {order.items_count.toLocaleString('en-GB')}
-                    </td>
                     <td className={`${TD} text-right`}>
-                      <span className="flex flex-col items-end">
+                      <span
+                        className="flex flex-col items-end"
+                        title={order.line_items_preview.join(', ')}
+                      >
                         <span className="font-semibold">
                           {formatPrice(order.total_price, order.currency)}
+                        </span>
+                        <span className="text-text-muted text-[0.75rem]">
+                          {itemsLabel(order)}
                         </span>
                         {hasRefund(order) && (
                           <span className="text-text-muted text-[0.75rem]">
@@ -312,19 +290,15 @@ export function OrdersList({
                         )}
                       </span>
                     </td>
-                    <td className={`${TD} ${FROM_XL}`}>
-                      <span
-                        className="block max-w-40 truncate"
-                        title={order.shop?.name ?? ''}
-                      >
+                    <td className={`${TD} ${FROM_2XL}`}>
+                      <span className="block truncate" title={order.shop?.name ?? ''}>
                         {order.shop?.name || '—'}
                       </span>
                     </td>
                     <td className={`${TD} ${FROM_2XL}`}>
-                      {sourceLabel(order.source_name) || '—'}
-                    </td>
-                    <td className={`${TD} ${FROM_2XL}`}>
-                      <Tags tags={order.tags} />
+                      <span className="block truncate">
+                        {sourceLabel(order.source_name) || '—'}
+                      </span>
                     </td>
                   </tr>
                 )

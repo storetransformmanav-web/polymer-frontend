@@ -22,6 +22,11 @@ export interface NavItem {
    * filter). Only set this for pages that do — the dropdown is hidden elsewhere.
    */
   shopScoped?: boolean
+  /**
+   * From `lg` up the page fills the height of the window (the layout stops scrolling as a
+   * whole): the page lays itself out in that height and its list scrolls inside its own box.
+   */
+  fillHeight?: boolean
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
   syncs?: 'products'
 }
@@ -50,7 +55,13 @@ export const NAV_ENTRIES: NavEntry[] = [
     label: 'Shopify Management',
     icon: StoreIcon,
     items: [
-      { to: '/orders', label: 'Orders', icon: OrdersIcon, shopScoped: true },
+      {
+        to: '/orders',
+        label: 'Orders',
+        icon: OrdersIcon,
+        shopScoped: true,
+        fillHeight: true,
+      },
       {
         to: '/products',
         label: 'Products',
