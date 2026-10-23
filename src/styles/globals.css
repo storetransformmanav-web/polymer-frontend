@@ -12,6 +12,8 @@
   --color-text-muted: #7c7c7c;
   --color-bg: #ffffff;
   --color-surface: #fcfcfd;
+  /* The page behind the cards (the body): a warm off-white. */
+  --color-page: #faf9f2;
   --color-border: #e5ebe5;
   /* A darker shade of the row-hover tint: outlines and scrollbars of data tables. */
   --color-border-strong: #b4c9b8;
@@ -53,6 +55,7 @@
     --color-text-muted: #9ca3af;
     --color-bg: #14151a;
     --color-surface: #1c1e24;
+    --color-page: #1c1e24;
     --color-border: #2b2d34;
     --color-border-strong: #44514a;
     --color-scrollbar: #5d7064;
@@ -73,6 +76,7 @@
   --color-text-muted: #9ca3af;
   --color-bg: #14151a;
   --color-surface: #1c1e24;
+  --color-page: #1c1e24;
   --color-border: #2b2d34;
   --color-border-strong: #44514a;
   --color-scrollbar: #5d7064;
@@ -92,9 +96,36 @@ html {
   font-size: 93.75%;
 }
 
+/*
+ * Bold scrollbars: wider than the browser's, with a rounded sage thumb (the `--color-scrollbar`
+ * token, darker on hover). A scroller that hides its bar (`[&::-webkit-scrollbar]:hidden`) still can.
+ */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-accent);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+}
+
 body {
   color: var(--color-text);
-  background: var(--color-bg);
+  background: var(--color-page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

@@ -50,9 +50,10 @@ describe('DashboardLayout', () => {
     vi.mocked(api.orders.list).mockResolvedValue({ ...emptyList, totals: null })
   })
 
-  it('marks only the Orders page as one that fills the window’s height', () => {
+  it('marks only Orders and Products as pages that fill the window’s height', () => {
     expect(NAV_ITEMS.filter((item) => item.fillHeight).map((item) => item.to)).toEqual([
       '/orders',
+      '/products',
     ])
   })
 
@@ -70,7 +71,7 @@ describe('DashboardLayout', () => {
   })
 
   it('leaves every other page scrolling as a whole, as before', () => {
-    for (const route of ['/products', '/customers']) {
+    for (const route of ['/customers']) {
       const { container, unmount } = renderAt(route)
 
       const layout = container.firstElementChild as HTMLElement

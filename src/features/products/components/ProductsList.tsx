@@ -22,7 +22,7 @@ import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
 const TH_BASE =
-  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-2.5 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+  'bg-accent text-accent-contrast border-accent sticky top-0 z-[1] border-b px-3 py-2.5 text-[0.7rem] font-extrabold tracking-wide whitespace-nowrap uppercase'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
@@ -236,7 +236,7 @@ export function ProductsList({
   return (
     <div
       aria-busy={isPending || isStale}
-      className="max-h-[min(68svh,760px)] overflow-auto"
+      className="max-h-[min(68svh,760px)] min-h-0 flex-1 overflow-auto lg:max-h-none"
     >
       <table
         className={`w-full min-w-[1100px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}

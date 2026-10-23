@@ -26,7 +26,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
 
       {getPageItems(page, totalPages).map((item, index) =>
         item === 'gap' ? (
-          <span key={`gap-${index}`} aria-hidden="true" className="text-text-muted px-1">
+          <span key={`gap-${index}`} aria-hidden="true" className="px-1 opacity-80">
             …
           </span>
         ) : (

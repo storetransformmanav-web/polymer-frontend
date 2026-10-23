@@ -21,6 +21,7 @@ import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ProductsBulkBar } from '../components/ProductsBulkBar.tsx'
 import { ProductsExport } from '../components/ProductsExport.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
+import { ProductsKpis } from '../components/ProductsKpis.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
@@ -42,6 +43,9 @@ const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`
 
 const LIST_PATH = '/products'
+// An open product / the bulk editor / the create form scroll inside the page (from `lg` up the
+// page itself does not scroll — see `fillHeight` in navigation.ts).
+const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 
 /**
@@ -283,22 +287,26 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {bulkItems && (
-        <BulkEditView
-          key="bulk-edit"
-          items={bulkItems}
-          onBack={() => setBulkItems(null)}
-          onSaved={handleBulkSaved}
-        />
+        <div className={SCROLL_VIEW}>
+          <BulkEditView
+            key="bulk-edit"
+            items={bulkItems}
+            onBack={() => setBulkItems(null)}
+            onSaved={handleBulkSaved}
+          />
+        </div>
       )}
 
       {creating && (
-        <ProductCreateView
-          key="create-product"
-          onBack={() => setCreating(false)}
-          onCreated={handleCreated}
-        />
+        <div className={SCROLL_VIEW}>
+          <ProductCreateView
+            key="create-product"
+            onBack={() => setCreating(false)}
+            onCreated={handleCreated}
+          />
+        </div>
       )}
 
       <ProductTabsBar
@@ -315,20 +323,28 @@ export function ProductsPage() {
       )}
 
       {activeId && (
-        <ProductDetailsView
-          key={`details-${activeId}`}
-          id={activeId}
-          onBack={() => navigate(LIST_PATH)}
-          onSaved={handleSaved}
-          savedStatus={savedStatus[activeId] ?? null}
-        />
+        <div className={SCROLL_VIEW}>
+          <ProductDetailsView
+            key={`details-${activeId}`}
+            id={activeId}
+            onBack={() => navigate(LIST_PATH)}
+            onSaved={handleSaved}
+            savedStatus={savedStatus[activeId] ?? null}
+          />
+        </div>
       )}
 
       {/* Kept mounted but hidden while a product is open (display: none also
           removes it from tab order and screen readers). */}
       <div
-        className={activeId || bulkItems || creating ? 'hidden' : 'flex flex-col gap-4'}
+        className={
+          activeId || bulkItems || creating
+            ? 'hidden'
+            : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
+        }
       >
+        <ProductsKpis data={data} />
+
         <ProductsToolbar
           filters={filters}
           facets={products.facets}
@@ -368,7 +384,7 @@ export function ProductsPage() {
 
         <section
           aria-label="Products"
-          className="border-border bg-bg relative overflow-hidden rounded-2xl border"
+          className="border-border bg-bg relative flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1"
         >
           {/* Thin activity bar: results stay on screen while a refresh runs. */}
           <div

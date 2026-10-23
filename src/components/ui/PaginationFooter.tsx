@@ -15,7 +15,10 @@ interface PaginationFooterProps {
   onPageSizeChange: (pageSize: number) => void
 }
 
-/** "Showing 1 to 25 of 6971 entries", page-size picker and page buttons. */
+/**
+ * "Showing 1 to 25 of 6971 entries", page-size picker and page buttons — on the same brand
+ * green as the table header above it.
+ */
 export function PaginationFooter({
   page,
   pageSize,
@@ -29,15 +32,14 @@ export function PaginationFooter({
   const format = (n: number) => n.toLocaleString('en-GB')
 
   return (
-    <footer className="border-border bg-accent-tint/40 flex flex-col gap-3 border-t px-4 py-3 text-[0.82rem] lg:flex-row lg:items-center lg:justify-between">
-      <p className="text-text-muted" aria-live="polite">
-        Showing <strong className="text-text">{format(from)}</strong> to{' '}
-        <strong className="text-text">{format(to)}</strong> of{' '}
-        <strong className="text-text">{format(total)}</strong> entries
+    <footer className="border-accent bg-accent text-accent-contrast flex flex-col gap-3 border-t px-4 py-3 text-[0.82rem] lg:flex-row lg:items-center lg:justify-between">
+      <p aria-live="polite">
+        Showing <strong>{format(from)}</strong> to <strong>{format(to)}</strong> of{' '}
+        <strong>{format(total)}</strong> entries
       </p>
 
       <div className="flex items-center gap-2">
-        <span className="text-text-muted">Show</span>
+        <span>Show</span>
         <div className="w-20">
           <SelectField
             id="page-size"
@@ -48,7 +50,7 @@ export function PaginationFooter({
             hideLabel
           />
         </div>
-        <span className="text-text-muted">entries per page</span>
+        <span>entries per page</span>
       </div>
 
       {totalPages > 1 && (

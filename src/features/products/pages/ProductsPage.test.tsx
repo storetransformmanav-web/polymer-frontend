@@ -54,6 +54,12 @@ function respond(params: ProductListParams): ProductListResponse {
 
   return {
     items: Array.from({ length: count }, (_, i) => makeProduct(start + i + 1)),
+    stock_summary: {
+      in_stock: 859,
+      low_stock: 125,
+      out_of_stock: 407,
+      low_stock_threshold: 10,
+    },
     page,
     page_size: pageSize,
     total: matches,
@@ -301,6 +307,19 @@ describe('ProductsPage list', () => {
     await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
     expect(await screen.findByText('Product 1')).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search products' })).toHaveValue('')
+  })
+
+  it('shows the API’s four stock figures in cards on top of the list', async () => {
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const card = (label: string) =>
+      // The cards come first ("Out of stock" is also a cell of the table).
+      screen.getAllByText(label, { selector: 'span' })[0].parentElement!.parentElement!
+    expect(within(card('In stock')).getByText('859')).toBeInTheDocument()
+    expect(within(card('Low stock')).getByText('125')).toBeInTheDocument()
+    expect(within(card('Out of stock')).getByText('407')).toBeInTheDocument()
+    expect(within(card('Low stock threshold')).getByText('10')).toBeInTheDocument()
   })
 
   it('filters by the status dropdown and sends it to the API', async () => {

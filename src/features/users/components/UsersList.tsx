@@ -7,7 +7,7 @@ import { formatDate, formatDateTime, initials } from '../../../lib/format.ts'
 import { isAdminRole, roleLabel, roleTone, userName } from '../utils/format.ts'
 
 const TH_BASE =
-  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+  'bg-accent text-accent-contrast border-accent sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-extrabold tracking-wide whitespace-nowrap uppercase'
 // No alignment in the cell base: cells are left-aligned by default, and a
 // `text-left` here would fight any `text-center`/`text-right` added later.
 const TD = 'px-3.5 py-2.5 whitespace-nowrap'

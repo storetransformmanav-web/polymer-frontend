@@ -67,6 +67,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         label: 'Products',
         icon: ProductsIcon,
         shopScoped: true,
+        fillHeight: true,
         syncs: 'products',
       },
       { to: '/customers', label: 'Customers', icon: UsersIcon, shopScoped: true },

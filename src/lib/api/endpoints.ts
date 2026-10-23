@@ -338,8 +338,18 @@ const productListItemSchema = z.object({
   synced_at: z.string(),
 })
 
+// How many variants-by-stock: in stock, low (at or under the threshold) and out of stock.
+const stockSummarySchema = z.object({
+  in_stock: z.number(),
+  low_stock: z.number(),
+  out_of_stock: z.number(),
+  low_stock_threshold: z.number(),
+})
+
 const productListResponseSchema = z.object({
   items: z.array(productListItemSchema),
+  // The four figures shown above the products list.
+  stock_summary: stockSummarySchema.nullish(),
   page: z.number(),
   page_size: z.number(),
   total: z.number(),

@@ -11,7 +11,7 @@ import { useActiveNavItem } from './useActiveNavItem.ts'
  * Shell for authenticated pages: a full-height Navbar on the left, and
  * a main column with the AppBar on top and the active route rendered
  * via <Outlet /> below it. Pages should not re-implement this chrome
- * themselves. A page marked `fillHeight` in navigation.ts (Orders) gets the whole window
+ * themselves. A page marked `fillHeight` in navigation.ts (Orders, Products) gets the whole window
  * height from `lg` up: the layout stops scrolling and the page lays out its own list.
  */
 export function DashboardLayout() {
@@ -32,7 +32,7 @@ export function DashboardLayout() {
       <div className={`flex min-w-0 flex-1 flex-col ${fill ? 'lg:min-h-0' : ''}`}>
         <AppBar />
         <main
-          className={`bg-surface flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
+          className={`bg-page flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
             fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden lg:pb-6' : ''
           }`}
         >
