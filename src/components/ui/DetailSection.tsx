@@ -124,7 +124,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 /** A details-page card: sage-green border by default. */
 export const DETAIL_CARD = 'border-border-strong bg-bg rounded-xl border'
 export const DETAIL_TH =
-  'text-text-muted border-border bg-accent-tint/60 border-b px-3.5 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
+  'text-text border-border-strong bg-table-head border-b px-3.5 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
 export const DETAIL_TD = 'px-3.5 py-2.5 text-[0.85rem] whitespace-nowrap'
 
 /** Centered "nothing here" card for an empty tab. */

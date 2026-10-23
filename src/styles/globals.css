@@ -21,6 +21,8 @@
   --color-accent: #648c6e;
   --color-accent-hover: #4a5a4e;
   --color-accent-tint: #eef7ef;
+  /* The header row of data tables: a clearly darker sage than the row-hover tint. */
+  --color-table-head: #d3e5d7;
   --color-accent-contrast: #ffffff;
   --color-secondary: #f2dec4;
   --color-danger: #dc2626;
@@ -62,6 +64,7 @@
     --color-accent: #8fb59a;
     --color-accent-hover: #a9c9b2;
     --color-accent-tint: #202a23;
+    --color-table-head: #2f4034;
     --color-accent-contrast: #14151a;
     --color-secondary: #4a4030;
     --color-danger: #f87171;
@@ -83,6 +86,7 @@
   --color-accent: #8fb59a;
   --color-accent-hover: #a9c9b2;
   --color-accent-tint: #202a23;
+  --color-table-head: #2f4034;
   --color-accent-contrast: #14151a;
   --color-secondary: #4a4030;
   --color-danger: #f87171;

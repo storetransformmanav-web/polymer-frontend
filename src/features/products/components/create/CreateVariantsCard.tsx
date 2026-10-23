@@ -31,7 +31,7 @@ const CELL =
   'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-9 w-full min-w-0 rounded-lg border px-2.5 text-[0.85rem] outline-none focus:outline-2 aria-[invalid=true]:border-danger'
 
 const TH =
-  'text-text-muted border-border bg-accent-tint/60 border-b px-2.5 py-2 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
+  'text-text border-border-strong bg-table-head border-b px-2.5 py-2 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
 
 interface VariantsCardProps extends CreateSectionProps {
   /** The store's stock locations (empty when none are known). */
