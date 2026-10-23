@@ -27,7 +27,7 @@ import {
   readDescriptionSections,
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
-import { htmlToText, safeUrl, statusLabel, statusTone } from '../utils/format.ts'
+import { htmlToText, safeUrl, statusLabel } from '../utils/format.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -50,7 +50,6 @@ import {
   DescriptionField,
   HandleField,
   ProductTypeField,
-  StatusField,
   TemplateSuffixField,
   TitleField,
   VendorField,
@@ -264,40 +263,6 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                   <HandleField {...section} />
                 </div>
                 <CategoryField {...section} />
-              </div>
-            )}
-          />
-
-          <EditableCard
-            product={product}
-            title="Status & Launch"
-            count={6}
-            icon={ListChecksIcon}
-            defaultOpen={false}
-            what="status"
-            errorPrefixes={NO_ERRORS}
-            onSaved={onSaved}
-            view={
-              <FieldGrid>
-                <Field label="Status">
-                  <Badge tone={statusTone(product.status)}>
-                    {statusLabel(product.status)}
-                  </Badge>
-                </Field>
-                <Field label="Published">
-                  {date(product.published_at) ?? 'Not published'}
-                </Field>
-                <Field label="Out-of-stock variants">
-                  {yesNo(product.has_out_of_stock_variants)}
-                </Field>
-                <Field label="Created">{date(product.shopify_created_at)}</Field>
-                <Field label="Updated">{date(product.shopify_updated_at)}</Field>
-                <Field label="Last synced">{date(product.synced_at)}</Field>
-              </FieldGrid>
-            }
-            editor={(section) => (
-              <div className="max-w-xs">
-                <StatusField {...section} />
               </div>
             )}
           />

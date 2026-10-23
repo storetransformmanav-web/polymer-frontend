@@ -26,7 +26,7 @@ export function useProductStatusChange() {
 
   const change = useCallback(
     async (
-      product: ProductListItem,
+      product: Pick<ProductListItem, 'id' | 'shop'>,
       status: ProductEditStatus,
     ): Promise<ProductWriteResult | null> => {
       const { id } = product

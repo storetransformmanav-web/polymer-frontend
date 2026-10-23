@@ -13,7 +13,7 @@ import {
 } from '../utils/format.ts'
 
 const TH_BASE =
-  'bg-accent text-accent-contrast border-accent sticky top-0 z-[1] border-b px-3 py-3 text-[0.7rem] font-extrabold tracking-wide whitespace-nowrap uppercase'
+  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`

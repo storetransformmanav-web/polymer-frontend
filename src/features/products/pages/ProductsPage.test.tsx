@@ -841,7 +841,7 @@ describe('ProductsPage details', () => {
     })
   })
 
-  it('starts with Status & Launch and Description collapsed, Specifications open', async () => {
+  it('starts with Description collapsed, Specifications open', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')
     await screen.findByText('Home > Desks')
@@ -849,7 +849,7 @@ describe('ProductsPage details', () => {
     const section = (name: string) =>
       screen.getByRole('button', { name: new RegExp(`^${name}`) })
     expect(section('Product Specifications')).toHaveAttribute('aria-expanded', 'true')
-    expect(section('Status & Launch')).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: /^Status & Launch/ })).toBeNull()
     expect(section('Description')).toHaveAttribute('aria-expanded', 'false')
 
     await user.click(section('Description'))
@@ -990,6 +990,30 @@ describe('ProductsPage details', () => {
 
       await closeButton()
       await waitFor(() => expect(currentSlide()).toHaveAttribute('src', IMAGES[0].url))
+    }, 20000)
+
+    it('shows the image’s alt text beside it, and follows the picture when paging', async () => {
+      const user = userEvent.setup()
+      details.mockImplementation((id) =>
+        Promise.resolve({
+          ...makeDetail(id),
+          featured_image_url: IMAGES[0].url,
+          images: [IMAGES[0], { ...IMAGES[1], alt_text: '' }, IMAGES[2]],
+        }),
+      )
+      renderPage('/products/id-7')
+      const gallery = await screen.findByRole('list', { name: 'Product media' })
+
+      await user.click(within(gallery).getByRole('button', { name: 'Open image 1 of 3' }))
+      await closeButton()
+      const panel = () => screen.getByRole('complementary', { name: 'Image alt text' })
+      expect(within(panel()).getByText('Photo 1')).toBeInTheDocument()
+
+      // The second picture has no alt text.
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      await waitFor(() =>
+        expect(within(panel()).getByText('No alt text')).toBeInTheDocument(),
+      )
     }, 20000)
 
     it('opens the lightbox from an image on the Media tab', async () => {

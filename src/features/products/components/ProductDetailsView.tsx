@@ -7,8 +7,12 @@ import {
   TagIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
+import type { ProductDetail, ProductEditStatus } from '../../../lib/api/endpoints.ts'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
+import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import type { SavedHandler } from '../hooks/useSectionEdit.ts'
+import { ConfirmUpdateDialog } from './ConfirmUpdateDialog.tsx'
+import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 import { ProductSyncStatus } from './ProductSyncStatus.tsx'
 import {
   formatPriceRange,
@@ -59,6 +63,15 @@ export function ProductDetailsView({
   const details = useProductDetails(id)
   const { product, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
+  // The status picked in the header, waiting for "Yes, update" (it is also changed in Shopify).
+  const statusChange = useProductStatusChange()
+  const [askedStatus, setAskedStatus] = useState<ProductEditStatus | null>(null)
+
+  async function changeStatus(current: ProductDetail, next: ProductEditStatus) {
+    setAskedStatus(null)
+    const result = await statusChange.change(current, next)
+    if (result) onSaved?.(result, current, { status: next })
+  }
 
   // The push history needs the product's store, known from the list row or the loaded record.
   const shop = product?.shop?.key ?? preview?.shop?.key
@@ -195,15 +208,26 @@ export function ProductDetailsView({
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
-              {status && (
-                <Badge tone={statusTone(status)}>
-                  <span
-                    aria-hidden="true"
-                    className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"
+              {status &&
+                (product ? (
+                  <ProductStatusSelect
+                    title={product.title}
+                    value={statusChange.pending[id] ?? status}
+                    saving={id in statusChange.pending}
+                    error={statusChange.errors[id]}
+                    onChange={(next) => {
+                      if (next !== status.toUpperCase()) setAskedStatus(next)
+                    }}
                   />
-                  {statusLabel(status)}
-                </Badge>
-              )}
+                ) : (
+                  <Badge tone={statusTone(status)}>
+                    <span
+                      aria-hidden="true"
+                      className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"
+                    />
+                    {statusLabel(status)}
+                  </Badge>
+                ))}
               {vendor && (
                 <span>
                   <span className="text-text-muted">Vendor </span>
@@ -288,6 +312,14 @@ export function ProductDetailsView({
         {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
         {product && tab === 'metafields' && <MetafieldsPanel product={product} />}
       </div>
+
+      {askedStatus && product && (
+        <ConfirmUpdateDialog
+          title={`Change “${product.title}” to ${statusLabel(askedStatus)}?`}
+          onConfirm={() => void changeStatus(product, askedStatus)}
+          onCancel={() => setAskedStatus(null)}
+        />
+      )}
     </article>
   )
 }

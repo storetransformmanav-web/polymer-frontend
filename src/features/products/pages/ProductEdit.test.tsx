@@ -317,9 +317,11 @@ describe('editing a section in place', () => {
   it('gives every section its own pencil, and opens no dialog', async () => {
     const user = await openDetails()
 
-    for (const what of ['specifications', 'status', 'description']) {
+    for (const what of ['specifications', 'description']) {
       expect(pencil(what)).toBeInTheDocument()
     }
+    // There is no Status & Launch card any more (the list's status dropdown changes it).
+    expect(screen.queryByRole('button', { name: 'Edit status' })).toBeNull()
     await user.click(pencil('specifications'))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -482,16 +484,8 @@ describe('editing a section in place', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
-  it('edits the status, the description and the search listing as separate saves', async () => {
+  it('edits the description and the search listing as separate saves', async () => {
     const user = await openDetails()
-
-    await user.click(pencil('status'))
-    await user.selectOptions(screen.getByLabelText('Status'), 'DRAFT')
-    await user.click(saveButton('status'))
-    await confirmUpdate(user)
-    await waitFor(() =>
-      expect(update).toHaveBeenLastCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
-    )
 
     await user.click(pencil('description'))
     // The rich-text editor loads on demand; its raw HTML view is a plain text box.
@@ -523,7 +517,7 @@ describe('editing a section in place', () => {
         'polymer-uk',
       ),
     )
-    expect(update).toHaveBeenCalledTimes(3)
+    expect(update).toHaveBeenCalledTimes(2)
   })
 
   it('edits two sections at once without one touching the other', async () => {

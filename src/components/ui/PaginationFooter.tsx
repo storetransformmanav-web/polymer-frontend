@@ -15,10 +15,7 @@ interface PaginationFooterProps {
   onPageSizeChange: (pageSize: number) => void
 }
 
-/**
- * "Showing 1 to 25 of 6971 entries", page-size picker and page buttons — on the same brand
- * green as the table header above it.
- */
+/** "Showing 1 to 25 of 6971 entries", page-size picker and page buttons. */
 export function PaginationFooter({
   page,
   pageSize,
@@ -32,7 +29,7 @@ export function PaginationFooter({
   const format = (n: number) => n.toLocaleString('en-GB')
 
   return (
-    <footer className="border-accent bg-accent text-accent-contrast flex flex-col gap-3 border-t px-4 py-3 text-[0.82rem] lg:flex-row lg:items-center lg:justify-between">
+    <footer className="border-border bg-accent-tint/40 flex flex-col gap-3 border-t px-4 py-3 text-[0.82rem] lg:flex-row lg:items-center lg:justify-between">
       <p aria-live="polite">
         Showing <strong>{format(from)}</strong> to <strong>{format(to)}</strong> of{' '}
         <strong>{format(total)}</strong> entries

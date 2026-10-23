@@ -5,6 +5,8 @@ import { safeUrl } from './format.ts'
 export interface LightboxSlide {
   src: string
   alt: string
+  /** The image's own alt text (`alt_text`), empty when it has none; unset for a slide that isn't a product image. */
+  altText?: string
   width?: number
   height?: number
 }
@@ -22,6 +24,7 @@ export function toSlides(images: ProductImage[], title: string): LightboxSlide[]
       {
         src,
         alt: image.alt_text ?? title,
+        altText: image.alt_text ?? '',
         width: image.width ?? undefined,
         height: image.height ?? undefined,
       },
