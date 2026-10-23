@@ -24,6 +24,8 @@ export const ENDPOINTS = {
   users: {
     list: '/users',
     create: '/users',
+    /** `DELETE` — soft delete: deactivated and hidden, its activity history is kept. */
+    remove: (id: string) => `/users/${encodeURIComponent(id)}`,
   },
   roles: {
     list: '/roles',
@@ -176,6 +178,9 @@ const userListResponseSchema = z.object({
 })
 
 const userCreateResponseSchema = z.object({ user: userItemSchema })
+
+/** What deleting a user answers (the spec says nothing; only a message is used, if there is one). */
+const userDeleteAnswerSchema = z.object({ message: z.string().nullish() })
 
 const roleSchema = z.object({
   name: z.string(),
@@ -1445,6 +1450,16 @@ export const api = {
     async create(body: UserCreateBody): Promise<UserItem> {
       const data = await apiClient.post(ENDPOINTS.users.create, body)
       return userCreateResponseSchema.parse(data).user
+    },
+
+    /**
+     * Deletes a user by id (`DELETE /users/{user_id}`). A soft delete: the account is
+     * deactivated and hidden, and its activity history is kept. Never retried automatically.
+     */
+    async remove(id: string): Promise<{ message: string }> {
+      const data = await apiClient.delete(ENDPOINTS.users.remove(id))
+      const parsed = userDeleteAnswerSchema.safeParse(data)
+      return { message: parsed.success ? (parsed.data.message ?? '') : '' }
     },
   },
 

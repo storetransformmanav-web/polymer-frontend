@@ -309,7 +309,7 @@ export function ProductsList({
                       <ProductImage src={product.image_url} alt="" />
                     </button>
                   </td>
-                  <td className={`${TD} group/name`}>
+                  <td className={TD}>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -317,12 +317,12 @@ export function ProductsList({
                         onClick={() => onOpen(product)}
                         onPointerEnter={() => onPrefetch(product.id)}
                         onFocus={() => onPrefetch(product.id)}
-                        className="hover:text-accent focus-visible:outline-accent block min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2"
+                        className="hover:text-accent focus-visible:outline-accent block h-5 min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left leading-5 font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2"
                       >
                         {product.title}
                       </button>
-                      {/* Appears when the name is hovered (or the button is focused by keyboard). */}
-                      <span className="opacity-0 transition-opacity group-hover/name:opacity-100 focus-within:opacity-100">
+                      {/* Always visible, right beside the name. */}
+                      <span className="flex h-5 shrink-0 items-center">
                         <CopyButton
                           value={product.title}
                           label={`Copy name of ${product.title}`}

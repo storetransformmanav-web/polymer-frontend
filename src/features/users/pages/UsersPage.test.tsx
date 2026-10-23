@@ -16,7 +16,7 @@ import { UsersPage } from './UsersPage.tsx'
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {
-    users: { list: vi.fn(), create: vi.fn() },
+    users: { list: vi.fn(), create: vi.fn(), remove: vi.fn() },
     roles: { list: vi.fn() },
     shops: { list: vi.fn() },
     auth: {},
@@ -106,6 +106,7 @@ function respond(params: UserListParams): UserListResponse {
 
 const list = vi.mocked(api.users.list)
 const create = vi.mocked(api.users.create)
+const remove = vi.mocked(api.users.remove)
 const rolesList = vi.mocked(api.roles.list)
 const shopsList = vi.mocked(api.shops.list)
 
@@ -154,6 +155,7 @@ describe('UsersPage', () => {
         'Sign-in',
         'Last Login',
         'Created',
+        'Actions',
       ])
 
       // Administrator: every store, signs in with Google, never logged in.
@@ -327,6 +329,89 @@ describe('UsersPage', () => {
           }),
         ),
       )
+    })
+  })
+
+  describe('delete user', () => {
+    it('asks first, and sends nothing until Delete is pressed', async () => {
+      remove.mockResolvedValue({ message: '' })
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      await user.click(screen.getByRole('button', { name: 'Delete First2 Last2' }))
+
+      const dialog = await screen.findByRole('alertdialog', {
+        name: 'Delete “First2 Last2”?',
+      })
+      expect(
+        within(dialog).getByText(/will be deactivated and hidden/),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByText(/activity history is kept/)).toBeInTheDocument()
+      // Cancel is the focused (safe) choice.
+      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      expect(remove).not.toHaveBeenCalled()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(remove).not.toHaveBeenCalled()
+      expect(screen.getByText('First2 Last2')).toBeInTheDocument()
+    })
+
+    it('deletes by id, drops the row at once and says so', async () => {
+      // The server forgets the user once the delete has gone through.
+      let deleted = false
+      list.mockImplementation((params) => {
+        const response = respond(params)
+        return Promise.resolve(
+          deleted
+            ? {
+                ...response,
+                items: response.items.filter((item) => item.id !== 'user-2'),
+                total: response.total - 1,
+              }
+            : response,
+        )
+      })
+      remove.mockImplementation(() => {
+        deleted = true
+        return Promise.resolve({ message: 'User deleted' })
+      })
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      await user.click(screen.getByRole('button', { name: 'Delete First2 Last2' }))
+      const dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(remove).toHaveBeenCalledWith('user-2'))
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      await waitFor(() =>
+        expect(screen.queryByText('First2 Last2')).not.toBeInTheDocument(),
+      )
+      expect(
+        screen.getByText(/Deleted “First2 Last2”\. User deleted/),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps the dialog open with the backend’s message when the delete is refused', async () => {
+      remove.mockRejectedValue(
+        new ApiError('You cannot delete your own account.', { status: 400 }),
+      )
+      const user = userEvent.setup()
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First1 Last1')
+
+      await user.click(screen.getByRole('button', { name: 'Delete First1 Last1' }))
+      const dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      expect(
+        await within(dialog).findByText('You cannot delete your own account.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      expect(screen.getByText('First1 Last1')).toBeInTheDocument()
     })
   })
 

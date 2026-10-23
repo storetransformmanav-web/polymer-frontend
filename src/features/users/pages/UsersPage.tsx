@@ -4,6 +4,7 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { useShops } from '../../../hooks/useShops.ts'
 import type { UserCreateBody } from '../../../lib/api/endpoints.ts'
+import { UserDeleteDialog, type UserToDelete } from '../components/UserDeleteDialog.tsx'
 import { UserFormPanel } from '../components/UserFormPanel.tsx'
 import { UsersList } from '../components/UsersList.tsx'
 import { UsersToolbar } from '../components/UsersToolbar.tsx'
@@ -31,6 +32,9 @@ export function UsersPage() {
 
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // The user a trash button asked to delete (the dialog confirms).
+  const [deleting, setDeleting] = useState<UserToDelete | null>(null)
+  const closeDelete = useCallback(() => setDeleting(null), [])
 
   const shopNames = useMemo(
     () => Object.fromEntries(shops.map((shop) => [shopValue(shop), shopLabel(shop)])),
@@ -60,6 +64,17 @@ export function UsersPage() {
     setNotice(`${userName(user)} (${user.email}) was added. They can now sign in.`)
     // Back to the first page: that's where the list is refetched.
     users.setFilters({ page: 1 })
+  }
+
+  function handleDeleted(user: UserToDelete, message: string) {
+    setDeleting(null)
+    setNotice(
+      `Deleted “${user.name}”. ${message || 'The account is deactivated; its activity history is kept.'}`,
+    )
+    // That was the last row of a later page: step back to the one before.
+    if (users.items.length === 1 && filters.page > 1) {
+      users.setFilters({ page: filters.page - 1 })
+    }
   }
 
   return (
@@ -97,6 +112,10 @@ export function UsersPage() {
           hasFilters={users.hasFilters}
           isStale={users.isShowingPrevious}
           shopNames={shopNames}
+          onDelete={(user) => {
+            setNotice(null)
+            setDeleting({ id: user.id, name: userName(user), email: user.email })
+          }}
           onRetry={users.retry}
           onClearFilters={users.resetFilters}
         />
@@ -112,6 +131,15 @@ export function UsersPage() {
           />
         )}
       </section>
+
+      {deleting && (
+        <UserDeleteDialog
+          key={`delete-${deleting.id}`}
+          user={deleting}
+          onClose={closeDelete}
+          onDone={(message) => handleDeleted(deleting, message)}
+        />
+      )}
 
       {adding && (
         <UserFormPanel

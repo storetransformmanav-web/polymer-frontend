@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { AlertTriangleIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  SearchIcon,
+  TrashIcon,
+} from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { UserItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime, initials } from '../../../lib/format.ts'
@@ -15,6 +19,8 @@ const TD = 'px-3.5 py-2.5 whitespace-nowrap'
 const FROM_XL = 'hidden xl:table-cell'
 const FROM_2XL = 'hidden 2xl:table-cell'
 const SKELETON_ROWS = 8
+const DELETE_BUTTON =
+  'text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors'
 
 interface UsersListProps {
   items: UserItem[]
@@ -25,6 +31,8 @@ interface UsersListProps {
   isStale: boolean
   /** Store key → display name, so a user's stores read "Polymer UK" rather than "polymer-uk". */
   shopNames: Record<string, string>
+  /** The trash button of a row / card: ask to delete this user. */
+  onDelete: (user: UserItem) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -116,6 +124,7 @@ export function UsersList({
   hasFilters,
   isStale,
   shopNames,
+  onDelete,
   onRetry,
   onClearFilters,
 }: UsersListProps) {
@@ -187,7 +196,20 @@ export function UsersList({
                 >
                   <Avatar name={name} />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate text-[0.88rem] font-semibold">{name}</span>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="truncate text-[0.88rem] font-semibold">
+                        {name}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${name}`}
+                        title="Delete"
+                        onClick={() => onDelete(user)}
+                        className={DELETE_BUTTON}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </span>
                     <span className="text-text-muted truncate text-[0.78rem]">
                       {user.email}
                     </span>
@@ -228,6 +250,7 @@ export function UsersList({
             <th className={`${TH_BASE} ${FROM_XL}`}>Sign-in</th>
             <th className={TH_BASE}>Last Login</th>
             <th className={`${TH_BASE} ${FROM_2XL}`}>Created</th>
+            <th className={`${TH_BASE} w-20 text-center`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -239,7 +262,7 @@ export function UsersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 6 }, (_, cell) => (
+                  {Array.from({ length: 7 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -288,6 +311,17 @@ export function UsersList({
                       <LastLogin value={user.last_login_at} />
                     </td>
                     <td className={`${TD} ${FROM_2XL}`}>{dateOrDash(user.created_at)}</td>
+                    <td className={`${TD} text-center`}>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${name}`}
+                        title="Delete"
+                        onClick={() => onDelete(user)}
+                        className={DELETE_BUTTON}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </td>
                   </tr>
                 )
               })}

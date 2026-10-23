@@ -345,6 +345,17 @@ export function ProductsPage() {
       >
         <ProductsKpis data={data} />
 
+        <ProductsExport
+          items={products.items}
+          page={data?.page ?? filters.page}
+          filters={filters}
+          total={data?.total ?? 0}
+          facets={products.facets}
+          visible={
+            !products.isPending && !products.error && !activeId && !bulkItems && !creating
+          }
+        />
+
         <ProductsToolbar
           filters={filters}
           facets={products.facets}
@@ -356,15 +367,6 @@ export function ProductsPage() {
 
         {!products.isPending && !products.error && (
           <ProductsBulkBar
-            leadingActions={
-              <ProductsExport
-                items={products.items}
-                page={data?.page ?? filters.page}
-                filters={filters}
-                total={data?.total ?? 0}
-                facets={products.facets}
-              />
-            }
             onAdd={openCreate}
             onAddIntent={preloadRichTextEditor}
             pageCount={products.items.length}

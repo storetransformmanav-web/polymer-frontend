@@ -1,4 +1,5 @@
 import { ChevronDownIcon, StoreIcon } from '../../components/ui/icons.tsx'
+import { SELECT_THEME } from '../../components/ui/SelectField.tsx'
 import { ALL_SHOPS, shopLabel, shopValue, type ShopState } from '../store/shopSlice.ts'
 import type { Shop } from '../../lib/api/endpoints.ts'
 
@@ -13,7 +14,8 @@ interface ShopSwitcherProps {
 /**
  * The store dropdown in the top bar: "All shops" first, then each store by
  * name, in the order the backend lists them. Native `<select>` for speed,
- * accessibility and mobile; only the chrome is styled. Renders nothing if
+ * accessibility and mobile; only the chrome is styled — and, where the browser
+ * allows, the open list is themed like the filter dropdowns (`SELECT_THEME`). Renders nothing if
  * the list couldn't be loaded — the app still works on "all".
  */
 export function ShopSwitcher({ shops, status, selected, onSelect }: ShopSwitcherProps) {
@@ -45,7 +47,7 @@ export function ShopSwitcher({ shops, status, selected, onSelect }: ShopSwitcher
         id="shop-switcher"
         value={selected}
         onChange={(event) => onSelect(event.target.value)}
-        className="border-border bg-bg text-text hover:border-accent focus:border-accent focus:outline-accent-tint h-9 w-full max-w-[11rem] min-w-0 cursor-pointer appearance-none truncate rounded-lg border pr-8 pl-9 text-[0.85rem] font-semibold transition-colors outline-none focus:outline-2 sm:max-w-[16rem]"
+        className={`border-border bg-bg text-text hover:border-accent focus:border-accent focus:outline-accent-tint h-9 w-full max-w-[11rem] min-w-0 cursor-pointer appearance-none truncate rounded-lg border pr-8 pl-9 text-[0.85rem] font-semibold transition-colors outline-none focus:outline-2 sm:max-w-[16rem] ${SELECT_THEME}`}
       >
         <option value={ALL_SHOPS}>All shops</option>
         {shops.map((shop) => (

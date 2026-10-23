@@ -8,7 +8,7 @@ import { ChevronDownIcon, type IconProps } from './icons.tsx'
  * one is a little stronger. Elsewhere the native list is used. It stays a real
  * `<select>`, so keyboard, screen readers and phones behave as before.
  */
-const SELECT_THEME = [
+export const SELECT_THEME = [
   'supports-[appearance:base-select]:[appearance:base-select]',
   'supports-[appearance:base-select]:flex supports-[appearance:base-select]:items-center',
   '[&::picker-icon]:hidden',
