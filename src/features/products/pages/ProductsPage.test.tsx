@@ -303,23 +303,21 @@ describe('ProductsPage list', () => {
     expect(screen.getByRole('searchbox', { name: 'Search products' })).toHaveValue('')
   })
 
-  it('filters by status tab and sends it to the API', async () => {
+  it('filters by the status dropdown and sends it to the API', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Product 1')
 
-    await user.click(screen.getByRole('button', { name: /^Archived/ }))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Product status'), 'ARCHIVED')
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ status: 'ARCHIVED' })),
     )
-    expect(screen.getByRole('button', { name: /^Archived/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('Product status')).toHaveValue('ARCHIVED')
   })
 
-  it('shows a count on every status tab, honouring the other filters', async () => {
+  it('shows a count on every status choice, honouring the other filters', async () => {
     list.mockImplementation((params) => {
       const byStatus = { ACTIVE: 40, DRAFT: 15, ARCHIVED: 5, UNLISTED: 0 }
       const total = params.status ? byStatus[params.status] : 60
@@ -329,19 +327,20 @@ describe('ProductsPage list', () => {
     renderPage()
     await screen.findByText('Product 1')
 
-    const tabs = screen.getByRole('group', { name: 'Filter by status' })
-    expect(
-      await within(tabs).findByRole('button', { name: /^All Products\s*60$/ }),
-    ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Active\s*40$/ }),
-    ).toBeInTheDocument()
-    expect(within(tabs).getByRole('button', { name: /^Draft\s*15$/ })).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Archived\s*5$/ }),
-    ).toBeInTheDocument()
-    // There is no Unlisted tab.
-    expect(within(tabs).queryByRole('button', { name: /^Unlisted/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    const status = screen.getByLabelText('Product status')
+    await waitFor(() =>
+      expect(
+        within(status)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['All Products (60)', 'Active (40)', 'Draft (15)', 'Archived (5)']),
+    )
+    // There is no Unlisted choice, and no tab strip any more (it is one dropdown).
+    expect(within(status).queryByRole('option', { name: /^Unlisted/ })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Filter by status' })).toBeNull()
+    // …and it is only in the Filters grid, not beside the search box.
+    expect(screen.getAllByLabelText('Product status')).toHaveLength(1)
 
     // The search narrows the counts too (the fake server ignores it, so only
     // check that the count queries carry it).

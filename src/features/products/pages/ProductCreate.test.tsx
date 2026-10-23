@@ -252,7 +252,11 @@ describe('adding a product', () => {
     expect(within(rows[2]).getByText('Hippo Bag')).toBeInTheDocument()
     expect(within(rows[1]).getByText('£9.99')).toBeInTheDocument()
     // "All Products" went from 1 to 2.
-    expect(screen.getByRole('button', { name: /^All Products\s*2$/ })).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('Product status')).getByRole('option', {
+        name: 'All Products (2)',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('shows it is creating, and locks the form meanwhile', async () => {

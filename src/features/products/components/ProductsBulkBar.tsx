@@ -42,22 +42,18 @@ export function ProductsBulkBar({
 }: ProductsBulkBarProps) {
   return (
     <div className="border-border bg-bg flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-2.5">
-      <p className="text-text-muted text-[0.82rem]">
-        {selectedCount > 0 ? (
-          <>
-            <span className="text-text font-semibold">{selectedCount} selected</span>
-            <button
-              type="button"
-              onClick={onClearSelection}
-              className="text-accent ml-3 cursor-pointer border-none bg-transparent p-0 text-[0.82rem] font-semibold hover:underline"
-            >
-              Clear selection
-            </button>
-          </>
-        ) : (
-          'Tick products to edit several at once.'
-        )}
-      </p>
+      {selectedCount > 0 && (
+        <p className="text-text-muted text-[0.82rem]">
+          <span className="text-text font-semibold">{selectedCount} selected</span>
+          <button
+            type="button"
+            onClick={onClearSelection}
+            className="text-accent ml-3 cursor-pointer border-none bg-transparent p-0 text-[0.82rem] font-semibold hover:underline"
+          >
+            Clear selection
+          </button>
+        </p>
+      )}
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {leadingActions}

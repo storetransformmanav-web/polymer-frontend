@@ -22,13 +22,13 @@ import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
 const TH_BASE =
-  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+  'text-text-muted border-border bg-accent-tint/60 sticky top-0 z-[1] border-b px-3 py-2.5 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
 // No alignment here: a `text-left` in the base would fight (and beat) the
 // `text-center` / `text-right` added per cell. Cells default to left.
-const TD = 'px-3.5 py-2.5 whitespace-nowrap'
+const TD = 'overflow-hidden px-3 py-1.5 whitespace-nowrap'
 const SKELETON_ROWS = 8
 
 interface ProductsListProps {
@@ -239,11 +239,11 @@ export function ProductsList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[720px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1100px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            {/* Narrow columns get a fixed width so Product takes the spare space. */}
+            {/* Every column has a share of the width, so the gaps between them are even. */}
             <th className={`${TH} w-12`}>
               <input
                 ref={pageBox}
@@ -255,14 +255,14 @@ export function ProductsList({
                 className="accent-accent h-4 w-4 cursor-pointer align-middle"
               />
             </th>
-            <th className={`${TH} w-20`}>Image</th>
-            <th className={TH}>Product</th>
-            <th className={`${TH_CENTER} w-24`}>Shopify</th>
-            <th className={`${TH_CENTER} w-28`}>Variants</th>
-            <th className={`${TH} w-40`}>Status</th>
-            <th className={`${TH_RIGHT} w-36`}>Inventory</th>
-            <th className={`${TH_RIGHT} w-44`}>Price</th>
-            <th className={`${TH_CENTER} w-24`}>Actions</th>
+            <th className={`${TH} w-16`}>Image</th>
+            <th className={`${TH} w-[28%]`}>Product</th>
+            <th className={`${TH_CENTER} w-[9%]`}>Shopify</th>
+            <th className={`${TH_CENTER} w-[9%]`}>Variants</th>
+            <th className={`${TH_CENTER} w-[10%]`}>Status</th>
+            <th className={`${TH_RIGHT} w-[11%]`}>Inventory</th>
+            <th className={`${TH_RIGHT} w-[13%]`}>Price</th>
+            <th className={`${TH_CENTER} w-[8%]`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -317,7 +317,7 @@ export function ProductsList({
                         onClick={() => onOpen(product)}
                         onPointerEnter={() => onPrefetch(product.id)}
                         onFocus={() => onPrefetch(product.id)}
-                        className="hover:text-accent focus-visible:outline-accent block max-w-64 min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2 2xl:max-w-[26rem]"
+                        className="hover:text-accent focus-visible:outline-accent block min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2"
                       >
                         {product.title}
                       </button>
@@ -336,7 +336,7 @@ export function ProductsList({
                   <td className={`${TD} text-center`}>
                     {product.variants_count.toLocaleString('en-GB')}
                   </td>
-                  <td className={TD}>
+                  <td className={`${TD} text-center`}>
                     <ProductStatusSelect
                       title={product.title}
                       value={statusPending[product.id] ?? product.status}
@@ -360,7 +360,7 @@ export function ProductsList({
                         onClick={() => onOpen(product)}
                         onPointerEnter={() => onPrefetch(product.id)}
                         onFocus={() => onPrefetch(product.id)}
-                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
                       >
                         <EyeIcon />
                       </button>
@@ -370,7 +370,7 @@ export function ProductsList({
                           aria-label={`Delete ${product.title}`}
                           title="Delete"
                           onClick={() => onDelete(product)}
-                          className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                          className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
                         >
                           <TrashIcon />
                         </button>

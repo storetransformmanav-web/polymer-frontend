@@ -5,6 +5,7 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   DollarSignIcon,
+  ListChecksIcon,
   SearchIcon,
   SlidersIcon,
   TagIcon,
@@ -47,8 +48,10 @@ const ORDER_OPTIONS: SelectOption[] = [
   { value: 'asc', label: 'Ascending' },
 ]
 
+// The filter grid is compact, like the Orders and Customers pages: shorter controls, smaller text.
 const FIELD_INPUT =
-  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.85rem] font-medium transition-colors outline-none focus:outline-2'
+  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-8 w-full min-w-0 rounded-lg border px-2.5 text-[0.76rem] font-medium transition-colors outline-none focus:outline-2'
+const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.72rem] font-semibold'
 
 interface ProductsToolbarProps {
   filters: ProductFilters
@@ -60,7 +63,8 @@ interface ProductsToolbarProps {
 }
 
 /**
- * Search, status tabs and the collapsible filter grid. Typing in
+ * Search, the Filters button and Clear All in one row, and the collapsible filter grid
+ * under it (its first field is the status, with a count on every choice). Typing in
  * the search/price boxes is instant locally and sent to the API once the
  * user pauses (see useDebouncedField); selects apply immediately.
  */
@@ -75,6 +79,16 @@ export function ProductsToolbar({
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
   const counts = useProductStatusCounts(filters, STATUS_VALUES)
+  // The status choices, each with its count ("Active (980)"). The open one can fall back
+  // to the list's own total while its count loads.
+  const statusOptions: SelectOption[] = STATUS_TABS.map((tab) => {
+    const count = counts[tab.value] ?? (filters.status === tab.value ? total : null)
+    return {
+      value: tab.value,
+      label:
+        count === null ? tab.label : `${tab.label} (${count.toLocaleString('en-GB')})`,
+    }
+  })
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
   )
@@ -114,7 +128,22 @@ export function ProductsToolbar({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="product-filter-grid"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
+          >
+            <SlidersIcon width={16} height={16} />
+            Filters
+            <ChevronDownIcon
+              width={14}
+              height={14}
+              className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
           <button
             type="button"
             onClick={onReset}
@@ -127,62 +156,6 @@ export function ProductsToolbar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="group"
-          aria-label="Filter by status"
-          className="border-border bg-surface flex max-w-full min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl border p-1 [&::-webkit-scrollbar]:hidden"
-        >
-          {STATUS_TABS.map((tab) => {
-            const active = filters.status === tab.value
-            // The open tab can fall back to the list's own total while its count loads.
-            const count = counts[tab.value] ?? (active ? total : null)
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onChange({ status: tab.value })}
-                className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap transition-colors ${
-                  active
-                    ? 'bg-bg text-text shadow-sm'
-                    : 'text-text-muted hover:text-text bg-transparent'
-                }`}
-              >
-                {tab.label}
-                {count !== null && (
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
-                      active
-                        ? 'bg-accent-tint text-accent'
-                        : 'bg-border/60 text-text-muted'
-                    }`}
-                  >
-                    {count.toLocaleString('en-GB')}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        <button
-          type="button"
-          aria-expanded={filtersOpen}
-          aria-controls="product-filter-grid"
-          onClick={() => setFiltersOpen(!filtersOpen)}
-          className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
-        >
-          <SlidersIcon width={16} height={16} />
-          Filters
-          <ChevronDownIcon
-            width={14}
-            height={14}
-            className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
-          />
-        </button>
-      </div>
-
       <div
         id="product-filter-grid"
         inert={!filtersOpen}
@@ -191,8 +164,18 @@ export function ProductsToolbar({
         }`}
       >
         <div className="-m-1 overflow-hidden p-1">
-          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
             <SelectField
+              compact
+              id="filter-status-grid"
+              label="Product status"
+              icon={ListChecksIcon}
+              value={filters.status}
+              options={statusOptions}
+              onChange={(status) => onChange({ status: status as ProductStatus | '' })}
+            />
+            <SelectField
+              compact
               id="filter-type"
               label="Product Type"
               icon={BoxesIcon}
@@ -201,6 +184,7 @@ export function ProductsToolbar({
               onChange={(productType) => onChange({ productType })}
             />
             <SelectField
+              compact
               id="filter-tag"
               label="Tag"
               icon={TagIcon}
@@ -209,6 +193,7 @@ export function ProductsToolbar({
               onChange={(tag) => onChange({ tag })}
             />
             <SelectField
+              compact
               id="filter-stock"
               label="Stock"
               icon={BoxesIcon}
@@ -216,12 +201,9 @@ export function ProductsToolbar({
               options={STOCK_OPTIONS}
               onChange={(stock) => onChange({ stock: stock as ProductFilters['stock'] })}
             />
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label
-                htmlFor="filter-min-price"
-                className="text-text flex items-center gap-1.5 text-[0.82rem] font-semibold"
-              >
-                <DollarSignIcon width={16} height={16} className="text-text-muted" />
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="filter-min-price" className={FIELD_LABEL}>
+                <DollarSignIcon width={14} height={14} className="text-text-muted" />
                 Min price
               </label>
               <input
@@ -235,12 +217,9 @@ export function ProductsToolbar({
                 className={FIELD_INPUT}
               />
             </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <label
-                htmlFor="filter-max-price"
-                className="text-text flex items-center gap-1.5 text-[0.82rem] font-semibold"
-              >
-                <DollarSignIcon width={16} height={16} className="text-text-muted" />
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="filter-max-price" className={FIELD_LABEL}>
+                <DollarSignIcon width={14} height={14} className="text-text-muted" />
                 Max price
               </label>
               <input
@@ -256,6 +235,7 @@ export function ProductsToolbar({
             </div>
             <>
               <SelectField
+                compact
                 id="filter-sort"
                 label="Sort by"
                 icon={ArrowUpDownIcon}
@@ -264,6 +244,7 @@ export function ProductsToolbar({
                 onChange={(sort) => onChange({ sort: sort as ProductSort })}
               />
               <SelectField
+                compact
                 id="filter-order"
                 label="Order"
                 value={filters.order}

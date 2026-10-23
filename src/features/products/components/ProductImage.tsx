@@ -9,7 +9,7 @@ interface ProductImageProps {
 }
 
 const SIZES = {
-  sm: { box: 'h-9 w-9 rounded-md', icon: 18, fit: 'object-cover' },
+  sm: { box: 'h-8 w-8 rounded-md', icon: 18, fit: 'object-cover' },
   // A square that fills its grid cell — gallery thumbnails.
   thumb: { box: 'aspect-square w-full rounded-lg', icon: 22, fit: 'object-cover' },
   lg: { box: 'h-48 w-full rounded-xl sm:h-56', icon: 40, fit: 'object-cover' },

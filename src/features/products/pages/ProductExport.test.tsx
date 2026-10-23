@@ -291,7 +291,8 @@ describe('exporting products', () => {
       renderPage()
       await screen.findByText('Product 1')
       await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'desk')
-      await user.click(screen.getByRole('button', { name: /^Archived/ }))
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      await user.selectOptions(screen.getByLabelText('Product status'), 'ARCHIVED')
       await waitFor(() =>
         expect(list).toHaveBeenCalledWith(
           expect.objectContaining({ search: 'desk', status: 'ARCHIVED' }),

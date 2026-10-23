@@ -22,7 +22,7 @@ interface ProductStatusSelectProps {
 /** Room the menu needs below the button (three rows and padding), to decide whether to open upward. */
 const MENU_HEIGHT = 150
 const PILL =
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap'
+  'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap'
 
 interface Option {
   value: string
@@ -149,7 +149,7 @@ export function ProductStatusSelect({
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-center gap-1">
       <button
         ref={button}
         type="button"
@@ -166,7 +166,7 @@ export function ProductStatusSelect({
             if (!open) openMenu()
           }
         }}
-        className={`${PILL} focus-visible:outline-accent cursor-pointer gap-1.5 border-none focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_TONE_CLASSES[statusTone(current)]}`}
+        className={`${PILL} focus-visible:outline-accent w-[5.5rem] cursor-pointer justify-center gap-1.5 border-none focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_TONE_CLASSES[statusTone(current)]}`}
       >
         {statusLabel(current)}
         {saving ? (

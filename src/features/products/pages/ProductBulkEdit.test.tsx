@@ -187,7 +187,7 @@ describe('editing products in bulk', () => {
     const user = await openList()
     const all = screen.getByRole('checkbox', { name: 'Select all products on this page' })
 
-    expect(screen.getByText('Tick products to edit several at once.')).toBeInTheDocument()
+    expect(screen.queryByText(/Tick products/)).toBeNull()
 
     await user.click(screen.getByLabelText('Select Hippo Bag'))
     expect(screen.getByText('1 selected')).toBeInTheDocument()

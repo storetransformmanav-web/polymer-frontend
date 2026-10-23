@@ -1,6 +1,29 @@
 import type { ComponentType } from 'react'
 import { ChevronDownIcon, type IconProps } from './icons.tsx'
 
+/**
+ * Where the browser supports customisable selects (`appearance: base-select`), the open
+ * list is themed: it is the app's card (border, radius, shadow) and an option under the
+ * pointer gets the same tint as a hovered table row (`bg-accent-tint/60`); the chosen
+ * one is a little stronger. Elsewhere the native list is used. It stays a real
+ * `<select>`, so keyboard, screen readers and phones behave as before.
+ */
+const SELECT_THEME = [
+  'supports-[appearance:base-select]:[appearance:base-select]',
+  'supports-[appearance:base-select]:flex supports-[appearance:base-select]:items-center',
+  '[&::picker-icon]:hidden',
+  '[&::picker(select)]:[appearance:base-select]',
+  '[&::picker(select)]:mt-1 [&::picker(select)]:rounded-xl [&::picker(select)]:border',
+  '[&::picker(select)]:border-border [&::picker(select)]:bg-bg [&::picker(select)]:p-1.5',
+  '[&::picker(select)]:shadow-lg',
+  // About ten options tall, then it scrolls — a long list (tags) never runs off the page.
+  '[&::picker(select)]:max-h-80',
+  '[&_option]:cursor-pointer [&_option]:rounded-lg [&_option]:px-2.5 [&_option]:py-1.5',
+  '[&_option]:text-text [&_option]:transition-colors',
+  '[&_option:hover]:bg-accent-tint/60 [&_option:focus-visible]:bg-accent-tint/60',
+  '[&_option:checked]:bg-accent-tint [&_option:checked]:font-semibold',
+].join(' ')
+
 export interface SelectOption {
   value: string
   label: string
@@ -68,7 +91,7 @@ export function SelectField({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          className={`border-border bg-bg text-text focus:border-accent focus:outline-accent-tint w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`border-border bg-bg text-text focus:border-accent focus:outline-accent-tint w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${SELECT_THEME} ${
             compact ? 'h-8 pr-7 pl-2.5 text-[0.76rem]' : 'h-10 pr-9 pl-3 text-[0.85rem]'
           }`}
         >
