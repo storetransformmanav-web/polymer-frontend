@@ -779,27 +779,23 @@ describe('ProductsPage details', () => {
       details.mockResolvedValue(detail)
     }
 
-    it('shows them in one “Product Details” card below the Description card, as an accordion, closed', async () => {
+    it('shows them as an accordion inside the one “Description” card, closed', async () => {
       withApd(SETTINGS)
       const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
 
       const card = screen.getByRole('button', { name: /^Description/ })
-      const details = screen.getByRole('button', { name: /^Product Details/ })
       const first = screen.getByRole('button', { name: /^Product Description/ })
       const second = screen.getByRole('button', { name: /^Product Information/ })
-      expect(card).toHaveAttribute('aria-expanded', 'false')
+      expect(card).toHaveAttribute('aria-expanded', 'true')
       expect(first).toHaveAttribute('aria-expanded', 'false')
       expect(second).toHaveAttribute('aria-expanded', 'false')
-      // Both rows live in the one card, below the product's own description card.
-      expect(details.closest('section')).toContainElement(first)
-      expect(details.closest('section')).toContainElement(second)
-      const own = screen.getByText('The plain store description')
-      expect(own.closest('section')).not.toContainElement(first)
-      expect(
-        own.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy()
+      // Both rows live in the Description card, which replaces the product's own description.
+      expect(card.closest('section')).toContainElement(first)
+      expect(card.closest('section')).toContainElement(second)
+      expect(screen.queryByText('The plain store description')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Product Details/ })).toBeNull()
       expect(screen.queryByText(/Hippo Microwave/)).not.toBeInTheDocument()
 
       await user.click(second)

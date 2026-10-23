@@ -208,6 +208,33 @@ export function useBulkEdit(ids: string[]) {
     [update],
   )
 
+  /**
+   * The "all products" row: give every product whose details have loaded the same
+   * product-level value (status, product type). A row still loading is skipped.
+   */
+  const changeAll = useCallback(
+    (patch: Partial<ProductDraft>) => {
+      for (const id of ids) {
+        if (details[detailsKey(id)]?.data) update(id, (draft) => ({ ...draft, ...patch }))
+      }
+    },
+    [details, ids, update],
+  )
+
+  /** The same, for a per-variant value (price, compare-at): every variant of every loaded product. */
+  const changeAllVariants = useCallback(
+    (patch: Partial<VariantDraft>) => {
+      for (const id of ids) {
+        if (!details[detailsKey(id)]?.data) continue
+        update(id, (draft) => ({
+          ...draft,
+          variants: draft.variants.map((variant) => ({ ...variant, ...patch })),
+        }))
+      }
+    },
+    [details, ids, update],
+  )
+
   const retryLoad = useCallback(
     (id: string) => void dispatch(fetchProductDetails({ id, force: true })),
     [dispatch],
@@ -309,6 +336,8 @@ export function useBulkEdit(ids: string[]) {
     isSaving,
     change,
     changeVariant,
+    changeAll,
+    changeAllVariants,
     retryLoad,
     discardAll,
     saveAll,

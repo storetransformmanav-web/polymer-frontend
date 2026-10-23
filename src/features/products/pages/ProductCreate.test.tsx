@@ -311,6 +311,82 @@ describe('adding a product', () => {
     expect(screen.queryByRole('region', { name: 'Add product' })).not.toBeInTheDocument()
   })
 
+  describe('as a tab', () => {
+    const strip = () => screen.getByRole('navigation', { name: 'Open products' })
+
+    it('opens in a tab of its own beside the opened products, like View product', async () => {
+      const { form } = await openForm()
+
+      const tab = within(strip()).getByRole('button', { name: /^Product\s*New product$/ })
+      expect(tab).toHaveAttribute('aria-current', 'page')
+      expect(
+        within(strip()).getByRole('button', { name: 'All Products' }),
+      ).not.toHaveAttribute('aria-current')
+      expect(form.closest('.hidden')).toBeNull()
+    })
+
+    it('keeps what was typed while another tab shows, and comes back to it', async () => {
+      const { user, form } = await openForm()
+      await user.type(within(form).getByLabelText('Title'), 'Half done')
+
+      await user.click(within(strip()).getByRole('button', { name: 'All Products' }))
+      // Hidden (Tailwind's `hidden`), not unmounted.
+      expect(form.closest('.hidden')).not.toBeNull()
+      expect(
+        screen.getByRole('region', { name: 'Products' }).closest('.hidden'),
+      ).toBeNull()
+
+      await user.click(
+        within(strip()).getByRole('button', { name: /^Product\s*New product$/ }),
+      )
+      expect(form.closest('.hidden')).toBeNull()
+      expect(within(form).getByLabelText('Title')).toHaveValue('Half done')
+    })
+
+    it('closing the tab asks first when something was typed, and removes it', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const { user, form } = await openForm()
+
+      // Nothing typed: closes at once.
+      await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
+      expect(confirm).not.toHaveBeenCalled()
+      expect(
+        screen.queryByRole('region', { name: 'Add product' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('navigation', { name: 'Open products' }),
+      ).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Add product' }))
+      const again = await screen.findByRole('region', { name: 'Add product' })
+      await user.type(within(again).getByLabelText('Title'), 'Half done')
+      await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
+      expect(confirm).toHaveBeenCalled()
+      expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
+
+      confirm.mockReturnValue(true)
+      await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
+      expect(
+        screen.queryByRole('region', { name: 'Add product' }),
+      ).not.toBeInTheDocument()
+      void form
+    })
+
+    it('goes away once the product is created', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(submit(form))
+
+      await screen.findByText(/Created/)
+      expect(
+        screen.queryByRole('region', { name: 'Add product' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('navigation', { name: 'Open products' }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   it('makes a variant for every combination of the options, each with its own price', async () => {
     const { user, form } = await openForm()
     await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')

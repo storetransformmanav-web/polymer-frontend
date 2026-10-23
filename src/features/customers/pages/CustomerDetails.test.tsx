@@ -278,3 +278,92 @@ describe('Customer details', () => {
     expect(details.mock.calls.length).toBe(calls)
   })
 })
+
+describe('Open customer tabs', () => {
+  beforeEach(() => {
+    list.mockImplementation((params) => Promise.resolve(respond(params)))
+    details.mockImplementation((id, raw) => Promise.resolve(makeDetail(id, raw)))
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows no strip until a customer is opened, then a tab named after them', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Customer 1')
+    expect(
+      screen.queryByRole('navigation', { name: 'Open customers' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'View Customer 2' }))
+    await screen.findByText('Contact & Account')
+
+    const tabs = screen.getByRole('navigation', { name: 'Open customers' })
+    expect(
+      within(tabs).getByRole('button', { name: 'All Customers' }),
+    ).not.toHaveAttribute('aria-current')
+    expect(
+      within(tabs).getByRole('button', { name: /^Customer\s*Customer 2$/ }),
+    ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('labels a tab opened from a bare URL once the customer loads', async () => {
+    renderPage('/customers/cust-3')
+
+    const tabs = await screen.findByRole('navigation', { name: 'Open customers' })
+    await waitFor(() =>
+      expect(
+        within(tabs).getByRole('button', { name: /^Customer\s*Customer 3$/ }),
+      ).toBeInTheDocument(),
+    )
+  })
+
+  it('goes back to the list keeping the tab, and reopens it from cache without a request', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Customer 1')
+
+    await user.click(screen.getByRole('button', { name: 'View Customer 4' }))
+    await screen.findByText('Contact & Account')
+    await user.click(screen.getByRole('button', { name: 'Back to list' }))
+
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/customers$/)
+    const tabs = screen.getByRole('navigation', { name: 'Open customers' })
+    expect(within(tabs).getByRole('button', { name: 'All Customers' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+
+    const calls = details.mock.calls.length
+    await user.click(
+      within(tabs).getByRole('button', { name: /^Customer\s*Customer 4$/ }),
+    )
+    expect(screen.getByTestId('path')).toHaveTextContent('/customers/cust-4')
+    expect(screen.getByText('Contact & Account')).toBeInTheDocument()
+    expect(details.mock.calls.length).toBe(calls)
+  })
+
+  it('closes tabs: the active one moves to its neighbour, and Clear returns to the list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Customer 1')
+
+    await user.click(screen.getByRole('button', { name: 'View Customer 1' }))
+    await screen.findByText('Contact & Account')
+    const tabs = screen.getByRole('navigation', { name: 'Open customers' })
+    await user.click(within(tabs).getByRole('button', { name: 'All Customers' }))
+    await user.click(screen.getByRole('button', { name: 'View Customer 2' }))
+    await screen.findByRole('heading', { level: 1, name: 'Customer 2' })
+
+    await user.click(within(tabs).getByRole('button', { name: 'Close Customer 2' }))
+    expect(screen.getByTestId('path')).toHaveTextContent('/customers/cust-1')
+
+    await user.click(within(tabs).getByRole('button', { name: 'Clear' }))
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/customers$/)
+    expect(
+      screen.queryByRole('navigation', { name: 'Open customers' }),
+    ).not.toBeInTheDocument()
+  })
+})

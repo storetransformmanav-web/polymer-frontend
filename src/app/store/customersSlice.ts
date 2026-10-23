@@ -144,6 +144,32 @@ export interface CustomersFacets {
   countries: string[]
 }
 
+export interface CustomerTab {
+  id: string
+  /** Not known when a details URL is opened directly; filled in on load. */
+  name: string | null
+  email: string | null
+}
+
+/** Most customers kept open as tabs; opening one more drops the oldest. */
+const MAX_TABS = 10
+
+/** The name a tab shows: full name, else first + last, else the email's local part. */
+function tabName(customer: {
+  full_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+}): string | null {
+  const full = customer.full_name?.trim()
+  if (full) return full
+  const joined = [customer.first_name, customer.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+  return joined || customer.email?.split('@')[0] || null
+}
+
 export interface CustomersState {
   filters: CustomerFilters
   entries: Record<string, CustomersEntry>
@@ -153,6 +179,8 @@ export interface CustomersState {
   facets: CustomersFacets
   /** Customer details, cached by id (and "id|raw" for the with-raw-data variant). */
   details: Record<string, CustomerDetailsEntry>
+  /** Opened customers, shown as tabs above the list/details (oldest first). */
+  tabs: CustomerTab[]
 }
 
 export interface CustomerDetailsEntry {
@@ -170,6 +198,7 @@ const initialState: CustomersState = {
   lastData: null,
   facets: { tags: [], countries: [] },
   details: {},
+  tabs: [],
 }
 
 interface FetchArg {
@@ -316,6 +345,27 @@ const customersSlice = createSlice({
       const cached = state.entries[customersCacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },
+    /** Opens (or refreshes the label of) a customer tab; existing tabs keep their place. */
+    tabOpened(
+      state,
+      action: PayloadAction<{ id: string; name?: string | null; email?: string | null }>,
+    ) {
+      const { id, name = null, email = null } = action.payload
+      const existing = state.tabs.find((tab) => tab.id === id)
+      if (existing) {
+        existing.name ??= name
+        existing.email ??= email
+        return
+      }
+      state.tabs.push({ id, name, email })
+      if (state.tabs.length > MAX_TABS) state.tabs.shift()
+    },
+    tabClosed(state, action: PayloadAction<string>) {
+      state.tabs = state.tabs.filter((tab) => tab.id !== action.payload)
+    },
+    tabsCleared(state) {
+      state.tabs = []
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -370,6 +420,12 @@ const customersSlice = createSlice({
       .addCase(fetchCustomerDetails.fulfilled, (state, action) => {
         const { id, raw } = action.meta.arg
         const { data, fetchedAt } = action.payload
+        // A tab opened from a bare URL gets its label once the customer loads.
+        const tab = state.tabs.find((candidate) => candidate.id === id)
+        if (tab) {
+          tab.name = tabName(data)
+          tab.email = data.email || null
+        }
         state.details[customerDetailsKey(id, raw)] = {
           data,
           fetchedAt,
@@ -398,6 +454,7 @@ const customersSlice = createSlice({
           entry.fetchedAt = null
         }
         if (state.lastData) state.lastData = withoutCustomer(state.lastData, id)
+        state.tabs = state.tabs.filter((tab) => tab.id !== id)
         delete state.details[customerDetailsKey(id)]
         delete state.details[customerDetailsKey(id, true)]
       })
@@ -418,6 +475,9 @@ const customersSlice = createSlice({
 export const {
   filtersChanged: customerFiltersChanged,
   filtersReset: customerFiltersReset,
+  tabOpened: customerTabOpened,
+  tabClosed: customerTabClosed,
+  tabsCleared: customerTabsCleared,
 } = customersSlice.actions
 export const customersReducer = customersSlice.reducer
 

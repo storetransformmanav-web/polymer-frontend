@@ -115,9 +115,9 @@ export function TagsInput({
 }
 
 /**
- * The product's tags, being edited (the product page's Tags block): the cursor is
- * ready in the card as soon as it opens. Tags are changed as additions and
- * removals, so a tag a colleague adds meanwhile is never wiped out by this edit.
+ * The product's tags, being edited (in the Product Specifications form, with its Save).
+ * Tags are changed as additions and removals, so a tag a colleague adds meanwhile is
+ * never wiped out by this edit.
  */
 export function TagsSection({ draft, onChange }: SectionProps) {
   return (
@@ -129,7 +129,6 @@ export function TagsSection({ draft, onChange }: SectionProps) {
       tags={draft.tags}
       onChange={(tags) => onChange({ tags })}
       hint="Press Enter or a comma to add a tag; separate several with commas. Tags are used for search and filters."
-      autoFocus
     />
   )
 }

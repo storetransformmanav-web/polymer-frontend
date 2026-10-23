@@ -23,7 +23,7 @@ export function DescriptionAccordion({ sections, multi }: DescriptionSections) {
   }
 
   return (
-    <div className="border-border divide-border bg-bg divide-y overflow-hidden rounded-xl border">
+    <div className="border-border-strong divide-border-strong bg-bg divide-y overflow-hidden rounded-xl border">
       {sections.map((section, index) => {
         const isOpen = open.has(index)
         const bodyId = `${base}-${index}`
@@ -35,7 +35,7 @@ export function DescriptionAccordion({ sections, multi }: DescriptionSections) {
                 aria-expanded={isOpen}
                 aria-controls={bodyId}
                 onClick={() => toggle(index)}
-                className="hover:bg-surface focus-visible:outline-accent flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3.5 text-left text-[0.95rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                className="hover:bg-accent-tint/60 focus-visible:outline-accent flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3.5 text-left text-[0.95rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
               >
                 {section.title}
                 <ChevronDownIcon

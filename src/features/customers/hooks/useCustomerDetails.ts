@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
   customerDetailsKey,
+  customerTabOpened,
   fetchCustomerDetails,
 } from '../../../app/store/customersSlice.ts'
 
@@ -30,6 +31,8 @@ export function useCustomerDetails(id: string) {
   )
 
   useEffect(() => {
+    // Opened from a bare URL: still gets a tab (labelled once the customer loads).
+    dispatch(customerTabOpened({ id }))
     void dispatch(fetchCustomerDetails({ id }))
   }, [dispatch, id])
 

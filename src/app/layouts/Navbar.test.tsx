@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { api } from '../../lib/api/endpoints.ts'
@@ -125,22 +125,71 @@ describe('Navbar', () => {
 
       expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
     })
+  })
 
-    it('stays usable in the collapsed icon rail', async () => {
+  describe('Shopify Management in the collapsed icon rail', () => {
+    async function collapse(route = '/') {
       const user = userEvent.setup()
-      renderWithProviders(<Navbar />, { route: '/' })
-
+      renderWithProviders(<Navbar />, { route })
       await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+      return user
+    }
 
-      // The heading and links keep their accessible names (labels turn into
-      // screen-reader text and tooltips).
-      const heading = screen.getByRole('button', GROUP)
-      await user.click(heading)
-      expect(heading).toHaveAttribute('aria-expanded', 'true')
-      expect(screen.getByRole('link', { name: 'Customers' })).toHaveAttribute(
-        'href',
-        '/customers',
-      )
+    it('is one icon with its pages hidden until it is clicked', async () => {
+      await collapse()
+
+      expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByRole('link', { name: 'Customers' })).not.toBeInTheDocument()
+    })
+
+    it('opens a card beside the rail with the group name and every page', async () => {
+      const user = await collapse()
+      await user.click(screen.getByRole('button', GROUP))
+
+      expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'true')
+      const card = screen.getByRole('group', GROUP)
+      expect(card).toHaveTextContent('Shopify Management')
+      for (const [label, href] of SECTIONS) {
+        expect(within(card).getByRole('link', { name: label })).toHaveAttribute(
+          'href',
+          href,
+        )
+      }
+    })
+
+    it('marks the current page in the card', async () => {
+      const user = await collapse('/products/abc')
+      await user.click(screen.getByRole('button', GROUP))
+
+      expect(
+        within(screen.getByRole('group', GROUP)).getByRole('link', { name: 'Products' }),
+      ).toHaveAttribute('aria-current', 'page')
+    })
+
+    it('closes on a second click, on Escape and on a click elsewhere', async () => {
+      const user = await collapse()
+      const icon = screen.getByRole('button', GROUP)
+
+      await user.click(icon)
+      await user.click(icon)
+      expect(screen.queryByRole('group', GROUP)).not.toBeInTheDocument()
+
+      await user.click(icon)
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('group', GROUP)).not.toBeInTheDocument()
+      expect(icon).toHaveFocus()
+
+      await user.click(icon)
+      await user.click(document.body)
+      expect(screen.queryByRole('group', GROUP)).not.toBeInTheDocument()
+    })
+
+    it('closes when a page is chosen', async () => {
+      const user = await collapse()
+      await user.click(screen.getByRole('button', GROUP))
+      await user.click(screen.getByRole('link', { name: 'Customers' }))
+
+      expect(screen.queryByRole('group', GROUP)).not.toBeInTheDocument()
     })
   })
 

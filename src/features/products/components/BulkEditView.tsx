@@ -2,11 +2,12 @@ import { Fragment, useMemo, useState } from 'react'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
-  ArrowLeftIcon,
+  CheckIcon,
   CheckCircleIcon,
   ChevronDownIcon,
   ColumnsIcon,
   SpinnerIcon,
+  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 import {
@@ -20,7 +21,9 @@ import {
   type VariantDraft,
 } from '../utils/editDraft.ts'
 import { statusLabel } from '../utils/format.ts'
+import { ConfirmCancelDialog } from './ConfirmCancelDialog.tsx'
 import { ConfirmUpdateDialog } from './ConfirmUpdateDialog.tsx'
+import { IconAction } from '../../../components/ui/IconAction.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
 type ColumnId = 'status' | 'productType' | 'price' | 'compareAtPrice' | 'sku' | 'barcode'
@@ -175,6 +178,109 @@ function ResultCell({ row }: { row: BulkRow }) {
     return <span className="text-warning px-3 text-[0.8rem] font-semibold">Edited</span>
   }
   return null
+}
+
+/** Which columns the "all products" row can set: not SKU or barcode, which are unique per variant. */
+const COMMON_COLUMNS: ColumnId[] = ['status', 'productType', 'price', 'compareAtPrice']
+
+/**
+ * The first row of the table: whatever is set here is applied to every product at once
+ * (status and product type to each product, price and compare-at to each of its variants),
+ * and shows in the rows below like any other edit — nothing is sent until Save. A cell
+ * left blank changes nothing, so it can never wipe the products' own values.
+ */
+function CommonRow({
+  columns,
+  count,
+  edit,
+}: {
+  columns: Column[]
+  count: number
+  edit: ReturnType<typeof useBulkEdit>
+}) {
+  const [values, setValues] = useState<Record<ColumnId, string>>({
+    status: '',
+    productType: '',
+    price: '',
+    compareAtPrice: '',
+    sku: '',
+    barcode: '',
+  })
+
+  function set(id: ColumnId, value: string) {
+    setValues((current) => ({ ...current, [id]: value }))
+    // Blank = leave every product as it is.
+    if (value === '' || value.trim() === '') return
+    if (id === 'status') edit.changeAll({ status: value })
+    else if (id === 'productType') edit.changeAll({ productType: value })
+    else if (id === 'price') edit.changeAllVariants({ price: value })
+    else if (id === 'compareAtPrice') edit.changeAllVariants({ compareAtPrice: value })
+  }
+
+  return (
+    <tr className="border-border bg-accent-tint/40 border-b">
+      <td className={`${TD} px-3 py-2`}>
+        <p className="text-[0.85rem] font-semibold">
+          All products <span className="text-text-muted font-normal">({count})</span>
+        </p>
+        <p className="text-text-muted text-[0.72rem]">
+          Set a value here to apply it to every product below.
+        </p>
+      </td>
+      {columns.map((column) => {
+        const label = `${column.label} for all products`
+        if (!COMMON_COLUMNS.includes(column.id)) {
+          return (
+            <td key={column.id} className={TD}>
+              <Dash />
+            </td>
+          )
+        }
+        return (
+          <td key={column.id} className={TD}>
+            {column.id === 'status' ? (
+              <div className="relative">
+                <select
+                  aria-label={label}
+                  value={values.status}
+                  onChange={(event) => set('status', event.target.value)}
+                  className={`${CELL} cursor-pointer appearance-none pr-8 ${
+                    values.status ? '' : 'text-text-muted'
+                  }`}
+                >
+                  <option value="">Change all…</option>
+                  {PRODUCT_EDIT_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon
+                  width={14}
+                  height={14}
+                  className="text-text-muted pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+                />
+              </div>
+            ) : (
+              <input
+                aria-label={label}
+                value={values[column.id]}
+                placeholder="Set for all…"
+                maxLength={column.id === 'productType' ? 255 : 20}
+                inputMode={NUMERIC.includes(column.id) ? 'decimal' : undefined}
+                autoComplete="off"
+                onChange={(event) => set(column.id, event.target.value)}
+                className={`${CELL} placeholder:text-text-muted/70 ${
+                  NUMERIC.includes(column.id) ? 'text-right' : ''
+                }`}
+              />
+            )}
+          </td>
+        )
+      })}
+      <td className={TD} />
+    </tr>
+  )
 }
 
 interface RowsProps {
@@ -406,6 +512,8 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
   const ids = useMemo(() => items.map((item) => item.id), [items])
   const edit = useBulkEdit(ids)
   const [confirming, setConfirming] = useState(false)
+  // ✕ Cancel pressed with unsaved changes: the "are you sure?" dialog is open.
+  const [cancelling, setCancelling] = useState(false)
   const [visible, setVisible] = useState<ColumnId[]>(DEFAULT_COLUMNS)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [summary, setSummary] = useState<{
@@ -419,14 +527,10 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
   const plural = (count: number, word: string) =>
     `${count} ${word}${count === 1 ? '' : 's'}`
 
-  function back() {
-    if (edit.dirtyCount > 0) {
-      const sure = window.confirm(
-        `Discard the unsaved changes to ${plural(edit.dirtyCount, 'product')}?`,
-      )
-      if (!sure) return
-    }
-    onBack()
+  // Nothing changed: just leave. Otherwise ask first (nothing is thrown away until "Yes, cancel").
+  function cancel() {
+    if (edit.dirtyCount > 0) setCancelling(true)
+    else onBack()
   }
 
   async function save() {
@@ -475,14 +579,6 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
       className="border-border bg-bg flex flex-col rounded-2xl border"
     >
       <div className="border-border flex flex-wrap items-center gap-x-4 gap-y-2 rounded-t-2xl border-b px-4 py-2.5">
-        <button
-          type="button"
-          onClick={back}
-          className="text-text hover:text-accent inline-flex h-9 cursor-pointer items-center gap-2 border-none bg-transparent px-1 text-[0.85rem] font-semibold transition-colors"
-        >
-          <ArrowLeftIcon width={16} height={16} />
-          Back
-        </button>
         <div className="bg-border hidden h-6 w-px sm:block" aria-hidden="true" />
         <h2 className="text-[0.95rem] font-semibold">
           Editing {plural(items.length, 'product')}
@@ -523,19 +619,34 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
             )}
           </PopoverButton>
 
-          <button
-            type="button"
+          <IconAction
+            label="Save"
+            icon={CheckIcon}
+            tone="primary"
+            disabled={edit.dirtyCount === 0}
+            busy={edit.isSaving}
             onClick={() => setConfirming(true)}
-            disabled={edit.dirtyCount === 0 || edit.isSaving}
-            className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 min-w-20 cursor-pointer items-center justify-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-50"
-          >
-            {edit.isSaving && (
-              <SpinnerIcon width={14} height={14} className="animate-spin" />
-            )}
-            Save
-          </button>
+          />
+          <IconAction
+            label="Cancel"
+            icon={XIcon}
+            tone="danger"
+            disabled={edit.isSaving}
+            onClick={cancel}
+          />
         </div>
       </div>
+
+      {cancelling && (
+        <ConfirmCancelDialog
+          lose={`your unsaved changes to ${plural(edit.dirtyCount, 'product')}`}
+          onConfirm={() => {
+            setCancelling(false)
+            onBack()
+          }}
+          onKeep={() => setCancelling(false)}
+        />
+      )}
 
       {confirming && (
         <ConfirmUpdateDialog
@@ -572,6 +683,9 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
             </tr>
           </thead>
           <tbody>
+            {edit.rows.length > 1 && (
+              <CommonRow columns={columns} count={edit.rows.length} edit={edit} />
+            )}
             {edit.rows.map((row) => (
               <ProductRows
                 key={row.id}

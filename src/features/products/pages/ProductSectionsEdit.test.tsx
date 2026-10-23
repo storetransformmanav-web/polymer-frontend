@@ -149,7 +149,7 @@ const details = vi.mocked(api.products.details)
 const update = vi.mocked(api.products.update)
 const syncHistory = vi.mocked(api.products.syncHistory)
 
-const WHAT = 'product details'
+const WHAT = 'description'
 const pencil = () => screen.getByRole('button', { name: `Edit ${WHAT}` })
 const save = () => screen.getByRole('button', { name: `Save ${WHAT}` })
 const discard = () => screen.getByRole('button', { name: `Discard ${WHAT} changes` })
@@ -188,15 +188,16 @@ describe('editing the description sections (metafield apd)', () => {
     vi.clearAllMocks()
   })
 
-  it('puts both sections in one “Product Details” card, with one pencil, the rows closed', async () => {
+  it('puts both sections in the one “Description” card, with one pencil, the rows closed', async () => {
     const user = await openDetails()
 
-    expect(screen.getByRole('button', { name: /^Product Details/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^Description/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     )
     expect(pencil()).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Edit product/ })).toHaveLength(1)
+    // One pencil for the Description card (the specifications have their own).
+    expect(screen.getAllByRole('button', { name: /^Edit desc/ })).toHaveLength(1)
     expect(screen.getByRole('button', { name: /^Product Information/ })).toHaveAttribute(
       'aria-expanded',
       'false',
@@ -215,12 +216,13 @@ describe('editing the description sections (metafield apd)', () => {
     ).toBeInTheDocument()
   })
 
-  it('has no card at all for a product without sections', async () => {
+  it('shows the product’s own description instead for a product without sections', async () => {
     details.mockResolvedValue({ ...DETAIL, metafields: [] })
     await openDetails()
 
-    expect(screen.queryByRole('button', { name: `Edit ${WHAT}` })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^Product Details/ })).toBeNull()
+    // The same Description card, but with the plain description (and no accordion rows).
+    expect(screen.getByRole('button', { name: /^Description/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Product Information/ })).toBeNull()
   })
 
   it('edits a title and sends only the apd metafield — the rest of its settings kept', async () => {

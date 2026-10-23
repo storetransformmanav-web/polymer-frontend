@@ -7,7 +7,6 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
-  PlusCircleIcon,
   PlusIcon,
   SearchIcon,
   SpinnerIcon,
@@ -242,16 +241,20 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             what="specifications"
             errorPrefixes={SPEC_ERRORS}
             onSaved={onSaved}
-            // Tags belong to this card, under the fields, with an edit session of their own.
-            after={<TagsBlock product={product} onSaved={onSaved} />}
             view={
-              <FieldGrid>
-                {getSpecs(product).map(([label, value]) => (
-                  <Field key={label} label={label}>
-                    {value}
-                  </Field>
-                ))}
-              </FieldGrid>
+              <div className="flex flex-col gap-5">
+                <FieldGrid>
+                  {getSpecs(product).map(([label, value]) => (
+                    <Field key={label} label={label}>
+                      {value}
+                    </Field>
+                  ))}
+                </FieldGrid>
+                {/* Tags are shown here, but can only be changed while the card is edited. */}
+                <TagsBlock>
+                  <TagsView tags={product.tags} />
+                </TagsBlock>
+              </div>
             }
             editor={(section) => (
               <div className="flex flex-col gap-5">
@@ -263,36 +266,40 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                   <HandleField {...section} />
                 </div>
                 <CategoryField {...section} />
+                <TagsBlock>
+                  <TagsEditor {...section} />
+                </TagsBlock>
               </div>
             )}
           />
 
-          <EditableCard
-            product={product}
-            title="Description"
-            icon={CheckCircleIcon}
-            defaultOpen={false}
-            what="description"
-            onEditIntent={preloadRichTextEditor}
-            errorPrefixes={NO_ERRORS}
-            onSaved={onSaved}
-            view={
-              description ? (
-                // The product's own description (description_html), with its structure.
-                <SafeHtml
-                  html={product.description_html ?? ''}
-                  className="text-[0.9rem] leading-relaxed"
-                />
-              ) : (
-                <p className="text-text-muted text-[0.9rem]">No description.</p>
-              )
-            }
-            editor={(section) => <DescriptionField {...section} />}
-          />
-
-          {/* Below it: the description app's sections (metafield apd), as an accordion in one card. */}
-          {sections && (
-            <ProductDetailsCard product={product} sections={sections} onSaved={onSaved} />
+          {sections ? (
+            // The description app's sections (metafield apd) are the Description: an accordion in one card.
+            <DescriptionCard product={product} sections={sections} onSaved={onSaved} />
+          ) : (
+            // A product without sections keeps its own description (description_html).
+            <EditableCard
+              product={product}
+              title="Description"
+              icon={CheckCircleIcon}
+              defaultOpen={false}
+              what="description"
+              onEditIntent={preloadRichTextEditor}
+              errorPrefixes={NO_ERRORS}
+              onSaved={onSaved}
+              view={
+                description ? (
+                  // The product's own description (description_html), with its structure.
+                  <SafeHtml
+                    html={product.description_html ?? ''}
+                    className="text-[0.9rem] leading-relaxed"
+                  />
+                ) : (
+                  <p className="text-text-muted text-[0.9rem]">No description.</p>
+                )
+              }
+              editor={(section) => <DescriptionField {...section} />}
+            />
           )}
         </div>
       )}
@@ -300,16 +307,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   )
 }
 
-// --- Product details (description sections) ----------------------------------------
+// --- Description (the description sections) ---------------------------------------
 
 /**
- * "Product Details": one card, like the ones above, holding the description sections
+ * "Description": one card, like the ones above, holding the description sections
  * (Product Description, Product Information…) as an accordion, closed to begin with.
  * Its pencil turns all the sections into an editor in place (titles, formatted text,
  * order, add / remove). Saving sends the product's `apd` metafield (`metafields` of
  * `PUT /products/{id}`).
  */
-function ProductDetailsCard({
+function DescriptionCard({
   product,
   sections,
   onSaved,
@@ -321,10 +328,10 @@ function ProductDetailsCard({
   return (
     <EditableCard
       product={product}
-      title="Product Details"
+      title="Description"
       count={sections.sections.length}
-      icon={BoxesIcon}
-      what="product details"
+      icon={CheckCircleIcon}
+      what="description"
       onEditIntent={preloadRichTextEditor}
       errorPrefixes={SECTIONS_ERRORS}
       onSaved={onSaved}
@@ -337,64 +344,34 @@ function ProductDetailsCard({
 // --- Tags -----------------------------------------------------------------------
 
 /**
- * "Tags" in the Product Specifications card: one bordered card with every tag as a chip. The ⊕ beside the heading opens the
- * card for editing — a box to type new tags into sits right in the card, each
- * chip gets a ✕ — and the heading's buttons become ✓ Save / ✕ Discard.
+ * "Tags" in the Product Specifications card, under its fields. Viewing, they are just
+ * chips; they can only be added or removed while the card is being edited (the
+ * `TagsEditor` box sits in the same form) and are saved with the card's ✓ Save.
  */
-function TagsBlock({
-  product,
-  onSaved,
-}: {
-  product: ProductDetail
-  onSaved?: SavedHandler
-}) {
+function TagsBlock({ children }: { children: ReactNode }) {
   return (
-    <section aria-labelledby="product-tags-heading">
-      <EditableTab
-        product={product}
-        what="tags"
-        errorPrefixes={NO_ERRORS}
-        onSaved={onSaved}
-        header={(edit) => (
-          <div className="flex items-center justify-between gap-3">
-            <h3 id="product-tags-heading" className="text-[0.95rem] font-semibold">
-              Tags
-            </h3>
-            {edit.editing ? (
-              <div className="flex items-center gap-1.5">
-                <SectionEditControls edit={edit} what="tags" />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={edit.start}
-                aria-label="Add tags"
-                title="Add tags"
-                className="text-text-muted hover:text-accent focus-visible:outline-accent inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors focus-visible:outline-2"
-              >
-                <PlusCircleIcon width={22} height={22} />
-              </button>
-            )}
-          </div>
-        )}
-        view={
-          product.tags.length > 0 ? (
-            <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
-              {product.tags.map((tag) => (
-                <li key={tag} className={TAG_CHIP}>
-                  {tag}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
-              No tags yet.
-            </p>
-          )
-        }
-        editor={(section) => <TagsEditor {...section} />}
-      />
+    <section aria-labelledby="product-tags-heading" className="flex flex-col gap-2.5">
+      <h3 id="product-tags-heading" className="text-[0.95rem] font-semibold">
+        Tags
+      </h3>
+      {children}
     </section>
+  )
+}
+
+function TagsView({ tags }: { tags: string[] }) {
+  return tags.length > 0 ? (
+    <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
+      {tags.map((tag) => (
+        <li key={tag} className={TAG_CHIP}>
+          {tag}
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
+      No tags yet.
+    </p>
   )
 }
 

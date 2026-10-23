@@ -133,119 +133,108 @@ describe('the Tags block on the product page', () => {
     vi.clearAllMocks()
   })
 
+  // The Tags block is re-created when the specifications card switches to its form.
+  const block = () => screen.getByRole('region', { name: 'Tags' })
+  const tagBox = () => within(block()).getByRole('textbox', { name: 'Add tags' })
+  const save = () => screen.getByRole('button', { name: 'Save specifications' })
+  const discard = () =>
+    screen.getByRole('button', { name: 'Discard specifications changes' })
+
   async function openPage() {
     const user = userEvent.setup()
     renderPage()
     await screen.findByRole('heading', { level: 1, name: 'Sushi Tray' })
-    const block = await screen.findByRole('region', { name: 'Tags' })
-    return { user, block }
+    await screen.findByRole('region', { name: 'Tags' })
+    return user
   }
 
-  const save = () => screen.getByRole('button', { name: 'Save tags' })
+  /** The specifications pencil: the only way to change the tags. */
+  async function startEditing(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
+    await user.click(tagBox())
+  }
 
-  it('shows every tag as a chip in one card, under a "Tags" heading with an add button', async () => {
-    const { block } = await openPage()
+  it('shows every tag as a chip in one card, under a "Tags" heading, with no add option', async () => {
+    await openPage()
 
-    expect(within(block).getByRole('heading', { name: 'Tags' })).toBeInTheDocument()
+    expect(within(block()).getByRole('heading', { name: 'Tags' })).toBeInTheDocument()
     expect(
-      within(block)
+      within(block())
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual(TAGS)
-    expect(within(block).getByRole('button', { name: 'Add tags' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add tags' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Add tags' })).not.toBeInTheDocument()
   })
 
   it('sits inside the Product Specifications card, under its fields — not in a card of its own', async () => {
-    const { block } = await openPage()
+    await openPage()
 
     const card = screen
       .getByRole('heading', { name: 'Product Specifications' })
       .closest('section') as HTMLElement
-    expect(within(card).getByRole('region', { name: 'Tags' })).toBe(block)
+    expect(within(card).getByRole('region', { name: 'Tags' })).toBe(block())
     // Below the fields.
-    expect(within(card).getByText('Vendor / Brand').compareDocumentPosition(block)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    )
+    expect(
+      within(card).getByText('Vendor / Brand').compareDocumentPosition(block()),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
-  it('is edited on its own: the specifications form does not include the tags', async () => {
-    const { user, block } = await openPage()
+  it('shows the add-tags box only while the specifications are being edited', async () => {
+    const user = await openPage()
     await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
 
-    // The specifications are open for editing, the tags are still just chips with the ⊕.
+    // The same card: the specification fields and the tags box are open together.
     expect(screen.getByLabelText('Title')).toBeInTheDocument()
-    expect(within(block).getByRole('button', { name: 'Add tags' })).toBeInTheDocument()
+    expect(tagBox()).toBeInTheDocument()
+    expect(
+      within(block()).getByRole('button', { name: 'Remove tag Material_Plastic' }),
+    ).toBeInTheDocument()
+
+    await user.click(discard())
     expect(screen.queryByRole('textbox', { name: 'Add tags' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Remove tag/ })).not.toBeInTheDocument()
   })
 
-  it('can be open at the same time as the specifications, each saving only its own changes', async () => {
-    const { user, block } = await openPage()
-    await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
-    await user.type(screen.getByLabelText('Vendor'), ' Ltd')
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
-    await user.keyboard('Eco{Enter}')
+  it('says so when there are no tags yet, and the box is there once editing', async () => {
+    details.mockResolvedValue(product([]))
+    const user = await openPage()
 
-    // The tag edit survives the specifications form being open, and vice versa.
-    expect(within(block).getByText('Eco')).toBeInTheDocument()
+    expect(within(block()).getByText('No tags yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Add tags' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
+    expect(tagBox()).toBeInTheDocument()
+  })
+
+  it('is saved together with the specifications, in one update', async () => {
+    const user = await openPage()
+    await startEditing(user)
+    await user.type(screen.getByLabelText('Vendor'), ' Ltd')
+    await user.type(tagBox(), 'Eco{Enter}')
+
+    expect(within(block()).getByText('Eco')).toBeInTheDocument()
     expect(screen.getByLabelText('Vendor')).toHaveValue('Polymer Ltd')
 
-    await user.click(screen.getByRole('button', { name: 'Save specifications' }))
-
+    await user.click(save())
     await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         'id-1',
-        { vendor: 'Polymer Ltd' },
+        { vendor: 'Polymer Ltd', tags_add: ['Eco'] },
         'polymer-uk',
       ),
     )
-    // The half-finished tag edit is untouched by that save.
-    expect(within(block).getByText('Eco')).toBeInTheDocument()
-    await user.click(save())
-    await confirmUpdate(user)
-    await waitFor(() =>
-      expect(update).toHaveBeenLastCalledWith(
-        'id-1',
-        { tags_add: ['Eco'] },
-        'polymer-uk',
-      ),
-    )
+    expect(update).toHaveBeenCalledTimes(1)
   })
 
-  it('says so when there are no tags yet, and still lets you add one', async () => {
-    details.mockResolvedValue(product([]))
-    const { block } = await openPage()
-
-    expect(within(block).getByText('No tags yet.')).toBeInTheDocument()
-    expect(within(block).getByRole('button', { name: 'Add tags' })).toBeInTheDocument()
-  })
-
-  it('opens the card for editing from the ⊕ button, with the cursor in the box inside the card', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
-
-    const box = within(block).getByRole('textbox', { name: 'Add tags' })
-    expect(box).toHaveFocus()
-    // Every tag has a remove button; Save and Discard replace the ⊕.
-    expect(
-      within(block).getByRole('button', { name: 'Remove tag Material_Plastic' }),
-    ).toBeInTheDocument()
+  it('adds a tag with Enter, and saves just that addition', async () => {
+    const user = await openPage()
+    await startEditing(user)
     expect(save()).toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Discard tags changes' }),
-    ).toBeInTheDocument()
-    expect(
-      within(block).queryByRole('button', { name: 'Add tags' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('adds a tag in the card with Enter, and saves just that addition', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
     await user.keyboard('Food Packaging{Enter}')
 
-    expect(within(block).getByText('Food Packaging')).toBeInTheDocument()
-    expect(within(block).getByRole('textbox', { name: 'Add tags' })).toHaveValue('')
+    expect(within(block()).getByText('Food Packaging')).toBeInTheDocument()
+    expect(tagBox()).toHaveValue('')
     expect(save()).toBeEnabled()
     await user.click(save())
     await confirmUpdate(user)
@@ -257,18 +246,18 @@ describe('the Tags block on the product page', () => {
         'polymer-uk',
       ),
     )
-    // Back to the card of chips, now including the new one.
+    // Back to the card of chips, with no box.
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add tags' })).toBeInTheDocument(),
+      expect(screen.queryByRole('textbox', { name: 'Add tags' })).not.toBeInTheDocument(),
     )
   })
 
   it('adds several tags at once from commas, ignoring blanks and duplicates', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await startEditing(user)
     await user.keyboard('a, b ,, Material_Plastic, a{Enter}')
 
-    const chips = within(block).getByRole('list', { name: 'Tags' })
+    const chips = within(block()).getByRole('list', { name: 'Tags' })
     expect(
       within(chips)
         .getAllByRole('listitem')
@@ -282,10 +271,10 @@ describe('the Tags block on the product page', () => {
   })
 
   it('removes a tag with its ✕, saved as a removal only', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await user.click(screen.getByRole('button', { name: 'Edit specifications' }))
     await user.click(
-      within(block).getByRole('button', { name: 'Remove tag Material_Plastic' }),
+      within(block()).getByRole('button', { name: 'Remove tag Material_Plastic' }),
     )
     await user.click(save())
     await confirmUpdate(user)
@@ -300,50 +289,49 @@ describe('the Tags block on the product page', () => {
   })
 
   it('removes the last tag with Backspace in the empty box', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await startEditing(user)
     await user.keyboard('{Backspace}')
 
     expect(
-      within(block).queryByText('Category_Sushi Containers & Lids'),
+      within(block()).queryByText('Category_Sushi Containers & Lids'),
     ).not.toBeInTheDocument()
-    expect(within(block).getByText('Material_Plastic')).toBeInTheDocument()
+    expect(within(block()).getByText('Material_Plastic')).toBeInTheDocument()
   })
 
   it('keeps what is typed when the box loses focus', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await startEditing(user)
     await user.keyboard('Half typed')
     await user.click(document.body)
 
-    expect(within(block).getByText('Half typed')).toBeInTheDocument()
+    expect(within(block()).getByText('Half typed')).toBeInTheDocument()
   })
 
   it('throws the changes away on Discard and on Escape, asking the server nothing', async () => {
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await startEditing(user)
     await user.keyboard('Temporary{Enter}')
-    await user.click(screen.getByRole('button', { name: 'Discard tags changes' }))
+    await user.click(discard())
 
-    expect(within(block).queryByText('Temporary')).not.toBeInTheDocument()
-    expect(within(block).getByRole('button', { name: 'Add tags' })).toBeInTheDocument()
+    expect(within(block()).queryByText('Temporary')).not.toBeInTheDocument()
 
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    await startEditing(user)
     await user.keyboard('Another{Enter}{Escape}')
-    expect(within(block).queryByText('Another')).not.toBeInTheDocument()
+    expect(within(block()).queryByText('Another')).not.toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()
   })
 
   it("stays open with the backend's message when saving fails", async () => {
     update.mockRejectedValue(new ApiError('Too many tags.', { status: 422 }))
-    const { user, block } = await openPage()
-    await user.click(within(block).getByRole('button', { name: 'Add tags' }))
+    const user = await openPage()
+    await startEditing(user)
     await user.keyboard('One more{Enter}')
     await user.click(save())
     await confirmUpdate(user)
 
     expect(await screen.findByText('Too many tags.')).toBeInTheDocument()
-    expect(within(block).getByText('One more')).toBeInTheDocument()
+    expect(within(block()).getByText('One more')).toBeInTheDocument()
     expect(save()).toBeEnabled()
   })
 })

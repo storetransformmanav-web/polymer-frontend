@@ -38,8 +38,11 @@ export function DetailSection({
   const bodyId = useId()
 
   return (
-    <section className="border-border bg-bg rounded-xl border">
-      <div className="flex items-center gap-2 pr-4 pl-5">
+    <section className={DETAIL_CARD}>
+      {/* Only the title row takes the hover tint, not the whole card. */}
+      <div
+        className={`hover:bg-accent-tint/60 flex items-center gap-2 rounded-t-[0.7rem] pr-4 pl-5 transition-colors ${open ? '' : 'rounded-b-[0.7rem]'}`}
+      >
         <button
           type="button"
           aria-expanded={open}
@@ -83,7 +86,7 @@ export function DetailSection({
         }`}
       >
         <div className="overflow-hidden">
-          <div className="border-border border-t p-5">{children}</div>
+          <div className="border-border-strong border-t p-5">{children}</div>
         </div>
       </div>
     </section>
@@ -118,7 +121,8 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 // --- Pieces shared by the product and customer details panels -----------------
 
-export const DETAIL_CARD = 'border-border bg-bg rounded-xl border'
+/** A details-page card: sage-green border by default. */
+export const DETAIL_CARD = 'border-border-strong bg-bg rounded-xl border'
 export const DETAIL_TH =
   'text-text-muted border-border bg-accent-tint/60 border-b px-3.5 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
 export const DETAIL_TD = 'px-3.5 py-2.5 text-[0.85rem] whitespace-nowrap'

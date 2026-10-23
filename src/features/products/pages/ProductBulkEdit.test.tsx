@@ -327,6 +327,94 @@ describe('editing products in bulk', () => {
     expect(update).toHaveBeenCalledWith('id-2', { status: 'ARCHIVED' }, 'polymer-uk')
   })
 
+  describe('the "All products" row', () => {
+    it('is the first row of the table, with no field for SKU or barcode', async () => {
+      const user = await openPageEditor()
+      const editor = screen.getByRole('region', { name: 'Bulk edit' })
+
+      expect(within(editor).getByText('All products')).toBeInTheDocument()
+      expect(within(editor).getByLabelText('Status for all products')).toBeInTheDocument()
+      expect(
+        within(editor).getByLabelText('Product type for all products'),
+      ).toBeInTheDocument()
+      expect(within(editor).getByLabelText('Price for all products')).toBeInTheDocument()
+
+      // SKUs and barcodes are unique per variant, so there is nothing to set for all.
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('checkbox', { name: /^SKU/ }))
+      expect(
+        within(editor).queryByLabelText('SKU for all products'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('changes the status of every product at once, saved as one update each', async () => {
+      const user = await openPageEditor()
+      await user.selectOptions(screen.getByLabelText('Status for all products'), 'DRAFT')
+
+      expect(screen.getByLabelText('Status for Hippo Bag')).toHaveValue('DRAFT')
+      expect(screen.getByLabelText('Status for Foil Lid')).toHaveValue('DRAFT')
+      expect(screen.getByText('2 unsaved')).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      await confirmUpdate(user)
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+      expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk')
+      expect(update).toHaveBeenCalledWith('id-2', { status: 'DRAFT' }, 'polymer-uk')
+    })
+
+    it('types a product type once and every product gets it', async () => {
+      const user = await openPageEditor()
+      await user.type(screen.getByLabelText('Product type for all products'), 'Acme')
+
+      expect(screen.getByLabelText('Product type for Hippo Bag')).toHaveValue('Acme')
+      expect(screen.getByLabelText('Product type for Foil Lid')).toHaveValue('Acme')
+    })
+
+    it('sets the price of every variant of every product', async () => {
+      const user = await openPageEditor()
+      await user.type(screen.getByLabelText('Price for all products'), '9.99')
+
+      expect(screen.getByLabelText('Price for Hippo Bag')).toHaveValue('9.99')
+      expect(screen.getByLabelText('Price for Foil Lid – 7x9inch')).toHaveValue('9.99')
+      expect(screen.getByLabelText('Price for Foil Lid – 9x11inch')).toHaveValue('9.99')
+
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      await confirmUpdate(user)
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: V_A, price: '9.99' }] },
+        'polymer-uk',
+      )
+      expect(update).toHaveBeenCalledWith(
+        'id-2',
+        {
+          variants: [
+            { id: V_B1, price: '9.99' },
+            { id: V_B2, price: '9.99' },
+          ],
+        },
+        'polymer-uk',
+      )
+    })
+
+    it('leaves the products alone while it is blank, and still lets one row differ afterwards', async () => {
+      const user = await openPageEditor()
+      const common = screen.getByLabelText('Product type for all products')
+      await user.type(common, 'A')
+      await user.clear(common)
+
+      // Clearing the box is not "set every type to nothing": the last value stays.
+      expect(screen.getByLabelText('Product type for Hippo Bag')).toHaveValue('A')
+
+      await user.selectOptions(screen.getByLabelText('Status for all products'), 'ACTIVE')
+      await user.selectOptions(screen.getByLabelText('Status for Foil Lid'), 'ARCHIVED')
+      expect(screen.getByLabelText('Status for Hippo Bag')).toHaveValue('ACTIVE')
+      expect(screen.getByLabelText('Status for Foil Lid')).toHaveValue('ARCHIVED')
+    })
+  })
+
   it('keeps going when one product fails, and says which', async () => {
     update.mockImplementation(async (id) => {
       if (id === 'id-2') throw new ApiError('Handle already taken.', { status: 422 })
@@ -375,34 +463,62 @@ describe('editing products in bulk', () => {
     expect(screen.getByLabelText('SKU for Hippo Bag')).toHaveValue('HIP-1')
   })
 
-  it('asks before leaving with unsaved changes, and stays if you say no', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('Cancel with unsaved changes opens "Are you sure you want to cancel?", and Keep editing stays', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
     const user = await openPageEditor()
     await user.type(screen.getByLabelText('Product type for Hippo Bag'), '!')
 
-    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(confirm).toHaveBeenCalled()
+    const dialog = await screen.findByRole('alertdialog', { name: 'Cancel editing?' })
+    expect(
+      within(dialog).getByText('Are you sure you want to cancel?'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText(/unsaved changes to 1 product/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Keep editing' })).toHaveFocus()
+    expect(confirm).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    // Still editing, with the typed text.
     expect(
       screen.getByRole('heading', { name: 'Editing 2 products' }),
     ).toBeInTheDocument()
+    expect(screen.getByLabelText('Product type for Hippo Bag')).toHaveDisplayValue(/!$/)
+  })
 
-    confirm.mockReturnValue(true)
-    await user.click(screen.getByRole('button', { name: 'Back' }))
+  it('"Yes, cancel" leaves the editor and drops the changes', async () => {
+    const user = await openPageEditor()
+    await user.type(screen.getByLabelText('Product type for Hippo Bag'), '!')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, cancel' }))
+
+    expect(
+      screen.queryByRole('heading', { name: 'Editing 2 products' }),
+    ).not.toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('Cancel leaves at once when nothing changed', async () => {
+    const user = await openPageEditor()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Editing 2 products' }),
     ).not.toBeInTheDocument()
   })
 
-  it('goes back without asking when nothing changed', async () => {
-    const confirm = vi.spyOn(window, 'confirm')
-    const user = await openPageEditor()
-    await user.click(screen.getByRole('button', { name: 'Back' }))
+  it('has icon-only Save and Cancel buttons, and no Back or text Save button', async () => {
+    await openPageEditor()
+    const editor = screen.getByRole('region', { name: 'Bulk edit' })
 
-    expect(confirm).not.toHaveBeenCalled()
-    expect(
-      screen.queryByRole('heading', { name: 'Editing 2 products' }),
-    ).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('button', { name: 'Back' })).toBeNull()
+    const save = within(editor).getByRole('button', { name: 'Save' })
+    expect(save.querySelector('svg')).not.toBeNull()
+    expect(save).toHaveTextContent('')
+    expect(within(editor).getByRole('button', { name: 'Cancel' })).toHaveTextContent('')
   })
 
   it('shows the saved values in the list once back, with no reload', async () => {
@@ -419,7 +535,7 @@ describe('editing products in bulk', () => {
     await confirmUpdate(user)
     await screen.findByText(/Saved 1 product/)
 
-    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(await screen.findByLabelText('Select Hippo Carrier Bag')).toBeInTheDocument()
   })
 })

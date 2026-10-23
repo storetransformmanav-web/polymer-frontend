@@ -6,11 +6,14 @@ import {
   CustomerDeleteDialog,
   type CustomerToDelete,
 } from '../components/CustomerDeleteDialog.tsx'
+import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useCustomers } from '../hooks/useCustomers.ts'
+import { useCustomerTabs } from '../hooks/useCustomerTabs.ts'
+import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { customerName } from '../utils/format.ts'
 
 const LIST_PATH = '/customers'
@@ -27,6 +30,7 @@ const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
  */
 export function CustomersPage() {
   const customers = useCustomers()
+  const tabs = useCustomerTabs()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = customers
@@ -54,8 +58,34 @@ export function CustomersPage() {
     if (activeId === customer.id) navigate(LIST_PATH)
   }
 
+  function openCustomer(customer: CustomerListItem) {
+    tabs.openTab({ id: customer.id, name: customerName(customer), email: customer.email })
+    navigate(detailsPath(customer.id))
+  }
+
+  function closeTab(id: string) {
+    const index = tabs.tabs.findIndex((tab) => tab.id === id)
+    const neighbour = tabs.tabs[index + 1] ?? tabs.tabs[index - 1]
+    tabs.closeTab(id)
+    if (id === activeId) navigate(neighbour ? detailsPath(neighbour.id) : LIST_PATH)
+  }
+
+  function clearTabs() {
+    tabs.clearTabs()
+    if (activeId) navigate(LIST_PATH)
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <CustomerTabsBar
+        tabs={tabs.tabs}
+        activeId={activeId}
+        onShowList={() => navigate(LIST_PATH)}
+        onSelect={(id) => navigate(detailsPath(id))}
+        onClose={closeTab}
+        onClear={clearTabs}
+      />
+
       {activeId && (
         <CustomerDetailsView
           key={activeId}
@@ -82,15 +112,15 @@ export function CustomersPage() {
           onReset={customers.resetFilters}
         />
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <CustomersExport
-            items={customers.items}
-            page={data?.page ?? filters.page}
-            filters={filters}
-            total={data?.total ?? 0}
-            facets={customers.facets}
-          />
-        </div>
+        {/* The Export button sits in the top bar; it is only shown while the list is. */}
+        <CustomersExport
+          items={customers.items}
+          page={data?.page ?? filters.page}
+          filters={filters}
+          total={data?.total ?? 0}
+          facets={customers.facets}
+          visible={!activeId}
+        />
 
         <section
           aria-label="Customers"
@@ -112,7 +142,7 @@ export function CustomersPage() {
             error={customers.error}
             hasFilters={customers.hasFilters}
             isStale={customers.isShowingPrevious}
-            onOpen={(customer) => navigate(detailsPath(customer.id))}
+            onOpen={openCustomer}
             onPrefetch={customers.prefetchDetails}
             onDelete={(customer) => {
               setNotice(null)

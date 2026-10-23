@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ALL_SHOPS, shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { ArrowLeftIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
@@ -30,6 +30,8 @@ import { MediaRows } from './MediaRows.tsx'
 
 interface ProductCreateViewProps {
   onBack: () => void
+  /** Tells the page whether the form holds anything typed (its tab asks before closing). */
+  onDirtyChange?: (dirty: boolean) => void
   /**
    * The product exists (it is already in the cached list). `previewUrl` is the
    * image address it was created with, when it has one: the store is still
@@ -49,7 +51,11 @@ const BUTTON =
  * first. Shopify creates the product (a second or two), and then it is simply in
  * the list: at the top, in the counts, with no refresh.
  */
-export function ProductCreateView({ onBack, onCreated }: ProductCreateViewProps) {
+export function ProductCreateView({
+  onBack,
+  onCreated,
+  onDirtyChange,
+}: ProductCreateViewProps) {
   const { shops, selected } = useShops()
   const { create, isCreating, error, clearError } = useCreateProduct()
   const [draft, setDraft] = useState<CreateDraft>(() => blankCreateDraft(''))
@@ -81,6 +87,11 @@ export function ProductCreateView({ onBack, onCreated }: ProductCreateViewProps)
       return 'options' in patch ? syncVariants(next) : next
     })
   }
+
+  const dirty = isCreateDirty(effective)
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
 
   function back() {
     if (

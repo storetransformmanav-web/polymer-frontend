@@ -11,6 +11,7 @@ import {
   OrdersIcon,
   SearchIcon,
   SlidersIcon,
+  UserCogIcon,
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
@@ -67,7 +68,8 @@ interface CustomersToolbarProps {
 }
 
 /**
- * Search, country, role tabs and the collapsible filter grid. Typing in the
+ * Search, country, the Filters button and Clear All in one row, and the collapsible
+ * filter grid under it (its first field is the role, with a count on every choice). Typing in the
  * search box is instant locally and sent to the API once the user
  * pauses (see useDebouncedField); selects apply immediately.
  */
@@ -82,6 +84,17 @@ export function CustomersToolbar({
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
   const counts = useCustomerRoleCounts(filters, ROLE_VALUES)
+
+  // The role choices, each with its count ("Subscribers (9,760)"). The open one can fall
+  // back to the list's own total while its count loads.
+  const roleOptions: SelectOption[] = ROLE_TABS.map((tab) => {
+    const count = counts[tab.value] ?? (filters.role === tab.value ? total : null)
+    return {
+      value: tab.value,
+      label:
+        count === null ? tab.label : `${tab.label} (${count.toLocaleString('en-GB')})`,
+    }
+  })
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -134,6 +147,21 @@ export function CustomersToolbar({
           </div>
           <button
             type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="customer-filter-grid"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
+          >
+            <SlidersIcon width={16} height={16} />
+            Filters
+            <ChevronDownIcon
+              width={14}
+              height={14}
+              className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          <button
+            type="button"
             onClick={onReset}
             disabled={!hasFilters}
             className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
@@ -142,62 +170,6 @@ export function CustomersToolbar({
             Clear All
           </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="group"
-          aria-label="Filter by role"
-          className="border-border bg-surface flex max-w-full min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl border p-1 [&::-webkit-scrollbar]:hidden"
-        >
-          {ROLE_TABS.map((tab) => {
-            const active = filters.role === tab.value
-            // The open tab can fall back to the list's own total while its count loads.
-            const count = counts[tab.value] ?? (active ? total : null)
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onChange({ role: tab.value })}
-                className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap transition-colors ${
-                  active
-                    ? 'bg-bg text-text shadow-sm'
-                    : 'text-text-muted hover:text-text bg-transparent'
-                }`}
-              >
-                {tab.label}
-                {count !== null && (
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
-                      active
-                        ? 'bg-accent-tint text-accent'
-                        : 'bg-border/60 text-text-muted'
-                    }`}
-                  >
-                    {count.toLocaleString('en-GB')}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        <button
-          type="button"
-          aria-expanded={filtersOpen}
-          aria-controls="customer-filter-grid"
-          onClick={() => setFiltersOpen(!filtersOpen)}
-          className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
-        >
-          <SlidersIcon width={16} height={16} />
-          Filters
-          <ChevronDownIcon
-            width={14}
-            height={14}
-            className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
-          />
-        </button>
       </div>
 
       <div
@@ -209,6 +181,15 @@ export function CustomersToolbar({
       >
         <div className="-m-1 overflow-hidden p-1">
           <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9">
+            <SelectField
+              compact
+              id="filter-role"
+              label="Customer role"
+              icon={UserCogIcon}
+              value={filters.role}
+              options={roleOptions}
+              onChange={(role) => onChange({ role: role as CustomerRole | '' })}
+            />
             <SelectField
               compact
               id="filter-state"

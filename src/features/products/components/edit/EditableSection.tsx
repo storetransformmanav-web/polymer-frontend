@@ -143,12 +143,6 @@ interface EditableCardProps extends SharedProps {
   count?: number
   icon: ComponentType<IconProps>
   defaultOpen?: boolean
-  /**
-   * Something that lives in the card under the fields and stays where it is when
-   * the card switches between viewing and editing — so it keeps its own state,
-   * and its own edit session, either way (the specifications' Tags).
-   */
-  after?: ReactNode
 }
 
 /**
@@ -168,7 +162,6 @@ export function EditableCard({
   icon,
   defaultOpen,
   onEditIntent,
-  after,
 }: EditableCardProps) {
   const edit = useSectionEdit(product, { errorPrefixes, onSaved })
 
@@ -186,7 +179,6 @@ export function EditableCard({
         <div onKeyDown={discardOnEscape(edit)}>
           {edit.editing ? renderBody(edit, editor) : view}
         </div>
-        {after && <div className="mt-5">{after}</div>}
       </DetailSection>
       <ConfirmSave edit={edit} title={product.title} />
     </>

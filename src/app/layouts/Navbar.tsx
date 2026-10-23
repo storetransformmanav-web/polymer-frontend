@@ -8,6 +8,7 @@ import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
 import { NAV_ENTRIES, isNavGroup } from '../router/navigation.ts'
 import { initials, useCurrentUser } from './currentUser.ts'
 import { NavAccordion } from './NavAccordion.tsx'
+import { NavGroupFlyout } from './NavGroupFlyout.tsx'
 import { NavItemLink } from './NavItemLink.tsx'
 
 /**
@@ -54,7 +55,12 @@ export function Navbar() {
         {NAV_ENTRIES.map((entry) =>
           isNavGroup(entry) ? (
             <li key={entry.label}>
-              <NavAccordion group={entry} collapsed={collapsed} />
+              {/* In the icon rail a group is one icon that opens a card of its pages. */}
+              {collapsed ? (
+                <NavGroupFlyout group={entry} />
+              ) : (
+                <NavAccordion group={entry} />
+              )}
             </li>
           ) : (
             <li key={entry.to}>

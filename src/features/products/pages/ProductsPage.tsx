@@ -47,6 +47,8 @@ const LIST_PATH = '/products'
 // page itself does not scroll — see `fillHeight` in navigation.ts).
 const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
+// The "Add product" form is a tab of its own, at /products/new (no product has that id).
+const CREATE_PATH = `${LIST_PATH}/new`
 
 /**
  * Products: the catalogue list at `/products`, and one product's details at
@@ -80,8 +82,9 @@ export function ProductsPage() {
   // Ticked rows (by id) and the products open in the bulk editor, if it is open.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [bulkItems, setBulkItems] = useState<ProductListItem[] | null>(null)
-  // The "Add product" form is open.
+  // The "Add product" form is open (as a tab), and whether it holds anything typed.
   const [creating, setCreating] = useState(false)
+  const [createDirty, setCreateDirty] = useState(false)
   const prefetchMany = usePrefetchDetails()
   const status = useProductStatusChange()
   // Only rows on the page being shown count as selected (and get edited).
@@ -118,13 +121,33 @@ export function ProductsPage() {
     setNotice(null)
     setQuickView(null)
     setCreating(true)
+    navigate(CREATE_PATH)
+  }
+
+  // Closes the form for good (created, backed out of, or its tab closed) and leaves its tab.
+  function closeCreate() {
+    setCreating(false)
+    setCreateDirty(false)
+    if (creatingRoute) navigate(LIST_PATH)
+  }
+
+  // Asks before throwing away what was typed (the form's own Back asks the same).
+  function discardCreate() {
+    if (
+      createDirty &&
+      !window.confirm('Discard this new product? What you entered will be lost.')
+    ) {
+      return false
+    }
+    closeCreate()
+    return true
   }
 
   function handleCreated(
     result: ProductCreateResult,
     info: { previewUrl: string | null },
   ) {
-    setCreating(false)
+    closeCreate()
     // What the store made, as it reports it (the counts are of what it accepted).
     const made = [
       result.variants > 0 ? plural(result.variants, 'variant') : '',
@@ -262,7 +285,16 @@ export function ProductsPage() {
   }
 
   // `/products/<id>[/…]` → the product id; `/products` → null (the list).
-  const activeId = splat ? splat.split('/')[0] || null : null
+  const first = splat ? splat.split('/')[0] || null : null
+  const creatingRoute = first === 'new'
+  const activeId = creatingRoute ? null : first
+  // The form is on screen (it stays mounted, with what was typed, while another tab shows).
+  const showCreate = creating && creatingRoute
+
+  // /products/new opened directly (a reload, a link) starts the form.
+  useEffect(() => {
+    if (creatingRoute) setCreating(true)
+  }, [creatingRoute])
 
   function openProduct(product: ProductListItem) {
     tabs.openTab({ id: product.id, handle: product.handle, title: product.title })
@@ -282,14 +314,33 @@ export function ProductsPage() {
   }
 
   function clearTabs() {
+    if (creating && !discardCreate()) return
     tabs.clearTabs()
     if (activeId) navigate(LIST_PATH)
   }
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      {/* The stock figures sit above the product tabs; they belong to the list, so a product,
+          the bulk editor and the create form take their place (kept mounted, only hidden). */}
+      <div className={activeId || bulkItems || showCreate ? 'hidden' : undefined}>
+        <ProductsKpis data={data} />
+      </div>
+
+      <ProductTabsBar
+        tabs={tabs.tabs}
+        activeId={activeId}
+        draft={creating ? { active: creatingRoute } : null}
+        onShowList={() => navigate(LIST_PATH)}
+        onSelect={(id) => navigate(detailsPath(id))}
+        onSelectDraft={() => navigate(CREATE_PATH)}
+        onCloseDraft={discardCreate}
+        onClose={closeTab}
+        onClear={clearTabs}
+      />
+
       {bulkItems && (
-        <div className={SCROLL_VIEW}>
+        <div className={creatingRoute ? 'hidden' : SCROLL_VIEW}>
           <BulkEditView
             key="bulk-edit"
             items={bulkItems}
@@ -300,23 +351,15 @@ export function ProductsPage() {
       )}
 
       {creating && (
-        <div className={SCROLL_VIEW}>
+        <div className={showCreate ? SCROLL_VIEW : 'hidden'}>
           <ProductCreateView
             key="create-product"
-            onBack={() => setCreating(false)}
+            onBack={closeCreate}
             onCreated={handleCreated}
+            onDirtyChange={setCreateDirty}
           />
         </div>
       )}
-
-      <ProductTabsBar
-        tabs={tabs.tabs}
-        activeId={activeId}
-        onShowList={() => navigate(LIST_PATH)}
-        onSelect={(id) => navigate(detailsPath(id))}
-        onClose={closeTab}
-        onClear={clearTabs}
-      />
 
       {noticeState && (
         <FormMessage tone={noticeState.tone}>{noticeState.text}</FormMessage>
@@ -338,13 +381,11 @@ export function ProductsPage() {
           removes it from tab order and screen readers). */}
       <div
         className={
-          activeId || bulkItems || creating
+          activeId || bulkItems || showCreate
             ? 'hidden'
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
-        <ProductsKpis data={data} />
-
         <ProductsExport
           items={products.items}
           page={data?.page ?? filters.page}
@@ -352,7 +393,11 @@ export function ProductsPage() {
           total={data?.total ?? 0}
           facets={products.facets}
           visible={
-            !products.isPending && !products.error && !activeId && !bulkItems && !creating
+            !products.isPending &&
+            !products.error &&
+            !activeId &&
+            !bulkItems &&
+            !showCreate
           }
         />
 

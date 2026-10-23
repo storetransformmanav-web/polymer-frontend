@@ -205,7 +205,8 @@ describe('exporting customers', () => {
       const user = userEvent.setup()
       renderWithProviders(<CustomersPage />)
       await screen.findByText('Customer 2')
-      await user.click(screen.getByRole('button', { name: /^Administrators/ }))
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      await user.selectOptions(screen.getByLabelText('Customer role'), 'administrator')
       await waitFor(() =>
         expect(list).toHaveBeenCalledWith(
           expect.objectContaining({ role: 'administrator' }),

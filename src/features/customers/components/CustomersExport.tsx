@@ -3,6 +3,7 @@ import type {
   CustomerFilters,
   CustomersFacets,
 } from '../../../app/store/customersSlice.ts'
+import { InAppBar } from '../../../components/ui/AppBarSlot.tsx'
 import { ExportButton, ExportStatus } from '../../../components/ui/ExportControls.tsx'
 import { useTableExport } from '../../../hooks/useTableExport.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
@@ -22,12 +23,15 @@ interface CustomersExportProps {
   /** How many customers match them, across every page. */
   total: number
   facets: CustomersFacets
+  /** Show the button (the list is on screen); the progress and the dialog stay either way. */
+  visible?: boolean
 }
 
 /**
- * The **Export** button of the customers page, and the progress of an export beside it.
- * The button opens `CustomersExportDialog` (format, columns, rows, filters); reading every
- * page can take a few seconds, so its progress — with Cancel — stays after the dialog has closed.
+ * The **Export** button of the customers page, in the top bar (`InAppBar`), and the progress
+ * of an export beside it. The button opens `CustomersExportDialog` (format, columns, rows,
+ * filters); reading every page can take a few seconds, so its progress — with Cancel — stays
+ * in the bar after the dialog has closed.
  */
 export function CustomersExport({
   items,
@@ -35,6 +39,7 @@ export function CustomersExport({
   filters,
   total,
   facets,
+  visible = true,
 }: CustomersExportProps) {
   const { state, exportPage, exportFilteredPage, exportAll, cancel, dismiss } =
     useTableExport(CUSTOMERS_EXPORT)
@@ -53,11 +58,17 @@ export function CustomersExport({
 
   return (
     <>
-      <ExportStatus state={state} onCancel={cancel} onDismiss={dismiss} />
-      <ExportButton
-        disabled={running || (items.length === 0 && total === 0)}
-        onClick={() => setOpen(true)}
-      />
+      <InAppBar>
+        <div className="max-w-[16rem] min-w-0">
+          <ExportStatus state={state} onCancel={cancel} onDismiss={dismiss} />
+        </div>
+        {visible && (
+          <ExportButton
+            disabled={running || (items.length === 0 && total === 0)}
+            onClick={() => setOpen(true)}
+          />
+        )}
+      </InAppBar>
       {open && (
         <CustomersExportDialog
           pageCount={items.length}

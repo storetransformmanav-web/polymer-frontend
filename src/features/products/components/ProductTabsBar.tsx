@@ -1,10 +1,15 @@
-import { HistoryIcon, ProductsIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
+import { ProductsIcon } from '../../../components/ui/icons.tsx'
 import type { ProductTab } from '../hooks/useProductTabs.ts'
 
 interface ProductTabsBarProps {
   tabs: ProductTab[]
   /** The product whose details are showing, or null on the list. */
   activeId: string | null
+  /** The "Add product" form, once opened — a tab of its own — and whether it is showing. */
+  draft: { active: boolean } | null
+  onSelectDraft: () => void
+  onCloseDraft: () => void
   onShowList: () => void
   onSelect: (id: string) => void
   onClose: (id: string) => void
@@ -12,90 +17,41 @@ interface ProductTabsBarProps {
 }
 
 const label = (tab: ProductTab) => tab.handle ?? `${tab.id.slice(0, 8)}…`
+// Not a product id (those are UUIDs or numbers).
+const DRAFT_ID = '__new-product__'
 
-/**
- * Browser-style strip of opened products: "All Products" returns to the
- * list, each product is a tab you can switch to or close. Switching is
- * instant — details are cached in Redux. Hidden until there's a tab.
- */
+/** The strip of opened products: "All Products" returns to the list (see `OpenTabsBar`). */
 export function ProductTabsBar({
   tabs,
   activeId,
-  onShowList,
+  draft,
+  onSelectDraft,
+  onCloseDraft,
   onSelect,
   onClose,
-  onClear,
+  ...rest
 }: ProductTabsBarProps) {
-  if (tabs.length === 0) return null
-
   return (
-    <nav
-      aria-label="Open products"
-      className="border-border bg-bg flex items-stretch rounded-xl border"
-    >
-      <button
-        type="button"
-        onClick={onShowList}
-        aria-label="All Products"
-        aria-current={activeId === null ? 'page' : undefined}
-        className={`text-text flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-4 py-3 text-[0.85rem] font-semibold transition-colors ${
-          activeId === null ? 'border-accent' : 'hover:border-border border-transparent'
-        }`}
-      >
-        <ProductsIcon width={16} height={16} />
-        <span className="hidden sm:inline" aria-hidden="true">
-          All Products
-        </span>
-      </button>
-
-      <span className="border-border text-text-muted flex shrink-0 items-center border-r px-3">
-        <HistoryIcon width={16} height={16} aria-label="Opened products" />
-      </span>
-
-      <ul className="flex min-w-0 flex-1 [scrollbar-width:none] items-stretch gap-1 overflow-x-auto px-2 [&::-webkit-scrollbar]:hidden">
-        {tabs.map((tab) => {
-          const active = tab.id === activeId
-          return (
-            <li
-              key={tab.id}
-              className={`flex shrink-0 items-center border-b-2 ${
-                active ? 'border-accent' : 'border-transparent'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => onSelect(tab.id)}
-                aria-current={active ? 'page' : undefined}
-                title={tab.title ?? undefined}
-                className="hover:bg-surface flex cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent py-1.5 pr-1 pl-2.5 text-[0.8rem] transition-colors"
-              >
-                <ProductsIcon width={14} height={14} className="text-accent" />
-                <span className="text-text-muted text-[0.62rem] font-bold tracking-wider uppercase">
-                  Product
-                </span>
-                <span className="max-w-32 truncate font-semibold">{label(tab)}</span>
-              </button>
-              <button
-                type="button"
-                aria-label={`Close ${label(tab)}`}
-                onClick={() => onClose(tab.id)}
-                className="text-text-muted hover:text-danger flex cursor-pointer items-center border-none bg-transparent p-1.5 transition-colors"
-              >
-                <XIcon width={12} height={12} />
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-
-      <button
-        type="button"
-        onClick={onClear}
-        className="border-border text-text-muted hover:text-danger flex shrink-0 cursor-pointer items-center gap-1.5 border-0 border-l bg-transparent px-4 text-[0.72rem] font-bold tracking-wide uppercase transition-colors"
-      >
-        <XIcon width={14} height={14} />
-        Clear
-      </button>
-    </nav>
+    <OpenTabsBar
+      {...rest}
+      activeId={draft?.active ? DRAFT_ID : activeId}
+      onSelect={(id) => (id === DRAFT_ID ? onSelectDraft() : onSelect(id))}
+      onClose={(id) => (id === DRAFT_ID ? onCloseDraft() : onClose(id))}
+      tabs={[
+        ...tabs.map((tab) => ({
+          id: tab.id,
+          label: label(tab),
+          title: tab.title ?? undefined,
+        })),
+        ...(draft
+          ? [{ id: DRAFT_ID, label: 'New product', title: 'A product being added' }]
+          : []),
+      ]}
+      navLabel="Open products"
+      listLabel="All Products"
+      kind="Product"
+      historyLabel="Opened products"
+      icon={ProductsIcon}
+    />
   )
 }
