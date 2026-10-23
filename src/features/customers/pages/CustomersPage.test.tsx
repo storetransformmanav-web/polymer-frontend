@@ -34,6 +34,7 @@ function makeCustomer(n: number): CustomerListItem {
     is_active: true,
     shopify_state: crm ? null : n % 5 === 0 ? 'INVITED' : 'ENABLED',
     accepts_marketing: crm ? null : n % 2 === 0,
+    verified_email: crm ? null : n % 2 === 0,
     orders_count: n % 4,
     total_spent: n % 4 === 0 ? '0.00' : '45.70',
     currency: crm ? null : 'GBP',
@@ -98,7 +99,7 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows every column by default: Customer name, Email subscription, Orders, Amount spent, Role, Joined, Last login, Actions', async () => {
+  it('shows every column by default: Customer name, Email verified, Orders, Amount spent, Role, Joined, Last login, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
@@ -106,7 +107,7 @@ describe('CustomersPage', () => {
     const headers = table.getAllByRole('columnheader').map((header) => header.textContent)
     expect(headers).toEqual([
       'Customer name',
-      'Email subscription',
+      'Email verified',
       'Orders',
       'Amount spent',
       'Role',
@@ -116,15 +117,17 @@ describe('CustomersPage', () => {
     ])
     expect(table.queryByRole('checkbox')).toBeNull()
 
-    // #2: Shopify subscriber with money spent and a marketing opt-in.
+    // #2: Shopify subscriber with money spent and a verified email.
     const row = table.getByText('Customer 2').closest('tr')!
     expect(within(row).getByText('customer2@example.com')).toBeInTheDocument()
-    expect(within(row).getByText('Subscribed')).toBeInTheDocument()
+    expect(within(row).getByText('Verified')).toBeInTheDocument()
     expect(within(row).getByText('£45.70')).toBeInTheDocument()
-    // #3 has not subscribed; #1 (CRM) has no marketing flag at all.
+    // #3 has not verified; #1 (CRM) has no flag at all.
     expect(
-      within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not subscribed'),
+      within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not verified'),
     ).toBeInTheDocument()
+    // The old Email subscription column is gone.
+    expect(table.queryByRole('columnheader', { name: 'Email subscription' })).toBeNull()
     // Store, note, location, state and tags are not columns at all.
     for (const name of ['Store', 'Note', 'Location', 'State', 'Tags']) {
       expect(table.queryByRole('columnheader', { name })).toBeNull()

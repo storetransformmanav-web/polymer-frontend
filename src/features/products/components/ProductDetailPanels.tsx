@@ -1039,12 +1039,6 @@ export function MetafieldsPanel({ product }: { product: ProductDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-text-muted text-[0.85rem] leading-relaxed">
-        Metafields are extra details stored with this product in Shopify — things the
-        standard fields don&apos;t cover, such as a unit of sale or the description
-        sections. Each one belongs to the whole product or to a single variant.
-      </p>
-
       <TableWrap>
         <thead>
           <tr>

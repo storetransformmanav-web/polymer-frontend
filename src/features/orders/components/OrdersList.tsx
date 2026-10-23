@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
@@ -17,7 +18,8 @@ const TH_BASE =
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
-const TD = 'overflow-hidden px-3 py-3 text-left align-middle'
+// No alignment here: each cell says its own (a `text-left` here would beat `text-center`).
+const TD = 'overflow-hidden px-3 py-3 align-middle'
 const SKELETON_ROWS = 8
 // The payment pills: one width, centred in their column, so they line up.
 const PILL = 'w-32 justify-center'
@@ -153,7 +155,7 @@ export function OrdersList({
                   className="border-border bg-bg hover:border-accent flex w-full min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors"
                 >
                   <span className="flex w-full items-start justify-between gap-3">
-                    <span className="text-[0.92rem] font-semibold">
+                    <span className="text-[0.88rem] font-semibold">
                       {orderLabel(order)}
                     </span>
                     <span className="text-[0.88rem] font-semibold">
@@ -286,7 +288,7 @@ export function OrdersList({
                         onClick={() => onOpen(order)}
                         onPointerEnter={() => onPrefetch(order)}
                         onFocus={() => onPrefetch(order)}
-                        className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                        className={ROW_ACTION}
                       >
                         <EyeIcon />
                       </button>

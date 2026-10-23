@@ -15,27 +15,35 @@ function kpis(data: ProductListResponse | null): Kpi[] {
   const summary = data?.stock_summary
   const count = (value: number | undefined) =>
     value === undefined ? '—' : value.toLocaleString('en-GB')
+  const threshold = summary?.low_stock_threshold
   return [
     {
       label: 'In stock',
+      hint: 'Products with stock above 0',
       value: count(summary?.in_stock),
       icon: CheckCircleIcon,
       tone: 'good',
     },
     {
       label: 'Low stock',
+      hint:
+        threshold === undefined
+          ? 'Stock above 0 but below the threshold'
+          : `Stock above 0 but below ${threshold.toLocaleString('en-GB')}`,
       value: count(summary?.low_stock),
       icon: AlertTriangleIcon,
       tone: 'warning',
     },
     {
       label: 'Out of stock',
+      hint: 'No stock: 0, negative or unknown',
       value: count(summary?.out_of_stock),
       icon: XCircleIcon,
       tone: 'danger',
     },
     {
       label: 'Low stock threshold',
+      hint: 'Below this many counts as low',
       value: count(summary?.low_stock_threshold),
       icon: SlidersIcon,
     },

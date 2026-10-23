@@ -322,6 +322,16 @@ describe('ProductsPage list', () => {
     expect(within(card('Low stock threshold')).getByText('10')).toBeInTheDocument()
   })
 
+  it('says under each stock figure what it counts, using the API’s threshold', async () => {
+    renderPage()
+    await screen.findByText('Product 1')
+
+    expect(screen.getByText('Products with stock above 0')).toBeInTheDocument()
+    expect(screen.getByText('Stock above 0 but below 10')).toBeInTheDocument()
+    expect(screen.getByText('No stock: 0, negative or unknown')).toBeInTheDocument()
+    expect(screen.getByText('Below this many counts as low')).toBeInTheDocument()
+  })
+
   it('filters by the status dropdown and sends it to the API', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -879,7 +889,7 @@ describe('ProductsPage details', () => {
       await screen.findByText('Home > Desks')
       await user.click(screen.getByRole('tab', { name: /^Metafields/ }))
 
-      expect(screen.getByText(/Metafields are extra details stored/)).toBeInTheDocument()
+      expect(screen.queryByText(/Metafields are extra details stored/)).toBeNull()
       expect(screen.getByRole('columnheader', { name: 'Detail' })).toBeInTheDocument()
       expect(screen.getByRole('columnheader', { name: 'Kind' })).toBeInTheDocument()
 

@@ -6,6 +6,7 @@ import {
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
@@ -22,7 +23,8 @@ const TH_BASE =
 const TH = `${TH_BASE} text-left`
 const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
-const TD = 'overflow-hidden px-3 py-3 text-left align-middle whitespace-nowrap'
+// No alignment here: each cell says its own (a `text-left` here would beat `text-center`).
+const TD = 'overflow-hidden px-3 py-3 align-middle whitespace-nowrap'
 // The pills (subscription, role): one width, centred in their column, so they line up.
 const PILL = 'w-28 justify-center'
 const SKELETON_ROWS = 8
@@ -48,7 +50,7 @@ function Avatar({ name }: { name: string }) {
   return (
     <span
       aria-hidden="true"
-      className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-bold"
+      className="bg-accent-tint text-accent inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-bold"
     >
       {initials(name) || '?'}
     </span>
@@ -66,16 +68,16 @@ function StateBadge({ customer }: { customer: CustomerListItem }) {
   )
 }
 
-function Marketing({ value }: { value: boolean | null | undefined }) {
+function EmailVerified({ value }: { value: boolean | null | undefined }) {
   if (value === null || value === undefined)
     return <span className="text-text-muted">—</span>
   return value ? (
     <Badge tone="success" className={PILL}>
-      Subscribed
+      Verified
     </Badge>
   ) : (
     <Badge tone="neutral" className={PILL}>
-      Not subscribed
+      Not verified
     </Badge>
   )
 }
@@ -221,18 +223,18 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[960px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1200px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={TH}>Customer name</th>
-            <th className={`${TH_CENTER} w-44`}>Email subscription</th>
-            <th className={`${TH_RIGHT} w-24`}>Orders</th>
-            <th className={`${TH_RIGHT} w-36 pr-8`}>Amount spent</th>
+            <th className={`${TH_CENTER} w-36`}>Email verified</th>
+            <th className={`${TH_RIGHT} w-36`}>Orders</th>
+            <th className={`${TH_RIGHT} w-36`}>Amount spent</th>
             <th className={`${TH_CENTER} w-36`}>Role</th>
-            <th className={`${TH_CENTER} w-32`}>Joined</th>
-            <th className={`${TH_CENTER} w-32`}>Last login</th>
-            <th className={`${TH_CENTER} w-24`}>Actions</th>
+            <th className={`${TH_CENTER} w-36`}>Joined</th>
+            <th className={`${TH_CENTER} w-36`}>Last login</th>
+            <th className={`${TH_CENTER} w-28`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -275,12 +277,12 @@ export function CustomersList({
                       </span>
                     </td>
                     <td className={`${TD} text-center`}>
-                      <Marketing value={customer.accepts_marketing} />
+                      <EmailVerified value={customer.verified_email} />
                     </td>
                     <td className={`${TD} text-right`}>
                       {customer.orders_count.toLocaleString('en-GB')}
                     </td>
-                    <td className={`${TD} pr-8 text-right font-semibold`}>
+                    <td className={`${TD} text-right font-semibold`}>
                       {money(customer)}
                     </td>
                     <td className={`${TD} text-center`}>
@@ -302,7 +304,7 @@ export function CustomersList({
                           onClick={() => onOpen(customer)}
                           onPointerEnter={() => onPrefetch(customer.id)}
                           onFocus={() => onPrefetch(customer.id)}
-                          className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                          className={ROW_ACTION}
                         >
                           <EyeIcon />
                         </button>
@@ -311,7 +313,7 @@ export function CustomersList({
                           aria-label={`Delete ${name}`}
                           title="Delete"
                           onClick={() => onDelete(customer)}
-                          className="text-text-muted hover:text-danger inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                          className={ROW_ACTION_DANGER}
                         >
                           <TrashIcon />
                         </button>

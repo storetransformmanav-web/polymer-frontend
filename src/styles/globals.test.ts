@@ -14,8 +14,13 @@ describe('globals.css', () => {
     expect(css).toMatch(/::-webkit-scrollbar-thumb\s*\{[^}]*var\(--color-scrollbar\)/)
   })
 
-  it('paints the body with the warm off-white page colour', () => {
-    expect(css).toMatch(/--color-page:\s*#faf9f2/)
+  it('gives cards and tables square corners (no xl / 2xl radius)', () => {
+    expect(css).toMatch(/--radius-xl:\s*0;/)
+    expect(css).toMatch(/--radius-2xl:\s*0;/)
+  })
+
+  it('paints the body with the tables’ light sage page colour', () => {
+    expect(css).toMatch(/--color-page:\s*#eef7ef/)
     expect(css).toMatch(/body\s*\{[^}]*background:\s*var\(--color-page\)/)
   })
 })

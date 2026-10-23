@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   ChevronDownIcon,
   DollarSignIcon,
+  ListChecksIcon,
   OrdersIcon,
   SearchIcon,
   SlidersIcon,
@@ -81,12 +82,11 @@ interface OrdersToolbarProps {
 }
 
 /**
- * One card, like the products list: the search row — search box, **Order Date** range,
- * Clear All — then the fulfillment tabs (the same segmented pill group as the products'
- * status tabs, each with its count) beside the Filters button, with the collapsible grid
- * of selects under it. Typing in the search/total boxes is instant locally and sent to the
- * API once the user pauses (see useDebouncedField); selects and the date range apply
- * immediately.
+ * One card, like the products and customers lists: the search row — search box, **Order Date**
+ * range, the Filters button and Clear All — and the collapsible grid of selects under it, whose
+ * first field is the fulfillment status with a count on every choice. Typing in the
+ * search/total boxes is instant locally and sent to the API once the user pauses (see
+ * useDebouncedField); selects and the date range apply immediately.
  */
 export function OrdersToolbar({
   filters,
@@ -99,6 +99,16 @@ export function OrdersToolbar({
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
   const counts = useOrderFulfillmentCounts(filters, FULFILLMENT_VALUES)
+  // The fulfillment choices, each with its count ("Unfulfilled (82)"). The open one can fall
+  // back to the list's own total while its count loads.
+  const fulfillmentOptions: SelectOption[] = FULFILLMENT_TABS.map((tab) => {
+    const count = counts[tab.value] ?? (filters.fulfillment === tab.value ? total : null)
+    return {
+      value: tab.value,
+      label:
+        count === null ? tab.label : `${tab.label} (${count.toLocaleString('en-GB')})`,
+    }
+  })
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -155,6 +165,21 @@ export function OrdersToolbar({
             </div>
             <button
               type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="order-filter-grid"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
+            >
+              <SlidersIcon width={16} height={16} />
+              Filters
+              <ChevronDownIcon
+                width={14}
+                height={14}
+                className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <button
+              type="button"
               onClick={onReset}
               disabled={!hasFilters}
               className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
@@ -163,62 +188,6 @@ export function OrdersToolbar({
               Clear All
             </button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div
-            role="group"
-            aria-label="Filter by fulfillment"
-            className="border-border bg-surface flex max-w-full min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl border p-1 [&::-webkit-scrollbar]:hidden"
-          >
-            {FULFILLMENT_TABS.map((tab) => {
-              const active = filters.fulfillment === tab.value
-              // The open tab can fall back to the list's own total while its count loads.
-              const count = counts[tab.value] ?? (active ? total : null)
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => onChange({ fulfillment: tab.value })}
-                  className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap transition-colors ${
-                    active
-                      ? 'bg-bg text-text shadow-sm'
-                      : 'text-text-muted hover:text-text bg-transparent'
-                  }`}
-                >
-                  {tab.label}
-                  {count !== null && (
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
-                        active
-                          ? 'bg-accent-tint text-accent'
-                          : 'bg-border/60 text-text-muted'
-                      }`}
-                    >
-                      {count.toLocaleString('en-GB')}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <button
-            type="button"
-            aria-expanded={filtersOpen}
-            aria-controls="order-filter-grid"
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
-          >
-            <SlidersIcon width={16} height={16} />
-            Filters
-            <ChevronDownIcon
-              width={14}
-              height={14}
-              className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
         </div>
 
         <div
@@ -231,7 +200,18 @@ export function OrdersToolbar({
           }`}
         >
           <div className="-m-1 overflow-hidden p-1">
-            <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9">
+            <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+              <SelectField
+                compact
+                id="filter-fulfillment"
+                label="Fulfillment status"
+                icon={ListChecksIcon}
+                value={filters.fulfillment}
+                options={fulfillmentOptions}
+                onChange={(fulfillment) =>
+                  onChange({ fulfillment: fulfillment as OrderFulfillmentStatus | '' })
+                }
+              />
               <SelectField
                 compact
                 id="filter-payment"

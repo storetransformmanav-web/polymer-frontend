@@ -6,6 +6,8 @@ export interface Kpi {
   value: ReactNode
   /** Small text beside the value. */
   note?: string
+  /** One short line under the figure saying what it counts. */
+  hint?: string
   icon: ComponentType<IconProps>
   tone?: 'default' | 'good' | 'warning' | 'danger'
 }
@@ -40,6 +42,11 @@ export function KpiCards({ items }: { items: Kpi[] }) {
                 <span className="text-text-muted text-[0.74rem]">{kpi.note}</span>
               )}
             </span>
+            {kpi.hint && (
+              <span className="text-text-muted text-[0.72rem] leading-snug">
+                {kpi.hint}
+              </span>
+            )}
           </div>
           <span className="bg-surface text-text border-border flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border">
             <kpi.icon width={18} height={18} />

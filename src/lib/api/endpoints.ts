@@ -639,6 +639,8 @@ const customerListItemSchema = z.object({
   is_active: z.boolean(),
   shopify_state: z.string().nullish(),
   accepts_marketing: z.boolean().nullish(),
+  // Whether the customer's email address is verified (the Email verified column).
+  verified_email: z.boolean().nullish(),
   orders_count: z.number(),
   // A decimal string, e.g. "45.70".
   total_spent: z.string().nullish(),

@@ -8,6 +8,7 @@ import {
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import {
@@ -108,7 +109,7 @@ function ShopifyLink({ product }: { product: ProductListItem }) {
       rel="noopener noreferrer"
       aria-label={`Open ${product.title} in Shopify`}
       title="Open in Shopify"
-      className="text-text-muted hover:text-accent hover:bg-accent-tint focus-visible:outline-accent inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-2"
+      className={ROW_ACTION}
     >
       <ExternalLinkIcon />
     </a>
@@ -360,7 +361,7 @@ export function ProductsList({
                         onClick={() => onOpen(product)}
                         onPointerEnter={() => onPrefetch(product.id)}
                         onFocus={() => onPrefetch(product.id)}
-                        className="text-text-muted hover:text-accent hover:bg-accent-tint inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                        className={ROW_ACTION}
                       >
                         <EyeIcon />
                       </button>
@@ -370,7 +371,7 @@ export function ProductsList({
                           aria-label={`Delete ${product.title}`}
                           title="Delete"
                           onClick={() => onDelete(product)}
-                          className="text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+                          className={ROW_ACTION_DANGER}
                         >
                           <TrashIcon />
                         </button>

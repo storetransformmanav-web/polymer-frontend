@@ -114,7 +114,7 @@ function respond(params: OrderListParams): OrderListResponse {
 }
 
 const list = vi.mocked(api.orders.list)
-// One-row requests are the fulfillment tabs' counts, not pages of the list.
+// One-row requests are the fulfillment choices' counts, not pages of the list.
 const isCountQuery = (params: OrderListParams) => params.page_size === 1
 const pageCalls = () => list.mock.calls.filter(([params]) => !isCountQuery(params))
 const callsForPage = (page: number) =>
@@ -264,23 +264,20 @@ describe('OrdersPage', () => {
     expect(screen.getByRole('searchbox', { name: 'Search orders' })).toHaveValue('')
   })
 
-  it('filters by fulfillment tab and by payment', async () => {
+  it('filters by the fulfillment dropdown and by payment', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
 
-    await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), 'UNFULFILLED')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({ fulfillment_status: 'UNFULFILLED', page_size: 25 }),
       ),
     )
-    expect(screen.getByRole('button', { name: /^Unfulfilled/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('Fulfillment status')).toHaveValue('UNFULFILLED')
 
-    await user.click(screen.getByRole('button', { name: 'Filters' }))
     await user.selectOptions(screen.getByLabelText('Payment'), 'PAID')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
@@ -297,20 +294,18 @@ describe('OrdersPage', () => {
     const user = userEvent.setup()
     const { store } = renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
-    await user.click(screen.getByRole('button', { name: /^On hold/ }))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), 'ON_HOLD')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({ fulfillment_status: 'ON_HOLD' }),
       ),
     )
 
-    await user.click(screen.getByRole('button', { name: /^All Orders/ }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), '')
 
     // Cached already, so it shows at once; the filter is simply cleared.
-    expect(screen.getByRole('button', { name: /^All Orders/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('Fulfillment status')).toHaveValue('')
     expect(store.getState().orders.filters.fulfillment).toBe('')
     expect(screen.getByText('17002')).toBeInTheDocument()
   })
@@ -455,11 +450,12 @@ describe('OrdersPage', () => {
     expect(pageCalls().length - callsBefore).toBeLessThanOrEqual(1)
   })
 
-  it('shows a tab visited before again with no loading, from the cache', async () => {
+  it('shows a status visited before again with no loading, from the cache', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
-    await user.click(screen.getByRole('button', { name: /^Fulfilled/ }))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), 'FULFILLED')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({ fulfillment_status: 'FULFILLED', page_size: 25 }),
@@ -468,7 +464,7 @@ describe('OrdersPage', () => {
     await screen.findByText('17002')
 
     list.mockClear()
-    await user.click(screen.getByRole('button', { name: /^All Orders/ }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), '')
 
     // The rows are there in the same render, with no loading state in between.
     expect(screen.getByText('17002')).toBeInTheDocument()
@@ -510,7 +506,7 @@ describe('OrdersPage', () => {
     expect(await screen.findByText('17002')).toBeInTheDocument()
   })
 
-  it('shows a count on every fulfillment tab, honouring the other filters', async () => {
+  it('shows a count on every fulfillment choice, honouring the other filters', async () => {
     list.mockImplementation((params) => {
       const byStatus = {
         UNFULFILLED: 30,
@@ -524,25 +520,22 @@ describe('OrdersPage', () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
 
-    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
+    const select = screen.getByLabelText('Fulfillment status')
     expect(
-      await within(tabs).findByRole('button', { name: /^All Orders\s*56$/ }),
+      await within(select).findByRole('option', { name: 'All Orders (56)' }),
     ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Unfulfilled\s*30$/ }),
-    ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Partially fulfilled\s*5$/ }),
-    ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^Fulfilled\s*20$/ }),
-    ).toBeInTheDocument()
-    expect(
-      within(tabs).getByRole('button', { name: /^On hold\s*1$/ }),
-    ).toBeInTheDocument()
+    for (const name of [
+      'Unfulfilled (30)',
+      'Partially fulfilled (5)',
+      'Fulfilled (20)',
+      'On hold (1)',
+    ]) {
+      expect(within(select).getByRole('option', { name })).toBeInTheDocument()
+    }
 
-    // The search narrows every tab's count (the count queries carry it).
+    // The search narrows every choice's count (the count queries carry it).
     await user.type(screen.getByRole('searchbox', { name: 'Search orders' }), '1001')
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
@@ -566,34 +559,42 @@ describe('OrdersPage', () => {
         ? Promise.resolve(respond(params))
         : new Promise<never>(() => undefined),
     )
-    await user.click(screen.getByRole('button', { name: /^Unfulfilled/ }))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Fulfillment status'), 'UNFULFILLED')
 
     expect(screen.getByText('17002')).toBeInTheDocument()
     expect(screen.getByRole('table').parentElement).toHaveAttribute('aria-busy', 'true')
   })
 
-  it('has the order-management layout: figures, then one card with the search row (with the order date) and the tabs, then the table', async () => {
+  it('has the order-management layout: figures, then one card with the search row (order date, Filters, Clear All), then the table', async () => {
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
 
     const order = (element: HTMLElement) =>
       [...document.querySelectorAll('*')].indexOf(element)
     const kpi = screen.getAllByText('Total price')[0]
-    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
     const search = screen.getByRole('searchbox', { name: 'Search orders' })
     const table = screen.getByRole('table')
     expect(order(kpi)).toBeLessThan(order(search))
-    expect(order(search)).toBeLessThan(order(tabs))
-    expect(order(tabs)).toBeLessThan(order(table))
-    // The tabs are in the same card as the search, like the products list.
-    expect(search.closest('section')).toContainElement(tabs)
+    expect(order(search)).toBeLessThan(order(table))
+    // No fulfillment tab strip any more: it is the first field of the Filters grid.
+    expect(
+      screen.queryByRole('group', { name: 'Filter by fulfillment' }),
+    ).not.toBeInTheDocument()
+    const grid = document.getElementById('order-filter-grid')!
+    expect(grid).toContainElement(screen.getByLabelText('Fulfillment status'))
+    expect(grid.querySelector('select')).toBe(screen.getByLabelText('Fulfillment status'))
+    // The Filters button and Clear All sit in the search row, in the same card.
     expect(search.closest('section')).toContainElement(
       screen.getByRole('button', { name: 'Filters' }),
+    )
+    expect(search.closest('section')).toContainElement(
+      screen.getByRole('button', { name: 'Clear All' }),
     )
     // The date range is in the search row, not in the collapsed grid.
     expect(screen.getByText('Order Date')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Date range:/ })).toBeVisible()
-    expect(document.getElementById('order-filter-grid')).toHaveAttribute('inert')
+    expect(grid).toHaveAttribute('inert')
   })
 
   it('fills the height it is given, with the table scrolling in its own box under a sticky header', async () => {
@@ -621,21 +622,6 @@ describe('OrdersPage', () => {
     expect(box.contains(screen.getByText(/Showing/))).toBe(false)
   })
 
-  it('draws the tabs like the products list’s: a segmented pill group, the open one raised', async () => {
-    renderWithProviders(<OrdersPage />)
-    await screen.findByText('17002')
-
-    const tabs = screen.getByRole('group', { name: 'Filter by fulfillment' })
-    expect(tabs.className).toContain('rounded-xl')
-    expect(tabs.className).toContain('bg-surface')
-    const open = within(tabs).getByRole('button', { name: /^All Orders/ })
-    expect(open.className).toContain('bg-bg')
-    expect(open.className).toContain('shadow-sm')
-    const other = within(tabs).getByRole('button', { name: /^Fulfilled/ })
-    expect(other.className).toContain('bg-transparent')
-    expect(other.className).not.toContain('shadow-sm')
-  })
-
   it('draws no hidden scrollbar any more: the page leaves its own scrollbar alone', async () => {
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
@@ -650,9 +636,9 @@ describe('OrdersPage', () => {
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
     const grid = document.getElementById('order-filter-grid')!.querySelector('.grid')!
-    expect(grid.className).toContain('xl:grid-cols-6')
-    expect(grid.className).toContain('2xl:grid-cols-9')
+    expect(grid.className).toContain('xl:grid-cols-5')
     for (const label of [
+      'Fulfillment status',
       'Payment',
       'Source',
       'Payment gateway',
