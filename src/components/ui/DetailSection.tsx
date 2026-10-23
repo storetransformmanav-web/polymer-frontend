@@ -146,10 +146,21 @@ export function DetailEmpty({
 }
 
 /** Bordered, horizontally scrollable table shell. */
-export function DetailTable({ children }: { children: ReactNode }) {
+export function DetailTable({
+  children,
+  fixed = false,
+}: {
+  children: ReactNode
+  /** Fixed column widths (set on the headers) — even gaps — instead of widths from the content. */
+  fixed?: boolean
+}) {
   return (
     <div className={`${DETAIL_CARD} overflow-x-auto`}>
-      <table className="w-full min-w-[640px] border-collapse">{children}</table>
+      <table
+        className={`w-full border-collapse ${fixed ? 'min-w-[980px] table-fixed' : 'min-w-[640px]'}`}
+      >
+        {children}
+      </table>
     </div>
   )
 }

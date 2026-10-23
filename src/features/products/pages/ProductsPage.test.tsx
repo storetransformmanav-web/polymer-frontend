@@ -837,6 +837,98 @@ describe('ProductsPage details', () => {
     })
   })
 
+  describe('metafields tab', () => {
+    function withMetafields() {
+      const detail = makeDetail('id-7')
+      detail.metafields = [
+        {
+          namespace: 'custom',
+          key: 'pack_materials',
+          type: 'list.single_line_text_field',
+          value: '["Plastic","Foil"]',
+        },
+        { namespace: 'custom', key: 'eco_friendly', type: 'boolean', value: 'true' },
+        {
+          namespace: 'apd',
+          key: 'apd',
+          type: 'json_string',
+          value: JSON.stringify({
+            accent_color: '#557b97',
+            sections: [
+              { title: 'Product Description', content: '<p>x</p>', position: 0 },
+              { title: 'Product Information', content: '<p>y</p>', position: 1 },
+            ],
+          }),
+        },
+      ]
+      detail.variants[0].metafields = [
+        {
+          namespace: 'my_fields',
+          key: 'unit_of_sale',
+          type: 'number_integer',
+          value: '500',
+        },
+      ]
+      details.mockResolvedValue(detail)
+    }
+
+    it('explains what metafields are and shows each one in plain words', async () => {
+      withMetafields()
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('tab', { name: /^Metafields/ }))
+
+      expect(screen.getByText(/Metafields are extra details stored/)).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: 'Detail' })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: 'Kind' })).toBeInTheDocument()
+
+      const rowOf = (name: string) =>
+        screen.getByText(name, { selector: 'p' }).closest('tr') as HTMLElement
+
+      // A plain name, a plain kind and a laid-out value — no technical name underneath.
+      const unit = rowOf('Unit of sale')
+      expect(within(unit).getByText('Variant: Default Title')).toBeInTheDocument()
+      expect(within(unit).getByText('Whole number')).toBeInTheDocument()
+      expect(within(unit).getByText('500')).toBeInTheDocument()
+      expect(within(unit).queryByText('my_fields.unit_of_sale')).toBeNull()
+      expect(within(unit).queryByText(/My fields/)).toBeNull()
+
+      const eco = rowOf('Eco friendly')
+      expect(within(eco).getByText('Whole product')).toBeInTheDocument()
+      expect(within(eco).getByText('Yes / No')).toBeInTheDocument()
+      expect(within(eco).getByText('Yes')).toBeInTheDocument()
+
+      const materials = rowOf('Pack materials')
+      expect(within(materials).getByText('List of text (one line)')).toBeInTheDocument()
+      expect(within(materials).getByText('Plastic')).toBeInTheDocument()
+      expect(within(materials).getByText('Foil')).toBeInTheDocument()
+    })
+
+    it('says what the description-sections metafield is instead of printing its JSON', async () => {
+      withMetafields()
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('tab', { name: /^Metafields/ }))
+
+      const row = screen
+        .getByText('Description sections', { selector: 'p' })
+        .closest('tr') as HTMLElement
+      expect(
+        within(row).getByText(/2 sections: Product Description, Product Information/),
+      ).toBeInTheDocument()
+      expect(within(row).getByText(/Shown in the Description card/)).toBeInTheDocument()
+      // The long JSON string is not dumped into the table: it is only inside "View original value".
+      expect(within(row).getByText('View original value')).toBeInTheDocument()
+      expect(
+        within(row)
+          .getByText(/accent_color/)
+          .closest('details'),
+      ).not.toBeNull()
+    })
+  })
+
   it('starts with Description collapsed, Specifications open', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')

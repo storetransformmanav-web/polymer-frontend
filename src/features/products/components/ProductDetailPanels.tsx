@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   BoxesIcon,
@@ -23,6 +23,8 @@ import type {
 import { formatDate, formatPrice } from '../../../lib/format.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
 import {
+  APD_KEY,
+  APD_NAMESPACE,
   readDescriptionSections,
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
@@ -64,6 +66,13 @@ import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
 import { TAG_CHIP, TagsSection as TagsEditor } from './edit/TagsSection.tsx'
 import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
+import {
+  formatMetafieldValue,
+  metafieldName,
+  metafieldTypeLabel,
+  rawMetafieldValue,
+  type MetafieldDisplay,
+} from '../utils/metafields.ts'
 import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { AddMediaDialog } from './AddMediaDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
@@ -390,28 +399,17 @@ function VariantsView({ product }: { product: ProductDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {product.options.length > 0 && !product.has_only_default_variant && (
-        <ul className="flex flex-wrap gap-2">
-          {product.options.map((option) => (
-            <li key={option.name} className={`${CARD} px-3 py-2 text-[0.82rem]`}>
-              <span className="text-text-muted font-semibold">{option.name}: </span>
-              {option.values.join(', ')}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <TableWrap>
+      <TableWrap fixed>
         <thead>
           <tr>
-            <th className={TH}>Variant</th>
-            <th className={TH}>SKU</th>
-            <th className={TH}>Barcode</th>
-            <th className={`${TH} text-right`}>Price</th>
-            <th className={`${TH} text-right`}>Compare at</th>
-            <th className={`${TH} text-right`}>Stock</th>
-            <th className={TH}>Availability</th>
-            <th className={TH}>Weight</th>
+            <th className={`${TH} w-[20%]`}>Variant</th>
+            <th className={`${TH} w-[16%]`}>SKU</th>
+            <th className={`${TH} w-[12%]`}>Barcode</th>
+            <th className={`${TH} w-[10%] text-right`}>Price</th>
+            <th className={`${TH} w-[10%] text-right`}>Compare at</th>
+            <th className={`${TH} w-[8%] text-right`}>Stock</th>
+            <th className={`${TH} w-[12%] text-center`}>Availability</th>
+            <th className={`${TH} w-[12%] text-right`}>Weight</th>
           </tr>
         </thead>
         <tbody>
@@ -442,14 +440,16 @@ function VariantsView({ product }: { product: ProductDetail }) {
               <td className={TD}>
                 {variant.sku ? (
                   <span className="flex items-center gap-1.5 font-mono text-[0.8rem]">
-                    {variant.sku}
+                    <span className="truncate" title={variant.sku}>
+                      {variant.sku}
+                    </span>
                     <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
                   </span>
                 ) : (
                   '—'
                 )}
               </td>
-              <td className={`${TD} font-mono text-[0.8rem]`}>
+              <td className={`${TD} truncate font-mono text-[0.8rem]`}>
                 {variant.barcode || '—'}
               </td>
               <td className={`${TD} text-right font-semibold`}>
@@ -472,7 +472,7 @@ function VariantsView({ product }: { product: ProductDetail }) {
               >
                 {num(variant.inventory_quantity)}
               </td>
-              <td className={TD}>
+              <td className={`${TD} text-center`}>
                 {variant.available_for_sale === null ||
                 variant.available_for_sale === undefined ? (
                   '—'
@@ -482,7 +482,7 @@ function VariantsView({ product }: { product: ProductDetail }) {
                   </Badge>
                 )}
               </td>
-              <td className={TD}>{weightLabel(variant)}</td>
+              <td className={`${TD} truncate text-right`}>{weightLabel(variant)}</td>
             </tr>
           ))}
         </tbody>
@@ -961,50 +961,150 @@ export function SeoPanel({
 
 // --- Metafields ------------------------------------------------------------------
 
-function getMetafieldRows(product: ProductDetail) {
+interface MetafieldRow {
+  /** "Whole product", or the variant it belongs to. */
+  appliesTo: string
+  namespace: string
+  key: string
+  type?: string | null | undefined
+  value?: string | null | undefined
+}
+
+function getMetafieldRows(product: ProductDetail): MetafieldRow[] {
   return [
-    ...product.metafields.map((field) => ({ scope: 'Product', ...field })),
+    ...product.metafields.map((field) => ({ appliesTo: 'Whole product', ...field })),
     ...product.variants.flatMap((variant) =>
       variant.metafields.map((field) => ({
-        scope: variant.title ?? variant.sku ?? 'Variant',
+        appliesTo: `Variant: ${variant.title ?? variant.sku ?? 'Variant'}`,
         ...field,
       })),
     ),
   ]
 }
 
+/** A metafield's value, laid out by what it is (see `formatMetafieldValue`). */
+function MetafieldValue({ display }: { display: MetafieldDisplay }) {
+  switch (display.kind) {
+    case 'empty':
+      return <span className="text-text-muted">Empty</span>
+    case 'text':
+      return <span className="break-words whitespace-pre-wrap">{display.text}</span>
+    case 'list':
+      return (
+        <ul className="flex flex-wrap gap-1.5">
+          {display.items.map((item, index) => (
+            <li key={`${item}-${index}`} className={TAG_CHIP}>
+              {item}
+            </li>
+          ))}
+        </ul>
+      )
+    case 'link':
+      return <ExternalLink href={display.href}>{display.text}</ExternalLink>
+    case 'color':
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            style={{ backgroundColor: display.color }}
+            className="border-border h-5 w-5 rounded-md border"
+          />
+          <span className="font-mono text-[0.8rem]">{display.color}</span>
+        </span>
+      )
+    case 'pairs':
+      return (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[0.82rem]">
+          {display.pairs.map(([label, value]) => (
+            <Fragment key={label}>
+              <dt className="text-text-muted">{label}</dt>
+              <dd className="m-0 break-words">{value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )
+  }
+}
+
+/**
+ * Metafields, in plain words: what the detail is called, what kind of detail it is, what
+ * it holds, and whether it belongs to the whole product or to one variant. The technical
+ * name (`namespace.key`) stays underneath for anyone who needs it, and the original value
+ * can be opened for structured data.
+ */
 export function MetafieldsPanel({ product }: { product: ProductDetail }) {
   const rows = getMetafieldRows(product)
+  const sections = readDescriptionSections(product)
   if (rows.length === 0) return <Empty icon={ListChecksIcon}>No metafields.</Empty>
 
   return (
-    <TableWrap>
-      <thead>
-        <tr>
-          <th className={TH}>Applies to</th>
-          <th className={TH}>Field</th>
-          <th className={TH}>Type</th>
-          <th className={TH}>Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, index) => (
-          <tr
-            key={index}
-            className="border-border even:bg-surface border-b last:border-b-0"
-          >
-            <td className={TD}>{row.scope}</td>
-            <td className={`${TD} font-mono text-[0.8rem]`}>
-              {row.namespace}.{row.key}
-            </td>
-            <td className={TD}>{row.type ?? '—'}</td>
-            <td className={`${TD} max-w-96 truncate`} title={row.value ?? ''}>
-              {row.value ?? '—'}
-            </td>
+    <div className="flex flex-col gap-4">
+      <p className="text-text-muted text-[0.85rem] leading-relaxed">
+        Metafields are extra details stored with this product in Shopify — things the
+        standard fields don&apos;t cover, such as a unit of sale or the description
+        sections. Each one belongs to the whole product or to a single variant.
+      </p>
+
+      <TableWrap>
+        <thead>
+          <tr>
+            <th className={TH}>Detail</th>
+            <th className={TH}>Applies to</th>
+            <th className={TH}>Kind</th>
+            <th className={TH}>Value</th>
           </tr>
-        ))}
-      </tbody>
-    </TableWrap>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const isSections = row.namespace === APD_NAMESPACE && row.key === APD_KEY
+            const display = formatMetafieldValue(row.type, row.value)
+            const raw = rawMetafieldValue(row.type, row.value)
+            return (
+              <tr
+                key={`${row.namespace}.${row.key}-${index}`}
+                className="border-border even:bg-surface border-b align-top last:border-b-0"
+              >
+                <td className={`${TD} whitespace-normal`}>
+                  <p className="font-semibold">{metafieldName(row.namespace, row.key)}</p>
+                </td>
+                <td className={`${TD} whitespace-normal`}>{row.appliesTo}</td>
+                <td className={`${TD} whitespace-normal`}>
+                  {metafieldTypeLabel(row.type)}
+                </td>
+                <td className={`${TD} max-w-md min-w-56 whitespace-normal`}>
+                  {isSections && sections ? (
+                    <div className="flex flex-col gap-1.5">
+                      <p>
+                        {sections.sections.length}{' '}
+                        {sections.sections.length === 1 ? 'section' : 'sections'}:{' '}
+                        {sections.sections.map((section) => section.title).join(', ')}
+                      </p>
+                      <p className="text-text-muted text-[0.78rem] leading-snug">
+                        Shown in the Description card on the Overview tab. The rest of
+                        this detail is the description app&apos;s look (colours, fonts,
+                        spacing).
+                      </p>
+                    </div>
+                  ) : (
+                    <MetafieldValue display={display} />
+                  )}
+                  {raw && (
+                    <details className="mt-1.5">
+                      <summary className="text-accent cursor-pointer text-[0.76rem] font-semibold">
+                        View original value
+                      </summary>
+                      <pre className="border-border bg-surface mt-1.5 max-h-56 overflow-auto rounded-lg border p-2.5 font-mono text-[0.72rem] leading-relaxed break-words whitespace-pre-wrap">
+                        {raw}
+                      </pre>
+                    </details>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </TableWrap>
+    </div>
   )
 }
 
@@ -1017,6 +1117,36 @@ interface TabProps {
   onSaved?: SavedHandler
 }
 
+/** The options (Size: Small, large…) on the left, the pencil — or Save / Discard — on the right. */
+function VariantsHeader({
+  product,
+  edit,
+}: {
+  product: ProductDetail
+  edit: SectionEdit
+}) {
+  const options = product.has_only_default_variant ? [] : product.options
+  return (
+    <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-2">
+      <ul className="mr-auto flex flex-wrap gap-2">
+        {edit.editing ? (
+          <li className="text-text-muted text-[0.82rem] font-medium">Editing variants</li>
+        ) : (
+          options.map((option) => (
+            <li key={option.name} className={`${CARD} px-3 py-1.5 text-[0.82rem]`}>
+              <span className="text-text-muted font-semibold">{option.name}: </span>
+              {option.values.join(', ')}
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="flex items-center gap-1.5">
+        <SectionEditControls edit={edit} what="variants" />
+      </div>
+    </div>
+  )
+}
+
 export function VariantsPanel({ product, onSaved }: TabProps) {
   return (
     <EditableTab
@@ -1024,6 +1154,7 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
       what="variants"
       errorPrefixes={VARIANT_ERRORS}
       onSaved={onSaved}
+      header={(edit) => <VariantsHeader product={product} edit={edit} />}
       view={<VariantsView product={product} />}
       editor={(section) => <VariantsEditor {...section} />}
     />
