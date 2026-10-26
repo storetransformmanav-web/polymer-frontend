@@ -3,6 +3,7 @@ import {
   emailEditRequested,
   errorCleared,
   googleSignIn as googleSignInThunk,
+  rememberMeChanged,
   requestOtp,
   verifyOtp,
 } from '../../../app/store/authSlice.ts'
@@ -21,6 +22,7 @@ export function useLogin() {
   return {
     step: auth.step,
     email: auth.email,
+    rememberMe: auth.rememberMe,
     notice: auth.notice,
     expiresInSeconds: auth.otpExpiresInSeconds,
     resendAvailableAt: auth.resendAvailableAt,
@@ -49,6 +51,7 @@ export function useLogin() {
         await dispatch(googleSignInThunk(credential)),
       )
     },
+    setRememberMe: (value: boolean) => dispatch(rememberMeChanged(value)),
     editEmail: () => dispatch(emailEditRequested()),
     clearError: () => dispatch(errorCleared()),
   }

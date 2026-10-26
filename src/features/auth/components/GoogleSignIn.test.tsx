@@ -94,7 +94,7 @@ describe('GoogleSignIn', () => {
 
     signIn(CREDENTIAL)
 
-    await waitFor(() => expect(api.auth.google).toHaveBeenCalledWith(CREDENTIAL))
+    await waitFor(() => expect(api.auth.google).toHaveBeenCalledWith(CREDENTIAL, false))
     await waitFor(() =>
       expect(store.getState().auth.session).toMatchObject({
         accessToken: 'google-token',

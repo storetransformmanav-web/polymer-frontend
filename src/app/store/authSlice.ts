@@ -18,29 +18,38 @@ export interface Session {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
-/** Every sign-in lasts 30 days — and nothing signs you out sooner except Log out. */
+/** "Remember me" ticked: the session lasts 30 days (the backend issues a 30-day token). */
 export const SESSION_DAYS = 30
+/** "Remember me" not ticked: the default session — one day (the backend's default token). */
+export const DEFAULT_SESSION_DAYS = 1
 
 /**
- * When the app ends a session that starts now: after 30 days, or when the
- * backend's token runs out if that is sooner (the backend issues 30-day tokens).
+ * When the app ends a session that starts now: after 30 days with "Remember me" (1 day
+ * without), or when the backend's token runs out if that is sooner.
  */
-export function sessionExpiry(backendExpiresAt: string, now = Date.now()): string {
-  const limit = now + SESSION_DAYS * DAY_MS
+export function sessionExpiry(
+  backendExpiresAt: string,
+  now = Date.now(),
+  rememberMe = true,
+): string {
+  const limit = now + (rememberMe ? SESSION_DAYS : DEFAULT_SESSION_DAYS) * DAY_MS
   const backend = Date.parse(backendExpiresAt)
   return new Date(
     Number.isFinite(backend) ? Math.min(backend, limit) : limit,
   ).toISOString()
 }
 
-function buildSession(response: {
-  access_token: string
-  expires_at: string
-  user: AuthUser
-}): Session {
+function buildSession(
+  response: {
+    access_token: string
+    expires_at: string
+    user: AuthUser
+  },
+  rememberMe: boolean,
+): Session {
   return {
     accessToken: response.access_token,
-    expiresAt: sessionExpiry(response.expires_at),
+    expiresAt: sessionExpiry(response.expires_at, Date.now(), rememberMe),
     user: response.user,
   }
 }
@@ -50,6 +59,8 @@ type RequestStatus = 'idle' | 'loading' | 'error'
 export interface AuthState {
   /** The signed-in session, or null. Persisted — see store.ts. */
   session: Session | null
+  /** The login page's "Remember me" checkbox: ticked = a 30-day session, else the default. */
+  rememberMe: boolean
   /** Where the user is in the email-code login flow. */
   step: 'email' | 'otp'
   email: string
@@ -108,6 +119,7 @@ function getStoredSession(): Session | null {
 
 const initialState: AuthState = {
   session: getStoredSession(),
+  rememberMe: false,
   step: 'email',
   email: '',
   notice: null,
@@ -219,8 +231,9 @@ export const verifyOtp = createAsyncThunk<
   'auth/verifyOtp',
   async (code, { getState, rejectWithValue }) => {
     try {
-      const response = await api.auth.verifyOtp(getState().auth.email, code)
-      return buildSession(response)
+      const { email, rememberMe } = getState().auth
+      const response = await api.auth.verifyOtp(email, code, rememberMe)
+      return buildSession(response, rememberMe)
     } catch (error) {
       return rejectWithValue(toMessage(error))
     }
@@ -235,10 +248,11 @@ export const googleSignIn = createAsyncThunk<
   { state: AuthRootState; rejectValue: string }
 >(
   'auth/googleSignIn',
-  async (credential, { rejectWithValue }) => {
+  async (credential, { getState, rejectWithValue }) => {
     try {
-      const response = await api.auth.google(credential)
-      return buildSession(response)
+      const { rememberMe } = getState().auth
+      const response = await api.auth.google(credential, rememberMe)
+      return buildSession(response, rememberMe)
     } catch (error) {
       return rejectWithValue(toMessage(error))
     }
@@ -270,6 +284,10 @@ const authSlice = createSlice({
       state.error = null
       state.notice = null
       state.verifyStatus = 'idle'
+    },
+    /** The "Remember me" checkbox was ticked or unticked. */
+    rememberMeChanged(state, action: PayloadAction<boolean>) {
+      state.rememberMe = action.payload
     },
     errorCleared(state) {
       state.error = null
@@ -331,7 +349,8 @@ const authSlice = createSlice({
   },
 })
 
-export const { emailEditRequested, errorCleared, sessionCleared } = authSlice.actions
+export const { emailEditRequested, errorCleared, rememberMeChanged, sessionCleared } =
+  authSlice.actions
 export const authReducer = authSlice.reducer
 
 /**

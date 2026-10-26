@@ -65,10 +65,10 @@ describe('how long a session lasts', () => {
   const NOW = Date.parse('2026-10-20T10:00:00Z')
   const DAY = 24 * 60 * 60 * 1000
 
-  async function sessionExpiry(expiresAt: string) {
+  async function sessionExpiry(expiresAt: string, rememberMe = true) {
     vi.resetModules()
     const slice = await import('./authSlice.ts')
-    return slice.sessionExpiry(expiresAt, NOW)
+    return slice.sessionExpiry(expiresAt, NOW, rememberMe)
   }
 
   it('is 30 days from signing in (the backend token lasts 30)', async () => {
@@ -87,5 +87,11 @@ describe('how long a session lasts', () => {
 
   it('falls back to 30 days when the backend date is unreadable', async () => {
     expect(await sessionExpiry('soon')).toBe(new Date(NOW + 30 * DAY).toISOString())
+  })
+
+  it('is the default 1 day without "Remember me", whatever the token says', async () => {
+    const LONG = new Date(NOW + 30 * DAY).toISOString()
+    expect(await sessionExpiry(LONG, false)).toBe(new Date(NOW + DAY).toISOString())
+    expect(await sessionExpiry('soon', false)).toBe(new Date(NOW + DAY).toISOString())
   })
 })

@@ -95,7 +95,9 @@ describe('requesting a code while one was just sent (backend 429)', () => {
     await screen.findByRole('heading', { name: 'Check your email' })
     await user.keyboard('123456')
 
-    await waitFor(() => expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456'))
+    await waitFor(() =>
+      expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456', false),
+    )
     await waitFor(() =>
       expect(store.getState().auth.session?.accessToken).toBe('token-123'),
     )

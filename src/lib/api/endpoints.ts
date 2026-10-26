@@ -99,12 +99,10 @@ const authUserSchema = z.object({
   permissions: z.record(z.string(), featureAccessSchema).optional(),
 })
 
-/**
- * Sent with every sign-in: `true` = the backend issues a 30-day token, `false` (its
- * default when left out) = a 1-day one. The app lets every sign-in last 30 days (see
- * "Staying signed in" in CLAUDE.md), so it always asks for the long one.
+/*
+ * Both sign-in calls send `remember_me`, from the login page's "Remember me" checkbox:
+ * `true` = the backend issues a 30-day token, `false` (its default) = a 1-day one.
  */
-const STAY_SIGNED_IN = true
 
 const otpRequestResponseSchema = z.object({
   message: z.string(),
@@ -1496,12 +1494,16 @@ export const api = {
       return otpRequestResponseSchema.parse(data)
     },
 
-    /** Step 2 of login: exchanges the code for an access token (30 days, see `STAY_SIGNED_IN`). */
-    async verifyOtp(email: string, code: string): Promise<LoginResponse> {
+    /** Step 2 of login: exchanges the code for an access token (30 days with `rememberMe`, else 1 day). */
+    async verifyOtp(
+      email: string,
+      code: string,
+      rememberMe: boolean,
+    ): Promise<LoginResponse> {
       const data = await apiClient.post(ENDPOINTS.auth.verifyOtp, {
         email,
         code,
-        remember_me: STAY_SIGNED_IN,
+        remember_me: rememberMe,
       })
       return loginResponseSchema.parse(data)
     },
@@ -1511,10 +1513,10 @@ export const api = {
      * Google Identity Services) for an access token. Only emails that
      * already belong to an active CRM user can sign in.
      */
-    async google(credential: string): Promise<LoginResponse> {
+    async google(credential: string, rememberMe: boolean): Promise<LoginResponse> {
       const data = await apiClient.post(ENDPOINTS.auth.google, {
         credential,
-        remember_me: STAY_SIGNED_IN,
+        remember_me: rememberMe,
       })
       return loginResponseSchema.parse(data)
     },

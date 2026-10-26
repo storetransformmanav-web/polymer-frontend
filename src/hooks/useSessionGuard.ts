@@ -6,7 +6,7 @@ const CHECK_INTERVAL_MS = 30_000
 
 /**
  * Keeps a signed-in session honest while the app is open:
- *  - signs out when the session passes its `expiresAt` (30 days after signing in),
+ *  - signs out when the session passes its `expiresAt` (30 days after signing in with "Remember me", else 1 day),
  *    instead of waiting for the next request to fail — and revokes the token;
  *  - when the session is removed in another tab (logout there), signs out
  *    here too, so one logout really ends the session everywhere.

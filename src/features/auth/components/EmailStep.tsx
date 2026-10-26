@@ -89,6 +89,19 @@ export function EmailStep() {
         </div>
       )}
 
+      <label className="text-text mt-4 flex cursor-pointer items-center gap-2.5 self-start text-left text-[0.88rem]">
+        <input
+          type="checkbox"
+          checked={login.rememberMe}
+          onChange={(event) => login.setRememberMe(event.target.checked)}
+          className="accent-accent h-4 w-4 shrink-0 cursor-pointer"
+        />
+        <span>
+          Remember me
+          <span className="text-text-muted"> · stay signed in for 30 days</span>
+        </span>
+      </label>
+
       {/* Continue appears once there's something to continue with. The
           grid-rows trick animates height without measuring, and `inert`
           keeps the collapsed button out of the tab order. */}

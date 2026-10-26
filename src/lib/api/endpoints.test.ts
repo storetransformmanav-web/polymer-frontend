@@ -368,10 +368,14 @@ describe('api.auth sign-in', () => {
     vi.mocked(apiClient.post).mockReset()
   })
 
-  it('verifies a code with remember_me: true, so the token lasts 30 days', async () => {
+  it('verifies a code with remember_me: true when "Remember me" is ticked (30-day token)', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    const result = await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941')
+    const result = await api.auth.verifyOtp(
+      'storetransformmanav@gmail.com',
+      '079941',
+      true,
+    )
 
     expect(apiClient.post).toHaveBeenCalledWith('/auth/otp/verify', {
       email: 'storetransformmanav@gmail.com',
@@ -386,21 +390,42 @@ describe('api.auth sign-in', () => {
     })
   })
 
-  it('signs in with Google with remember_me: true as well', async () => {
+  it('verifies a code with remember_me: false when it is not ticked (default session)', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    await api.auth.google('google-id-token-0123456789')
+    await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941', false)
 
-    expect(apiClient.post).toHaveBeenCalledWith('/auth/google', {
+    expect(apiClient.post).toHaveBeenCalledWith('/auth/otp/verify', {
+      email: 'storetransformmanav@gmail.com',
+      code: '079941',
+      remember_me: false,
+    })
+  })
+
+  it('signs in with Google with the same remember_me choice', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
+
+    await api.auth.google('google-id-token-0123456789', true)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/auth/google', {
       credential: 'google-id-token-0123456789',
       remember_me: true,
+    })
+
+    await api.auth.google('google-id-token-0123456789', false)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/auth/google', {
+      credential: 'google-id-token-0123456789',
+      remember_me: false,
     })
   })
 
   it('keeps the user’s permissions from the answer', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    const { user } = await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941')
+    const { user } = await api.auth.verifyOtp(
+      'storetransformmanav@gmail.com',
+      '079941',
+      true,
+    )
 
     expect(user.permissions?.products).toEqual({ view: true, manage: true })
     expect(user.permissions?.activity).toEqual({ view: true, manage: false })
@@ -410,7 +435,7 @@ describe('api.auth sign-in', () => {
     const { permissions: _permissions, ...user } = LOGIN.user
     vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, user })
 
-    const result = await api.auth.verifyOtp('a@b.co', '123456')
+    const result = await api.auth.verifyOtp('a@b.co', '123456', true)
 
     expect(result.user.permissions).toBeUndefined()
   })
@@ -418,7 +443,7 @@ describe('api.auth sign-in', () => {
   it('refuses an answer without a token', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, access_token: '' })
 
-    await expect(api.auth.verifyOtp('a@b.co', '123456')).rejects.toThrow()
+    await expect(api.auth.verifyOtp('a@b.co', '123456', true)).rejects.toThrow()
   })
 })
 

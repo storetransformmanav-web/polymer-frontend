@@ -49,17 +49,29 @@ describe('LoginForm', () => {
   describe('how long signing in lasts', () => {
     const DAY = 24 * 60 * 60 * 1000
 
-    it('offers no choice (no checkbox or button) — everyone stays signed in for 30 days', async () => {
-      const user = userEvent.setup()
+    it('has a "Remember me" checkbox on the email step, unticked by default', () => {
       renderWithProviders(<LoginForm />)
 
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-      expect(screen.queryByText(/remember me/i)).not.toBeInTheDocument()
-      await goToOtpStep(user)
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+      const box = screen.getByRole('checkbox', { name: /remember me/i })
+      expect(box).not.toBeChecked()
     })
 
-    it('starts a session that lasts 30 days', async () => {
+    it('ticked: asks the backend for a 30-day sign-in and the session lasts 30 days', async () => {
+      vi.mocked(api.auth.verifyOtp).mockResolvedValue(LOGIN_RESPONSE)
+      const user = userEvent.setup()
+      const { store } = renderWithProviders(<LoginForm />)
+      await user.click(screen.getByRole('checkbox', { name: /remember me/i }))
+      await goToOtpStep(user)
+      for (const digit of '123456') await user.keyboard(digit)
+      await waitFor(() => expect(store.getState().auth.session).not.toBeNull())
+
+      expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456', true)
+      const left = Date.parse(store.getState().auth.session!.expiresAt) - Date.now()
+      expect(left).toBeGreaterThan(30 * DAY - 60_000)
+      expect(left).toBeLessThanOrEqual(30 * DAY)
+    })
+
+    it('unticked: uses the default session (remember_me false, one day), not 30 days', async () => {
       vi.mocked(api.auth.verifyOtp).mockResolvedValue(LOGIN_RESPONSE)
       const user = userEvent.setup()
       const { store } = renderWithProviders(<LoginForm />)
@@ -67,9 +79,20 @@ describe('LoginForm', () => {
       for (const digit of '123456') await user.keyboard(digit)
       await waitFor(() => expect(store.getState().auth.session).not.toBeNull())
 
+      expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456', false)
       const left = Date.parse(store.getState().auth.session!.expiresAt) - Date.now()
-      expect(left).toBeGreaterThan(30 * DAY - 60_000)
-      expect(left).toBeLessThanOrEqual(30 * DAY)
+      expect(left).toBeGreaterThan(DAY - 60_000)
+      expect(left).toBeLessThanOrEqual(DAY)
+    })
+
+    it('keeps the choice when going back to change the email', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<LoginForm />)
+      await user.click(screen.getByRole('checkbox', { name: /remember me/i }))
+      await goToOtpStep(user)
+      await user.click(screen.getByRole('button', { name: /use a different email/i }))
+
+      expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeChecked()
     })
   })
 
@@ -166,7 +189,7 @@ describe('LoginForm', () => {
       await user.keyboard('123456')
 
       await waitFor(() =>
-        expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456'),
+        expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456', false),
       )
       await waitFor(() =>
         expect(store.getState().auth.session).toMatchObject({
@@ -185,7 +208,7 @@ describe('LoginForm', () => {
       await user.paste('654321')
 
       await waitFor(() =>
-        expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '654321'),
+        expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '654321', false),
       )
     })
 
