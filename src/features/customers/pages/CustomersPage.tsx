@@ -9,6 +9,7 @@ import {
 import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
+import { CustomersKpis } from '../components/CustomersKpis.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useCustomers } from '../hooks/useCustomers.ts'
@@ -77,6 +78,12 @@ export function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The figures sit above the tabs; they belong to the list, so an open customer takes
+          their place (kept mounted, only hidden). */}
+      <div className={activeId ? 'hidden' : undefined}>
+        <CustomersKpis filters={filters} total={data?.total ?? null} />
+      </div>
+
       <CustomerTabsBar
         tabs={tabs.tabs}
         activeId={activeId}

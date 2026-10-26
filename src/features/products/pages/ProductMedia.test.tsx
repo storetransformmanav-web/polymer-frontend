@@ -634,6 +634,20 @@ describe('files the store has not finished downloading', () => {
     expect(screen.getByText('1 image')).toBeInTheDocument()
   })
 
+  it('look for the image every couple of seconds at first, so it shows as soon as it is ready', async () => {
+    await addOne()
+
+    details.mockResolvedValue(
+      product([{ id: 'img-new', url: 'https://cdn.shopify.com/new.jpg', alt: 'New' }]),
+    )
+    await act(() => vi.advanceTimersByTimeAsync(2200))
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByText('1 image')).toBeInTheDocument()
+  })
+
   it('read the products list again when the image arrives, so its row gets the image too', async () => {
     await addOne()
     list.mockClear()

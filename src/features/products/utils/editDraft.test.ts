@@ -503,6 +503,23 @@ describe('the "Add media" form, for the documented three-image example', () => {
 describe('the "Add media" form', () => {
   const row = (url: string, alt = '') => ({ ...blankMedia(), url, alt })
 
+  it('refuses the same address twice in one go, and never sends it twice', () => {
+    const rows = [
+      row('https://cdn.example.com/a.jpg'),
+      row('https://cdn.example.com/b.jpg'),
+      row('  HTTPS://cdn.example.com/A.jpg '),
+    ]
+
+    expect(validateNewMedia(rows)).toEqual({
+      '2.url': 'This address is already in the list above',
+    })
+    // Even if it were sent, the second copy is dropped.
+    expect(buildMediaItems(rows).map((item) => item.url)).toEqual([
+      'https://cdn.example.com/a.jpg',
+      'https://cdn.example.com/b.jpg',
+    ])
+  })
+
   it('turns filled rows into the items POST /media takes, skipping blank rows', () => {
     const items = buildMediaItems([
       row(' https://cdn.example.com/a.jpg ', 'First'),
@@ -546,7 +563,9 @@ describe('the "Add media" form', () => {
   })
 
   it('allows at most 20 files in one call', () => {
-    const rows = Array.from({ length: 21 }, () => row('https://cdn.example.com/a.jpg'))
+    const rows = Array.from({ length: 21 }, (_, i) =>
+      row(`https://cdn.example.com/${i}.jpg`),
+    )
 
     expect(validateNewMedia(rows).rows).toMatch(/at most 20/)
     expect(validateNewMedia(rows.slice(0, 20))).toEqual({})

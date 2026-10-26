@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
   addProductMedia,
@@ -40,13 +40,19 @@ export function useProductMedia(product: ProductDetail) {
   const [isAdding, setIsAdding] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A second click (or key press) while a request is still running must not send it again:
+  // `isAdding` only turns true on the next render, so this is checked synchronously.
+  const busy = useRef(false)
   const shop = product.shop?.key
 
   const add = useCallback(
     async (items: ProductMediaInput[]): Promise<ProductWriteResult | null> => {
+      if (busy.current) return null
+      busy.current = true
       setIsAdding(true)
       setError(null)
       const result = await dispatch(addProductMedia({ id: product.id, items, shop }))
+      busy.current = false
       setIsAdding(false)
       if (!addProductMedia.fulfilled.match(result)) {
         setError(result.payload ?? 'Something went wrong. Please try again.')
@@ -68,6 +74,8 @@ export function useProductMedia(product: ProductDetail) {
    */
   const remove = useCallback(
     async (image: ProductImage): Promise<ProductWriteResult | null> => {
+      if (busy.current) return null
+      busy.current = true
       setIsRemoving(true)
       setError(null)
       const send = (attachmentId: string) =>
@@ -87,6 +95,7 @@ export function useProductMedia(product: ProductDetail) {
             sameFile(item.url, image.url),
           )
           if (!current) {
+            busy.current = false
             setIsRemoving(false)
             setError(
               'That image is no longer on this product. The page has been refreshed.',
@@ -100,6 +109,7 @@ export function useProductMedia(product: ProductDetail) {
         }
       }
 
+      busy.current = false
       setIsRemoving(false)
       if (!removeProductMedia.fulfilled.match(result)) {
         setError(result.payload ?? 'Something went wrong. Please try again.')

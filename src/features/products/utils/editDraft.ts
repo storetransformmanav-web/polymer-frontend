@@ -360,13 +360,23 @@ const tooLong = (label: string, value: string, max: number) =>
 
 /** The rows of the "Add media" form → the items `POST /media` expects (blank rows are skipped). */
 export function buildMediaItems(rows: NewMediaDraft[]): ProductMediaInput[] {
-  return rows
-    .filter((row) => row.url.trim() !== '')
-    .map((row) => ({
-      url: row.url.trim(),
-      media_type: row.mediaType,
-      ...(row.alt.trim() ? { alt: row.alt.trim() } : {}),
-    }))
+  const seen = new Set<string>()
+  return (
+    rows
+      .filter((row) => row.url.trim() !== '')
+      // The same address twice would add the same picture twice.
+      .filter((row) => {
+        const key = row.url.trim().toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .map((row) => ({
+        url: row.url.trim(),
+        media_type: row.mediaType,
+        ...(row.alt.trim() ? { alt: row.alt.trim() } : {}),
+      }))
+  )
 }
 
 /**
@@ -383,17 +393,23 @@ export function validateNewMedia(rows: NewMediaDraft[]): DraftErrors {
   if (used.length > LIMITS.newMedia) {
     errors.rows = `You can add at most ${LIMITS.newMedia} files at a time`
   }
+  const firstSeen = new Map<string, number>()
   rows.forEach((row, index) => {
     const url = row.url.trim()
     if (url === '' && row.alt.trim() === '') return
+    const key = url.toLowerCase()
+    const duplicate = url !== '' && firstSeen.has(key)
+    if (url !== '' && !duplicate) firstSeen.set(key, index)
     const urlProblem =
       url === ''
         ? 'Enter the file’s web address'
-        : url.length > LIMITS.mediaUrl
-          ? `The address can be at most ${LIMITS.mediaUrl} characters`
-          : /^https:\/\//i.test(url)
-            ? null
-            : 'Use a public https:// address'
+        : duplicate
+          ? 'This address is already in the list above'
+          : url.length > LIMITS.mediaUrl
+            ? `The address can be at most ${LIMITS.mediaUrl} characters`
+            : /^https:\/\//i.test(url)
+              ? null
+              : 'Use a public https:// address'
     if (urlProblem) errors[`${index}.url`] = urlProblem
     const altProblem = tooLong('The alt text', row.alt, LIMITS.mediaAlt)
     if (altProblem) errors[`${index}.alt`] = altProblem

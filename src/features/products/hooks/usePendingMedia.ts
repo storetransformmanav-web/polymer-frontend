@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
 import {
   fetchProductDetails,
@@ -8,11 +8,23 @@ import {
 import type { ProductDetail, ProductMediaInput } from '../../../lib/api/endpoints.ts'
 import { useRefreshProductList } from './useRefreshProductList.ts'
 
-/** How often to look for the files the store has finished downloading. */
+/**
+ * How often to look for the files the store has finished downloading: often at first (a
+ * file is usually ready within seconds, and every second of waiting makes people add it
+ * again), then less often.
+ */
+const FAST_POLL_MS = 2000
+const FAST_UNTIL_MS = 30_000
 const POLL_MS = 4000
 /** After this long the store is "taking longer than usual": say so, and look less often. */
 const SLOW_AFTER_MS = 60_000
 const SLOW_POLL_MS = 16_000
+
+/** How long to wait before the next look, given how long the files have been waiting. */
+function pollDelay(ageMs: number): number {
+  if (ageMs < FAST_UNTIL_MS) return FAST_POLL_MS
+  return ageMs < SLOW_AFTER_MS ? POLL_MS : SLOW_POLL_MS
+}
 /** Stop looking altogether (the files stay listed until they arrive or are dismissed). */
 const STOP_AFTER_MS = 15 * 60_000
 
@@ -31,7 +43,6 @@ export function usePendingMedia(product: ProductDetail) {
   const queued = useAppSelector((state) => state.products.pendingMedia[id])
   const [now, setNow] = useState(() => Date.now())
   const imageCount = product.images.length
-  const ticks = useRef(0)
 
   const queue = useCallback(
     (items: ProductMediaInput[]) =>
@@ -57,19 +68,19 @@ export function usePendingMedia(product: ProductDetail) {
   }, [done, dispatch, id, refreshList])
 
   useEffect(() => {
-    if (!active) return undefined
-    ticks.current = 0
-    const timer = window.setInterval(() => {
+    if (!active || startedAt === undefined) return undefined
+    const begun = startedAt
+    let timer: number | undefined
+    function look() {
       const current = Date.now()
       setNow(current)
-      const age = current - startedAt
+      const age = current - begun
       if (age > STOP_AFTER_MS) return
-      ticks.current += 1
-      // A slow store is asked less often (every fourth look).
-      if (age > SLOW_AFTER_MS && ticks.current % (SLOW_POLL_MS / POLL_MS) !== 0) return
       void dispatch(fetchProductDetails({ id, force: true }))
-    }, POLL_MS)
-    return () => window.clearInterval(timer)
+      timer = window.setTimeout(look, pollDelay(age))
+    }
+    timer = window.setTimeout(look, FAST_POLL_MS)
+    return () => window.clearTimeout(timer)
   }, [active, dispatch, id, startedAt])
 
   const slow = active && now - startedAt > SLOW_AFTER_MS

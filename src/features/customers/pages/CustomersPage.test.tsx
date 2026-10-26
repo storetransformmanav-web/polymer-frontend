@@ -83,6 +83,97 @@ describe('CustomersPage', () => {
     vi.clearAllMocks()
   })
 
+  describe('the figures above the list', () => {
+    // 60 customers in all: 45 have ordered, 15 have not; 20 accept marketing emails.
+    function serveStats() {
+      list.mockImplementation((params) => {
+        const total =
+          params.has_orders === true
+            ? 45
+            : params.has_orders === false
+              ? 15
+              : params.accepts_marketing === true
+                ? 20
+                : TOTAL
+        return Promise.resolve({ ...respond(params), total })
+      })
+    }
+    const card = (label: string) =>
+      screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
+
+    it('shows four cards on top, each the API total for one more condition', async () => {
+      serveStats()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      await waitFor(() =>
+        expect(within(card('With orders')).getByText('45')).toBeInTheDocument(),
+      )
+      expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
+      expect(within(card('Without orders')).getByText('15')).toBeInTheDocument()
+      expect(within(card('Email subscribers')).getByText('20')).toBeInTheDocument()
+
+      // Each says what it counts, and each is one cheap one-row request.
+      expect(
+        within(card('With orders')).getByText('Have placed at least one order'),
+      ).toBeVisible()
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ has_orders: true, page_size: 1, role: 'all' }),
+      )
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ has_orders: false, page_size: 1 }),
+      )
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ accepts_marketing: true, page_size: 1 }),
+      )
+    })
+
+    it('sit above the list, before the toolbar and the table', async () => {
+      serveStats()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      const order = (element: HTMLElement) =>
+        [...document.querySelectorAll('*')].indexOf(element)
+      expect(order(card('Customers'))).toBeLessThan(
+        order(screen.getByRole('searchbox', { name: 'Search customers' })),
+      )
+      expect(order(card('Customers'))).toBeLessThan(order(screen.getByRole('table')))
+    })
+
+    it('follow the search: every figure is asked for under the same search', async () => {
+      serveStats()
+      const user = userEvent.setup()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      await user.type(screen.getByRole('searchbox', { name: 'Search customers' }), 'ian')
+
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ search: 'ian', has_orders: true, page_size: 1 }),
+        ),
+      )
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'ian', accepts_marketing: true, page_size: 1 }),
+      )
+    })
+
+    it('show a dash until their number has arrived', async () => {
+      list.mockImplementation((params) =>
+        isCountQuery(params)
+          ? new Promise<never>(() => undefined)
+          : Promise.resolve(respond(params)),
+      )
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      expect(within(card('With orders')).getByText('—')).toBeInTheDocument()
+      // The first card falls back to the list's own total meanwhile.
+      expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
+    })
+  })
+
   it('loads the first page from the API with the default query', async () => {
     renderWithProviders(<CustomersPage />)
 
