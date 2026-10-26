@@ -209,7 +209,7 @@ describe('ProductsPage list', () => {
     expect(screen.queryByRole('option', { name: 'Vendor' })).not.toBeInTheDocument()
   })
 
-  it('lays the table out as (tick), Image, Product, Shopify, Variants, Status, Inventory, Price, Actions', async () => {
+  it('lays the table out as (tick), Image, Product, Variants, Status, Inventory, Price, Actions', async () => {
     renderPage()
     await screen.findByText('Product 1')
 
@@ -221,7 +221,6 @@ describe('ProductsPage list', () => {
       '', // the "select all on this page" checkbox
       'Image',
       'Product',
-      'Shopify',
       'Variants',
       'Status',
       'Inventory',
@@ -233,15 +232,15 @@ describe('ProductsPage list', () => {
     // Product 1: 2 variants, 10 units. Product 3 is out of stock.
     const [, row1, , row3] = within(table).getAllByRole('row')
     const cells1 = within(row1).getAllByRole('cell')
-    // (cells: tick, image, product, Shopify, variants, status, inventory, price, actions)
-    expect(cells1[4]).toHaveTextContent('2')
+    // (cells: tick, image, product, variants, status, inventory, price, actions)
+    expect(cells1[3]).toHaveTextContent('2')
     // Alignment classes must not conflict (a stray text-left beat text-center).
-    expect(cells1[4]).toHaveClass('text-center')
-    expect(cells1[4]).not.toHaveClass('text-left')
-    expect(cells1[6]).toHaveClass('text-right')
-    expect(cells1[6]).not.toHaveClass('text-left')
-    expect(cells1[6]).toHaveTextContent('10')
-    expect(within(row3).getAllByRole('cell')[6]).toHaveTextContent('Out of stock')
+    expect(cells1[3]).toHaveClass('text-center')
+    expect(cells1[3]).not.toHaveClass('text-left')
+    expect(cells1[5]).toHaveClass('text-right')
+    expect(cells1[5]).not.toHaveClass('text-left')
+    expect(cells1[5]).toHaveTextContent('10')
+    expect(within(row3).getAllByRole('cell')[5]).toHaveTextContent('Out of stock')
   })
 
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
@@ -625,11 +624,17 @@ describe('ProductsPage details', () => {
       )
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-      // The Shopify column sits right before Variants.
+      // No Shopify column: the icon sits in the Product cell, right after the copy icon.
       const headers = within(screen.getByRole('table'))
         .getAllByRole('columnheader')
         .map((header) => header.textContent)
-      expect(headers.indexOf('Shopify')).toBe(headers.indexOf('Variants') - 1)
+      expect(headers).not.toContain('Shopify')
+      const copy = screen.getByRole('button', { name: 'Copy name of Product 1' })
+      expect(copy.nextElementSibling).toBe(link)
+      expect(link.closest('td')).toBe(copy.closest('td'))
+      // The same box and icon size as the copy icon, so they line up.
+      expect(link).toHaveClass('h-5', 'w-5')
+      expect(copy).toHaveClass('h-5', 'w-5')
       // Each row links to its own product.
       expect(
         screen.getByRole('link', { name: 'Open Product 2 in Shopify' }),
@@ -659,7 +664,7 @@ describe('ProductsPage details', () => {
       expect(screen.queryByRole('heading', { level: 1, name: 'Product 1' })).toBeNull()
     })
 
-    it('shows a dash instead of a link when the store address is not known', async () => {
+    it('shows no link (and no stray dash) when the store address is not known', async () => {
       renderPage() // the fixture rows carry no store
       await screen.findByText('Product 1')
 

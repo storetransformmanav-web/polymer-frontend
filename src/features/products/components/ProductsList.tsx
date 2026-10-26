@@ -89,19 +89,14 @@ const MESSAGE_BUTTON =
  * below it. Handles the loading skeleton, error and empty states itself so
  * the page only passes data in.
  */
-/** Opens the product's page in the Shopify admin (a new tab). */
+/**
+ * Opens the product's page in the Shopify admin (a new tab). Sits right beside the copy icon
+ * after the name: the same 20px box and 15px icon, so the two line up. Nothing is drawn when
+ * the store's address isn't known (no guessed link).
+ */
 function ShopifyLink({ product }: { product: ProductListItem }) {
   const href = shopifyAdminProductUrl(product.shop, product.shopify_id)
-  if (!href) {
-    return (
-      <span
-        title="The store's address isn't known, so there is no Shopify link"
-        className="text-text-muted"
-      >
-        —
-      </span>
-    )
-  }
+  if (!href) return null
   return (
     <a
       href={href}
@@ -109,9 +104,9 @@ function ShopifyLink({ product }: { product: ProductListItem }) {
       rel="noopener noreferrer"
       aria-label={`Open ${product.title} in Shopify`}
       title="Open in Shopify"
-      className={ROW_ACTION}
+      className="text-text-muted hover:text-text focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 items-center justify-center leading-none transition-colors focus-visible:outline-2"
     >
-      <ExternalLinkIcon />
+      <ExternalLinkIcon width={15} height={15} />
     </a>
   )
 }
@@ -257,8 +252,7 @@ export function ProductsList({
               />
             </th>
             <th className={`${TH} w-16`}>Image</th>
-            <th className={`${TH} w-[28%]`}>Product</th>
-            <th className={`${TH_CENTER} w-[9%]`}>Shopify</th>
+            <th className={`${TH} w-[37%]`}>Product</th>
             <th className={`${TH_CENTER} w-[9%]`}>Variants</th>
             <th className={`${TH_CENTER} w-[10%]`}>Status</th>
             <th className={`${TH_RIGHT} w-[11%]`}>Inventory</th>
@@ -275,7 +269,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 9 }, (_, cell) => (
+                  {Array.from({ length: 8 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -322,17 +316,15 @@ export function ProductsList({
                       >
                         {product.title}
                       </button>
-                      {/* Always visible, right beside the name. */}
-                      <span className="flex h-5 shrink-0 items-center">
+                      {/* Always visible, right beside the name: copy, then open in Shopify. */}
+                      <span className="flex h-5 shrink-0 items-center gap-1">
                         <CopyButton
                           value={product.title}
                           label={`Copy name of ${product.title}`}
                         />
+                        <ShopifyLink product={product} />
                       </span>
                     </div>
-                  </td>
-                  <td className={`${TD} text-center`}>
-                    <ShopifyLink product={product} />
                   </td>
                   <td className={`${TD} text-center`}>
                     {product.variants_count.toLocaleString('en-GB')}
