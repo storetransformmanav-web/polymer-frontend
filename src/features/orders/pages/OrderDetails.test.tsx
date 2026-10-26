@@ -447,6 +447,100 @@ describe('an order’s details page', () => {
     expect(await screen.findByText('Order Summary')).toBeInTheDocument()
   })
 
+  describe('the strip of opened orders (like the products’ tabs)', () => {
+    const strip = () => screen.getByRole('navigation', { name: 'Open orders' })
+
+    it('is not there until an order is opened', async () => {
+      renderAt()
+      await screen.findByText('17501')
+
+      expect(screen.queryByRole('navigation', { name: 'Open orders' })).toBeNull()
+    })
+
+    it('shows "All Orders" and a tab for the opened order, with the order’s tab active', async () => {
+      await openFirst()
+      await screen.findByText('Order Summary')
+
+      expect(within(strip()).getByRole('button', { name: 'All Orders' })).toBeVisible()
+      const tab = within(strip()).getByRole('button', { name: /^Order\s*17501$/ })
+      expect(tab).toHaveAttribute('aria-current', 'page')
+      expect(within(strip()).getByRole('button', { name: 'Close 17501' })).toBeVisible()
+    })
+
+    it('returns to the list from "All Orders" and back to the order from its tab', async () => {
+      const user = await openFirst()
+      await screen.findByText('Order Summary')
+
+      await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
+      expect(where()).toBe('/orders')
+      expect(screen.getByRole('table')).toBeVisible()
+      // The tab stays, now not the current one.
+      const tab = within(strip()).getByRole('button', { name: /^Order\s*17501$/ })
+      expect(tab).not.toHaveAttribute('aria-current')
+
+      await user.click(tab)
+      expect(where()).toBe('/orders/17501?shop=polymer-uk')
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Order 17501' }),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps every order opened this way as its own tab, and switches between them', async () => {
+      const user = await openFirst()
+      await screen.findByText('Order Summary')
+      await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
+      await user.click(screen.getByRole('button', { name: 'View order 17502' }))
+      await screen.findByRole('heading', { level: 1, name: 'Order 17502' })
+
+      expect(
+        within(strip()).getByRole('button', { name: /^Order\s*17501$/ }),
+      ).toBeInTheDocument()
+      expect(
+        within(strip()).getByRole('button', { name: /^Order\s*17502$/ }),
+      ).toHaveAttribute('aria-current', 'page')
+
+      await user.click(within(strip()).getByRole('button', { name: /^Order\s*17501$/ }))
+      expect(where()).toBe('/orders/17501?shop=polymer-uk')
+    })
+
+    it('closes a tab; closing the one you are on moves to its neighbour, then to the list', async () => {
+      const user = await openFirst()
+      await screen.findByText('Order Summary')
+      await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
+      await user.click(screen.getByRole('button', { name: 'View order 17502' }))
+      await screen.findByRole('heading', { level: 1, name: 'Order 17502' })
+
+      // On 17502 (the last tab): closing it lands on 17501.
+      await user.click(within(strip()).getByRole('button', { name: 'Close 17502' }))
+      expect(where()).toBe('/orders/17501?shop=polymer-uk')
+      expect(within(strip()).queryByRole('button', { name: /17502/ })).toBeNull()
+
+      // Closing the only one left returns to the list and the strip disappears.
+      await user.click(within(strip()).getByRole('button', { name: 'Close 17501' }))
+      expect(where()).toBe('/orders')
+      expect(screen.queryByRole('navigation', { name: 'Open orders' })).toBeNull()
+    })
+
+    it('closes them all with Clear and goes back to the list', async () => {
+      const user = await openFirst()
+      await screen.findByText('Order Summary')
+
+      await user.click(within(strip()).getByRole('button', { name: 'Clear' }))
+
+      expect(where()).toBe('/orders')
+      expect(screen.queryByRole('navigation', { name: 'Open orders' })).toBeNull()
+    })
+
+    it('gives an order opened from a bare address a tab too, labelled with its number', async () => {
+      renderAt('/orders/17503?shop=polymer-uk')
+      await screen.findByText('Order Summary')
+
+      expect(
+        within(strip()).getByRole('button', { name: /^Order\s*17503$/ }),
+      ).toHaveAttribute('aria-current', 'page')
+    })
+  })
+
   it('never asks for the raw Shopify payload', async () => {
     await openFirst()
     await screen.findByText('Order Summary')

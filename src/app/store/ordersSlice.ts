@@ -176,6 +176,23 @@ export function orderDetailsKey(ref: string, shop?: string | null): string {
   return `${shop ?? ''}|${ref}`
 }
 
+/** An opened order, shown as a tab above the list/details (like the products' tabs). */
+export interface OrderTab {
+  /** `orderDetailsKey(ref, shop)` — what identifies the tab. */
+  id: string
+  /** The order number (or id) as it goes in the address. */
+  ref: string
+  /** The order's store key, when known. */
+  shop: string | null
+  /** What the tab says: the order number. */
+  label: string
+  /** Hover text: who the order is for. */
+  title: string | null
+}
+
+/** Most orders kept open as tabs; opening one more drops the oldest. */
+const MAX_TABS = 10
+
 export interface OrdersState {
   filters: OrderFilters
   entries: Record<string, OrdersEntry>
@@ -185,6 +202,8 @@ export interface OrdersState {
   facets: OrdersFacets
   /** Order details, cached by `orderDetailsKey`. */
   details: Record<string, OrderDetailsEntry>
+  /** Opened orders, shown as tabs above the list/details (oldest first). */
+  tabs: OrderTab[]
 }
 
 type OrdersRootState = { orders: OrdersState }
@@ -195,6 +214,7 @@ const initialState: OrdersState = {
   lastData: null,
   facets: { tags: [], gateways: [] },
   details: {},
+  tabs: [],
 }
 
 interface FetchArg {
@@ -303,6 +323,33 @@ const ordersSlice = createSlice({
       const cached = state.entries[ordersCacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },
+    /** Opens (or refreshes the label of) an order tab; existing tabs keep their place. */
+    tabOpened(
+      state,
+      action: PayloadAction<{
+        ref: string
+        shop?: string | null
+        label?: string
+        title?: string | null
+      }>,
+    ) {
+      const { ref, shop = null, label = ref, title = null } = action.payload
+      const id = orderDetailsKey(ref, shop)
+      const existing = state.tabs.find((tab) => tab.id === id)
+      if (existing) {
+        if (label !== ref) existing.label = label
+        existing.title ??= title
+        return
+      }
+      state.tabs.push({ id, ref, shop, label, title })
+      if (state.tabs.length > MAX_TABS) state.tabs.shift()
+    },
+    tabClosed(state, action: PayloadAction<string>) {
+      state.tabs = state.tabs.filter((tab) => tab.id !== action.payload)
+    },
+    tabsCleared(state) {
+      state.tabs = []
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -357,6 +404,12 @@ const ordersSlice = createSlice({
       .addCase(fetchOrderDetails.fulfilled, (state, action) => {
         const key = orderDetailsKey(action.meta.arg.ref, action.meta.arg.shop)
         const { data, fetchedAt } = action.payload
+        // A tab opened from a bare URL gets its label and hover text once the order loads.
+        const tab = state.tabs.find((candidate) => candidate.id === key)
+        if (tab) {
+          tab.label = data.order_number != null ? String(data.order_number) : tab.ref
+          tab.title = data.customer?.full_name?.trim() || data.customer?.email || null
+        }
         state.details[key] = { data, fetchedAt, error: null, isFetching: false }
       })
       .addCase(fetchOrderDetails.rejected, (state, action) => {
@@ -384,8 +437,13 @@ const ordersSlice = createSlice({
   },
 })
 
-export const { filtersChanged: orderFiltersChanged, filtersReset: orderFiltersReset } =
-  ordersSlice.actions
+export const {
+  filtersChanged: orderFiltersChanged,
+  filtersReset: orderFiltersReset,
+  tabOpened: orderTabOpened,
+  tabClosed: orderTabClosed,
+  tabsCleared: orderTabsCleared,
+} = ordersSlice.actions
 export const ordersReducer = ordersSlice.reducer
 
 /** Warms the cache for whatever filters are currently set (e.g. on app load). */

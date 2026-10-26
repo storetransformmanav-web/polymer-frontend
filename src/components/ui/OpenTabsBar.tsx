@@ -31,7 +31,7 @@ interface OpenTabsBarProps {
 /**
  * Browser-style strip of opened records: the first button returns to the list, each
  * record is a tab you can switch to or close. Switching is instant — details are cached
- * in Redux. Hidden until there's a tab. Shared by Products and Customers.
+ * in Redux. Hidden until there's a tab. Shared by Products, Customers and Orders.
  */
 export function OpenTabsBar({
   tabs,

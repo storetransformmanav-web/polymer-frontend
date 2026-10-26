@@ -1,6 +1,10 @@
 import { useCallback, useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
-import { fetchOrderDetails, orderDetailsKey } from '../../../app/store/ordersSlice.ts'
+import {
+  fetchOrderDetails,
+  orderDetailsKey,
+  orderTabOpened,
+} from '../../../app/store/ordersSlice.ts'
 
 /**
  * One order's details, from the Redux cache.
@@ -29,6 +33,8 @@ export function useOrderDetails(ref: string, shop: string | null) {
   )
 
   useEffect(() => {
+    // Opened from a bare URL: still gets a tab (labelled once the order loads).
+    dispatch(orderTabOpened({ ref, shop }))
     void dispatch(fetchOrderDetails({ ref, shop }))
   }, [dispatch, ref, shop])
 

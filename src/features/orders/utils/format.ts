@@ -81,14 +81,16 @@ export function orderRef(order: Pick<OrderListItem, 'order_number' | 'id'>): str
   return order.order_number != null ? String(order.order_number) : order.id
 }
 
-/** The details page of an order — its number, and its store when known (two stores can share a number). */
+/** The details page of an order by its reference and store (two stores can share a number). */
+export function orderPathFor(ref: string, shop?: string | null): string {
+  return `/orders/${encodeURIComponent(ref)}${shop ? `?shop=${encodeURIComponent(shop)}` : ''}`
+}
+
+/** The details page of an order — its number, and its store when known. */
 export function orderPath(
   order: Pick<OrderListItem, 'order_number' | 'id' | 'shop'>,
 ): string {
-  const shop = order.shop?.key
-  return `/orders/${encodeURIComponent(orderRef(order))}${
-    shop ? `?shop=${encodeURIComponent(shop)}` : ''
-  }`
+  return orderPathFor(orderRef(order), order.shop?.key)
 }
 
 /** The lines of a postal address, whichever parts exist ("55 Buckshaft Road", "Cinderford GL14 3DT"…). */
