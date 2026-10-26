@@ -411,6 +411,58 @@ describe('ProductsPage list', () => {
     await waitFor(() => expect(table.querySelector('mark')).toBeNull())
   })
 
+  it('filters the table when the In stock or Out of stock card is pressed, and again to show everything', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const inStock = screen.getByRole('button', { name: /^In stock/ })
+    const outOfStock = screen.getByRole('button', { name: /^Out of stock/ })
+    // Low stock and the threshold are plain figures: the API has no filter for them.
+    expect(screen.queryByRole('button', { name: /^Low stock/ })).toBeNull()
+    expect(inStock).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(inStock)
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ in_stock: true, page: 1 }),
+      ),
+    )
+    expect(screen.getByRole('button', { name: /^In stock/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    // The other card switches the filter over, and the Stock dropdown in Filters follows.
+    await user.click(screen.getByRole('button', { name: /^Out of stock/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ in_stock: false, page: 1 }),
+      ),
+    )
+    expect(screen.getByRole('button', { name: /^Out of stock/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: /^In stock/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.getByLabelText('Stock')).toHaveValue('out')
+
+    // Pressing the active card again clears the filter.
+    list.mockClear()
+    await user.click(screen.getByRole('button', { name: /^Out of stock/ }))
+    await waitFor(() => expect(list).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: /^Out of stock/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(screen.getByLabelText('Stock')).toHaveValue('')
+    void outOfStock
+  })
+
   it('shows the API’s four stock figures in cards on top of the list', async () => {
     renderPage()
     await screen.findByText('Product 1')

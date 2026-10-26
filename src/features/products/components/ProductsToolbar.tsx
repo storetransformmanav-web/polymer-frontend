@@ -111,7 +111,7 @@ export function ProductsToolbar({
           <input
             type="search"
             aria-label="Search products"
-            placeholder="Smart Search: title, SKU, vendor, type, tag…"
+            placeholder="Search by title "
             maxLength={200}
             value={search}
             onChange={(event) => setSearch(event.target.value)}

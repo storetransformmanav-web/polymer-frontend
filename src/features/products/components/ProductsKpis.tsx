@@ -5,13 +5,18 @@ import {
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import { KpiCards, type Kpi } from '../../../components/ui/KpiCards.tsx'
+import type { ProductFilters } from '../../../app/store/productsSlice.ts'
 import type { ProductListResponse } from '../../../lib/api/endpoints.ts'
 
 /**
  * The four figures of the answer's `stock_summary`: how many are in stock, low on stock
  * and out of stock, and the threshold that counts as "low". Nothing is worked out here.
  */
-function kpis(data: ProductListResponse | null): Kpi[] {
+function kpis(
+  data: ProductListResponse | null,
+  stock: ProductFilters['stock'],
+  onStock: (stock: ProductFilters['stock']) => void,
+): Kpi[] {
   const summary = data?.stock_summary
   const count = (value: number | undefined) =>
     value === undefined ? '—' : value.toLocaleString('en-GB')
@@ -23,6 +28,8 @@ function kpis(data: ProductListResponse | null): Kpi[] {
       value: count(summary?.in_stock),
       icon: CheckCircleIcon,
       tone: 'good',
+      active: stock === 'in',
+      onClick: () => onStock(stock === 'in' ? '' : 'in'),
     },
     {
       label: 'Low stock',
@@ -40,6 +47,8 @@ function kpis(data: ProductListResponse | null): Kpi[] {
       value: count(summary?.out_of_stock),
       icon: XCircleIcon,
       tone: 'danger',
+      active: stock === 'out',
+      onClick: () => onStock(stock === 'out' ? '' : 'out'),
     },
     {
       label: 'Low stock threshold',
@@ -50,7 +59,19 @@ function kpis(data: ProductListResponse | null): Kpi[] {
   ]
 }
 
-/** The four stock figures above the products list. */
-export function ProductsKpis({ data }: { data: ProductListResponse | null }) {
-  return <KpiCards items={kpis(data)} />
+/**
+ * The four stock figures above the products list. **In stock** and **Out of stock** are
+ * buttons: pressing one shows only those products in the table (the same filter as Stock in
+ * Filters), pressing it again shows everything.
+ */
+export function ProductsKpis({
+  data,
+  stock,
+  onStock,
+}: {
+  data: ProductListResponse | null
+  stock: ProductFilters['stock']
+  onStock: (stock: ProductFilters['stock']) => void
+}) {
+  return <KpiCards items={kpis(data, stock, onStock)} />
 }

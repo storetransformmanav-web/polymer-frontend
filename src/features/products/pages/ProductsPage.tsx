@@ -325,7 +325,11 @@ export function ProductsPage() {
       {/* The stock figures sit above the product tabs; they belong to the list, so a product,
           the bulk editor and the create form take their place (kept mounted, only hidden). */}
       <div className={activeId || bulkItems || showCreate ? 'hidden' : undefined}>
-        <ProductsKpis data={data} />
+        <ProductsKpis
+          data={data}
+          stock={filters.stock}
+          onStock={(stock) => products.setFilters({ stock })}
+        />
       </div>
 
       <ProductTabsBar
