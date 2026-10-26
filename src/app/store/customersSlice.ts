@@ -117,25 +117,6 @@ export function roleCountFilters(
   }
 }
 
-/**
- * The query behind one of the figure cards above the list: the same narrowing filters as the
- * list (search, store, country...) with `change` applied on top (for example `orders: 'yes'`),
- * one row per page — only `total` is read. Sort/order are pinned so re-sorting reuses it.
- */
-export function statCountFilters(
-  filters: CustomerFilters,
-  change: Partial<CustomerFilters>,
-): CustomerFilters {
-  return {
-    ...filters,
-    ...change,
-    page: 1,
-    pageSize: 1,
-    sort: DEFAULT_CUSTOMER_FILTERS.sort,
-    order: DEFAULT_CUSTOMER_FILTERS.order,
-  }
-}
-
 /** True when any narrowing filter (not sort/paging) is applied. */
 export function hasActiveCustomerFilters(filters: CustomerFilters): boolean {
   return (

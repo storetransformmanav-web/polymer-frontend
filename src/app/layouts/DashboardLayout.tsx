@@ -1,7 +1,4 @@
 import { Outlet } from 'react-router-dom'
-import { usePrefetchCustomers } from '../../features/customers/index.ts'
-import { usePrefetchOrders } from '../../features/orders/index.ts'
-import { usePrefetchProducts } from '../../features/products/index.ts'
 import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
@@ -15,11 +12,8 @@ import { useActiveNavItem } from './useActiveNavItem.ts'
  * height from `lg` up: the layout stops scrolling and the page lays out its own list.
  */
 export function DashboardLayout() {
-  // Warm the list caches as soon as the user is signed in, so those pages
-  // open with their data already loaded.
-  usePrefetchProducts()
-  usePrefetchCustomers()
-  usePrefetchOrders()
+  // Nothing is loaded here: each page asks for what it needs when it opens (the sidebar
+  // warms a page's data when the pointer reaches its link — see Navbar).
   // Idle timeout, token expiry and cross-tab logout for the signed-in session.
   useSessionGuard()
   const fill = useActiveNavItem()?.fillHeight === true

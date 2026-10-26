@@ -16,7 +16,9 @@ import { useActivityFilterOptions } from '../hooks/useActivityFilterOptions.ts'
  */
 export function ActivityPage() {
   const activity = useActivity()
-  const options = useActivityFilterOptions(activity.items)
+  // The dropdown choices are loaded when someone reaches for a dropdown, not when the page opens.
+  const [wantOptions, setWantOptions] = useState(false)
+  const options = useActivityFilterOptions(activity.items, wantOptions)
   const { filters, data } = activity
   // The row whose details panel is open.
   const [selected, setSelected] = useState<ActivityItem | null>(null)
@@ -35,6 +37,7 @@ export function ActivityPage() {
         onChange={activity.setFilters}
         onReset={activity.resetFilters}
         onRefresh={activity.refresh}
+        onWantOptions={() => setWantOptions(true)}
       />
 
       <section

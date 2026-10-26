@@ -14,10 +14,13 @@ export interface UserOption {
  * log itself (with counts); users from the Users list. If the signed-in
  * person can't see the Users list, the dropdown still offers everyone who
  * appears in the rows already loaded, so it never ends up empty.
+ *
+ * Nothing is requested until `enabled`: the page opens with just its list, and the choices
+ * are fetched when someone reaches for a dropdown (or opens the Filters grid).
  */
-export function useActivityFilterOptions(visibleItems: ActivityItem[]) {
-  const actions = useQuery(activityActionsOptions())
-  const users = useQuery(activityUsersOptions())
+export function useActivityFilterOptions(visibleItems: ActivityItem[], enabled = true) {
+  const actions = useQuery({ ...activityActionsOptions(), enabled })
+  const users = useQuery({ ...activityUsersOptions(), enabled })
 
   const userOptions = useMemo(() => {
     const byId = new Map<string, UserOption>()

@@ -148,7 +148,9 @@ describe('changing the status from the product page header', () => {
   it('asks first, then saves only the status', async () => {
     const user = await openPage()
     await user.click(statusButton())
-    await user.click(screen.getByRole('option', { name: 'Active' }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Active' }),
+    )
 
     // Nothing is sent until "Yes, update".
     expect(screen.getByText('Change “Sushi Tray” to Active?')).toBeInTheDocument()
@@ -166,7 +168,9 @@ describe('changing the status from the product page header', () => {
   it('sends nothing when the dialog is cancelled', async () => {
     const user = await openPage()
     await user.click(statusButton())
-    await user.click(screen.getByRole('option', { name: 'Archived' }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Archived' }),
+    )
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(update).not.toHaveBeenCalled()
@@ -177,7 +181,9 @@ describe('changing the status from the product page header', () => {
     update.mockRejectedValue(new ApiError('Shopify said no.', { status: 422 }))
     const user = await openPage()
     await user.click(statusButton())
-    await user.click(screen.getByRole('option', { name: 'Active' }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Active' }),
+    )
     await confirmUpdate(user)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Shopify said no.')

@@ -95,8 +95,10 @@ describe('AppBar shop dropdown', () => {
   it('is hidden on pages that cannot be scoped to a store', async () => {
     renderWithProviders(<AppBar />, { route: '/' })
 
-    await waitFor(() => expect(list).toHaveBeenCalled())
     expect(screen.queryByRole('combobox', { name: 'Shop' })).not.toBeInTheDocument()
+    // …and the store list isn't requested for a page that doesn't show the dropdown.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(list).not.toHaveBeenCalled()
   })
 
   it('scopes products and customers to the chosen store, and back to all', async () => {

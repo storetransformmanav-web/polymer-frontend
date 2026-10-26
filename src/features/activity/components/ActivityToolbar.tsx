@@ -30,6 +30,8 @@ interface ActivityToolbarProps {
   onChange: (changes: Partial<ActivityFilters>) => void
   onReset: () => void
   onRefresh: () => void
+  /** Someone reached for a dropdown or opened the Filters grid: load the choices now. */
+  onWantOptions?: () => void
 }
 
 /**
@@ -49,6 +51,7 @@ export function ActivityToolbar({
   onChange,
   onReset,
   onRefresh,
+  onWantOptions,
 }: ActivityToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -111,7 +114,11 @@ export function ActivityToolbar({
             height={16}
             className="text-text-muted hidden sm:block"
           />
-          <div className="min-w-0 flex-1 lg:w-64 lg:flex-none">
+          <div
+            className="min-w-0 flex-1 lg:w-64 lg:flex-none"
+            onPointerEnter={onWantOptions}
+            onFocusCapture={onWantOptions}
+          >
             <SelectField
               inline
               id="filter-user"
@@ -164,7 +171,10 @@ export function ActivityToolbar({
             type="button"
             aria-expanded={filtersOpen}
             aria-controls="activity-filter-grid"
-            onClick={() => setFiltersOpen(!filtersOpen)}
+            onClick={() => {
+              if (!filtersOpen) onWantOptions?.()
+              setFiltersOpen(!filtersOpen)
+            }}
             className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
           >
             <SlidersIcon width={16} height={16} />

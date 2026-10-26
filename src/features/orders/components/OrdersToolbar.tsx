@@ -98,7 +98,8 @@ export function OrdersToolbar({
 }: OrdersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const counts = useOrderFulfillmentCounts(filters, FULFILLMENT_VALUES)
+  // The counts are only shown in the dropdown, so they are requested once the grid is open.
+  const counts = useOrderFulfillmentCounts(filters, FULFILLMENT_VALUES, filtersOpen)
   // The fulfillment choices, each with its count ("Unfulfilled (82)"). The open one can fall
   // back to the list's own total while its count loads.
   const fulfillmentOptions: SelectOption[] = FULFILLMENT_TABS.map((tab) => {

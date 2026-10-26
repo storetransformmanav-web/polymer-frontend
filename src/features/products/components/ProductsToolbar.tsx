@@ -78,7 +78,8 @@ export function ProductsToolbar({
 }: ProductsToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const counts = useProductStatusCounts(filters, STATUS_VALUES)
+  // The counts are only shown in the dropdown, so they are requested once the grid is open.
+  const counts = useProductStatusCounts(filters, STATUS_VALUES, filtersOpen)
   // The status choices, each with its count ("Active (980)"). The open one can fall back
   // to the list's own total while its count loads.
   const statusOptions: SelectOption[] = STATUS_TABS.map((tab) => {

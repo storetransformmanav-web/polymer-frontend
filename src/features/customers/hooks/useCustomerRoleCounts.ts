@@ -14,10 +14,14 @@ import type { CustomerRole } from '../../../lib/api/endpoints.ts'
  * search/country/state/... filters. A count is `null` until it has loaded.
  * Each one is a cached one-row query (see `roleCountFilters`), so paging or
  * re-sorting doesn't refetch them. Pass a stable `roles` array.
+ *
+ * The counts only appear inside the role dropdown, so nothing is requested until
+ * `enabled` (the Filters grid is open).
  */
 export function useCustomerRoleCounts(
   filters: CustomerFilters,
   roles: readonly (CustomerRole | '')[],
+  enabled = true,
 ): Record<string, number | null> {
   const dispatch = useAppDispatch()
 
@@ -33,10 +37,11 @@ export function useCustomerRoleCounts(
 
   // Already-cached fresh counts are skipped by fetchCustomers' own `condition`.
   useEffect(() => {
+    if (!enabled) return
     for (const role of roles) {
       void dispatch(fetchCustomers({ filters: roleCountFilters(filters, role) }))
     }
-  }, [dispatch, filters, roles])
+  }, [dispatch, enabled, filters, roles])
 
   return Object.fromEntries(roles.map((role, i) => [role, totals[i] ?? null]))
 }

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { api } from '../../lib/api/endpoints.ts'
@@ -60,29 +60,19 @@ describe('Navbar', () => {
     expect(activity).toHaveAttribute('aria-current', 'page')
   })
 
-  it('starts loading the Activity page as soon as its link is hovered or focused', async () => {
-    vi.mocked(api.activity.list).mockResolvedValue({
-      items: [],
-      page: 1,
-      page_size: 25,
-      total: 0,
-      total_pages: 1,
-      has_next: false,
-    })
-    vi.mocked(api.activity.actions).mockResolvedValue([])
+  it('makes no request when a link is hovered or focused: a page loads when it is clicked', async () => {
     const user = userEvent.setup()
     renderWithProviders(<Navbar />, { route: '/' })
-    expect(api.activity.list).not.toHaveBeenCalled()
 
     await user.hover(screen.getByRole('link', { name: 'Activity Management' }))
+    await user.hover(screen.getByRole('link', { name: 'Orders' }))
+    await user.hover(screen.getByRole('link', { name: 'Products' }))
+    await user.hover(screen.getByRole('link', { name: 'Customers' }))
+    screen.getByRole('link', { name: 'Activity Management' }).focus()
+    await new Promise((resolve) => setTimeout(resolve, 20))
 
-    await waitFor(() =>
-      expect(api.activity.list).toHaveBeenCalledWith({ page: 1, page_size: 25 }),
-    )
-    expect(api.activity.actions).toHaveBeenCalled()
-    // Other links don't trigger any loading.
-    await user.hover(screen.getByRole('link', { name: 'Dashboard' }))
-    expect(api.activity.list).toHaveBeenCalledTimes(1)
+    expect(api.activity.list).not.toHaveBeenCalled()
+    expect(api.activity.actions).not.toHaveBeenCalled()
   })
 
   describe('Shopify Management accordion', () => {

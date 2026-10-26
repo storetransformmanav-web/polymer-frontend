@@ -217,29 +217,26 @@ describe('ActivityPage', () => {
       expect(page1Calls()).toBe(before)
     })
 
-    it('fetches the next page ahead of time, so paging forward is instant', async () => {
+    it('asks for page 1 only when it opens, and for page 2 when its button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
-
-      await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 2, page_size: 25 }))
       const page2Calls = () => list.mock.calls.filter(([p]) => p.page === 2).length
-      expect(page2Calls()).toBe(1)
+      expect(page2Calls()).toBe(0)
+
+      await user.hover(screen.getByRole('button', { name: 'Page 2' }))
+      expect(page2Calls()).toBe(0)
 
       await user.click(screen.getByRole('button', { name: 'Page 2' }))
 
-      // No await: page 2's rows are there in the same render as the click, and
-      // page 2 isn't requested a second time (page 3 is now fetched ahead instead).
-      expect(screen.getByText('Manav viewed product 26')).toBeInTheDocument()
+      expect(await screen.findByText('Manav viewed product 26')).toBeInTheDocument()
       expect(page2Calls()).toBe(1)
-      await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 3, page_size: 25 }))
     })
 
-    it('does not prefetch a "next page" for a new filter using the previous results', async () => {
+    it('asks for just the filtered page 1 when a filter is applied — no other page, no extra request', async () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
-      await waitFor(() => expect(list).toHaveBeenCalledWith({ page: 2, page_size: 25 }))
       list.mockClear()
 
       // The filtered query's own answer says there is no next page.

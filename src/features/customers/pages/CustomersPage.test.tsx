@@ -84,52 +84,37 @@ describe('CustomersPage', () => {
   })
 
   describe('the figures above the list', () => {
-    // 60 customers in all: 45 have ordered, 15 have not; 20 accept marketing emails.
-    function serveStats() {
-      list.mockImplementation((params) => {
-        const total =
-          params.has_orders === true
-            ? 45
-            : params.has_orders === false
-              ? 15
-              : params.accepts_marketing === true
-                ? 20
-                : TOTAL
-        return Promise.resolve({ ...respond(params), total })
-      })
-    }
     const card = (label: string) =>
       screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
 
-    it('shows four cards on top, each the API total for one more condition', async () => {
-      serveStats()
+    it('shows four cards on top, read from the list answer — the API total and the page counts', async () => {
       renderWithProviders(<CustomersPage />)
       await screen.findByText('Customer 2')
 
-      await waitFor(() =>
-        expect(within(card('With orders')).getByText('45')).toBeInTheDocument(),
-      )
+      // 60 in all (the answer's `total`). On the 25 shown (customers 1–25): 19 have orders
+      // (all but the multiples of 4), 6 have none, 12 accept marketing (the even ones).
       expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
-      expect(within(card('Without orders')).getByText('15')).toBeInTheDocument()
-      expect(within(card('Email subscribers')).getByText('20')).toBeInTheDocument()
-
-      // Each says what it counts, and each is one cheap one-row request.
+      expect(within(card('With orders')).getByText('19')).toBeInTheDocument()
+      expect(within(card('Without orders')).getByText('6')).toBeInTheDocument()
+      expect(within(card('Email subscribers')).getByText('12')).toBeInTheDocument()
       expect(
-        within(card('With orders')).getByText('Have placed at least one order'),
+        within(card('With orders')).getByText('Of the 25 on this page'),
       ).toBeVisible()
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ has_orders: true, page_size: 1, role: 'all' }),
-      )
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ has_orders: false, page_size: 1 }),
-      )
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ accepts_marketing: true, page_size: 1 }),
-      )
+      expect(
+        within(card('Customers')).getByText('Everyone matching the list'),
+      ).toBeVisible()
+    })
+
+    it('make no request of their own: the page asks for customers once', async () => {
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(list.mock.calls.some(([params]) => isCountQuery(params))).toBe(false)
     })
 
     it('sit above the list, before the toolbar and the table', async () => {
-      serveStats()
       renderWithProviders(<CustomersPage />)
       await screen.findByText('Customer 2')
 
@@ -141,36 +126,32 @@ describe('CustomersPage', () => {
       expect(order(card('Customers'))).toBeLessThan(order(screen.getByRole('table')))
     })
 
-    it('follow the search: every figure is asked for under the same search', async () => {
-      serveStats()
+    it('follow the search with one request for the new list, and the figures change with it', async () => {
       const user = userEvent.setup()
       renderWithProviders(<CustomersPage />)
       await screen.findByText('Customer 2')
+      list.mockClear()
 
-      await user.type(screen.getByRole('searchbox', { name: 'Search customers' }), 'ian')
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search customers' }),
+        'nomatch',
+      )
 
       await waitFor(() =>
-        expect(list).toHaveBeenCalledWith(
-          expect.objectContaining({ search: 'ian', has_orders: true, page_size: 1 }),
-        ),
+        expect(list).toHaveBeenCalledWith(expect.objectContaining({ search: 'nomatch' })),
       )
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ search: 'ian', accepts_marketing: true, page_size: 1 }),
+      expect(list.mock.calls.every(([params]) => !isCountQuery(params))).toBe(true)
+      await waitFor(() =>
+        expect(within(card('Customers')).getByText('0')).toBeInTheDocument(),
       )
     })
 
-    it('show a dash until their number has arrived', async () => {
-      list.mockImplementation((params) =>
-        isCountQuery(params)
-          ? new Promise<never>(() => undefined)
-          : Promise.resolve(respond(params)),
-      )
+    it('show a dash until the list has arrived', async () => {
+      list.mockImplementation(() => new Promise<never>(() => undefined))
       renderWithProviders(<CustomersPage />)
-      await screen.findByText('Customer 2')
 
-      expect(within(card('With orders')).getByText('—')).toBeInTheDocument()
-      // The first card falls back to the list's own total meanwhile.
-      expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
+      await waitFor(() => expect(within(card('Customers')).getByText('—')).toBeVisible())
+      expect(within(card('With orders')).getByText('—')).toBeVisible()
     })
   })
 
@@ -418,26 +399,30 @@ describe('CustomersPage', () => {
     )
   })
 
-  it('shows the next page instantly (prefetched) and re-visits pages from cache', async () => {
+  it('opens with page 1 only, asks for another page when its button is clicked, and re-visits pages from cache', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
-    // Page 2 is requested in the background without being asked for.
-    await waitFor(() => expect(callsForPage(2)).toBe(1))
+    // Nothing but page 1 is requested when the page opens, or when a button is hovered…
+    expect(callsForPage(2)).toBe(0)
+    await user.hover(screen.getByRole('button', { name: 'Page 2' }))
+    expect(callsForPage(2)).toBe(0)
+
+    // …page 2 is requested by the click.
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    expect(await screen.findByText('Customer 26')).toBeInTheDocument()
+    expect(callsForPage(2)).toBe(1)
+    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
     const callsBefore = pageCalls().length
 
-    await user.click(screen.getByRole('button', { name: 'Page 2' }))
-    // No await/findBy: the rows are there in the same render as the click.
-    expect(screen.getByText('Customer 26')).toBeInTheDocument()
-    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
-
     await user.click(screen.getByRole('button', { name: 'Page 1' }))
+    // Back on a page seen before: shown at once, from the cache.
     expect(screen.getByText('Customer 2')).toBeInTheDocument()
 
-    // Page 1 was never fetched a second time; only page 3 was prefetched.
+    // Page 1 was never fetched a second time, and going back asked for nothing new.
     expect(callsForPage(1)).toBe(1)
-    expect(pageCalls().length - callsBefore).toBeLessThanOrEqual(1)
+    expect(pageCalls().length - callsBefore).toBe(0)
   })
 
   it('changes the page size', async () => {

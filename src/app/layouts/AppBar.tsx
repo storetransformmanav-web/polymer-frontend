@@ -6,6 +6,22 @@ import { useActiveNavItem } from './useActiveNavItem.ts'
 import { UserMenu } from './UserMenu.tsx'
 
 /**
+ * The store dropdown. Its own component so the store list (`GET /shops`) is only requested
+ * on a page that shows the dropdown — not on every page the bar is mounted for.
+ */
+function ShopScope() {
+  const shops = useShops()
+  return (
+    <ShopSwitcher
+      shops={shops.shops}
+      status={shops.status}
+      selected={shops.selected}
+      onSelect={shops.select}
+    />
+  )
+}
+
+/**
  * Top application bar: shows the active section's label (derived from
  * the shared NAV_ITEMS, so it never drifts from the Navbar), the store
  * dropdown on pages that can be scoped to one store, plus global actions.
@@ -13,8 +29,6 @@ import { UserMenu } from './UserMenu.tsx'
  */
 export function AppBar() {
   const activeItem = useActiveNavItem()
-  // Loaded here (the bar is always mounted) so the list is ready when a page needs it.
-  const shops = useShops()
 
   return (
     <header className="border-border bg-bg sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b px-4 sm:px-6">
@@ -25,12 +39,7 @@ export function AppBar() {
         {activeItem?.shopScoped && (
           <>
             <span aria-hidden="true" className="bg-border h-5 w-px shrink-0" />
-            <ShopSwitcher
-              shops={shops.shops}
-              status={shops.status}
-              selected={shops.selected}
-              onSelect={shops.select}
-            />
+            <ShopScope />
           </>
         )}
       </div>

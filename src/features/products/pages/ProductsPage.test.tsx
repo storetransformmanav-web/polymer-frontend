@@ -275,7 +275,10 @@ describe('ProductsPage list', () => {
         expect.objectContaining({ shop: 'polymer-uk', page: 1, page_size: 25 }),
       ),
     )
-    // The status tab counts follow the same store.
+    // No counts were asked for yet: they only appear in the status dropdown, once Filters is open.
+    expect(list.mock.calls.some(([params]) => params.page_size === 1)).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    // The status counts follow the same store.
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({ shop: 'polymer-uk', status: 'ACTIVE', page_size: 1 }),
@@ -398,26 +401,30 @@ describe('ProductsPage list', () => {
     )
   })
 
-  it('shows the next page instantly (prefetched) and re-visits pages from cache', async () => {
+  it('opens with page 1 only, asks for another page when its button is clicked, and re-visits pages from cache', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Product 1')
 
-    // Page 2 is requested in the background without being asked for.
-    await waitFor(() => expect(callsForPage(2)).toBe(1))
+    // Nothing but page 1 is requested when the page opens, or when a button is hovered…
+    expect(callsForPage(2)).toBe(0)
+    await user.hover(screen.getByRole('button', { name: 'Page 2' }))
+    expect(callsForPage(2)).toBe(0)
+
+    // …page 2 is requested by the click.
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    expect(await screen.findByText('Product 26')).toBeInTheDocument()
+    expect(callsForPage(2)).toBe(1)
+    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
     const callsBefore = list.mock.calls.length
 
-    await user.click(screen.getByRole('button', { name: 'Page 2' }))
-    // No await/findBy: the rows are there in the same render as the click.
-    expect(screen.getByText('Product 26')).toBeInTheDocument()
-    expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 26 to 50 of 60')
-
     await user.click(screen.getByRole('button', { name: 'Page 1' }))
+    // Back on a page seen before: shown at once, from the cache.
     expect(screen.getByText('Product 1')).toBeInTheDocument()
 
-    // Page 1 was never fetched a second time; only page 3 was prefetched.
+    // Page 1 was never fetched a second time, and going back asked for nothing new.
     expect(callsForPage(1)).toBe(1)
-    expect(list.mock.calls.length - callsBefore).toBeLessThanOrEqual(1)
+    expect(list.mock.calls.length - callsBefore).toBe(0)
   })
 
   it('changes the page size', async () => {

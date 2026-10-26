@@ -1,5 +1,5 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   activityListOptions,
@@ -17,10 +17,9 @@ import {
  *    at once from memory (and refreshes quietly once it is 30 s old);
  *  - while a new page or filter loads, the previous rows stay on screen
  *    instead of blanking the table;
- *  - the next page is fetched in the background, so "Next" is usually instant.
+ *  - nothing is requested ahead of time: a page loads when it is asked for.
  */
 export function useActivity() {
-  const queryClient = useQueryClient()
   const [filters, setFilters] = useState(DEFAULT_ACTIVITY_FILTERS)
   const params = toActivityParams(filters)
   const rangeInvalid = isRangeInvalid(filters)
@@ -31,17 +30,6 @@ export function useActivity() {
     // Don't ask the server a question that can't have an answer.
     enabled: !rangeInvalid,
   })
-
-  // Warm the next page so paging forward is instant.
-  // `has_next` only counts for the query on screen: while a new page or filter
-  // loads, `data` is still the *previous* query's rows (keepPreviousData), and
-  // its `has_next` says nothing about the new one.
-  const hasNext = (query.data?.has_next ?? false) && !query.isPlaceholderData
-  useEffect(() => {
-    if (!hasNext || rangeInvalid) return
-    const next = toActivityParams({ ...filters, page: filters.page + 1 })
-    void queryClient.prefetchQuery(activityListOptions(next))
-  }, [queryClient, filters, hasNext, rangeInvalid])
 
   return {
     filters,

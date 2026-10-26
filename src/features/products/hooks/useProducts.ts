@@ -35,14 +35,6 @@ export function useProducts() {
     dispatch(prefetchProducts())
   }, [dispatch, key])
 
-  // Warm the next page so "Next" is instant.
-  const hasNext = entry?.data?.has_next ?? false
-  useEffect(() => {
-    if (hasNext) {
-      void dispatch(fetchProducts({ filters: { ...filters, page: filters.page + 1 } }))
-    }
-  }, [dispatch, filters, hasNext])
-
   const failed = entry?.error != null && entry.data == null
   const data = entry?.data ?? (failed ? null : lastData)
 

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Logo } from '../../components/ui/Logo.tsx'
 import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.tsx'
-import { usePrefetchActivity } from '../../features/activity/index.ts'
 import { useAuth } from '../../hooks/useAuth.ts'
 import { useMediaQuery } from '../../hooks/useMediaQuery.ts'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
@@ -24,8 +23,6 @@ export function Navbar() {
   const collapsed = preferCollapsed || !isWide
   const { logout } = useAuth()
   const currentUser = useCurrentUser()
-  // Pages whose data is worth loading the moment you reach for their link.
-  const prefetchers: Record<string, () => void> = { '/activity': usePrefetchActivity() }
 
   return (
     <nav
@@ -64,11 +61,7 @@ export function Navbar() {
             </li>
           ) : (
             <li key={entry.to}>
-              <NavItemLink
-                item={entry}
-                collapsed={collapsed}
-                onPrefetch={prefetchers[entry.to]}
-              />
+              <NavItemLink item={entry} collapsed={collapsed} />
             </li>
           ),
         )}

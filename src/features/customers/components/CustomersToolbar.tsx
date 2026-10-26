@@ -83,7 +83,8 @@ export function CustomersToolbar({
 }: CustomersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const counts = useCustomerRoleCounts(filters, ROLE_VALUES)
+  // The counts are only shown in the dropdown, so they are requested once the grid is open.
+  const counts = useCustomerRoleCounts(filters, ROLE_VALUES, filtersOpen)
 
   // The role choices, each with its count ("Subscribers (9,760)"). The open one can fall
   // back to the list's own total while its count loads.

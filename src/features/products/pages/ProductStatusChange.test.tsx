@@ -125,7 +125,9 @@ describe('changing a status from the products table', () => {
     label: string,
   ) {
     await user.click(statusOf(title))
-    await user.click(screen.getByRole('option', { name: label }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: label }),
+    )
     await confirmUpdate(user)
   }
 
@@ -148,14 +150,12 @@ describe('changing a status from the products table', () => {
       'Draft',
       'Archived',
     ])
-    expect(screen.getByRole('option', { name: 'Draft' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(screen.getByRole('option', { name: 'Active' })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    )
+    expect(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Draft' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    expect(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Active' }),
+    ).toHaveAttribute('aria-selected', 'false')
   })
 
   it('colours each status in the menu: Active green, Draft grey, Archived red', async () => {
@@ -163,7 +163,9 @@ describe('changing a status from the products table', () => {
     await user.click(statusOf('Hippo Bag'))
 
     const pill = (label: string) =>
-      within(screen.getByRole('option', { name: label })).getByText(label)
+      within(
+        within(screen.getByRole('listbox')).getByRole('option', { name: label }),
+      ).getByText(label)
     expect(pill('Active')).toHaveClass('text-accent', 'bg-accent-tint')
     expect(pill('Draft')).toHaveClass('text-text-muted')
     expect(pill('Archived')).toHaveClass('text-danger', 'bg-danger-bg')
@@ -173,7 +175,9 @@ describe('changing a status from the products table', () => {
     const user = await openList()
     await user.click(statusOf('Odd Box'))
 
-    const unlisted = screen.getByRole('option', { name: 'Unlisted' })
+    const unlisted = within(screen.getByRole('listbox')).getByRole('option', {
+      name: 'Unlisted',
+    })
     expect(unlisted).toHaveAttribute('aria-disabled', 'true')
     await user.click(unlisted)
     expect(update).not.toHaveBeenCalled()
@@ -182,7 +186,9 @@ describe('changing a status from the products table', () => {
   it('asks "are you sure?" first — it also changes in Shopify — and Cancel leaves everything as it was', async () => {
     const user = await openList()
     await user.click(statusOf('Hippo Bag'))
-    await user.click(screen.getByRole('option', { name: 'Draft' }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Draft' }),
+    )
 
     const dialog = await screen.findByRole('alertdialog', {
       name: 'Change “Hippo Bag” to Draft?',
@@ -199,7 +205,9 @@ describe('changing a status from the products table', () => {
 
     // Choosing it again and saying yes does save.
     await user.click(statusOf('Hippo Bag'))
-    await user.click(screen.getByRole('option', { name: 'Draft' }))
+    await user.click(
+      within(screen.getByRole('listbox')).getByRole('option', { name: 'Draft' }),
+    )
     await user.click(await screen.findByRole('button', { name: 'Yes, update' }))
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith('id-1', { status: 'DRAFT' }, 'polymer-uk'),
