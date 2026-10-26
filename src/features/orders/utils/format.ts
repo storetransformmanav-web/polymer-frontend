@@ -93,7 +93,7 @@ export function orderPath(
   return orderPathFor(orderRef(order), order.shop?.key)
 }
 
-/** The lines of a postal address, whichever parts exist ("55 Buckshaft Road", "Cinderford GL14 3DT"…). */
+/** The lines of a postal address, whichever parts exist ("1 Example Street", "Exampletown AB1 2CD"…). */
 export function formatAddressLines(
   address:
     | {

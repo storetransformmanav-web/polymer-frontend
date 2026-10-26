@@ -140,13 +140,13 @@ describe('order details helpers', () => {
   it('formatAddressLines lists only the parts that exist', () => {
     expect(
       formatAddressLines({
-        address1: '55 Buckshaft Road',
+        address1: '1 Example Street',
         address2: null,
-        city: 'Cinderford',
-        zip: 'GL14 3DT',
+        city: 'Exampletown',
+        zip: 'AB1 2CD',
         country: 'United Kingdom',
       }),
-    ).toEqual(['55 Buckshaft Road', 'Cinderford GL14 3DT', 'United Kingdom'])
+    ).toEqual(['1 Example Street', 'Exampletown AB1 2CD', 'United Kingdom'])
     expect(formatAddressLines(null)).toEqual([])
   })
 

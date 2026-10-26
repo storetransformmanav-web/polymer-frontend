@@ -610,23 +610,6 @@ describe('editing a section in place', () => {
     expect(screen.getByRole('button', { name: /^Remove variant/ })).toBeInTheDocument()
   })
 
-  it('edits the collections tab in place', async () => {
-    const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-    await user.click(pencil('collections'))
-    await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
-    await user.click(saveButton('collections'))
-    await confirmUpdate(user)
-
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(
-        'id-1',
-        { collections_remove: ['col1'] },
-        'polymer-uk',
-      ),
-    )
-  })
-
   describe('removing a product from a collection with the ✕ on its tile', () => {
     const openCollections = async () => {
       const user = await openDetails()
@@ -886,7 +869,7 @@ describe('editing a section in place', () => {
 
       expect(
         await screen.findByText(
-          'No collection matches “zzz”. Paste its ID and press Add.',
+          'No collection matches “zzz”. Check the name, or paste its ID and press Add.',
         ),
       ).toBeVisible()
     })
@@ -931,6 +914,55 @@ describe('editing a section in place', () => {
       expect(screen.getByText('Range 01')).toBeInTheDocument()
     })
 
+    it('adds a collection by typing its name and pressing Enter or Add', async () => {
+      const user = await openAdd()
+
+      // The exact name (any case), no need to click the list.
+      await user.type(box(), 'range 04{Enter}')
+      expect(box()).toHaveValue('')
+      expect(screen.getByText('Range 04')).toBeInTheDocument()
+
+      // Part of a name that narrows to one collection works with the Add button.
+      await user.type(box(), 'range 12')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      expect(screen.getByText('Range 12')).toBeInTheDocument()
+
+      await user.click(saveButton('collections'))
+      await confirmUpdate(user)
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_add: [OTHERS[3].id, OTHERS[11].id] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('does not guess when a name fits several collections or none', async () => {
+      const user = await openAdd()
+
+      await user.type(box(), 'range 0{Enter}')
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Choose a collection from the list',
+      )
+      expect(screen.queryByText('New')).toBeNull()
+
+      await user.clear(box())
+      await user.type(box(), 'zzz{Enter}')
+      expect(screen.getByRole('alert')).toHaveTextContent('No collection is called “zzz”')
+      expect(screen.queryByText('New')).toBeNull()
+    })
+
+    it('says so when the name is of a collection the product is already in', async () => {
+      const user = await openAdd()
+
+      await user.type(box(), 'Best Sellers{Enter}')
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The product is already in that collection',
+      )
+    })
+
     it('still takes a pasted ID that is not in the list', async () => {
       const user = await openAdd()
       const id = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
@@ -942,31 +974,31 @@ describe('editing a section in place', () => {
     })
   })
 
-  it('puts the summary, Edit and Add collection together in the collections header', async () => {
+  it('has no Edit pencil on the collections tab: the summary and Add collection only', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
 
     expect(screen.getByText('In 1 collection')).toBeInTheDocument()
-    expect(pencil('collections')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit collections' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save collections' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add collection' })).toBeInTheDocument()
 
-    // While editing, Save / Discard replace the pencil; Add collection stays.
-    await user.click(pencil('collections'))
+    // Add collection starts the edit: Save / Discard appear, Add collection stays.
+    await user.click(screen.getByRole('button', { name: 'Add collection' }))
     expect(saveButton('collections')).toBeInTheDocument()
     expect(discardButton('collections')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add collection' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit collections' })).toBeNull()
   })
 
-  it('keeps the add-by-ID box hidden while editing until "Add collection" is clicked', async () => {
+  it('keeps the box on top of the list, and tucks it away when Add collection is clicked again', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-    await user.click(pencil('collections'))
-
-    expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
-
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
+
     const box = screen.getByLabelText('Add to a collection')
     expect(box).toHaveFocus()
+    expect(box).toHaveAttribute('placeholder', 'Type a collection name')
 
     // It sits on top of the list of collections.
     const list = screen.getByRole('list', { name: 'Collections' })
@@ -974,7 +1006,6 @@ describe('editing a section in place', () => {
       box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
 
-    // Clicking again tucks it away.
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
     expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
@@ -1006,14 +1037,6 @@ describe('editing a section in place', () => {
         'polymer-uk',
       ),
     )
-  })
-
-  it('does not show the add box when editing starts from the pencil', async () => {
-    const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-    await user.click(pencil('collections'))
-
-    expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
 
   it('edits the media tab in place', async () => {

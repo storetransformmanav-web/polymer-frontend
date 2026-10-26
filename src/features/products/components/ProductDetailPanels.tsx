@@ -692,8 +692,8 @@ function CollectionsView({
 
 /**
  * One row above the tiles: "In 10 collections" + a badge per type on the left;
- * the filter box, the pencil and "Add collection" on the right. While editing,
- * the pencil becomes Save / Discard and the summary says what is being edited.
+ * the filter box and "Add collection" on the right. While adding, Save / Discard
+ * appear beside it and the summary says what is being edited.
  */
 function CollectionsHeader({
   product,
@@ -702,16 +702,14 @@ function CollectionsHeader({
   edit,
   addOpen,
   onAdd,
-  onStart,
 }: {
   product: ProductDetail
   query: string
   onQuery: (value: string) => void
   edit: SectionEdit
-  /** Whether the "add by ID" box is open (only meaningful while editing). */
+  /** Whether the "add a collection" box is open (only meaningful while editing). */
   addOpen: boolean
   onAdd: () => void
-  onStart: () => void
 }) {
   const { collections } = product
 
@@ -760,7 +758,9 @@ function CollectionsHeader({
       )}
 
       <div className="flex items-center gap-1.5">
-        <SectionEditControls edit={edit} what="collections" onStart={onStart} />
+        {/* No pencil: collections are added with "Add collection" (Save / Discard appear
+            then) and taken out with the ✕ on a tile. */}
+        {edit.editing && <SectionEditControls edit={edit} what="collections" />}
         <button
           type="button"
           onClick={onAdd}
@@ -1227,8 +1227,8 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
 
 export function CollectionsPanel({ product, onSaved }: TabProps) {
   const [query, setQuery] = useState('')
-  // The "add by ID" box stays hidden until "Add collection" is clicked, then
-  // sits on top of the list. The pencil opens the editor without it.
+  // The "add a collection" box stays hidden until "Add collection" is clicked, then
+  // sits on top of the list.
   const [addOpen, setAddOpen] = useState(false)
   // The collection whose ✕ was clicked, waiting for "Remove".
   const [removing, setRemoving] = useState<ProductDetail['collections'][number] | null>(
@@ -1249,7 +1249,6 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
             onQuery={setQuery}
             edit={edit}
             addOpen={addOpen}
-            onStart={() => setAddOpen(false)}
             onAdd={() => {
               if (edit.editing) {
                 setAddOpen((open) => !open)

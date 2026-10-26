@@ -89,30 +89,30 @@ function makeDetail(n: number): OrderDetail {
     processed_at: '2026-10-22T07:48:46Z',
     billing_address: {
       kind: 'billing',
-      first_name: 'david',
-      last_name: 'kenworthy',
-      name: 'david kenworthy',
-      company: 'Wood and resin by david',
-      address1: '55 Buckshaft Road',
+      first_name: 'jane',
+      last_name: 'doe',
+      name: 'jane doe',
+      company: 'Example Co',
+      address1: '1 Example Street',
       address2: null,
-      city: 'Cinderford',
+      city: 'Exampletown',
       province: 'England',
       province_code: 'ENG',
       country: 'United Kingdom',
       country_code: 'GB',
-      zip: 'GL14 3DT',
-      phone: '07980709283',
+      zip: 'AB1 2CD',
+      phone: '07700900123',
     },
     shipping_address: {
       kind: 'shipping',
-      name: 'david kenworthy',
-      company: 'Wood and resin by david',
-      address1: '55 Buckshaft Road',
-      city: 'Cinderford',
+      name: 'jane doe',
+      company: 'Example Co',
+      address1: '1 Example Street',
+      city: 'Exampletown',
       province: 'England',
       country: 'United Kingdom',
-      zip: 'GL14 3DT',
-      phone: '07980709283',
+      zip: 'AB1 2CD',
+      phone: '07700900123',
     },
     line_items: [
       {
@@ -380,9 +380,9 @@ describe('an order’s details page', () => {
     await user.click(screen.getByRole('tab', { name: 'Shipping' }))
 
     const shipping = within(screen.getByText('Shipping address').closest('section')!)
-    expect(shipping.getByText('david kenworthy')).toBeInTheDocument()
-    expect(shipping.getByText('55 Buckshaft Road')).toBeInTheDocument()
-    expect(shipping.getByText('Cinderford GL14 3DT')).toBeInTheDocument()
+    expect(shipping.getByText('jane doe')).toBeInTheDocument()
+    expect(shipping.getByText('1 Example Street')).toBeInTheDocument()
+    expect(shipping.getByText('Exampletown AB1 2CD')).toBeInTheDocument()
     expect(shipping.getByText('United Kingdom')).toBeInTheDocument()
     expect(screen.getByText('Billing address')).toBeInTheDocument()
     expect(

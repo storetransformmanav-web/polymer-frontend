@@ -25,7 +25,7 @@ const TOTAL = 60
 const USER = {
   id: 'user-1',
   full_name: 'Manav',
-  email: 'manav@polymer.co',
+  email: 'admin@example.com',
   role: 'admin',
 }
 
@@ -120,7 +120,7 @@ describe('ActivityPage', () => {
           first_name: 'Manav',
           last_name: '',
           full_name: 'Manav',
-          email: 'manav@polymer.co',
+          email: 'admin@example.com',
           phone: null,
           role: 'admin',
           role_label: 'Administrator',
@@ -466,7 +466,7 @@ describe('ActivityPage', () => {
       expect(
         within(panel).getByText('Manav created user jane@company.com'),
       ).toBeInTheDocument()
-      expect(within(panel).getByText('manav@polymer.co')).toBeInTheDocument()
+      expect(within(panel).getByText('admin@example.com')).toBeInTheDocument()
       expect(within(panel).getByText('create_user')).toBeInTheDocument()
       expect(within(panel).getByText('POST /api/users')).toBeInTheDocument()
       expect(within(panel).getByText('user · Jane Doe')).toBeInTheDocument()

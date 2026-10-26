@@ -11,7 +11,7 @@ vi.mock('../../../lib/api/endpoints.ts', () => ({
   api: { auth: { requestOtp: vi.fn(), verifyOtp: vi.fn(), logout: vi.fn() } },
 }))
 
-const EMAIL = 'storetransformmanav@gmail.com'
+const EMAIL = 'admin@example.com'
 const SENT = 'If this email belongs to an active user, a login code has been sent.'
 const COOLDOWN = 'Please wait 41 seconds before requesting another code.'
 const cooldownError = (message = COOLDOWN) => new ApiError(message, { status: 429 })
@@ -81,7 +81,7 @@ describe('requesting a code while one was just sent (backend 429)', () => {
       user: {
         id: 'u1',
         email: EMAIL,
-        full_name: 'Manav',
+        full_name: 'Test Admin',
         phone: null,
         role: 'administrator',
         is_active: true,

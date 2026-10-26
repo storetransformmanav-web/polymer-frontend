@@ -77,6 +77,36 @@ describe('no secrets in the browser bundle', () => {
     expect(findings).toEqual([])
   })
 
+  // Test fixtures get pushed to GitHub too: a response pasted from the live backend must
+  // never keep its real access token, and tracked config must not carry a real client ID.
+  it('keeps real tokens and real client IDs out of tests and tracked config', () => {
+    const patterns: [string, RegExp][] = [
+      [
+        'a long token value',
+        /(access_?token|refresh_?token|id_?token|secret|api_?key)['"]?\s*[:=]\s*['"][A-Za-z0-9_-]{24,}['"]/i,
+      ],
+      ['hard-coded bearer token', /Bearer\s+[A-Za-z0-9._-]{20,}/],
+      ['private key block', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+      ['JWT', /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+      ['real Google client ID', /\d{9,}-[a-z0-9]{20,}\.apps\.googleusercontent\.com/],
+    ]
+    const self = join(SRC, 'config', 'secrets.test.ts')
+    const files = [
+      ...sourceFiles(SRC).filter((path) => path !== self),
+      join(ROOT, '.env.example'),
+      join(ROOT, 'vercel.json'),
+    ]
+
+    const findings = files.flatMap((path) => {
+      const text = readFileSync(path, 'utf8')
+      return patterns
+        .filter(([, pattern]) => pattern.test(text))
+        .map(([label]) => `${rel(path)}: ${label}`)
+    })
+
+    expect(findings).toEqual([])
+  })
+
   it('never logs to the browser console from production code', () => {
     const offenders = productionFiles
       .filter((path) =>

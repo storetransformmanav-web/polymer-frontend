@@ -17,6 +17,17 @@ dist-ssr
 .env.*
 !.env.example
 
+# Keys, certificates, deploy and registry credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+.vercel
+.npmrc
+.netrc
+service-account*.json
+
 # Test coverage
 coverage
 

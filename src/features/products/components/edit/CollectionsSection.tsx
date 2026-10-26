@@ -15,13 +15,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LIST_ROOM = 340
 
 /**
- * Remove the product from a collection, or put it in one. Adding is from a dropdown of the
- * collections the app already knows (those of the products it has loaded — the backend has
- * no "list collections" endpoint yet): it stays closed until something is typed, then shows
- * the related ones, ten at most; a collection that isn't listed can still be added by
- * pasting its CRM ID (a UUID).
+ * Remove the product from a collection, or put it in one. Adding is by name: type part of a
+ * collection's name and pick it from the dropdown of the collections the app already knows
+ * (those of the products it has loaded — the backend has no "list collections" endpoint
+ * yet); it stays closed until something is typed, then shows the related ones, ten at most.
+ * "Add" / Enter takes a name that is exactly one collection's (or narrows to just one). A
+ * collection that isn't listed can still be added by pasting its CRM ID (a UUID) — the API
+ * itself takes ids.
  *
- * The "add by ID" box and the collections about to be added sit on top of the
+ * The "add a collection" box and the collections about to be added sit on top of the
  * list. The Collections tab keeps the box hidden until "Add collection" is
  * clicked (`showAdd`, and `focusAdd` to put the cursor in it); by default it is
  * always shown, as in the quick-edit panel in the list.
@@ -34,7 +36,7 @@ export function CollectionsSection({
   showAdd = true,
   focusAdd = false,
 }: SectionProps & {
-  /** Whether the "add by ID" box is shown. */
+  /** Whether the "add a collection" box is shown. */
   showAdd?: boolean
   /** Put the cursor in the box whenever it opens. */
   focusAdd?: boolean
@@ -126,9 +128,31 @@ export function CollectionsSection({
   }
 
   function add() {
-    const id = input.trim().toLowerCase()
-    if (!id) return
-    if (!UUID.test(id)) return setInputError('That is not a valid collection ID')
+    const text = input.trim()
+    if (!text) return
+    // A name: the collection called exactly that, else the only one the text narrows to.
+    if (!UUID.test(text)) {
+      const named = known.find(
+        (collection) =>
+          !skip.has(collection.id) &&
+          collection.title.trim().toLowerCase() === text.toLowerCase(),
+      )
+      if (named) return pick(named.id)
+      if (
+        product.collections.some(
+          (collection) => collection.title.trim().toLowerCase() === text.toLowerCase(),
+        )
+      ) {
+        return setInputError('The product is already in that collection')
+      }
+      if (shown.length === 1) return pick(shown[0].id)
+      return setInputError(
+        shown.length > 1
+          ? 'Choose a collection from the list'
+          : `No collection is called “${text}”`,
+      )
+    }
+    const id = text.toLowerCase()
     if (product.collections.some((collection) => collection.id === id)) {
       return setInputError('The product is already in that collection')
     }
@@ -158,7 +182,7 @@ export function CollectionsSection({
               autoComplete="off"
               spellCheck={false}
               value={input}
-              placeholder="Search collections, or paste an ID"
+              placeholder="Type a collection name"
               role="combobox"
               aria-expanded={panelOpen}
               aria-controls={listOpen ? listId : undefined}
@@ -198,7 +222,7 @@ export function CollectionsSection({
                   else add()
                 }
               }}
-              className={`${FIELD_INPUT} font-mono text-[0.8rem]`}
+              className={FIELD_INPUT}
             />
             <button
               type="button"
@@ -273,7 +297,7 @@ export function CollectionsSection({
                   <p className="text-text-muted px-3.5 py-3 text-[0.82rem]">
                     {loading
                       ? 'Loading collections…'
-                      : `No collection matches “${input.trim()}”. Paste its ID and press Add.`}
+                      : `No collection matches “${input.trim()}”. Check the name, or paste its ID and press Add.`}
                   </p>
                 )}
                 {shown.length > 0 && (total > COLLECTION_LIST_LIMIT || loading) && (

@@ -19,7 +19,7 @@ const GUEST = {
   shopify_id: 14292500775297,
   name: '#17516',
   order_number: 17516,
-  email: 'david@woodandresinbydavid.co.uk',
+  email: 'guest@example.com',
   customer: { id: null, full_name: null, email: null, phone: null, orders_count: null },
   shop: SHOP,
   currency: 'GBP',
@@ -49,11 +49,11 @@ const CRM_CUSTOMER = {
   id: '8bfb5796-89d4-4a38-b434-039f3e67cd43',
   name: '#17511',
   order_number: 17511,
-  email: 'SALES@DPLTD.CO.UK',
+  email: 'SALES@EXAMPLE.COM',
   customer: {
     id: 'a7d98ea3-17e3-4367-bb65-078d904d38f9',
-    full_name: 'DELTA PACKAGING LTD',
-    email: 'sales@dpltd.co.uk',
+    full_name: 'EXAMPLE PACKAGING LTD',
+    email: 'sales@example.com',
     phone: null,
     orders_count: 3,
   },
@@ -122,7 +122,7 @@ describe('api.orders.list', () => {
       id: '2abd6b08-a7f7-4285-abb5-daa0932a8a38',
       name: '#17516',
       order_number: 17516,
-      email: 'david@woodandresinbydavid.co.uk',
+      email: 'guest@example.com',
       total_price: '26.50',
       financial_status: 'AUTHORIZED',
       fulfillment_status: 'UNFULFILLED',
@@ -135,7 +135,7 @@ describe('api.orders.list', () => {
     })
     expect(result.items[1]).toMatchObject({
       name: '#17511',
-      customer: { full_name: 'DELTA PACKAGING LTD', orders_count: 3 },
+      customer: { full_name: 'EXAMPLE PACKAGING LTD', orders_count: 3 },
       closed_at: '2026-10-21T15:29:02Z',
     })
     expect(result.totals).toEqual({

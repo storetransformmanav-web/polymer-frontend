@@ -343,14 +343,14 @@ describe('api.auth sign-in', () => {
     code: 200,
     status: 'OK',
     message: 'Login successful',
-    access_token: 'zL7AhiYMkxpWhOaMC5j9qRDR9o1V1r_MhSF30T1a_D8',
+    access_token: 'test-access-token',
     token_type: 'bearer',
     expires_at: '2026-11-20T11:31:17.119751Z',
     user: {
-      id: 'b6862867-56b6-4153-a662-8b48b5436e89',
-      email: 'storetransformmanav@gmail.com',
-      full_name: 'Manav',
-      first_name: 'Manav',
+      id: '00000000-0000-4000-8000-000000000001',
+      email: 'admin@example.com',
+      full_name: 'Test Admin',
+      first_name: 'Test Admin',
       last_name: '',
       phone: null,
       role: 'admin',
@@ -371,21 +371,17 @@ describe('api.auth sign-in', () => {
   it('verifies a code with remember_me: true when "Remember me" is ticked (30-day token)', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    const result = await api.auth.verifyOtp(
-      'storetransformmanav@gmail.com',
-      '079941',
-      true,
-    )
+    const result = await api.auth.verifyOtp('admin@example.com', '079941', true)
 
     expect(apiClient.post).toHaveBeenCalledWith('/auth/otp/verify', {
-      email: 'storetransformmanav@gmail.com',
+      email: 'admin@example.com',
       code: '079941',
       remember_me: true,
     })
-    expect(result.access_token).toBe('zL7AhiYMkxpWhOaMC5j9qRDR9o1V1r_MhSF30T1a_D8')
+    expect(result.access_token).toBe('test-access-token')
     expect(result.expires_at).toBe('2026-11-20T11:31:17.119751Z')
     expect(result.user).toMatchObject({
-      id: 'b6862867-56b6-4153-a662-8b48b5436e89',
+      id: '00000000-0000-4000-8000-000000000001',
       role: 'admin',
     })
   })
@@ -393,10 +389,10 @@ describe('api.auth sign-in', () => {
   it('verifies a code with remember_me: false when it is not ticked (default session)', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    await api.auth.verifyOtp('storetransformmanav@gmail.com', '079941', false)
+    await api.auth.verifyOtp('admin@example.com', '079941', false)
 
     expect(apiClient.post).toHaveBeenCalledWith('/auth/otp/verify', {
-      email: 'storetransformmanav@gmail.com',
+      email: 'admin@example.com',
       code: '079941',
       remember_me: false,
     })
@@ -421,11 +417,7 @@ describe('api.auth sign-in', () => {
   it('keeps the user’s permissions from the answer', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    const { user } = await api.auth.verifyOtp(
-      'storetransformmanav@gmail.com',
-      '079941',
-      true,
-    )
+    const { user } = await api.auth.verifyOtp('admin@example.com', '079941', true)
 
     expect(user.permissions?.products).toEqual({ view: true, manage: true })
     expect(user.permissions?.activity).toEqual({ view: true, manage: false })
