@@ -160,6 +160,7 @@ export function UsersPage() {
       {/* The figures belong to the list, so the form takes their place (kept mounted, only hidden). */}
       <div className={creatingRoute || activeId ? 'hidden' : undefined}>
         <UsersKpis
+          totals={data?.totals}
           total={data?.total ?? null}
           roles={roles.roles}
           rolesLoaded={!roles.isPending && !roles.error}

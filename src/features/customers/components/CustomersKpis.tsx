@@ -5,56 +5,53 @@ import {
   UsersIcon,
 } from '../../../components/ui/icons.tsx'
 import { KpiCards, type Kpi } from '../../../components/ui/KpiCards.tsx'
-import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
+import type { CustomerListResponse } from '../../../lib/api/endpoints.ts'
 
-const count = (value: number | null) =>
-  value === null ? '—' : value.toLocaleString('en-GB')
+const count = (value: number | null | undefined) =>
+  value == null ? '—' : value.toLocaleString('en-GB')
 
 /**
- * Four figures above the customers list, all read from the list's own answer — they make no
- * request of their own (the API has no summary block for customers, and a request per figure
- * made the page ask for customers four times). **Customers** is the answer's `total`, for
- * everyone matching the list; the other three are counted among the customers shown on
- * the current page (`orders_count`, `accepts_marketing`), and say so.
+ * Four figures above the customers list, read from the list answer's `totals` block — they
+ * make no request of their own. They count every customer matching the list, not just the
+ * page on screen: **Customers**, **With orders**, **Without orders** and **Email
+ * subscribers**. (`totals` also carries `verified_email` and `email_checked_valid`; no card
+ * shows them.) Each shows a dash until the answer arrives; Customers falls back to the
+ * answer's `total`.
  */
 export function CustomersKpis({
-  items,
+  totals,
   total,
 }: {
-  /** The customers on the page being shown. */
-  items: readonly CustomerListItem[]
+  /** The list answer's `totals` block, or null/undefined until it arrives. */
+  totals: CustomerListResponse['totals']
   /** The answer's `total`: everyone matching the list, across every page. */
   total: number | null
 }) {
-  const loaded = total !== null
-  const shown = items.length
   const kpis: Kpi[] = [
     {
       label: 'Customers',
-      value: count(total),
+      value: count(totals?.customers ?? total),
       hint: 'Everyone matching the list',
       icon: UsersIcon,
     },
     {
       label: 'With orders',
-      value: loaded ? count(items.filter((item) => item.orders_count > 0).length) : '—',
-      hint: `Of the ${shown.toLocaleString('en-GB')} on this page`,
+      value: count(totals?.with_orders),
+      hint: 'Have placed at least one order',
       icon: CheckCircleIcon,
       tone: 'good',
     },
     {
       label: 'Without orders',
-      value: loaded ? count(items.filter((item) => item.orders_count === 0).length) : '—',
-      hint: `Of the ${shown.toLocaleString('en-GB')} on this page`,
+      value: count(totals?.without_orders),
+      hint: 'Have not ordered yet',
       icon: OrdersIcon,
       tone: 'warning',
     },
     {
       label: 'Email subscribers',
-      value: loaded
-        ? count(items.filter((item) => item.accepts_marketing === true).length)
-        : '—',
-      hint: `Of the ${shown.toLocaleString('en-GB')} on this page`,
+      value: count(totals?.email_subscribers),
+      hint: 'Accept marketing emails',
       icon: MailIcon,
     },
   ]

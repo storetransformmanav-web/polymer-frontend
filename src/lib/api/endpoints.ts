@@ -170,6 +170,17 @@ const userItemSchema = z.object({
 
 const userListResponseSchema = z.object({
   items: z.array(userItemSchema),
+  /** Headline figures for the cards above the list (the answer's own `totals` block). */
+  totals: z
+    .object({
+      users: z.number().nullish(),
+      active: z.number().nullish(),
+      inactive: z.number().nullish(),
+      administrators: z.number().nullish(),
+      other_staff: z.number().nullish(),
+      roles: z.number().nullish(),
+    })
+    .nullish(),
   page: z.number(),
   page_size: z.number(),
   total: z.number(),
@@ -677,6 +688,17 @@ const customerListItemSchema = z.object({
 
 const customerListResponseSchema = z.object({
   items: z.array(customerListItemSchema),
+  /** Counts over every customer matching the list (not just this page), for the cards above it. */
+  totals: z
+    .object({
+      customers: z.number().nullish(),
+      with_orders: z.number().nullish(),
+      without_orders: z.number().nullish(),
+      email_subscribers: z.number().nullish(),
+      verified_email: z.number().nullish(),
+      email_checked_valid: z.number().nullish(),
+    })
+    .nullish(),
   page: z.number(),
   page_size: z.number(),
   total: z.number(),

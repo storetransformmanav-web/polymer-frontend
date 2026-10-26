@@ -82,7 +82,7 @@ export function CustomersPage() {
       {/* The figures sit above the tabs; they belong to the list, so an open customer takes
           their place (kept mounted, only hidden). */}
       <div className={activeId ? 'hidden' : undefined}>
-        <CustomersKpis items={customers.items} total={data?.total ?? null} />
+        <CustomersKpis totals={data?.totals} total={data?.total ?? null} />
       </div>
 
       <CustomerTabsBar

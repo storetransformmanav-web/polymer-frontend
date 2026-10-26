@@ -793,3 +793,71 @@ describe('api.users.detail', () => {
     expect(vi.mocked(apiClient.get).mock.calls[0][0]).toBe('/users/a%2Fb%20c')
   })
 })
+
+describe('the totals block of the customers and users lists', () => {
+  const PAGING = { page: 1, page_size: 25, total_pages: 1, has_next: false }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.get).mockReset()
+  })
+
+  it('keeps GET /customers totals (the cards above the list)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      items: [],
+      totals: {
+        customers: 9760,
+        with_orders: 2332,
+        without_orders: 7428,
+        email_subscribers: 3567,
+        verified_email: 3493,
+        email_checked_valid: 0,
+      },
+      ...PAGING,
+      total: 9760,
+      sort: 'created_at',
+      order: 'desc',
+    })
+
+    const result = await api.customers.list({ role: 'all' })
+
+    expect(result.totals).toEqual({
+      customers: 9760,
+      with_orders: 2332,
+      without_orders: 7428,
+      email_subscribers: 3567,
+      verified_email: 3493,
+      email_checked_valid: 0,
+    })
+  })
+
+  it('keeps GET /users totals, and still accepts an answer without them', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message: 'Users fetched successfully',
+      items: [],
+      totals: {
+        users: 3,
+        active: 3,
+        inactive: 0,
+        administrators: 3,
+        other_staff: 0,
+        roles: 2,
+      },
+      ...PAGING,
+      total: 3,
+    })
+    const withTotals = await api.users.list({})
+    expect(withTotals.totals).toEqual({
+      users: 3,
+      active: 3,
+      inactive: 0,
+      administrators: 3,
+      other_staff: 0,
+      roles: 2,
+    })
+
+    vi.mocked(apiClient.get).mockResolvedValue({ items: [], ...PAGING, total: 0 })
+    expect((await api.users.list({})).totals).toBeUndefined()
+  })
+})

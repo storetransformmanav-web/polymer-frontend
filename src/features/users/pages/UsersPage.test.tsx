@@ -101,6 +101,15 @@ function respond(params: UserListParams): UserListResponse {
     page,
     page_size: pageSize,
     total: matches,
+    // The answer's own `totals` block (deliberately different from what /roles adds up to).
+    totals: {
+      users: matches,
+      active: matches,
+      inactive: 0,
+      administrators: 2,
+      other_staff: 58,
+      roles: 2,
+    },
     total_pages: Math.max(1, Math.ceil(matches / pageSize)),
     has_next: start + count < matches,
   }
@@ -373,7 +382,24 @@ describe('UsersPage', () => {
     const card = (label: string) =>
       screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
 
-    it('shows four cards on top: the list total and what the roles say', async () => {
+    it('shows four cards on top, read from the answer’s totals', async () => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      expect(within(card('Users')).getByText('60')).toBeInTheDocument()
+      expect(within(card('Administrators')).getByText('2')).toBeInTheDocument()
+      expect(within(card('Other staff')).getByText('58')).toBeInTheDocument()
+      expect(within(card('Roles')).getByText('2')).toBeInTheDocument()
+      expect(
+        within(card('Administrators')).getByText('Can see every store'),
+      ).toBeVisible()
+    })
+
+    it('fall back to the total and the role counts when the answer has no totals', async () => {
+      list.mockImplementation((params) => {
+        const { totals: _totals, ...rest } = respond(params)
+        return Promise.resolve(rest)
+      })
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
 
@@ -384,9 +410,6 @@ describe('UsersPage', () => {
       )
       expect(within(card('Other staff')).getByText('59')).toBeInTheDocument()
       expect(within(card('Roles')).getByText('3')).toBeInTheDocument()
-      expect(
-        within(card('Administrators')).getByText('Can see every store'),
-      ).toBeVisible()
     })
 
     it('sit above the toolbar and the table, and ask for nothing of their own', async () => {

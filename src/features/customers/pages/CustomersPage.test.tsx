@@ -57,6 +57,25 @@ function respond(params: CustomerListParams): CustomerListResponse {
 
   return {
     items: Array.from({ length: count }, (_, i) => makeCustomer(start + i + 1)),
+    // The answer's own counts over everyone matching (deliberately not the page's share).
+    totals:
+      matches === 0
+        ? {
+            customers: 0,
+            with_orders: 0,
+            without_orders: 0,
+            email_subscribers: 0,
+            verified_email: 0,
+            email_checked_valid: 0,
+          }
+        : {
+            customers: 9760,
+            with_orders: 2332,
+            without_orders: 7428,
+            email_subscribers: 3567,
+            verified_email: 3493,
+            email_checked_valid: 0,
+          },
     page,
     page_size: pageSize,
     total: matches,
@@ -87,22 +106,33 @@ describe('CustomersPage', () => {
     const card = (label: string) =>
       screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
 
-    it('shows four cards on top, read from the list answer — the API total and the page counts', async () => {
+    it('shows four cards on top, read from the answer’s totals (every customer, not the page)', async () => {
       renderWithProviders(<CustomersPage />)
       await screen.findByText('Customer 2')
 
-      // 60 in all (the answer's `total`). On the 25 shown (customers 1–25): 19 have orders
-      // (all but the multiples of 4), 6 have none, 12 accept marketing (the even ones).
-      expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
-      expect(within(card('With orders')).getByText('19')).toBeInTheDocument()
-      expect(within(card('Without orders')).getByText('6')).toBeInTheDocument()
-      expect(within(card('Email subscribers')).getByText('12')).toBeInTheDocument()
-      expect(
-        within(card('With orders')).getByText('Of the 25 on this page'),
-      ).toBeVisible()
+      expect(within(card('Customers')).getByText('9,760')).toBeInTheDocument()
+      expect(within(card('With orders')).getByText('2,332')).toBeInTheDocument()
+      expect(within(card('Without orders')).getByText('7,428')).toBeInTheDocument()
+      expect(within(card('Email subscribers')).getByText('3,567')).toBeInTheDocument()
       expect(
         within(card('Customers')).getByText('Everyone matching the list'),
       ).toBeVisible()
+      // verified_email / email_checked_valid are in the answer but have no card.
+      expect(screen.queryByText('3,493')).not.toBeInTheDocument()
+    })
+
+    it('fall back to dashes (and the answer’s total) when the answer has no totals', async () => {
+      list.mockImplementation((params) => {
+        const { totals: _totals, ...rest } = respond(params)
+        return Promise.resolve(rest)
+      })
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      expect(within(card('Customers')).getByText('60')).toBeInTheDocument()
+      expect(within(card('With orders')).getByText('—')).toBeVisible()
+      expect(within(card('Without orders')).getByText('—')).toBeVisible()
+      expect(within(card('Email subscribers')).getByText('—')).toBeVisible()
     })
 
     it('make no request of their own: the page asks for customers once', async () => {
