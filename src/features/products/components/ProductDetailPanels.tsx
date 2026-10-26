@@ -11,8 +11,10 @@ import {
   SearchIcon,
   SpinnerIcon,
   TrashIcon,
+  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
+import { ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import type {
   ProductDetail,
   ProductImage as ProductImageData,
@@ -75,6 +77,7 @@ import {
 } from '../utils/metafields.ts'
 import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { AddMediaDialog } from './AddMediaDialog.tsx'
+import { RemoveCollectionDialog } from './RemoveCollectionDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
@@ -415,96 +418,107 @@ function VariantsView({ product }: { product: ProductDetail }) {
     return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
   }
 
+  // Everything the store has in stock, across all locations (the sum when it isn't given).
+  const total =
+    product.total_inventory ??
+    product.variants.reduce((sum, variant) => sum + (variant.inventory_quantity ?? 0), 0)
+
   return (
-    <div className="flex flex-col gap-4">
-      <TableWrap fixed>
-        <thead>
-          <tr>
-            <th className={`${TH} w-[20%]`}>Variant</th>
-            <th className={`${TH} w-[16%]`}>SKU</th>
-            <th className={`${TH} w-[12%]`}>Barcode</th>
-            <th className={`${TH} w-[10%] text-right`}>Price</th>
-            <th className={`${TH} w-[10%] text-right`}>Compare at</th>
-            <th className={`${TH} w-[8%] text-right`}>Stock</th>
-            <th className={`${TH} w-[12%] text-center`}>Availability</th>
-            <th className={`${TH} w-[12%] text-right`}>Weight</th>
-          </tr>
-        </thead>
-        <tbody>
-          {product.variants.map((variant) => (
-            <tr
-              key={variant.id}
-              className="border-border even:bg-surface border-b last:border-b-0"
-            >
-              <td className={TD}>
-                <div className="flex items-center gap-2.5">
-                  {variant.image_url && (
-                    <div className="h-9 w-9 shrink-0">
-                      <ProductImage
-                        src={variant.image_url}
-                        alt={variant.title ?? ''}
-                        size="thumb"
-                      />
-                    </div>
-                  )}
-                  <span
-                    className="block max-w-64 truncate font-medium"
-                    title={variant.title ?? ''}
-                  >
-                    {variant.title ?? '—'}
-                  </span>
-                </div>
-              </td>
-              <td className={TD}>
-                {variant.sku ? (
-                  <span className="flex items-center gap-1.5 font-mono text-[0.8rem]">
-                    <span className="truncate" title={variant.sku}>
-                      {variant.sku}
-                    </span>
-                    <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
-                  </span>
-                ) : (
-                  '—'
-                )}
-              </td>
-              <td className={`${TD} truncate font-mono text-[0.8rem]`}>
-                {variant.barcode || '—'}
-              </td>
-              <td className={`${TD} text-right font-semibold`}>
-                {formatPrice(variant.price, variant.currency ?? product.currency)}
-              </td>
-              <td className={`${TD} text-right`}>
-                {variant.compare_at_price
-                  ? formatPrice(
-                      variant.compare_at_price,
-                      variant.currency ?? product.currency,
-                    )
-                  : '—'}
-              </td>
-              <td
-                className={`${TD} text-right ${
-                  (variant.inventory_quantity ?? 1) <= 0
-                    ? 'text-danger font-semibold'
-                    : ''
-                }`}
-              >
-                {num(variant.inventory_quantity)}
-              </td>
-              <td className={`${TD} text-center`}>
-                {variant.available_for_sale === null ||
-                variant.available_for_sale === undefined ? (
-                  '—'
-                ) : (
-                  <Badge tone={variant.available_for_sale ? 'success' : 'neutral'}>
-                    {variant.available_for_sale ? 'Available' : 'Unavailable'}
-                  </Badge>
-                )}
-              </td>
-              <td className={`${TD} truncate text-right`}>{weightLabel(variant)}</td>
+    <div className={`${CARD} overflow-hidden`}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] table-fixed border-collapse">
+          <thead>
+            <tr>
+              <th className={`${TH} w-[56%]`}>Variant</th>
+              <th className={`${TH} w-[24%]`}>Price</th>
+              <th className={`${TH} w-[20%]`}>Available</th>
             </tr>
-          ))}
-        </tbody>
-      </TableWrap>
+          </thead>
+          <tbody>
+            {product.variants.map((variant) => {
+              const currency = variant.currency ?? product.currency
+              const weight = weightLabel(variant)
+              const details = [
+                variant.barcode ? `Barcode ${variant.barcode}` : '',
+                weight !== '—' ? weight : '',
+              ].filter(Boolean)
+              const stock = variant.inventory_quantity
+              return (
+                <tr
+                  key={variant.id}
+                  className="border-border hover:bg-accent-tint/60 border-b align-middle transition-colors last:border-b-0"
+                >
+                  <td className={`${TD} py-3`}>
+                    <div className="flex items-center gap-4">
+                      {/* A tall picture tile, as in the store's own admin. */}
+                      <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
+                        <ProductImage
+                          src={variant.image_url ?? null}
+                          alt={variant.title ?? ''}
+                          size="thumb"
+                        />
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span
+                          className="block truncate font-semibold"
+                          title={variant.title ?? ''}
+                        >
+                          {variant.title ?? '—'}
+                        </span>
+                        {variant.sku && (
+                          <span className="text-text-muted flex items-center gap-1.5 font-mono text-[0.8rem]">
+                            <span className="truncate" title={variant.sku}>
+                              {variant.sku}
+                            </span>
+                            <CopyButton
+                              value={variant.sku}
+                              label={`Copy ${variant.sku}`}
+                            />
+                          </span>
+                        )}
+                        {details.length > 0 && (
+                          <span className="text-text-muted truncate text-[0.75rem]">
+                            {details.join(' · ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className={TD}>
+                    <span className="flex flex-col">
+                      <span className="font-semibold">
+                        {formatPrice(variant.price, currency)}
+                      </span>
+                      {variant.compare_at_price && (
+                        <span className="text-text-muted text-[0.78rem] line-through">
+                          {formatPrice(variant.compare_at_price, currency)}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className={TD}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={
+                          (stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'
+                        }
+                      >
+                        {num(stock)}
+                      </span>
+                      {variant.available_for_sale === false && (
+                        <Badge tone="neutral">Unavailable</Badge>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="border-border-strong bg-surface border-t px-3.5 py-3 text-[0.85rem]">
+        Total inventory across all locations: <strong>{num(total)}</strong> available
+      </p>
     </div>
   )
 }
@@ -586,7 +600,16 @@ function collectionTypeLabel(type: string): string {
 const COLLECTION_FILTER_MIN = 6
 
 /** The collections as tiles, narrowed by the header's filter box. */
-function CollectionsView({ product, query }: { product: ProductDetail; query: string }) {
+function CollectionsView({
+  product,
+  query,
+  onRemove,
+}: {
+  product: ProductDetail
+  query: string
+  /** The ✕ on a collection was clicked: ask before taking the product out of it. */
+  onRemove: (collection: ProductDetail['collections'][number]) => void
+}) {
   const { collections } = product
 
   if (collections.length === 0) {
@@ -609,7 +632,10 @@ function CollectionsView({ product, query }: { product: ProductDetail; query: st
           No collections match &ldquo;{query.trim()}&rdquo;.
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <ul
+          aria-label="Collections"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {visible.map((collection) => (
             <li
               key={collection.id}
@@ -645,6 +671,17 @@ function CollectionsView({ product, query }: { product: ProductDetail; query: st
                   {collectionTypeLabel(collection.collection_type)}
                 </Badge>
               )}
+
+              {/* Always there: removing asks first (see RemoveCollectionDialog). */}
+              <button
+                type="button"
+                aria-label={`Remove from ${collection.title}`}
+                title="Remove from this collection"
+                onClick={() => onRemove(collection)}
+                className={ROW_ACTION_DANGER}
+              >
+                <XIcon width={16} height={16} />
+              </button>
             </li>
           ))}
         </ul>
@@ -1129,7 +1166,7 @@ interface TabProps {
   onSaved?: SavedHandler
 }
 
-/** The options (Size: Small, large…) on the left, the pencil — or Save / Discard — on the right. */
+/** "2 variants", each option as a label with a pill per value, and the pencil (or Save / Discard). */
 function VariantsHeader({
   product,
   edit,
@@ -1138,21 +1175,36 @@ function VariantsHeader({
   edit: SectionEdit
 }) {
   const options = product.has_only_default_variant ? [] : product.options
+  const count = product.variants.length
   return (
-    <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-2">
-      <ul className="mr-auto flex flex-wrap gap-2">
-        {edit.editing ? (
-          <li className="text-text-muted text-[0.82rem] font-medium">Editing variants</li>
-        ) : (
-          options.map((option) => (
-            <li key={option.name} className={`${CARD} px-3 py-1.5 text-[0.82rem]`}>
-              <span className="text-text-muted font-semibold">{option.name}: </span>
-              {option.values.join(', ')}
-            </li>
-          ))
-        )}
-      </ul>
-      <div className="flex items-center gap-1.5">
+    <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2">
+      {edit.editing ? (
+        <p className="text-text-muted text-[0.82rem] font-medium">Editing variants</p>
+      ) : (
+        <>
+          <p className="text-[0.95rem] font-semibold">
+            {count} {count === 1 ? 'variant' : 'variants'}
+          </p>
+          {options.map((option) => (
+            <div key={option.name} className="flex flex-wrap items-center gap-1.5">
+              <span className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
+                {option.name}
+              </span>
+              <ul className="flex flex-wrap gap-1.5">
+                {option.values.map((value) => (
+                  <li
+                    key={value}
+                    className="border-border-strong bg-bg rounded-full border px-2.5 py-0.5 text-[0.78rem] font-medium"
+                  >
+                    {value}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </>
+      )}
+      <div className="ml-auto flex items-center gap-1.5">
         <SectionEditControls edit={edit} what="variants" />
       </div>
     </div>
@@ -1178,34 +1230,55 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
   // The "add by ID" box stays hidden until "Add collection" is clicked, then
   // sits on top of the list. The pencil opens the editor without it.
   const [addOpen, setAddOpen] = useState(false)
+  // The collection whose ✕ was clicked, waiting for "Remove".
+  const [removing, setRemoving] = useState<ProductDetail['collections'][number] | null>(
+    null,
+  )
 
   return (
-    <EditableTab
-      product={product}
-      what="collections"
-      errorPrefixes={COLLECTION_ERRORS}
-      onSaved={onSaved}
-      header={(edit) => (
-        <CollectionsHeader
+    <>
+      <EditableTab
+        product={product}
+        what="collections"
+        errorPrefixes={COLLECTION_ERRORS}
+        onSaved={onSaved}
+        header={(edit) => (
+          <CollectionsHeader
+            product={product}
+            query={query}
+            onQuery={setQuery}
+            edit={edit}
+            addOpen={addOpen}
+            onStart={() => setAddOpen(false)}
+            onAdd={() => {
+              if (edit.editing) {
+                setAddOpen((open) => !open)
+              } else {
+                setAddOpen(true)
+                edit.start()
+              }
+            }}
+          />
+        )}
+        view={<CollectionsView product={product} query={query} onRemove={setRemoving} />}
+        editor={(section) => (
+          <CollectionsEditor {...section} showAdd={addOpen} focusAdd />
+        )}
+      />
+
+      {removing && (
+        <RemoveCollectionDialog
+          key={removing.id}
           product={product}
-          query={query}
-          onQuery={setQuery}
-          edit={edit}
-          addOpen={addOpen}
-          onStart={() => setAddOpen(false)}
-          onAdd={() => {
-            if (edit.editing) {
-              setAddOpen((open) => !open)
-            } else {
-              setAddOpen(true)
-              edit.start()
-            }
+          collection={removing}
+          onClose={() => setRemoving(null)}
+          onDone={(result) => {
+            setRemoving(null)
+            onSaved?.(result, product, { collections_remove: [removing.id] })
           }}
         />
       )}
-      view={<CollectionsView product={product} query={query} />}
-      editor={(section) => <CollectionsEditor {...section} showAdd={addOpen} focusAdd />}
-    />
+    </>
   )
 }
 

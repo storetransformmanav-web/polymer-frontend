@@ -299,6 +299,30 @@ describe('ProductsPage list', () => {
     )
   })
 
+  it('shows the Variants tab as Variant (picture, name, SKU), Price and Available, with the total inventory under it', async () => {
+    const user = userEvent.setup()
+    renderPage('/products/id-7')
+    await screen.findByRole('heading', { level: 1, name: 'Product 7' })
+    await user.click(screen.getByRole('tab', { name: /Variants/ }))
+
+    // (the hidden list's table is still mounted, so look inside the tab's panel)
+    const table = screen.getByRole('tabpanel')
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Variant', 'Price', 'Available'])
+
+    // The SKU sits under the variant's name, in the same cell.
+    const cell = screen.getByRole('cell', { name: /Default Title/ })
+    expect(cell).toHaveTextContent('SKU-7')
+
+    // The footer adds it all up.
+    expect(screen.getByText(/Total inventory across all locations:/)).toHaveTextContent(
+      /Total inventory across all locations: \d[\d,]* available/,
+    )
+  })
+
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
     const user = userEvent.setup()
     renderPage()

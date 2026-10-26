@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +10,7 @@ import {
   type ProductListResponse,
   type ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
+import { fetchProductDetails } from '../../../app/store/productsSlice.ts'
 import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
@@ -626,6 +627,321 @@ describe('editing a section in place', () => {
     )
   })
 
+  describe('removing a product from a collection with the ✕ on its tile', () => {
+    const openCollections = async () => {
+      const user = await openDetails()
+      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
+      return user
+    }
+
+    it('shows three columns of tiles, each with a ✕ by default — no pencil needed', async () => {
+      await openCollections()
+
+      const list = screen.getByRole('list', { name: 'Collections' })
+      expect(list.className).toContain('lg:grid-cols-3')
+      expect(
+        within(list).getByRole('button', { name: 'Remove from Best Sellers' }),
+      ).toBeInTheDocument()
+    })
+
+    it('asks first, and sends nothing when Cancel is pressed', async () => {
+      const user = await openCollections()
+      await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
+
+      const alert = await screen.findByRole('alertdialog', {
+        name: 'Remove from “Best Sellers”?',
+      })
+      expect(within(alert).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      // A smart collection is filled by rules: the alert says the store may refuse.
+      expect(within(alert).getByText(/smart collection/)).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+
+      await user.click(within(alert).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      expect(screen.getByText('Best Sellers')).toBeInTheDocument()
+    })
+
+    it('removes only that collection when Remove is pressed, and the tile goes at once', async () => {
+      const user = await openCollections()
+      // Once removed, the store's own copy no longer has it either.
+      details.mockResolvedValue({ ...DETAIL, collections: [] })
+      await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Remove',
+        }),
+      )
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_remove: ['col1'] },
+          'polymer-uk',
+        ),
+      )
+      expect(update).toHaveBeenCalledTimes(1)
+      await waitFor(() =>
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+      )
+      expect(
+        await screen.findByText("This product isn't in any collection."),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps the alert open with the backend’s message when the store refuses', async () => {
+      update.mockRejectedValue(
+        new ApiError('A smart collection cannot be changed by hand.', { status: 422 }),
+      )
+      const user = await openCollections()
+      await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Remove',
+        }),
+      )
+
+      expect(
+        await screen.findByText('A smart collection cannot be changed by hand.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      // Nothing changed behind it.
+      expect(screen.getAllByText('Best Sellers').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('adding to a collection from the list of the collections already known', () => {
+    // Other products' details are in the cache (the app learns collections as products are
+    // opened): 12 more collections, the first of which the product is already in.
+    const OTHERS = Array.from({ length: 12 }, (_, i) => ({
+      id: `aaaaaaaa-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+      shopify_id: 100 + i,
+      title: `Range ${String(i + 1).padStart(2, '0')}`,
+      handle: `range-${i + 1}`,
+      collection_type: 'custom',
+    }))
+
+    async function openAdd() {
+      const user = userEvent.setup()
+      const { store } = renderPage('/products/id-1')
+      await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+      store.dispatch(
+        fetchProductDetails.fulfilled(
+          {
+            data: { ...DETAIL, id: 'id-9', collections: OTHERS } as ProductDetail,
+            fetchedAt: Date.now(),
+          },
+          'req',
+          { id: 'id-9' },
+        ),
+      )
+      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
+      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+      return user
+    }
+    const box = () => screen.getByRole('combobox', { name: 'Add to a collection' })
+    const list = () => screen.queryByRole('listbox', { name: 'Collections to add' })
+
+    it('shows nothing by default — the dropdown only opens once something is typed', async () => {
+      const user = await openAdd()
+      // "Add collection" puts the cursor in the box, but with nothing typed there is no list.
+      expect(box()).toHaveFocus()
+      expect(list()).toBeNull()
+      await user.click(box())
+      expect(list()).toBeNull()
+
+      await user.type(box(), 'r')
+      expect(list()).not.toBeNull()
+
+      // Clearing the box puts it away again.
+      await user.clear(box())
+      expect(list()).toBeNull()
+    })
+
+    it('shows ten at most once something is typed, related to it, and says there are more', async () => {
+      const user = await openAdd()
+
+      // "range" matches all twelve: ten are shown, in a dropdown over the tiles below.
+      await user.type(box(), 'range')
+      const rows = within(list()!).getAllByRole('option')
+      expect(rows).toHaveLength(10)
+      expect(rows[0]).toHaveTextContent('Range 01')
+      // The product's own collection (Best Sellers) isn't offered again.
+      expect(within(list()!).queryByText('Best Sellers')).toBeNull()
+      expect(
+        screen.getByText('Showing 10 of 12 — keep typing to narrow the list.'),
+      ).toBeVisible()
+      // Drawn on top of the page (so nothing clips it), not a block that pushes the tiles down.
+      expect(list()!.parentElement!.className).toContain('fixed')
+      expect(list()!.parentElement!.parentElement).toBe(document.body)
+
+      // "range 0" matches nine (01–09): all nine, each related to the text.
+      await user.type(box(), ' 0')
+      const titles = within(list()!)
+        .getAllByRole('option')
+        .map((row) => row.querySelector('p')?.textContent ?? '')
+      expect(titles).toHaveLength(9)
+      expect(titles.every((title) => title.toLowerCase().includes('range 0'))).toBe(true)
+      expect(screen.queryByText(/^Showing 10 of/)).toBeNull()
+    })
+
+    it('narrows the list as you type, and shows them all once few enough', async () => {
+      const user = await openAdd()
+
+      await user.type(box(), 'range 1')
+
+      // Range 10, 11, 12 and Range 1x…: "range 1" matches 10, 11, 12 and 01? ("range 01" has no "1" right after "range ").
+      expect(
+        within(list()!)
+          .getAllByRole('option')
+          .map((row) => row.querySelector('p')?.textContent),
+      ).toEqual(['Range 10', 'Range 11', 'Range 12'])
+      expect(screen.queryByText(/^Showing 10 of/)).toBeNull()
+    })
+
+    it('reads the products on the list to learn their collections when the box opens, and says so while they load', async () => {
+      vi.mocked(api.products.list).mockResolvedValue({
+        ...LIST,
+        items: [ROW, { ...ROW, id: 'id-2', title: 'Foil Lid' }],
+      })
+      let finish: (value: ProductDetail) => void = () => undefined
+      details.mockImplementation((id) =>
+        id === 'id-2'
+          ? new Promise<ProductDetail>((resolve) => {
+              finish = resolve
+            })
+          : Promise.resolve(DETAIL),
+      )
+      const user = userEvent.setup()
+      renderPage('/products/id-1')
+      await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
+      // Nothing about the other product is asked until the box is opened.
+      const askedFor = (id: string) => details.mock.calls.some(([asked]) => asked === id)
+      expect(askedFor('id-2')).toBe(false)
+      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+
+      // Opening the box reads them in the background (nothing is shown until typing)…
+      await waitFor(() => expect(askedFor('id-2')).toBe(true))
+      expect(list()).toBeNull()
+      // …and typing says they are still on their way.
+      await user.type(box(), 'range')
+      expect(await screen.findByText('Loading collections…')).toBeVisible()
+
+      finish({ ...DETAIL, id: 'id-2', collections: OTHERS } as ProductDetail)
+      await waitFor(() => expect(within(list()!).getAllByRole('option')).toHaveLength(10))
+      expect(
+        screen.getByText('Showing 10 of 12 — keep typing to narrow the list.'),
+      ).toBeVisible()
+      expect(screen.queryByText('Loading collections…')).toBeNull()
+    })
+
+    it('is not clipped, and follows its box when the page scrolls instead of closing', async () => {
+      const user = await openAdd()
+      const row = box().parentElement!
+      let top = 300
+      const original = row.getBoundingClientRect
+      row.getBoundingClientRect = () =>
+        ({
+          top,
+          bottom: top + 40,
+          left: 20,
+          right: 620,
+          width: 600,
+          height: 40,
+          x: 20,
+          y: top,
+          toJSON: () => ({}),
+        }) as DOMRect
+      try {
+        await user.type(box(), 'range')
+        expect(list()!.parentElement).toHaveStyle({ top: '344px', width: '600px' })
+
+        top = 200
+        fireEvent.scroll(window)
+        expect(list()).not.toBeNull()
+        expect(list()!.parentElement).toHaveStyle({ top: '244px' })
+
+        // Scrolled out of view: hidden until it is back.
+        top = -300
+        fireEvent.scroll(window)
+        expect(list()).toBeNull()
+        top = 300
+        fireEvent.scroll(window)
+        expect(list()).not.toBeNull()
+      } finally {
+        row.getBoundingClientRect = original
+      }
+    })
+
+    it('says so when nothing matches what was typed', async () => {
+      const user = userEvent.setup()
+      renderPage('/products/id-1')
+      await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
+      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+      expect(list()).toBeNull()
+
+      await user.type(box(), 'zzz')
+
+      expect(
+        await screen.findByText(
+          'No collection matches “zzz”. Paste its ID and press Add.',
+        ),
+      ).toBeVisible()
+    })
+
+    it('adds the clicked collection by its id, shows it by name, and saves it', async () => {
+      const user = await openAdd()
+      await user.type(box(), 'range 03')
+      await user.click(within(list()!).getByRole('option', { name: /Range 03/ }))
+
+      expect(box()).toHaveValue('')
+      expect(screen.getByText('Range 03')).toBeInTheDocument()
+      expect(screen.getByText('New')).toBeInTheDocument()
+
+      await user.click(saveButton('collections'))
+      await confirmUpdate(user)
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_add: [OTHERS[2].id] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('moves with the arrow keys and adds the highlighted one on Enter; Escape closes only the list', async () => {
+      const user = await openAdd()
+      await user.type(box(), 'range')
+
+      await user.keyboard('{ArrowDown}{ArrowDown}')
+      expect(within(list()!).getByRole('option', { name: /Range 02/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      await user.keyboard('{Escape}')
+      expect(list()).toBeNull()
+      expect(saveButton('collections')).toBeInTheDocument()
+
+      // Clicking the box brings the list back (what was typed is still there).
+      await user.click(box())
+      expect(list()).not.toBeNull()
+      await user.keyboard('{ArrowDown}{Enter}')
+      expect(screen.getByText('Range 01')).toBeInTheDocument()
+    })
+
+    it('still takes a pasted ID that is not in the list', async () => {
+      const user = await openAdd()
+      const id = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+
+      await user.type(box(), `${id}{Enter}`)
+
+      expect(screen.getByText(id)).toBeInTheDocument()
+      expect(screen.getByText('Collection to add')).toBeInTheDocument()
+    })
+  })
+
   it('puts the summary, Edit and Add collection together in the collections header', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
@@ -646,10 +962,10 @@ describe('editing a section in place', () => {
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
     await user.click(pencil('collections'))
 
-    expect(screen.queryByLabelText('Add to a collection by ID')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
-    const box = screen.getByLabelText('Add to a collection by ID')
+    const box = screen.getByLabelText('Add to a collection')
     expect(box).toHaveFocus()
 
     // It sits on top of the list of collections.
@@ -660,7 +976,7 @@ describe('editing a section in place', () => {
 
     // Clicking again tucks it away.
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
-    expect(screen.queryByLabelText('Add to a collection by ID')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
 
   it('opens the editor with the add box on top from "Add collection", and shows added ones first', async () => {
@@ -668,7 +984,7 @@ describe('editing a section in place', () => {
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
 
-    const box = screen.getByLabelText('Add to a collection by ID')
+    const box = screen.getByLabelText('Add to a collection')
     expect(box).toHaveFocus()
 
     const id = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
@@ -697,7 +1013,7 @@ describe('editing a section in place', () => {
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
     await user.click(pencil('collections'))
 
-    expect(screen.queryByLabelText('Add to a collection by ID')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
 
   it('edits the media tab in place', async () => {

@@ -1,14 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Badge } from '../../../../components/ui/Badge.tsx'
 import { PlusIcon, XIcon } from '../../../../components/ui/icons.tsx'
+import { useKnownCollections } from '../../hooks/useKnownCollections.ts'
+import {
+  COLLECTION_LIST_LIMIT,
+  matchCollections,
+} from '../../utils/collectionSuggestions.ts'
 import { FIELD_INPUT, TEXT_BUTTON, type SectionProps } from './fields.tsx'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/** Room the dropdown wants below the box before it opens above it instead (px). */
+const LIST_ROOM = 340
+
 /**
- * Remove the product from a collection, or put it in one by its ID. The
- * backend has no "list collections" endpoint yet, so adding is by CRM
- * collection ID (a UUID) rather than from a picker.
+ * Remove the product from a collection, or put it in one. Adding is from a dropdown of the
+ * collections the app already knows (those of the products it has loaded — the backend has
+ * no "list collections" endpoint yet): it stays closed until something is typed, then shows
+ * the related ones, ten at most; a collection that isn't listed can still be added by
+ * pasting its CRM ID (a UUID).
  *
  * The "add by ID" box and the collections about to be added sit on top of the
  * list. The Collections tab keeps the box hidden until "Add collection" is
@@ -36,12 +47,82 @@ export function CollectionsSection({
   const [inputError, setInputError] = useState<string | null>(null)
   const removed = new Set(draft.removedCollectionIds)
 
+  // The dropdown under the box: the known collections related to what is typed, ten at most —
+  // and nothing at all until something is typed. Opening the box already reads the details of
+  // the products on the list (to learn their collections), so they are ready when typing starts.
+  const { collections: known, loading } = useKnownCollections(showAdd)
+  const listId = useId()
+  const [focused, setFocused] = useState(false)
+  const [active, setActive] = useState(-1)
+  const skip = useMemo(
+    () => new Set([...product.collections.map((c) => c.id), ...draft.addedCollectionIds]),
+    [product.collections, draft.addedCollectionIds],
+  )
+  const { shown, total } = useMemo(
+    () => matchCollections(known, input, skip, COLLECTION_LIST_LIMIT),
+    [known, input, skip],
+  )
+  const typed = input.trim() !== ''
+  const panelOpen = focused && typed
+  const listOpen = panelOpen && shown.length > 0
+
+  // The dropdown is drawn on top of the page (a portal), so no ancestor can clip it, and it
+  // follows its box as the page scrolls or the window is resized.
+  const row = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<{
+    left: number
+    width: number
+    top?: number
+    bottom?: number
+    visible: boolean
+  } | null>(null)
+  useEffect(() => {
+    if (!panelOpen) return undefined
+    function measure() {
+      const rect = row.current?.getBoundingClientRect()
+      if (!rect) return
+      const below = window.innerHeight - rect.bottom
+      const upward = below < LIST_ROOM && rect.top > below
+      setPlace({
+        left: rect.left,
+        width: rect.width,
+        visible:
+          (rect.width === 0 && rect.height === 0) ||
+          (rect.bottom > 0 && rect.top < window.innerHeight),
+        ...(upward
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      })
+    }
+    function onScroll(event: Event) {
+      if (event.target instanceof Node && list.current?.contains(event.target)) return
+      measure()
+    }
+    measure()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [panelOpen, input, shown.length])
+  const titleOf = (id: string) => known.find((collection) => collection.id === id)?.title
+
   function toggleRemoved(id: string) {
     onChange({
       removedCollectionIds: removed.has(id)
         ? draft.removedCollectionIds.filter((value) => value !== id)
         : [...draft.removedCollectionIds, id],
     })
+  }
+
+  /** Puts the product in a collection chosen from the list. */
+  function pick(id: string) {
+    onChange({ addedCollectionIds: [...draft.addedCollectionIds, id] })
+    setInput('')
+    setInputError(null)
+    setActive(-1)
   }
 
   function add() {
@@ -68,25 +149,53 @@ export function CollectionsSection({
             htmlFor="edit-collection-id"
             className="text-text text-[0.82rem] font-semibold"
           >
-            Add to a collection by ID
+            Add to a collection
           </label>
-          <div className="flex gap-2">
+          <div ref={row} className="flex gap-2">
             <input
               id="edit-collection-id"
               ref={addInput}
               autoComplete="off"
               spellCheck={false}
               value={input}
-              placeholder="3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              placeholder="Search collections, or paste an ID"
+              role="combobox"
+              aria-expanded={panelOpen}
+              aria-controls={listOpen ? listId : undefined}
+              aria-autocomplete="list"
+              aria-activedescendant={
+                listOpen && active >= 0 ? `${listId}-${active}` : undefined
+              }
               aria-invalid={inputError ? true : undefined}
+              onFocus={() => setFocused(true)}
+              // Clicking the box again (or ↓) brings the list back after Escape.
+              onClick={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
               onChange={(event) => {
                 setInput(event.target.value)
                 setInputError(null)
+                setActive(-1)
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
+                if (!listOpen && event.key === 'ArrowDown') {
                   event.preventDefault()
-                  add()
+                  setFocused(true)
+                } else if (listOpen && event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  setActive((index) => (index + 1) % shown.length)
+                } else if (listOpen && event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  setActive((index) => (index <= 0 ? shown.length - 1 : index - 1))
+                } else if (listOpen && event.key === 'Escape') {
+                  // Only the list closes; the section's own Escape (discard) is for the next press.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setFocused(false)
+                  setActive(-1)
+                } else if (event.key === 'Enter') {
+                  event.preventDefault()
+                  if (listOpen && active >= 0) pick(shown[active].id)
+                  else add()
                 }
               }}
               className={`${FIELD_INPUT} font-mono text-[0.8rem]`}
@@ -106,6 +215,80 @@ export function CollectionsSection({
               {inputError}
             </p>
           )}
+
+          {panelOpen &&
+            place?.visible &&
+            createPortal(
+              <div
+                ref={list}
+                style={{
+                  left: place.left,
+                  top: place.top,
+                  bottom: place.bottom,
+                  width: place.width,
+                }}
+                className="border-border bg-bg fixed z-50 overflow-hidden rounded-xl border shadow-lg"
+              >
+                <ul id={listId} role="listbox" aria-label="Collections to add">
+                  {shown.map((collection, index) => (
+                    <li
+                      key={collection.id}
+                      id={`${listId}-${index}`}
+                      role="option"
+                      aria-selected={index === active}
+                      // Keep the focus in the box: leaving it would close the list before the click.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setActive(index)}
+                      onClick={() => pick(collection.id)}
+                      className={`flex cursor-pointer items-center gap-3 px-3.5 py-2 ${
+                        index === active ? 'bg-accent-tint/60' : ''
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.88rem] font-semibold">
+                          {collection.title}
+                        </p>
+                        <p className="text-text-muted truncate font-mono text-[0.74rem]">
+                          {collection.handle}
+                        </p>
+                      </div>
+                      {collection.collection_type && (
+                        <Badge
+                          tone={
+                            collection.collection_type.toLowerCase() === 'smart'
+                              ? 'default'
+                              : 'neutral'
+                          }
+                        >
+                          {collection.collection_type.toLowerCase() === 'custom'
+                            ? 'Manual'
+                            : collection.collection_type.charAt(0).toUpperCase() +
+                              collection.collection_type.slice(1).toLowerCase()}
+                        </Badge>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {shown.length === 0 && (
+                  <p className="text-text-muted px-3.5 py-3 text-[0.82rem]">
+                    {loading
+                      ? 'Loading collections…'
+                      : `No collection matches “${input.trim()}”. Paste its ID and press Add.`}
+                  </p>
+                )}
+                {shown.length > 0 && (total > COLLECTION_LIST_LIMIT || loading) && (
+                  <p className="border-border text-text-muted border-t px-3.5 py-2 text-[0.76rem]">
+                    {total > COLLECTION_LIST_LIMIT
+                      ? `Showing ${COLLECTION_LIST_LIMIT} of ${total}`
+                      : `${total} ${total === 1 ? 'collection' : 'collections'}`}
+                    {loading
+                      ? ' so far — more are loading…'
+                      : ' — keep typing to narrow the list.'}
+                  </p>
+                )}
+              </div>,
+              document.body,
+            )}
         </div>
       )}
 
@@ -121,7 +304,9 @@ export function CollectionsSection({
               className="border-accent/40 bg-accent-tint/40 flex items-center gap-3 rounded-xl border px-3.5 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[0.88rem] font-semibold">Collection to add</p>
+                <p className="text-[0.88rem] font-semibold">
+                  {titleOf(id) ?? 'Collection to add'}
+                </p>
                 <p className="text-text-muted truncate font-mono text-[0.74rem]">{id}</p>
                 {errors[`addedCollections.${index}`] && (
                   <p role="alert" className="text-danger text-[0.78rem]">
