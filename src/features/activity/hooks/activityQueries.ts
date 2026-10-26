@@ -1,5 +1,9 @@
 import { queryOptions } from '@tanstack/react-query'
-import { api, type ActivityListParams } from '../../../lib/api/endpoints.ts'
+import {
+  api,
+  type ActivityListParams,
+  type ActivityMethod,
+} from '../../../lib/api/endpoints.ts'
 
 /**
  * Query definitions shared by the page's hooks and by the prefetch that runs
@@ -11,15 +15,13 @@ import { api, type ActivityListParams } from '../../../lib/api/endpoints.ts'
 export const ACTIVITY_STALE_MS = 30_000
 /** Actions and users change rarely — keep their dropdown lists for five minutes. */
 export const ACTIVITY_OPTIONS_STALE_MS = 5 * 60_000
-/** Most users offered in the "User" dropdown (the Users API's maximum page size). */
-export const USER_OPTIONS_LIMIT = 100
 
 export interface ActivityFilters {
   search: string
-  /** A user's id ('' = everyone). */
-  userId: string
   /** An exact action name ('' = every action). */
   action: string
+  /** An HTTP method ('' = every method). */
+  method: ActivityMethod | ''
   /** `datetime-local` values ("2026-10-14T09:30", the browser's local time) or ''. */
   from: string
   to: string
@@ -29,8 +31,8 @@ export interface ActivityFilters {
 
 export const DEFAULT_ACTIVITY_FILTERS: ActivityFilters = {
   search: '',
-  userId: '',
   action: '',
+  method: '',
   from: '',
   to: '',
   page: 1,
@@ -71,8 +73,8 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
 
   const search = filters.search.trim()
   if (search) params.search = search
-  if (filters.userId) params.user_id = filters.userId
   if (filters.action) params.action = filters.action
+  if (filters.method) params.method = filters.method
   const from = toIso(filters.from)
   if (from) params.from = from
   const to = toIso(filters.to)
@@ -85,8 +87,8 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
 export function hasActiveActivityFilters(filters: ActivityFilters): boolean {
   return (
     filters.search.trim() !== '' ||
-    filters.userId !== '' ||
     filters.action !== '' ||
+    filters.method !== '' ||
     filters.from !== '' ||
     filters.to !== ''
   )
@@ -103,12 +105,5 @@ export const activityActionsOptions = () =>
   queryOptions({
     queryKey: ['activity', 'actions'],
     queryFn: api.activity.actions,
-    staleTime: ACTIVITY_OPTIONS_STALE_MS,
-  })
-
-export const activityUsersOptions = () =>
-  queryOptions({
-    queryKey: ['activity', 'users'],
-    queryFn: () => api.users.list({ page: 1, page_size: USER_OPTIONS_LIMIT }),
     staleTime: ACTIVITY_OPTIONS_STALE_MS,
   })

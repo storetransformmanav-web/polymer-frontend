@@ -237,6 +237,7 @@ describe('ActivityPage', () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
       list.mockClear()
 
       // The filtered query's own answer says there is no next page.
@@ -248,14 +249,14 @@ describe('ActivityPage', () => {
           total_pages: 1,
         }),
       )
-      await user.selectOptions(screen.getByLabelText('User:'), 'Manav')
+      await user.selectOptions(screen.getByLabelText('Method'), 'POST')
       await screen.findByText(/Showing/)
 
       await waitFor(() =>
-        expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25, user_id: 'user-1' }),
+        expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25, method: 'POST' }),
       )
       expect(list).not.toHaveBeenCalledWith(
-        expect.objectContaining({ user_id: 'user-1', page: 2 }),
+        expect.objectContaining({ method: 'POST', page: 2 }),
       )
     })
 
@@ -303,21 +304,73 @@ describe('ActivityPage', () => {
       expect(await screen.findByText('Manav viewed product 1')).toBeInTheDocument()
     })
 
-    it('shows the total beside "All Methods", with no per-method tabs or extra count requests', async () => {
+    it('has no "All Methods" tab row any more: it is the Method dropdown in the Filters grid', async () => {
+      const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
 
-      expect(await screen.findByText(/^All Methods/)).toHaveTextContent(
-        /^All Methodss*60$/,
-      )
+      // No tab strip, no per-method buttons.
+      expect(screen.queryByRole('group', { name: 'Filter by method' })).toBeNull()
       for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
         expect(
           screen.queryByRole('button', { name: new RegExp(`^${method}`) }),
         ).toBeNull()
       }
-      expect(screen.queryByRole('group', { name: 'Filter by method' })).toBeNull()
+      // The Method dropdown is the first field of the (collapsed) grid and carries the total.
+      const grid = document.getElementById('activity-filter-grid')!
+      expect(grid).toHaveAttribute('inert')
+      const method = screen.getByLabelText('Method')
+      expect(grid.querySelector('select')).toBe(method)
+      expect(
+        within(method).getByRole('option', { name: 'All Methods (60)' }),
+      ).toBeInTheDocument()
+      expect(
+        within(method)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['All Methods (60)', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      expect(grid).not.toHaveAttribute('inert')
       // Only pages of the list are ever requested (no one-row count queries).
       expect(list.mock.calls.every(([params]) => params.page_size === 25)).toBe(true)
+    })
+
+    it('puts the Filters button in the search row, beside the search box', async () => {
+      renderWithProviders(<ActivityPage />)
+      await screen.findByText('Manav viewed product 1')
+
+      const row = screen
+        .getByRole('searchbox', { name: 'Search activity' })
+        .closest('section') as HTMLElement
+      const search = screen.getByRole('searchbox', { name: 'Search activity' })
+      const filters = screen.getByRole('button', { name: 'Filters' })
+      expect(row).toContainElement(filters)
+      // Right of the search box, in the same row as Clear All.
+      expect(
+        search.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      const clear = screen.getByRole('button', { name: 'Clear All' })
+      expect(filters.parentElement).toBe(clear.parentElement)
+    })
+
+    it('filters by method: only that list is asked for, from page 1, and Clear All undoes it', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<ActivityPage />)
+      await screen.findByText('Manav viewed product 1')
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      list.mockClear()
+
+      await user.selectOptions(screen.getByLabelText('Method'), 'POST')
+
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith({ page: 1, page_size: 25, method: 'POST' }),
+      )
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(screen.getByLabelText('Method')).toHaveValue('POST')
+
+      await user.click(screen.getByRole('button', { name: 'Clear All' }))
+      await waitFor(() => expect(screen.getByLabelText('Method')).toHaveValue(''))
     })
   })
 
@@ -336,26 +389,17 @@ describe('ActivityPage', () => {
       expect(document.getElementById('activity-filter-grid')).not.toHaveAttribute('inert')
     })
 
-    it('filters by user (from the Users list)', async () => {
+    it('has no User filter and no Refresh button, and never asks for the users list', async () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
 
-      const userSelect = screen.getByLabelText('User:')
-      expect(
-        within(userSelect)
-          .getAllByRole('option')
-          .map((option) => option.textContent),
-      ).toEqual(['All Users', 'Manav'])
-      await user.selectOptions(userSelect, 'Manav')
-      await waitFor(() =>
-        expect(list).toHaveBeenCalledWith(
-          expect.objectContaining({ user_id: 'user-1', page: 1 }),
-        ),
-      )
-
-      await user.click(screen.getByRole('button', { name: 'Clear All' }))
-      expect(screen.getByLabelText('User:')).toHaveValue('')
+      expect(screen.queryByLabelText('User:')).toBeNull()
+      expect(screen.queryByLabelText('User')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Refresh activity' })).toBeNull()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(usersList).not.toHaveBeenCalled()
     })
 
     it('filters by action (names with counts from the actions API) and date range', async () => {

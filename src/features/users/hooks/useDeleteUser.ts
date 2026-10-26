@@ -25,8 +25,6 @@ export function useDeleteUser() {
         }
       })
       void queryClient.invalidateQueries({ queryKey: ['users'] })
-      // The Activity page's "user" dropdown is built from the same list.
-      void queryClient.invalidateQueries({ queryKey: ['activity', 'users'] })
     },
   })
 

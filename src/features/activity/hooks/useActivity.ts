@@ -58,8 +58,6 @@ export function useActivity() {
         ...DEFAULT_ACTIVITY_FILTERS,
         pageSize: current.pageSize,
       })),
-    /** Fetch the current page again right now (the log changes all the time). */
-    refresh: () => void query.refetch(),
     retry: () => void query.refetch(),
   }
 }

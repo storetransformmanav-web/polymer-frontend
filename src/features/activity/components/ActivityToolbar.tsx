@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import {
+  ArrowUpDownIcon,
   CalendarIcon,
   ChevronDownIcon,
-  FilterIcon,
   ListChecksIcon,
-  RefreshIcon,
   SearchIcon,
   SlidersIcon,
   XIcon,
@@ -12,9 +11,12 @@ import {
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import type { ActivityActionCount } from '../../../lib/api/endpoints.ts'
+import {
+  ACTIVITY_METHODS,
+  type ActivityActionCount,
+  type ActivityMethod,
+} from '../../../lib/api/endpoints.ts'
 import { toDateFilters, type ActivityFilters } from '../hooks/activityQueries.ts'
-import type { UserOption } from '../hooks/useActivityFilterOptions.ts'
 import { actionLabel } from '../utils/format.ts'
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
@@ -22,35 +24,29 @@ const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-sem
 interface ActivityToolbarProps {
   filters: ActivityFilters
   actions: ActivityActionCount[]
-  users: UserOption[]
   total: number | null
   hasFilters: boolean
   rangeInvalid: boolean
-  isRefreshing: boolean
   onChange: (changes: Partial<ActivityFilters>) => void
   onReset: () => void
-  onRefresh: () => void
-  /** Someone reached for a dropdown or opened the Filters grid: load the choices now. */
+  /** The Filters grid was opened: load the dropdown choices now. */
   onWantOptions?: () => void
 }
 
 /**
- * Search, user dropdown, the total count and the collapsible filter grid (action,
- * date range). Typing in the search box is instant locally and sent to the API
- * once the user pauses (see useDebouncedField); dropdowns and dates apply
- * immediately.
+ * Search, the Filters button and Clear All in one row, and the collapsible filter grid under
+ * it (method — "All Methods (total)" — action, date range). Typing in the search box is
+ * instant locally and sent to the API once the user pauses (see useDebouncedField);
+ * dropdowns and dates apply immediately.
  */
 export function ActivityToolbar({
   filters,
   actions,
-  users,
   total,
   hasFilters,
   rangeInvalid,
-  isRefreshing,
   onChange,
   onReset,
-  onRefresh,
   onWantOptions,
 }: ActivityToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
@@ -60,10 +56,6 @@ export function ActivityToolbar({
     onChange({ search }),
   )
 
-  const userOptions: SelectOption[] = [
-    { value: '', label: 'All Users' },
-    ...users.map((user) => ({ value: user.id, label: user.name })),
-  ]
   const actionOptions: SelectOption[] = [
     { value: '', label: 'All Actions' },
     ...actions.map((item) => ({
@@ -71,10 +63,19 @@ export function ActivityToolbar({
       label: `${actionLabel(item.action)} (${item.count.toLocaleString('en-GB')})`,
     })),
   ]
+  // "All Methods" carries the list's total (the open choice's own number, no extra request: a
+  // count per method would be one more request each, and every request is logged here).
+  const methodOptions: SelectOption[] = [
+    {
+      value: '',
+      label:
+        total !== null && filters.method === ''
+          ? `All Methods (${total.toLocaleString('en-GB')})`
+          : 'All Methods',
+    },
+    ...ACTIVITY_METHODS.map((method) => ({ value: method, label: method })),
+  ]
   // The chosen value is always listed, even before its list has loaded.
-  if (filters.userId && !users.some((user) => user.id === filters.userId)) {
-    userOptions.push({ value: filters.userId, label: 'Selected user' })
-  }
   if (filters.action && !actions.some((item) => item.action === filters.action)) {
     actionOptions.push({ value: filters.action, label: actionLabel(filters.action) })
   }
@@ -109,64 +110,6 @@ export function ActivityToolbar({
         </div>
 
         <div className="flex items-center gap-3">
-          <FilterIcon
-            width={16}
-            height={16}
-            className="text-text-muted hidden sm:block"
-          />
-          <div
-            className="min-w-0 flex-1 lg:w-64 lg:flex-none"
-            onPointerEnter={onWantOptions}
-            onFocusCapture={onWantOptions}
-          >
-            <SelectField
-              inline
-              id="filter-user"
-              label="User"
-              value={filters.userId}
-              options={userOptions}
-              onChange={(userId) => onChange({ userId })}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={!hasFilters}
-            className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
-          >
-            <XIcon width={14} height={14} />
-            Clear All
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="border-border bg-surface flex max-w-full min-w-0 gap-1 rounded-xl border p-1">
-          <span className="bg-bg text-text flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap shadow-sm">
-            All Methods
-            {total !== null && (
-              <span className="bg-accent-tint text-accent rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold">
-                {total.toLocaleString('en-GB')}
-              </span>
-            )}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            aria-label="Refresh activity"
-            title="Refresh"
-            className="border-border bg-bg text-text hover:border-accent flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-60"
-          >
-            <RefreshIcon
-              width={16}
-              height={16}
-              className={isRefreshing ? 'animate-spin' : ''}
-            />
-          </button>
           <button
             type="button"
             aria-expanded={filtersOpen}
@@ -184,6 +127,15 @@ export function ActivityToolbar({
               height={14}
               className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
             />
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={!hasFilters}
+            className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+          >
+            <XIcon width={14} height={14} />
+            Clear All
           </button>
         </div>
       </div>
@@ -203,6 +155,14 @@ export function ActivityToolbar({
       >
         <div className="-m-1 overflow-hidden p-1">
           <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+            <SelectField
+              id="filter-method"
+              label="Method"
+              icon={ArrowUpDownIcon}
+              value={filters.method}
+              options={methodOptions}
+              onChange={(method) => onChange({ method: method as ActivityMethod | '' })}
+            />
             <SelectField
               id="filter-action"
               label="Action"

@@ -120,7 +120,7 @@ describe('what a page requests when it opens', () => {
     expect([...new Set(names())].sort()).toEqual(['customers.list', 'shops.list'])
   })
 
-  it('Activity: its list only — the dropdown choices wait until a dropdown is reached for', async () => {
+  it('Activity: its list only — the action choices wait until Filters is opened, and users are never asked for', async () => {
     const user = userEvent.setup()
     renderAt('/activity')
     await waitFor(() => expect(callsTo('activity.list')).toHaveLength(1))
@@ -128,9 +128,10 @@ describe('what a page requests when it opens', () => {
 
     expect(names()).toEqual(['activity.list'])
 
-    await user.hover(screen.getByLabelText('User:'))
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
     await waitFor(() => expect(callsTo('activity.actions')).toHaveLength(1))
-    expect(callsTo('users.list')).toHaveLength(1)
+    await settle()
+    expect(callsTo('users.list')).toHaveLength(0)
   })
 })
 
