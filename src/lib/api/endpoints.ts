@@ -24,6 +24,8 @@ export const ENDPOINTS = {
   users: {
     list: '/users',
     create: '/users',
+    /** `GET` one user; `id` is the user's UUID. */
+    detail: (id: string) => `/users/${encodeURIComponent(id)}`,
     /** `DELETE` — soft delete: deactivated and hidden, its activity history is kept. */
     remove: (id: string) => `/users/${encodeURIComponent(id)}`,
   },
@@ -177,6 +179,24 @@ const userListResponseSchema = z.object({
 
 const userCreateResponseSchema = z.object({ user: userItemSchema })
 
+/**
+ * `GET /users/{user_id}`: the list's fields plus what only the full record carries. Read
+ * leniently — the optional parts are `nullish` (and `permissions` is dropped, not fatal, if
+ * its shape ever differs) so one missing value can't take the page down.
+ */
+const userDetailSchema = userItemSchema.extend({
+  updated_at: z.string().nullish(),
+  /** The user's access by area (`products`, `users`…), as at sign-in. */
+  permissions: z.record(z.string(), featureAccessSchema).nullish().catch(undefined),
+})
+
+/** The answer is the user, or the user wrapped as `{ user }` / `{ result }`. */
+const userDetailResponseSchema = z.union([
+  z.object({ user: userDetailSchema }).transform((answer) => answer.user),
+  z.object({ result: userDetailSchema }).transform((answer) => answer.result),
+  userDetailSchema,
+])
+
 /** What deleting a user answers (the spec says nothing; only a message is used, if there is one). */
 const userDeleteAnswerSchema = z.object({ message: z.string().nullish() })
 
@@ -192,6 +212,7 @@ const roleListResponseSchema = z.object({ items: z.array(roleSchema) })
 
 export type UserStatus = (typeof USER_STATUSES)[number]
 export type UserItem = z.infer<typeof userItemSchema>
+export type UserDetail = z.infer<typeof userDetailSchema>
 export type UserListResponse = z.infer<typeof userListResponseSchema>
 export type Role = z.infer<typeof roleSchema>
 
@@ -1446,6 +1467,12 @@ export const api = {
     async list(params: UserListParams): Promise<UserListResponse> {
       const data = await apiClient.get(ENDPOINTS.users.list, { params })
       return userListResponseSchema.parse(data)
+    },
+
+    /** One user's full record (`GET /users/{user_id}`, the user's UUID). */
+    async detail(id: string): Promise<UserDetail> {
+      const data = await apiClient.get(ENDPOINTS.users.detail(id))
+      return userDetailResponseSchema.parse(data)
     },
 
     /** Creates a staff user (they sign in by emailed code or Google). Returns the new user. */

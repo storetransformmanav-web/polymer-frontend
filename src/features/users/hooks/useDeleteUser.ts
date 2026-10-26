@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import { api, type UserListResponse } from '../../../lib/api/endpoints.ts'
+import { userDetailsKey } from './useUserDetails.ts'
 
 /**
  * Deletes a user (a soft delete on the server: deactivated and hidden, activity history
@@ -24,6 +25,8 @@ export function useDeleteUser() {
           total: Math.max(0, cached.total - 1),
         }
       })
+      // A deleted user's opened details would only answer 404 now.
+      queryClient.removeQueries({ queryKey: userDetailsKey(id) })
       void queryClient.invalidateQueries({ queryKey: ['users'] })
     },
   })

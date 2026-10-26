@@ -3,9 +3,11 @@ import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   AlertTriangleIcon,
+  EyeIcon,
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { UserItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime, initials } from '../../../lib/format.ts'
@@ -20,8 +22,6 @@ const TD = 'px-3.5 py-2.5 whitespace-nowrap'
 const FROM_XL = 'hidden xl:table-cell'
 const FROM_2XL = 'hidden 2xl:table-cell'
 const SKELETON_ROWS = 8
-const DELETE_BUTTON =
-  'text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors'
 
 interface UsersListProps {
   items: UserItem[]
@@ -32,6 +32,10 @@ interface UsersListProps {
   isStale: boolean
   /** Store key → display name, so a user's stores read "Polymer UK" rather than "polymer-uk". */
   shopNames: Record<string, string>
+  /** The View button of a row / card: open this user's details. */
+  onOpen: (user: UserItem) => void
+  /** Hovering or focusing View: read the details ahead of the click. */
+  onPrefetch: (id: string) => void
   /** The trash button of a row / card: ask to delete this user. */
   onDelete: (user: UserItem) => void
   onRetry: () => void
@@ -45,6 +49,42 @@ function Avatar({ name }: { name: string }) {
       className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-bold"
     >
       {initials(name) || '?'}
+    </span>
+  )
+}
+
+interface RowActionsProps {
+  user: UserItem
+  name: string
+  onOpen: (user: UserItem) => void
+  onPrefetch: (id: string) => void
+  onDelete: (user: UserItem) => void
+}
+
+/** View (opens the details page) and Delete — the same icon buttons as the other lists. */
+function RowActions({ user, name, onOpen, onPrefetch, onDelete }: RowActionsProps) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-0.5">
+      <button
+        type="button"
+        aria-label={`View ${name}`}
+        title="View"
+        onClick={() => onOpen(user)}
+        onPointerEnter={() => onPrefetch(user.id)}
+        onFocus={() => onPrefetch(user.id)}
+        className={ROW_ACTION}
+      >
+        <EyeIcon />
+      </button>
+      <button
+        type="button"
+        aria-label={`Delete ${name}`}
+        title="Delete"
+        onClick={() => onDelete(user)}
+        className={ROW_ACTION_DANGER}
+      >
+        <TrashIcon />
+      </button>
     </span>
   )
 }
@@ -125,6 +165,8 @@ export function UsersList({
   hasFilters,
   isStale,
   shopNames,
+  onOpen,
+  onPrefetch,
   onDelete,
   onRetry,
   onClearFilters,
@@ -201,15 +243,13 @@ export function UsersList({
                       <span className="truncate text-[0.88rem] font-semibold">
                         <Highlight text={name} />
                       </span>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${name}`}
-                        title="Delete"
-                        onClick={() => onDelete(user)}
-                        className={DELETE_BUTTON}
-                      >
-                        <TrashIcon />
-                      </button>
+                      <RowActions
+                        user={user}
+                        name={name}
+                        onOpen={onOpen}
+                        onPrefetch={onPrefetch}
+                        onDelete={onDelete}
+                      />
                     </span>
                     <span className="text-text-muted truncate text-[0.78rem]">
                       <Highlight text={user.email} />
@@ -251,7 +291,7 @@ export function UsersList({
             <th className={`${TH_BASE} ${FROM_XL}`}>Sign-in</th>
             <th className={TH_BASE}>Last Login</th>
             <th className={`${TH_BASE} ${FROM_2XL}`}>Created</th>
-            <th className={`${TH_BASE} w-20 text-center`}>Actions</th>
+            <th className={`${TH_BASE} w-24 text-center`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -313,15 +353,13 @@ export function UsersList({
                     </td>
                     <td className={`${TD} ${FROM_2XL}`}>{dateOrDash(user.created_at)}</td>
                     <td className={`${TD} text-center`}>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${name}`}
-                        title="Delete"
-                        onClick={() => onDelete(user)}
-                        className={DELETE_BUTTON}
-                      >
-                        <TrashIcon />
-                      </button>
+                      <RowActions
+                        user={user}
+                        name={name}
+                        onOpen={onOpen}
+                        onPrefetch={onPrefetch}
+                        onDelete={onDelete}
+                      />
                     </td>
                   </tr>
                 )

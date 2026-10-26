@@ -24,6 +24,12 @@ export function roleLabel(user: Pick<UserItem, 'role' | 'role_label'>): string {
   return user.role.charAt(0).toUpperCase() + user.role.slice(1)
 }
 
+/** "order_items" → "Order items" — a permission area's key, for people. */
+export function areaLabel(key: string): string {
+  const words = key.replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
 export function roleTone(role: string): BadgeTone {
   return isAdminRole(role) ? 'default' : 'neutral'
 }

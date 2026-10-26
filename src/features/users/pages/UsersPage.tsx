@@ -7,15 +7,18 @@ import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PlusIcon, UsersIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { useShops } from '../../../hooks/useShops.ts'
-import type { UserCreateBody } from '../../../lib/api/endpoints.ts'
+import type { UserCreateBody, UserItem } from '../../../lib/api/endpoints.ts'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { UserCreateView } from '../components/UserCreateView.tsx'
+import { UserDetailsView } from '../components/UserDetailsView.tsx'
 import { UserDeleteDialog, type UserToDelete } from '../components/UserDeleteDialog.tsx'
 import { UsersKpis } from '../components/UsersKpis.tsx'
 import { UsersList } from '../components/UsersList.tsx'
 import { UsersToolbar } from '../components/UsersToolbar.tsx'
 import { useCreateUser } from '../hooks/useCreateUser.ts'
 import { useRoles } from '../hooks/useRoles.ts'
+import { usePrefetchUserDetails, useUserDetails } from '../hooks/useUserDetails.ts'
+import { useUserTabs } from '../hooks/useUserTabs.ts'
 import { useUsers } from '../hooks/useUsers.ts'
 import { userName } from '../utils/format.ts'
 
@@ -26,11 +29,13 @@ const LIST_PATH = '/users'
 const NEW_PATH = '/users/new'
 // The tab of the form being filled in (not a user id).
 const NEW_TAB = '__new-user__'
+const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 
 /**
- * Users: the CRM's staff accounts, with search, filters (status, role), paging and an
- * "Add user" form that opens in place of the list at `/users/new` — like "Add product", as a
- * tab of its own that keeps what was typed while you look at the list. Data comes from
+ * Users: the CRM's staff accounts, with search, filters (status, role), paging, one user's
+ * details at `/users/:id` (View button — in place of the list, like a product's, with a tab
+ * per opened user) and an "Add user" form that opens in place of the list at `/users/new` —
+ * like "Add product", as a tab of its own that keeps what was typed while you look at the list. Data comes from
  * TanStack Query (see useUsers), so revisiting a page or filter is instant and a new user
  * appears as soon as the list refetches.
  */
@@ -39,10 +44,29 @@ export function UsersPage() {
   const roles = useRoles()
   const { shops } = useShops()
   const createUser = useCreateUser()
+  const userTabs = useUserTabs()
+  const prefetchDetails = usePrefetchUserDetails()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = users
   const { clearError } = createUser
+  const { openTab } = userTabs
+
+  // `/users/<id>` → the user whose details show; `/users` and `/users/new` → none.
+  const first = splat ? splat.split('/')[0] : ''
+  const activeId = first && first !== 'new' ? first : null
+  const activeRow = activeId
+    ? (users.items.find((item) => item.id === activeId) ?? null)
+    : null
+  const details = useUserDetails(activeId, activeRow)
+  const known = details.user ?? activeRow
+  const knownName = known ? userName(known) : null
+  const knownEmail = known?.email ?? null
+
+  // Every opened user gets a tab — also one reached by a bare URL, labelled once it loads.
+  useEffect(() => {
+    if (activeId) openTab({ id: activeId, name: knownName, email: knownEmail })
+  }, [activeId, knownName, knownEmail, openTab])
 
   // The form is open — it stays mounted, with what was typed, while the list is shown. It starts
   // open when the page is reached at /users/new directly (a reload, a link).
@@ -100,8 +124,28 @@ export function UsersPage() {
     users.setFilters({ page: 1 })
   }
 
+  function openUser(user: UserItem) {
+    userTabs.openTab({ id: user.id, name: userName(user), email: user.email })
+    navigate(detailsPath(user.id))
+  }
+
+  function closeUserTab(id: string) {
+    const index = userTabs.tabs.findIndex((tab) => tab.id === id)
+    const neighbour = userTabs.tabs[index + 1] ?? userTabs.tabs[index - 1]
+    userTabs.closeTab(id)
+    if (id === activeId) navigate(neighbour ? detailsPath(neighbour.id) : LIST_PATH)
+  }
+
+  /** Clear: closes every opened user, and the New user form (asking first if it has text). */
+  function clearTabs() {
+    userTabs.clearTabs()
+    if (activeId) navigate(LIST_PATH)
+    if (formOpen) requestClose()
+  }
+
   function handleDeleted(user: UserToDelete, message: string) {
     setDeleting(null)
+    userTabs.closeTab(user.id)
     setNotice(
       `Deleted “${user.name}”. ${message || 'The account is deactivated; its activity history is kept.'}`,
     )
@@ -114,7 +158,7 @@ export function UsersPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* The figures belong to the list, so the form takes their place (kept mounted, only hidden). */}
-      <div className={creatingRoute ? 'hidden' : undefined}>
+      <div className={creatingRoute || activeId ? 'hidden' : undefined}>
         <UsersKpis
           total={data?.total ?? null}
           roles={roles.roles}
@@ -122,19 +166,35 @@ export function UsersPage() {
         />
       </div>
 
-      {formOpen && (
-        <OpenTabsBar
-          tabs={[{ id: NEW_TAB, label: 'New user', title: 'A user being added' }]}
-          activeId={creatingRoute ? NEW_TAB : null}
-          navLabel="Open users"
-          listLabel="All Users"
-          kind="User"
-          historyLabel="Opened users"
-          icon={UsersIcon}
-          onShowList={() => navigate(LIST_PATH)}
-          onSelect={() => navigate(NEW_PATH)}
-          onClose={requestClose}
-          onClear={requestClose}
+      <OpenTabsBar
+        tabs={[
+          ...userTabs.tabs.map((tab) => ({
+            id: tab.id,
+            label: tab.name ?? `${tab.id.slice(0, 8)}…`,
+            title: tab.email ?? undefined,
+          })),
+          ...(formOpen
+            ? [{ id: NEW_TAB, label: 'New user', title: 'A user being added' }]
+            : []),
+        ]}
+        activeId={creatingRoute ? NEW_TAB : activeId}
+        navLabel="Open users"
+        listLabel="All Users"
+        kind="User"
+        historyLabel="Opened users"
+        icon={UsersIcon}
+        onShowList={() => navigate(LIST_PATH)}
+        onSelect={(id) => navigate(id === NEW_TAB ? NEW_PATH : detailsPath(id))}
+        onClose={(id) => (id === NEW_TAB ? requestClose() : closeUserTab(id))}
+        onClear={clearTabs}
+      />
+
+      {activeId && (
+        <UserDetailsView
+          key={activeId}
+          details={details}
+          shopNames={shopNames}
+          onBack={() => navigate(LIST_PATH)}
         />
       )}
 
@@ -159,7 +219,7 @@ export function UsersPage() {
 
       {/* Kept mounted but hidden while the form is open (display: none also removes it
           from tab order and screen readers). */}
-      <div className={creatingRoute ? 'hidden' : 'flex flex-col gap-4'}>
+      <div className={creatingRoute || activeId ? 'hidden' : 'flex flex-col gap-4'}>
         <UsersToolbar
           filters={filters}
           roles={roles.roles}
@@ -202,6 +262,8 @@ export function UsersPage() {
               hasFilters={users.hasFilters}
               isStale={users.isShowingPrevious}
               shopNames={shopNames}
+              onOpen={openUser}
+              onPrefetch={prefetchDetails}
               onDelete={(user) => {
                 setNotice(null)
                 setDeleting({ id: user.id, name: userName(user), email: user.email })

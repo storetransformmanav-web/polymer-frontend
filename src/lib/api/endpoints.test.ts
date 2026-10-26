@@ -740,3 +740,64 @@ describe('api.inventory.locations', () => {
     expect(await api.inventory.locations()).toEqual([])
   })
 })
+
+describe('api.users.detail', () => {
+  const USER = {
+    id: 'a7d79a67-29ed-41eb-a125-c71816e9ed9b',
+    first_name: 'Jane',
+    last_name: 'Doe',
+    full_name: 'Jane Doe',
+    email: 'jane@polymer.co',
+    phone: null,
+    role: 'office',
+    role_label: 'Office',
+    is_active: true,
+    google_linked: false,
+    last_login_at: null,
+    created_at: '2026-10-08T12:58:01Z',
+    updated_at: '2026-10-09T08:00:00Z',
+    shop_keys: ['polymer-uk'],
+    permissions: { products: { view: true, manage: false } },
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiClient.get).mockReset()
+  })
+
+  it('sends GET /users/{user_id} and reads a bare user', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(USER)
+
+    const user = await api.users.detail(USER.id)
+
+    expect(apiClient.get).toHaveBeenCalledWith(`/users/${USER.id}`)
+    expect(user.full_name).toBe('Jane Doe')
+    expect(user.permissions).toEqual({ products: { view: true, manage: false } })
+    expect(user.updated_at).toBe('2026-10-09T08:00:00Z')
+  })
+
+  it('also reads the user wrapped as { user } or { result }', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ code: 200, user: USER })
+    expect((await api.users.detail('x')).email).toBe('jane@polymer.co')
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ result: USER })
+    expect((await api.users.detail('x')).email).toBe('jane@polymer.co')
+  })
+
+  it('does not fail when the extra fields are missing or odd', async () => {
+    const bare: Record<string, unknown> = { ...USER }
+    delete bare.permissions
+    delete bare.updated_at
+    vi.mocked(apiClient.get).mockResolvedValueOnce(bare)
+    expect((await api.users.detail('x')).permissions).toBeUndefined()
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ ...USER, permissions: 'everything' })
+    expect((await api.users.detail('x')).permissions).toBeUndefined()
+  })
+
+  it('encodes the id in the path', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(USER)
+    await api.users.detail('a/b c')
+
+    expect(vi.mocked(apiClient.get).mock.calls[0][0]).toBe('/users/a%2Fb%20c')
+  })
+})

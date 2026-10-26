@@ -6,6 +6,7 @@ import {
   api,
   type Role,
   type Shop,
+  type UserDetail,
   type UserItem,
   type UserListParams,
   type UserListResponse,
@@ -17,7 +18,7 @@ import { UsersPage } from './UsersPage.tsx'
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {
-    users: { list: vi.fn(), create: vi.fn(), remove: vi.fn() },
+    users: { list: vi.fn(), detail: vi.fn(), create: vi.fn(), remove: vi.fn() },
     roles: { list: vi.fn() },
     shops: { list: vi.fn() },
     auth: {},
@@ -105,9 +106,19 @@ function respond(params: UserListParams): UserListResponse {
   }
 }
 
+/** What `GET /users/{id}` answers for a list row: the row plus the full record's extras. */
+function makeDetail(n: number): UserDetail {
+  return {
+    ...makeUser(n),
+    updated_at: '2026-10-20T09:30:00Z',
+    permissions: { products: { view: true, manage: false }, order_items: { view: true } },
+  }
+}
+
 const list = vi.mocked(api.users.list)
 const create = vi.mocked(api.users.create)
 const remove = vi.mocked(api.users.remove)
+const detail = vi.mocked(api.users.detail)
 const rolesList = vi.mocked(api.roles.list)
 const shopsList = vi.mocked(api.shops.list)
 
@@ -132,6 +143,7 @@ describe('UsersPage', () => {
     list.mockImplementation((params) => Promise.resolve(respond(params)))
     rolesList.mockResolvedValue(ROLES)
     shopsList.mockResolvedValue(SHOPS)
+    detail.mockImplementation((id) => Promise.resolve(makeDetail(Number(id.slice(5)))))
   })
 
   afterEach(() => {
@@ -736,6 +748,252 @@ describe('UsersPage', () => {
 
       await user.click(within(form).getByRole('button', { name: 'Try again' }))
       expect(await within(form).findByLabelText('Role')).toHaveValue('office')
+    })
+  })
+
+  describe('user details', () => {
+    const openUser = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage()
+      await screen.findByText('First2 Last2')
+      await user.click(screen.getByRole('button', { name: 'View First2 Last2' }))
+      return screen.findByRole('article', { name: 'User First2 Last2' })
+    }
+    const strip = () => screen.getByRole('navigation', { name: 'Open users' })
+
+    it('has a View button on every row, and asks for nothing until it is used', async () => {
+      renderPage()
+      await screen.findByText('First2 Last2')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      const row = within(screen.getByText('First2 Last2').closest('tr') as HTMLElement)
+      expect(row.getByRole('button', { name: 'View First2 Last2' })).toBeInTheDocument()
+      expect(row.getByRole('button', { name: 'Delete First2 Last2' })).toBeInTheDocument()
+      expect(detail).not.toHaveBeenCalled()
+    })
+
+    it('reads the details when View is clicked, in place of the list, at /users/:id', async () => {
+      const user = userEvent.setup()
+      const view = await openUser(user)
+
+      expect(detail).toHaveBeenCalledWith('user-2')
+      expect(within(view).getByRole('heading', { name: 'First2 Last2' })).toBeVisible()
+      // The list stays mounted but hidden; there is no slide-over.
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(
+        screen.getByRole('table', { hidden: true }).closest('.hidden'),
+      ).not.toBeNull()
+      // The user is a tab, and the list is one click away.
+      expect(
+        within(strip()).getByRole('button', { name: /^User\s*First2 Last2$/ }),
+      ).toHaveAttribute('aria-current', 'page')
+      expect(within(strip()).getByRole('button', { name: 'All Users' })).toBeVisible()
+    })
+
+    it('shows the profile, with the extras only the full record has', async () => {
+      const view = within(await openUser(userEvent.setup()))
+
+      expect(await view.findByText('Profile & Account')).toBeInTheDocument()
+      expect(view.getByText('First2')).toBeInTheDocument()
+      expect(view.getByText('Last2')).toBeInTheDocument()
+      expect(view.getAllByText('user2@polymer.co').length).toBeGreaterThan(0)
+      expect(view.getByText('+44 20 7946 0000')).toBeInTheDocument()
+      expect(view.getAllByText('Office').length).toBeGreaterThan(0)
+      expect(view.getAllByText('Active').length).toBeGreaterThan(0)
+      expect(view.getByText('Email code')).toBeInTheDocument()
+      expect(view.getByText('user-2')).toBeInTheDocument()
+      expect(view.getByText(/20 Oct 2026/)).toBeInTheDocument()
+    })
+
+    it('draws the header from the list row while the details load', async () => {
+      detail.mockImplementation(() => new Promise<never>(() => undefined))
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('First2 Last2')
+
+      await user.click(screen.getByRole('button', { name: 'View First2 Last2' }))
+
+      const view = await screen.findByRole('article', { name: 'User First2 Last2' })
+      expect(within(view).getByRole('heading', { name: 'First2 Last2' })).toBeVisible()
+      expect(within(view).getByText('user2@polymer.co')).toBeVisible()
+      expect(within(view).getByText('Last login')).toBeVisible()
+    })
+
+    it('lists stores by name and the permissions on the Access tab', async () => {
+      const user = userEvent.setup()
+      const view = within(await openUser(user))
+      await view.findByText('Profile & Account')
+
+      await user.click(view.getByRole('tab', { name: 'Access' }))
+
+      expect(await view.findByText('Polymer UK')).toBeInTheDocument()
+      expect(view.getByText('Polymer EU')).toBeInTheDocument()
+      const row = view.getByText('Products').closest('tr') as HTMLElement
+      expect(within(row).getByText('Yes')).toBeInTheDocument()
+      expect(within(row).getByText('No')).toBeInTheDocument()
+      // An area the API reports without `manage` shows a dash, not a guess.
+      const other = view.getByText('Order items').closest('tr') as HTMLElement
+      expect(within(other).getByText('Yes')).toBeInTheDocument()
+      expect(within(other).getByText('—')).toBeInTheDocument()
+    })
+
+    it('says administrators see every store', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('First1 Last1')
+      await user.click(screen.getByRole('button', { name: 'View First1 Last1' }))
+      const view = within(
+        await screen.findByRole('article', { name: 'User First1 Last1' }),
+      )
+      await view.findByText('Profile & Account')
+
+      await user.click(view.getByRole('tab', { name: 'Access' }))
+
+      expect(view.getByText('Administrators can see every store.')).toBeInTheDocument()
+    })
+
+    it('goes back to the list from Back to list and from the All Users tab', async () => {
+      const user = userEvent.setup()
+      const view = await openUser(user)
+
+      await user.click(within(view).getByRole('button', { name: 'Back to list' }))
+      expect(screen.queryByRole('article')).toBeNull()
+      expect(screen.getByRole('table')).toBeVisible()
+      // The tab stays, so the user can come back to it instantly.
+      await user.click(
+        within(strip()).getByRole('button', { name: /^User\s*First2 Last2$/ }),
+      )
+      expect(
+        await screen.findByRole('article', { name: 'User First2 Last2' }),
+      ).toBeVisible()
+      expect(detail).toHaveBeenCalledTimes(1)
+
+      await user.click(within(strip()).getByRole('button', { name: 'All Users' }))
+      expect(screen.queryByRole('article')).toBeNull()
+    })
+
+    it('opens a second user as a second tab, and closes tabs one by one or all at once', async () => {
+      const user = userEvent.setup()
+      await openUser(user)
+      await user.click(within(strip()).getByRole('button', { name: 'All Users' }))
+      await user.click(screen.getByRole('button', { name: 'View First3 Last3' }))
+      await screen.findByRole('article', { name: 'User First3 Last3' })
+      expect(within(strip()).getAllByRole('listitem')).toHaveLength(2)
+
+      // Closing the one on screen moves to its neighbour.
+      await user.click(
+        within(strip()).getByRole('button', { name: 'Close First3 Last3' }),
+      )
+      expect(
+        await screen.findByRole('article', { name: 'User First2 Last2' }),
+      ).toBeVisible()
+
+      await user.click(
+        within(strip()).getByRole('button', { name: 'Close First2 Last2' }),
+      )
+      expect(screen.queryByRole('article')).toBeNull()
+      expect(screen.queryByRole('navigation', { name: 'Open users' })).toBeNull()
+
+      await user.click(screen.getByRole('button', { name: 'View First4 Last4' }))
+      await screen.findByRole('article', { name: 'User First4 Last4' })
+      await user.click(screen.getByRole('button', { name: 'Clear' }))
+      expect(screen.queryByRole('article')).toBeNull()
+      expect(screen.queryByRole('navigation', { name: 'Open users' })).toBeNull()
+    })
+
+    it('opens straight from /users/:id (a reload, a link) and tabs it once it has loaded', async () => {
+      renderPage('/users/user-2')
+
+      expect(
+        await screen.findByRole('article', { name: 'User First2 Last2' }),
+      ).toBeVisible()
+      expect(detail).toHaveBeenCalledWith('user-2')
+      expect(
+        await within(strip()).findByRole('button', { name: /^User\s*First2 Last2$/ }),
+      ).toBeVisible()
+    })
+
+    it('hides the figures while a user is open', async () => {
+      const user = userEvent.setup()
+      await openUser(user)
+
+      expect(
+        screen.getByText('Roles', { selector: 'span' }).closest('.hidden'),
+      ).not.toBeNull()
+    })
+
+    it('reads the details ahead of the click when the pointer reaches View', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('First2 Last2')
+
+      await user.hover(screen.getByRole('button', { name: 'View First2 Last2' }))
+      await waitFor(() => expect(detail).toHaveBeenCalledWith('user-2'))
+
+      await user.click(screen.getByRole('button', { name: 'View First2 Last2' }))
+      await screen.findByRole('article', { name: 'User First2 Last2' })
+      expect(detail).toHaveBeenCalledTimes(1)
+    })
+
+    it("shows the backend's message when the details cannot be loaded, and retries", async () => {
+      let fail = true
+      detail.mockImplementation((id) =>
+        fail
+          ? Promise.reject(
+              new ApiError('You do not have access to Users.', { status: 403 }),
+            )
+          : Promise.resolve(makeDetail(Number(id.slice(5)))),
+      )
+      const user = userEvent.setup()
+      renderPage('/users/user-2')
+
+      expect(await screen.findByText("Couldn't load this user")).toBeInTheDocument()
+      expect(screen.getByText('You do not have access to Users.')).toBeInTheDocument()
+
+      fail = false
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(
+        await screen.findByRole('article', { name: 'User First2 Last2' }),
+      ).toBeVisible()
+    })
+
+    it('keeps the New user form and a user side by side as tabs', async () => {
+      const user = userEvent.setup()
+      await openUser(user)
+      await user.click(within(strip()).getByRole('button', { name: 'All Users' }))
+
+      await user.click(screen.getByRole('button', { name: 'Add user' }))
+      await screen.findByRole('region', { name: 'Add user' })
+
+      expect(within(strip()).getAllByRole('listitem')).toHaveLength(2)
+      await user.click(
+        within(strip()).getByRole('button', { name: /^User\s*First2 Last2$/ }),
+      )
+      expect(
+        await screen.findByRole('article', { name: 'User First2 Last2' }),
+      ).toBeVisible()
+      // The form is only kept (hidden), with what was typed.
+      expect(
+        screen.getByRole('region', { name: 'Add user', hidden: true }).closest('.hidden'),
+      ).not.toBeNull()
+    })
+
+    it('closes the tab of a user that was deleted from the list', async () => {
+      remove.mockResolvedValue({ message: '' })
+      const user = userEvent.setup()
+      await openUser(user)
+      await user.click(within(strip()).getByRole('button', { name: 'All Users' }))
+
+      await user.click(screen.getByRole('button', { name: 'Delete First2 Last2' }))
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Delete',
+        }),
+      )
+
+      await waitFor(() => expect(remove).toHaveBeenCalledWith('user-2'))
+      await waitFor(() =>
+        expect(screen.queryByRole('navigation', { name: 'Open users' })).toBeNull(),
+      )
     })
   })
 })
