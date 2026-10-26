@@ -1,3 +1,4 @@
+import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useState } from 'react'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import type { ActivityItem } from '../../../lib/api/endpoints.ts'
@@ -51,16 +52,18 @@ export function ActivityPage() {
           }`}
         />
 
-        <ActivityList
-          items={activity.items}
-          isPending={activity.isPending}
-          error={activity.error}
-          hasFilters={activity.hasFilters}
-          isStale={activity.isShowingPrevious}
-          onOpen={setSelected}
-          onRetry={activity.retry}
-          onClearFilters={activity.resetFilters}
-        />
+        <HighlightQuery query={filters.search}>
+          <ActivityList
+            items={activity.items}
+            isPending={activity.isPending}
+            error={activity.error}
+            hasFilters={activity.hasFilters}
+            isStale={activity.isShowingPrevious}
+            onOpen={setSelected}
+            onRetry={activity.retry}
+            onClearFilters={activity.resetFilters}
+          />
+        </HighlightQuery>
 
         {data && data.total > 0 && (
           <PaginationFooter

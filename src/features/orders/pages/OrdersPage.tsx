@@ -1,3 +1,4 @@
+import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { OrderDetailsView } from '../components/OrderDetailsView.tsx'
@@ -111,28 +112,30 @@ export function OrdersPage() {
             }`}
           />
 
-          <OrdersList
-            items={orders.items}
-            isPending={orders.isPending}
-            error={orders.error}
-            hasFilters={orders.hasFilters}
-            isStale={orders.isShowingPrevious}
-            onOpen={(order) => {
-              const customer = orderCustomer(order)
-              tabs.openTab({
-                ref: orderRef(order),
-                shop: order.shop?.key,
-                label: orderLabel(order),
-                title: customer ? customer.name : null,
-              })
-              navigate(orderPath(order))
-            }}
-            onPrefetch={(order) =>
-              orders.prefetchDetails(orderRef(order), order.shop?.key)
-            }
-            onRetry={orders.retry}
-            onClearFilters={orders.resetFilters}
-          />
+          <HighlightQuery query={filters.search}>
+            <OrdersList
+              items={orders.items}
+              isPending={orders.isPending}
+              error={orders.error}
+              hasFilters={orders.hasFilters}
+              isStale={orders.isShowingPrevious}
+              onOpen={(order) => {
+                const customer = orderCustomer(order)
+                tabs.openTab({
+                  ref: orderRef(order),
+                  shop: order.shop?.key,
+                  label: orderLabel(order),
+                  title: customer ? customer.name : null,
+                })
+                navigate(orderPath(order))
+              }}
+              onPrefetch={(order) =>
+                orders.prefetchDetails(orderRef(order), order.shop?.key)
+              }
+              onRetry={orders.retry}
+              onClearFilters={orders.resetFilters}
+            />
+          </HighlightQuery>
 
           {data && data.total > 0 && (
             <PaginationFooter

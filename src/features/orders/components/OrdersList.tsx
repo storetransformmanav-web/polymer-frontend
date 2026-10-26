@@ -1,3 +1,4 @@
+import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
@@ -156,7 +157,7 @@ export function OrdersList({
                 >
                   <span className="flex w-full items-start justify-between gap-3">
                     <span className="text-[0.88rem] font-semibold">
-                      {orderLabel(order)}
+                      <Highlight text={orderLabel(order)} />
                     </span>
                     <span className="text-[0.88rem] font-semibold">
                       {formatPrice(order.total_price, order.currency)}
@@ -224,13 +225,13 @@ export function OrdersList({
                   >
                     <td className={TD}>
                       <span className="block truncate font-semibold">
-                        {orderLabel(order)}
+                        <Highlight text={orderLabel(order)} />
                       </span>
                     </td>
                     <td className={TD}>
                       {name ? (
                         <span className="block truncate" title={name}>
-                          {name}
+                          <Highlight text={name} />
                         </span>
                       ) : (
                         <span className="text-text-muted">—</span>
@@ -239,7 +240,7 @@ export function OrdersList({
                     <td className={TD}>
                       {email ? (
                         <span className="block truncate" title={email}>
-                          {email}
+                          <Highlight text={email} />
                         </span>
                       ) : (
                         <span className="text-text-muted">—</span>

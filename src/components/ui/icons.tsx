@@ -727,3 +727,13 @@ export function CsvFileIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function InfoIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M10 9v4.5" />
+      <path d="M10 6.5h.01" />
+    </svg>
+  )
+}

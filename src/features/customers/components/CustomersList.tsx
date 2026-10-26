@@ -1,3 +1,4 @@
+import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
@@ -187,10 +188,10 @@ export function CustomersList({
                     <Avatar name={name} />
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate text-[0.88rem] font-semibold">
-                        {name}
+                        <Highlight text={name} />
                       </span>
                       <span className="text-text-muted truncate text-[0.78rem]">
-                        {customer.email ?? '—'}
+                        <Highlight text={customer.email ?? '—'} />
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.82rem]">
                         <Badge tone={roleTone(customer.role)}>
@@ -265,13 +266,13 @@ export function CustomersList({
                         <Avatar name={name} />
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate font-semibold" title={name}>
-                            {name}
+                            <Highlight text={name} />
                           </span>
                           <span
                             className="text-text-muted truncate text-[0.78rem]"
                             title={customer.email ?? ''}
                           >
-                            {customer.email ?? '—'}
+                            <Highlight text={customer.email ?? '—'} />
                           </span>
                         </span>
                       </span>

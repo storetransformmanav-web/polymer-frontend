@@ -1,3 +1,4 @@
+import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
@@ -9,8 +10,9 @@ import {
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
-import type { ProductListItem } from '../../../lib/api/endpoints.ts'
+import type { ProductListItem, ProductSort } from '../../../lib/api/endpoints.ts'
 import {
   formatPriceRange,
   shopifyAdminProductUrl,
@@ -58,6 +60,11 @@ interface ProductsListProps {
   onToggleSelected: (id: string) => void
   /** Ticks (or unticks) every row on this page. */
   onTogglePage: (checked: boolean) => void
+  /** The column the list is sorted by, and the direction (the header buttons show them). */
+  sort: ProductSort
+  order: 'asc' | 'desc'
+  /** A sortable header was clicked: sort by that column (or flip its direction). */
+  onSort: (sort: ProductSort) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -127,6 +134,9 @@ export function ProductsList({
   selected,
   onToggleSelected,
   onTogglePage,
+  sort,
+  order,
+  onSort,
   onRetry,
   onClearFilters,
 }: ProductsListProps) {
@@ -207,7 +217,7 @@ export function ProductsList({
                   <ProductImage src={product.image_url} alt="" />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="line-clamp-2 text-[0.88rem] font-semibold">
-                      {product.title}
+                      <Highlight text={product.title} />
                     </span>
                     <span className="text-text-muted truncate text-[0.78rem]">
                       {[product.vendor, product.product_type]
@@ -252,11 +262,38 @@ export function ProductsList({
               />
             </th>
             <th className={`${TH} w-16`}>Image</th>
-            <th className={`${TH} w-[37%]`}>Product</th>
+            <th className={`${TH} w-[37%]`} aria-sort={ariaSort(sort === 'title', order)}>
+              <SortButton
+                label="Product"
+                active={sort === 'title'}
+                order={order}
+                onClick={() => onSort('title')}
+              />
+            </th>
             <th className={`${TH_CENTER} w-[9%]`}>Variants</th>
             <th className={`${TH_CENTER} w-[10%]`}>Status</th>
-            <th className={`${TH_RIGHT} w-[11%]`}>Inventory</th>
-            <th className={`${TH_RIGHT} w-[13%]`}>Price</th>
+            <th
+              className={`${TH_RIGHT} w-[11%]`}
+              aria-sort={ariaSort(sort === 'inventory', order)}
+            >
+              <SortButton
+                label="Inventory"
+                active={sort === 'inventory'}
+                order={order}
+                onClick={() => onSort('inventory')}
+              />
+            </th>
+            <th
+              className={`${TH_RIGHT} w-[13%]`}
+              aria-sort={ariaSort(sort === 'price', order)}
+            >
+              <SortButton
+                label="Price"
+                active={sort === 'price'}
+                order={order}
+                onClick={() => onSort('price')}
+              />
+            </th>
             <th className={`${TH_CENTER} w-[8%]`}>Actions</th>
           </tr>
         </thead>
@@ -314,7 +351,7 @@ export function ProductsList({
                         onFocus={() => onPrefetch(product.id)}
                         className="hover:text-accent focus-visible:outline-accent block h-5 min-w-0 cursor-pointer truncate rounded-sm border-none bg-transparent p-0 text-left leading-5 font-medium underline-offset-2 transition-colors hover:underline focus-visible:outline-2"
                       >
-                        {product.title}
+                        <Highlight text={product.title} />
                       </button>
                       {/* Always visible, right beside the name: copy, then open in Shopify. */}
                       <span className="flex h-5 shrink-0 items-center gap-1">

@@ -1,3 +1,4 @@
+import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -443,25 +444,37 @@ export function ProductsPage() {
             }`}
           />
 
-          <ProductsList
-            items={products.items}
-            isPending={products.isPending}
-            error={products.error}
-            hasFilters={products.hasFilters}
-            isStale={products.isShowingPrevious}
-            onOpen={openProduct}
-            onQuickView={setQuickView}
-            onStatusChange={askStatusChange}
-            statusPending={status.pending}
-            statusErrors={status.errors}
-            onDelete={askDelete}
-            onPrefetch={products.prefetchDetails}
-            selected={selected}
-            onToggleSelected={toggleSelected}
-            onTogglePage={togglePage}
-            onRetry={products.retry}
-            onClearFilters={products.resetFilters}
-          />
+          <HighlightQuery query={filters.search}>
+            <ProductsList
+              items={products.items}
+              isPending={products.isPending}
+              error={products.error}
+              hasFilters={products.hasFilters}
+              isStale={products.isShowingPrevious}
+              onOpen={openProduct}
+              onQuickView={setQuickView}
+              onStatusChange={askStatusChange}
+              statusPending={status.pending}
+              statusErrors={status.errors}
+              onDelete={askDelete}
+              onPrefetch={products.prefetchDetails}
+              selected={selected}
+              onToggleSelected={toggleSelected}
+              onTogglePage={togglePage}
+              sort={filters.sort}
+              order={filters.order}
+              // A new column starts ascending; the same column flips direction.
+              onSort={(sort) =>
+                products.setFilters(
+                  sort === filters.sort
+                    ? { order: filters.order === 'asc' ? 'desc' : 'asc' }
+                    : { sort, order: 'asc' },
+                )
+              }
+              onRetry={products.retry}
+              onClearFilters={products.resetFilters}
+            />
+          </HighlightQuery>
 
           {data && data.total > 0 && (
             <PaginationFooter

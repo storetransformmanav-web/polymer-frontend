@@ -1,3 +1,4 @@
+import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
@@ -198,7 +199,7 @@ export function UsersList({
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex items-start justify-between gap-2">
                       <span className="truncate text-[0.88rem] font-semibold">
-                        {name}
+                        <Highlight text={name} />
                       </span>
                       <button
                         type="button"
@@ -211,7 +212,7 @@ export function UsersList({
                       </button>
                     </span>
                     <span className="text-text-muted truncate text-[0.78rem]">
-                      {user.email}
+                      <Highlight text={user.email} />
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.82rem]">
                       <Badge tone={roleTone(user.role)}>{roleLabel(user)}</Badge>
@@ -281,13 +282,13 @@ export function UsersList({
                         <Avatar name={name} />
                         <span className="flex min-w-0 flex-col">
                           <span className="max-w-56 truncate font-semibold" title={name}>
-                            {name}
+                            <Highlight text={name} />
                           </span>
                           <span
                             className="text-text-muted max-w-56 truncate text-[0.78rem]"
                             title={user.email}
                           >
-                            {user.email}
+                            <Highlight text={user.email} />
                           </span>
                         </span>
                       </span>

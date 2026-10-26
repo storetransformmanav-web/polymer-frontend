@@ -23,6 +23,9 @@
   --color-accent-tint: #eef7ef;
   /* The header row of data tables: a clearly darker sage than the row-hover tint. */
   --color-table-head: #d3e5d7;
+  /* What was searched for, marked in the rows. */
+  --color-highlight: #fde047;
+  --color-highlight-text: #1a1a1a;
   --color-accent-contrast: #ffffff;
   --color-secondary: #f2dec4;
   --color-danger: #dc2626;
@@ -70,6 +73,8 @@
     --color-accent-hover: #a9c9b2;
     --color-accent-tint: #202a23;
     --color-table-head: #2f4034;
+    --color-highlight: #a16207;
+    --color-highlight-text: #ffffff;
     --color-accent-contrast: #14151a;
     --color-secondary: #4a4030;
     --color-danger: #f87171;
@@ -92,6 +97,8 @@
   --color-accent-hover: #a9c9b2;
   --color-accent-tint: #202a23;
   --color-table-head: #2f4034;
+  --color-highlight: #a16207;
+  --color-highlight-text: #ffffff;
   --color-accent-contrast: #14151a;
   --color-secondary: #4a4030;
   --color-danger: #f87171;

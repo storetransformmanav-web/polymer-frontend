@@ -1,3 +1,4 @@
+import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
@@ -157,7 +158,7 @@ export function ActivityList({
                     <Avatar name={name} />
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="line-clamp-2 text-[0.88rem] font-semibold">
-                        {item.summary || actionLabel(item.action)}
+                        <Highlight text={item.summary || actionLabel(item.action)} />
                       </span>
                       <span className="text-text-muted truncate text-[0.78rem]">
                         {name} · {formatTimestamp(item.time)}
@@ -249,14 +250,14 @@ export function ActivityList({
                           className="max-w-72 truncate 2xl:max-w-md"
                           title={item.summary}
                         >
-                          {item.summary || '—'}
+                          <Highlight text={item.summary || '—'} />
                         </span>
                         {item.path && (
                           <span
                             className="text-text-muted max-w-72 truncate font-mono text-[0.74rem] 2xl:max-w-md"
                             title={item.path}
                           >
-                            {item.path}
+                            <Highlight text={item.path} />
                           </span>
                         )}
                       </span>

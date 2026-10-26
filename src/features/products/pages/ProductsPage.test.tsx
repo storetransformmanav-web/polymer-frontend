@@ -243,6 +243,62 @@ describe('ProductsPage list', () => {
     expect(within(row3).getAllByRole('cell')[5]).toHaveTextContent('Out of stock')
   })
 
+  it('sorts from the Product, Inventory and Price headers: ascending first, then flipping, from page 1', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const header = (name: string) =>
+      screen.getByRole('columnheader', { name: new RegExp(`^${name}`, 'i') })
+    // Only these three are sortable; none is sorted to begin with.
+    for (const name of ['Product', 'Inventory', 'Price']) {
+      expect(within(header(name)).getByRole('button')).toBeInTheDocument()
+      expect(header(name)).not.toHaveAttribute('aria-sort')
+    }
+    expect(
+      within(screen.getByRole('columnheader', { name: 'Status' })).queryByRole('button'),
+    ).toBeNull()
+
+    await user.click(within(header('Price')).getByRole('button'))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'price', order: 'asc', page: 1 }),
+      ),
+    )
+    expect(header('Price')).toHaveAttribute('aria-sort', 'ascending')
+
+    // The same column again flips the direction.
+    await user.click(within(header('Price')).getByRole('button'))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'price', order: 'desc', page: 1 }),
+      ),
+    )
+    expect(header('Price')).toHaveAttribute('aria-sort', 'descending')
+
+    // Another column starts ascending, and only it is marked.
+    await user.click(within(header('Product')).getByRole('button'))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'title', order: 'asc' }),
+      ),
+    )
+    expect(header('Product')).toHaveAttribute('aria-sort', 'ascending')
+    expect(header('Price')).not.toHaveAttribute('aria-sort')
+
+    // The Sort by / Order dropdowns in Filters follow along.
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.getByLabelText('Sort by')).toHaveValue('title')
+    expect(screen.getByLabelText('Order')).toHaveValue('asc')
+
+    await user.click(within(header('Inventory')).getByRole('button'))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'inventory', order: 'asc' }),
+      ),
+    )
+  })
+
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -309,6 +365,26 @@ describe('ProductsPage list', () => {
     await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
     expect(await screen.findByText('Product 1')).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search products' })).toHaveValue('')
+  })
+
+  it('marks what was searched for in yellow in the rows, and nothing without a search', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+    const table = screen.getByRole('table')
+    expect(table.querySelector('mark')).toBeNull()
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search products' }), 'Product')
+    await waitFor(() => expect(table.querySelector('mark')).not.toBeNull())
+
+    const first = within(table).getByRole('button', { name: 'Product 1' })
+    expect(first.querySelector('mark')).toHaveTextContent('Product')
+    expect(first.querySelector('mark')?.className).toContain('bg-highlight')
+    // The whole name is still there.
+    expect(first).toHaveTextContent('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await waitFor(() => expect(table.querySelector('mark')).toBeNull())
   })
 
   it('shows the API’s four stock figures in cards on top of the list', async () => {
@@ -1050,6 +1126,7 @@ describe('ProductsPage details', () => {
       height: 600,
       position: n,
       media_type: 'IMAGE',
+      mime_type: 'image/jpeg',
     }))
     // The lightbox loads on demand, so the first open needs a little longer.
     const LOAD = { timeout: 8000 }
@@ -1102,7 +1179,7 @@ describe('ProductsPage details', () => {
       await waitFor(() => expect(currentSlide()).toHaveAttribute('src', IMAGES[0].url))
     }, 20000)
 
-    it('shows the image’s alt text beside it, and follows the picture when paging', async () => {
+    it('shows the image’s information beside it — name, alt text, type and size, id — and follows the picture when paging', async () => {
       const user = userEvent.setup()
       details.mockImplementation((id) =>
         Promise.resolve({
@@ -1116,14 +1193,27 @@ describe('ProductsPage details', () => {
 
       await user.click(within(gallery).getByRole('button', { name: 'Open image 1 of 3' }))
       await closeButton()
-      const panel = () => screen.getByRole('complementary', { name: 'Image alt text' })
-      expect(within(panel()).getByText('Photo 1')).toBeInTheDocument()
+      const panel = () => screen.getByRole('complementary', { name: 'Image information' })
+      expect(
+        within(panel()).getByRole('heading', { name: 'Information' }),
+      ).toBeInTheDocument()
+      // The picture's own record: file name (from its address), alt text, type and
+      // size in pixels, and its id.
+      const first = within(panel())
+      expect(first.getByText('Name')).toBeInTheDocument()
+      expect(first.getByText('p1.jpg')).toBeInTheDocument()
+      expect(first.getByText('Photo 1')).toBeInTheDocument()
+      expect(first.getByText('JPG · 800 × 600 px')).toBeInTheDocument()
+      expect(first.getByText('img-1')).toBeInTheDocument()
+      expect(first.getByRole('button', { name: 'Copy image ID' })).toBeInTheDocument()
 
-      // The second picture has no alt text.
+      // The second picture: its own details, and it has no alt text.
       await user.click(screen.getByRole('button', { name: 'Next' }))
       await waitFor(() =>
         expect(within(panel()).getByText('No alt text')).toBeInTheDocument(),
       )
+      expect(within(panel()).getByText('p2.jpg')).toBeInTheDocument()
+      expect(within(panel()).getByText('img-2')).toBeInTheDocument()
     }, 20000)
 
     it('opens the lightbox from an image on the Media tab', async () => {

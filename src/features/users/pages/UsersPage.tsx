@@ -1,3 +1,4 @@
+import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
@@ -193,20 +194,22 @@ export function UsersPage() {
             }`}
           />
 
-          <UsersList
-            items={users.items}
-            isPending={users.isPending}
-            error={users.error}
-            hasFilters={users.hasFilters}
-            isStale={users.isShowingPrevious}
-            shopNames={shopNames}
-            onDelete={(user) => {
-              setNotice(null)
-              setDeleting({ id: user.id, name: userName(user), email: user.email })
-            }}
-            onRetry={users.retry}
-            onClearFilters={users.resetFilters}
-          />
+          <HighlightQuery query={filters.search}>
+            <UsersList
+              items={users.items}
+              isPending={users.isPending}
+              error={users.error}
+              hasFilters={users.hasFilters}
+              isStale={users.isShowingPrevious}
+              shopNames={shopNames}
+              onDelete={(user) => {
+                setNotice(null)
+                setDeleting({ id: user.id, name: userName(user), email: user.email })
+              }}
+              onRetry={users.retry}
+              onClearFilters={users.resetFilters}
+            />
+          </HighlightQuery>
 
           {data && data.total > 0 && (
             <PaginationFooter

@@ -851,6 +851,8 @@ const productImageSchema = z.object({
   height: z.number().nullish(),
   position: z.number().nullish(),
   media_type: z.string().nullish(),
+  // e.g. "image/jpeg" — the lightbox shows it as the file type.
+  mime_type: z.string().nullish(),
 })
 
 const productDetailSchema = z.object({

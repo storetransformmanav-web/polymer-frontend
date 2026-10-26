@@ -1,3 +1,4 @@
+import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -143,26 +144,28 @@ export function CustomersPage() {
             }`}
           />
 
-          <CustomersList
-            items={customers.items}
-            isPending={customers.isPending}
-            error={customers.error}
-            hasFilters={customers.hasFilters}
-            isStale={customers.isShowingPrevious}
-            onOpen={openCustomer}
-            onPrefetch={customers.prefetchDetails}
-            onDelete={(customer) => {
-              setNotice(null)
-              setDeleting({
-                id: customer.id,
-                name: customerName(customer),
-                shop: customer.shop?.key ?? null,
-                ordersCount: customer.orders_count,
-              })
-            }}
-            onRetry={customers.retry}
-            onClearFilters={customers.resetFilters}
-          />
+          <HighlightQuery query={filters.search}>
+            <CustomersList
+              items={customers.items}
+              isPending={customers.isPending}
+              error={customers.error}
+              hasFilters={customers.hasFilters}
+              isStale={customers.isShowingPrevious}
+              onOpen={openCustomer}
+              onPrefetch={customers.prefetchDetails}
+              onDelete={(customer) => {
+                setNotice(null)
+                setDeleting({
+                  id: customer.id,
+                  name: customerName(customer),
+                  shop: customer.shop?.key ?? null,
+                  ordersCount: customer.orders_count,
+                })
+              }}
+              onRetry={customers.retry}
+              onClearFilters={customers.resetFilters}
+            />
+          </HighlightQuery>
 
           {data && data.total > 0 && (
             <PaginationFooter
