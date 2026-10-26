@@ -19,7 +19,10 @@ import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
-import { ProductsBulkBar } from '../components/ProductsBulkBar.tsx'
+import {
+  ProductsBulkActions,
+  ProductsSelectionNote,
+} from '../components/ProductsBulkBar.tsx'
 import { ProductsExport } from '../components/ProductsExport.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ProductsKpis } from '../components/ProductsKpis.tsx'
@@ -109,6 +112,12 @@ export function ProductsPage() {
       }
       return next
     })
+  }
+
+  // Clear All: the filters back to their defaults, and any ticked rows unticked.
+  function clearAll() {
+    products.resetFilters()
+    setSelected(new Set())
   }
 
   function openBulk(items: ProductListItem[]) {
@@ -411,28 +420,34 @@ export function ProductsPage() {
           facets={products.facets}
           total={data?.total ?? null}
           hasFilters={products.hasFilters}
+          hasSelection={selected.size > 0}
           onChange={products.setFilters}
-          onReset={products.resetFilters}
+          onReset={clearAll}
+          actions={
+            !products.isPending && !products.error ? (
+              <ProductsBulkActions
+                onAdd={openCreate}
+                onAddIntent={preloadRichTextEditor}
+                pageCount={products.items.length}
+                selectedCount={selectedItems.length}
+                onEditPage={() => openBulk(products.items)}
+                onEditSelected={() => openBulk(selectedItems)}
+                onPrepare={() =>
+                  prefetchMany(
+                    (selectedItems.length > 0 ? selectedItems : products.items).map(
+                      (item) => item.id,
+                    ),
+                  )
+                }
+              />
+            ) : null
+          }
         />
 
-        {!products.isPending && !products.error && (
-          <ProductsBulkBar
-            onAdd={openCreate}
-            onAddIntent={preloadRichTextEditor}
-            pageCount={products.items.length}
-            selectedCount={selectedItems.length}
-            onEditPage={() => openBulk(products.items)}
-            onEditSelected={() => openBulk(selectedItems)}
-            onClearSelection={() => setSelected(new Set())}
-            onPrepare={() =>
-              prefetchMany(
-                (selectedItems.length > 0 ? selectedItems : products.items).map(
-                  (item) => item.id,
-                ),
-              )
-            }
-          />
-        )}
+        <ProductsSelectionNote
+          selectedCount={selectedItems.length}
+          onClearSelection={() => setSelected(new Set())}
+        />
 
         <section
           aria-label="Products"

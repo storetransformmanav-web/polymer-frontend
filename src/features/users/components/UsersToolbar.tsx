@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   ChevronDownIcon,
   ListChecksIcon,
@@ -28,10 +28,12 @@ interface UsersToolbarProps {
   hasFilters: boolean
   onChange: (changes: Partial<UserFilters>) => void
   onReset: () => void
+  /** Buttons at the right-hand end of the search row (the page's Add user). */
+  actions?: ReactNode
 }
 
 /**
- * Search, the Filters button and Clear All in one row, and the collapsible filter grid
+ * Search, the Filters button, Clear All and the page's own action (Add user) in one row, and the collapsible filter grid
  * under it: **Status** (with a count on every choice) and **Role**. Typing in the search
  * box is instant locally and sent to the API once the user pauses (see
  * useDebouncedField); the dropdowns apply immediately.
@@ -43,6 +45,7 @@ export function UsersToolbar({
   hasFilters,
   onChange,
   onReset,
+  actions,
 }: UsersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -128,6 +131,7 @@ export function UsersToolbar({
             <XIcon width={14} height={14} />
             Clear All
           </button>
+          {actions}
         </div>
       </div>
 

@@ -18,6 +18,8 @@ interface PopoverButtonProps {
   showLabel?: boolean
   /** Show the little arrow next to the label/icon (default). Off for toolbar buttons that open a form. */
   chevron?: boolean
+  /** Button variant only: a square, icon-only trigger (the label stays as its accessible name and tooltip). */
+  iconOnly?: boolean
   /** Is the thing this opens in use (e.g. the text has a colour)? Styled as pressed. */
   active?: boolean
   disabled?: boolean
@@ -47,6 +49,7 @@ export function PopoverButton({
   variant = 'button',
   showLabel = false,
   chevron = true,
+  iconOnly = false,
   active = false,
   disabled = false,
   onOpen,
@@ -92,8 +95,8 @@ export function PopoverButton({
         onMouseDown={
           variant === 'toolbar' ? (event) => event.preventDefault() : undefined
         }
-        title={variant === 'toolbar' ? label : undefined}
-        aria-label={variant === 'toolbar' && !showLabel ? label : undefined}
+        title={variant === 'toolbar' || iconOnly ? label : undefined}
+        aria-label={(variant === 'toolbar' && !showLabel) || iconOnly ? label : undefined}
         className={
           variant === 'toolbar'
             ? `inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border-none px-1.5 text-[0.85rem] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 ${
@@ -101,11 +104,13 @@ export function PopoverButton({
                   ? 'bg-accent-tint text-accent'
                   : 'text-text-muted hover:bg-surface hover:text-text bg-transparent'
               }`
-            : `inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`
+            : iconOnly
+              ? `inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`
+              : `inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 ${TONES[tone]}`
         }
       >
-        {Icon && <Icon width={16} height={16} />}
-        {variant === 'toolbar' && !showLabel ? null : label}
+        {Icon && <Icon width={iconOnly ? 18 : 16} height={iconOnly ? 18 : 16} />}
+        {(variant === 'toolbar' && !showLabel) || iconOnly ? null : label}
         {chevron && (
           <ChevronDownIcon
             width={variant === 'toolbar' ? 12 : 14}

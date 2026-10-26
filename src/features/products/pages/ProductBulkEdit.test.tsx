@@ -202,6 +202,35 @@ describe('editing products in bulk', () => {
     expect(screen.queryByText(/selected$/)).not.toBeInTheDocument()
   })
 
+  it('puts Filters, then Clear All, then Add product, then the Edit icon, in one row', async () => {
+    await openList()
+    const order = ['Filters', 'Clear All', 'Add product', 'Edit in bulk'].map((name) =>
+      screen.getByRole('button', { name: new RegExp(`^${name}`) }),
+    )
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    }
+    // The Edit icon is icon-only.
+    expect(order[3]).toHaveTextContent('')
+  })
+
+  it('Clear All also unticks the ticked rows', async () => {
+    const user = await openList()
+    const clearAll = screen.getByRole('button', { name: 'Clear All' })
+    expect(clearAll).toBeDisabled()
+
+    await user.click(screen.getByLabelText('Select Hippo Bag'))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    expect(clearAll).toBeEnabled()
+
+    await user.click(clearAll)
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Select Hippo Bag')).not.toBeChecked()
+    expect(clearAll).toBeDisabled()
+  })
+
   it('offers "Edit this page" and "Edit selected" under one menu', async () => {
     const user = await openList()
     await user.click(screen.getByRole('button', { name: 'Edit in bulk' }))

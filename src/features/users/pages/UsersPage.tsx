@@ -167,18 +167,18 @@ export function UsersPage() {
           hasFilters={users.hasFilters}
           onChange={users.setFilters}
           onReset={users.resetFilters}
+          // Add user sits in the search row, to the right of Filters and Clear All.
+          actions={
+            <button
+              type="button"
+              onClick={openForm}
+              className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors"
+            >
+              <PlusIcon width={16} height={16} />
+              Add user
+            </button>
+          }
         />
-
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={openForm}
-            className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors"
-          >
-            <PlusIcon width={16} height={16} />
-            Add user
-          </button>
-        </div>
 
         <section
           aria-label="Users"

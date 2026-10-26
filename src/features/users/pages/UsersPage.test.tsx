@@ -496,6 +496,25 @@ describe('UsersPage', () => {
       return formOf()
     }
 
+    it('puts the Add user button in the search row, to the right of Filters and Clear All', async () => {
+      renderPage()
+      await screen.findByText('First2 Last2')
+
+      const add = screen.getByRole('button', { name: 'Add user' })
+      const filters = screen.getByRole('button', { name: 'Filters' })
+      const clear = screen.getByRole('button', { name: 'Clear All' })
+      const section = screen.getByRole('region', { name: 'User filters' })
+      // In the same card and the same row, after both of them.
+      expect(section).toContainElement(add)
+      expect(add.parentElement).toBe(filters.parentElement)
+      expect(
+        filters.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(
+        clear.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    })
+
     it('opens in place of the list as a "New user" tab, not in a slide-over', async () => {
       const user = userEvent.setup()
       const form = await openForm(user)

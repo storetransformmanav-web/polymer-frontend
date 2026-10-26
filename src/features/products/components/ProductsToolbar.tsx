@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { ProductFilters, ProductsFacets } from '../../../app/store/productsSlice.ts'
 import {
   ArrowUpDownIcon,
@@ -58,12 +58,18 @@ interface ProductsToolbarProps {
   facets: ProductsFacets
   total: number | null
   hasFilters: boolean
+  /** Rows are ticked: Clear All also has something to clear. */
+  hasSelection?: boolean
+  /** Buttons placed between Filters and Clear All (Add product, the Edit icon). */
+  actions?: ReactNode
   onChange: (changes: Partial<ProductFilters>) => void
+  /** Clear All: the page clears its filters and any ticked rows. */
   onReset: () => void
 }
 
 /**
- * Search, the Filters button and Clear All in one row, and the collapsible filter grid
+ * Search, the Filters button, the page's actions (Add product, Edit) and Clear All in
+ * one row, and the collapsible filter grid
  * under it (its first field is the status, with a count on every choice). Typing in
  * the search/price boxes is instant locally and sent to the API once the
  * user pauses (see useDebouncedField); selects apply immediately.
@@ -73,6 +79,8 @@ export function ProductsToolbar({
   facets,
   total,
   hasFilters,
+  hasSelection = false,
+  actions,
   onChange,
   onReset,
 }: ProductsToolbarProps) {
@@ -148,12 +156,13 @@ export function ProductsToolbar({
           <button
             type="button"
             onClick={onReset}
-            disabled={!hasFilters}
+            disabled={!hasFilters && !hasSelection}
             className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
           >
             <XIcon width={14} height={14} />
             Clear All
           </button>
+          {actions}
         </div>
       </div>
 
