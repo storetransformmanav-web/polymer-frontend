@@ -21,7 +21,7 @@ import {
   type VariantDraft,
 } from '../utils/editDraft.ts'
 import { statusLabel } from '../utils/format.ts'
-import { ConfirmCancelDialog } from './ConfirmCancelDialog.tsx'
+import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { ConfirmUpdateDialog } from './ConfirmUpdateDialog.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import { ProductImage } from './ProductImage.tsx'

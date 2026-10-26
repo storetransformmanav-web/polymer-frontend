@@ -1,4 +1,4 @@
-import { Dialog } from '../../../components/ui/Dialog.tsx'
+import { Dialog } from './Dialog.tsx'
 
 const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'

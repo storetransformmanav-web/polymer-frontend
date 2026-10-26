@@ -40,7 +40,8 @@ const router = createBrowserRouter([
           // `*` lets CustomersPage also serve /customers/:id (the details page).
           { path: 'customers/*', element: <CustomersPage /> },
           { path: 'inventory', element: <InventoryPage /> },
-          { path: 'users', element: <UsersPage /> },
+          // `*` lets UsersPage also serve /users/new (the Add user form).
+          { path: 'users/*', element: <UsersPage /> },
           { path: 'activity', element: <ActivityPage /> },
         ],
       },

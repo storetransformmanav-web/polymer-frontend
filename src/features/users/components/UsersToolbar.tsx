@@ -1,18 +1,25 @@
-import { Button } from '../../../components/ui/Button.tsx'
-import { FilterIcon, PlusIcon, SearchIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { useState } from 'react'
+import {
+  ChevronDownIcon,
+  ListChecksIcon,
+  SearchIcon,
+  SlidersIcon,
+  UserCogIcon,
+  XIcon,
+} from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import type { Role } from '../../../lib/api/endpoints.ts'
 import { useUserStatusCounts } from '../hooks/useUserStatusCounts.ts'
 import type { UserFilters } from '../hooks/useUsers.ts'
 
-const STATUS_TABS: { value: UserFilters['status']; label: string }[] = [
+const STATUS_CHOICES: { value: UserFilters['status']; label: string }[] = [
   { value: '', label: 'All Users' },
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
 ]
 
-const STATUS_VALUES = STATUS_TABS.map((tab) => tab.value)
+const STATUS_VALUES = STATUS_CHOICES.map((choice) => choice.value)
 
 interface UsersToolbarProps {
   filters: UserFilters
@@ -21,13 +28,13 @@ interface UsersToolbarProps {
   hasFilters: boolean
   onChange: (changes: Partial<UserFilters>) => void
   onReset: () => void
-  onAdd: () => void
 }
 
 /**
- * Search, role dropdown, status tabs and the "Add user" button. Typing in the
- * search box is instant locally and sent to the API once the user pauses
- * (see useDebouncedField); the dropdown and tabs apply immediately.
+ * Search, the Filters button and Clear All in one row, and the collapsible filter grid
+ * under it: **Status** (with a count on every choice) and **Role**. Typing in the search
+ * box is instant locally and sent to the API once the user pauses (see
+ * useDebouncedField); the dropdowns apply immediately.
  */
 export function UsersToolbar({
   filters,
@@ -36,12 +43,27 @@ export function UsersToolbar({
   hasFilters,
   onChange,
   onReset,
-  onAdd,
 }: UsersToolbarProps) {
-  const counts = useUserStatusCounts(filters, STATUS_VALUES)
+  // Collapsed by default on every screen size; the Filters button reveals the grid.
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // The counts are only shown in the status dropdown, so they are requested once the grid is open.
+  const counts = useUserStatusCounts(filters, STATUS_VALUES, filtersOpen)
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
   )
+
+  // The status choices, each with its count ("Active (48)"). The open one can fall back to
+  // the list's own total while its count loads.
+  const statusOptions: SelectOption[] = STATUS_CHOICES.map((choice) => {
+    const count = counts[choice.value] ?? (filters.status === choice.value ? total : null)
+    return {
+      value: choice.value,
+      label:
+        count === null
+          ? choice.label
+          : `${choice.label} (${count.toLocaleString('en-GB')})`,
+    }
+  })
 
   // "All roles" plus every role the backend knows; the selected one is always listed.
   const roleOptions: SelectOption[] = [
@@ -81,22 +103,22 @@ export function UsersToolbar({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <FilterIcon
-            width={16}
-            height={16}
-            className="text-text-muted hidden sm:block"
-          />
-          <div className="min-w-0 flex-1 lg:w-64 lg:flex-none">
-            <SelectField
-              inline
-              id="filter-role"
-              label="Role"
-              value={filters.role}
-              options={roleOptions}
-              onChange={(role) => onChange({ role })}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="user-filter-grid"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="border-border bg-bg text-text hover:border-accent flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors"
+          >
+            <SlidersIcon width={16} height={16} />
+            Filters
+            <ChevronDownIcon
+              width={14}
+              height={14}
+              className={`transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`}
             />
-          </div>
+          </button>
           <button
             type="button"
             onClick={onReset}
@@ -109,53 +131,35 @@ export function UsersToolbar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="group"
-          aria-label="Filter by status"
-          className="border-border bg-surface flex max-w-full min-w-0 [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl border p-1 [&::-webkit-scrollbar]:hidden"
-        >
-          {STATUS_TABS.map((tab) => {
-            const active = filters.status === tab.value
-            // The open tab can fall back to the list's own total while its count loads.
-            const count = counts[tab.value] ?? (active ? total : null)
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onChange({ status: tab.value })}
-                className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap transition-colors ${
-                  active
-                    ? 'bg-bg text-text shadow-sm'
-                    : 'text-text-muted hover:text-text bg-transparent'
-                }`}
-              >
-                {tab.label}
-                {count !== null && (
-                  <span
-                    className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-bold ${
-                      active
-                        ? 'bg-accent-tint text-accent'
-                        : 'bg-border/60 text-text-muted'
-                    }`}
-                  >
-                    {count.toLocaleString('en-GB')}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+      <div
+        id="user-filter-grid"
+        inert={!filtersOpen}
+        className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${
+          filtersOpen ? 'grid-rows-[1fr] opacity-100' : '-mt-4 grid-rows-[0fr] opacity-0'
+        }`}
+      >
+        <div className="-m-1 overflow-hidden p-1">
+          <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+            <SelectField
+              compact
+              id="filter-status"
+              label="User status"
+              icon={ListChecksIcon}
+              value={filters.status}
+              options={statusOptions}
+              onChange={(status) => onChange({ status: status as UserFilters['status'] })}
+            />
+            <SelectField
+              compact
+              id="filter-role"
+              label="Role"
+              icon={UserCogIcon}
+              value={filters.role}
+              options={roleOptions}
+              onChange={(role) => onChange({ role })}
+            />
+          </div>
         </div>
-
-        <Button
-          type="button"
-          onClick={onAdd}
-          className="h-10 rounded-lg px-4 text-[0.82rem]"
-        >
-          <PlusIcon width={16} height={16} />
-          Add user
-        </Button>
       </div>
     </section>
   )

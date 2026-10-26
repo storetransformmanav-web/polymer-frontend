@@ -6,6 +6,7 @@ import { ActivityPage } from '../../features/activity/index.ts'
 import { CustomersPage } from '../../features/customers/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
+import { UsersPage } from '../../features/users/index.ts'
 import { renderWithProviders } from '../../test/renderWithProviders.tsx'
 import { DashboardLayout } from './DashboardLayout.tsx'
 
@@ -66,6 +67,7 @@ function renderAt(route: string) {
         <Route path="customers/*" element={<CustomersPage />} />
         <Route path="orders/*" element={<OrdersPage />} />
         <Route path="activity" element={<ActivityPage />} />
+        <Route path="users/*" element={<UsersPage />} />
       </Route>
     </Routes>,
     { route },
@@ -118,6 +120,32 @@ describe('what a page requests when it opens', () => {
 
     expect(callsTo('customers.list')[0].params).toMatchObject({ page: 1, page_size: 25 })
     expect([...new Set(names())].sort()).toEqual(['customers.list', 'shops.list'])
+  })
+
+  it('Users: its list (page 1), the roles and the store names — no status counts', async () => {
+    renderAt('/users')
+    await waitFor(() => expect(callsTo('users.list')).toHaveLength(1))
+    await settle()
+
+    expect(callsTo('users.list')[0].params).toMatchObject({ page: 1, page_size: 25 })
+    expect([...new Set(names())].sort()).toEqual([
+      'roles.list',
+      'shops.list',
+      'users.list',
+    ])
+  })
+
+  it('Users: opening Filters loads the two status counts, and nothing else', async () => {
+    const user = userEvent.setup()
+    renderAt('/users')
+    await waitFor(() => expect(callsTo('users.list')).toHaveLength(1))
+    await settle()
+    log.calls = []
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await waitFor(() => expect(callsTo('users.list').length).toBeGreaterThan(0))
+    expect(callsTo('users.list').every((call) => isOneRow(call.params))).toBe(true)
+    expect(names().every((name) => name === 'users.list')).toBe(true)
   })
 
   it('Activity: its list only — the action choices wait until Filters is opened, and users are never asked for', async () => {

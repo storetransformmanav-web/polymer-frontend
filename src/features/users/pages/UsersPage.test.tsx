@@ -10,6 +10,7 @@ import {
   type UserListParams,
   type UserListResponse,
 } from '../../../lib/api/endpoints.ts'
+import { Route, Routes } from 'react-router-dom'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { UsersPage } from './UsersPage.tsx'
 
@@ -115,6 +116,16 @@ const isCountQuery = (params: UserListParams) => params.page_size === 1
 const callsForPage = (page: number) =>
   list.mock.calls.filter(([params]) => !isCountQuery(params) && params.page === page)
     .length
+
+/** The page where the app serves it: `/users`, and `/users/new` for the Add user form. */
+function renderPage(route = '/users') {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/users/*" element={<UsersPage />} />
+    </Routes>,
+    { route },
+  )
+}
 
 describe('UsersPage', () => {
   beforeEach(() => {
@@ -237,12 +248,13 @@ describe('UsersPage', () => {
       expect(screen.getByRole('searchbox', { name: 'Search users' })).toHaveValue('')
     })
 
-    it('filters by role (names from the roles API) and by status', async () => {
+    it('filters by role (names from the roles API) and by status, both in the Filters grid', async () => {
       const user = userEvent.setup()
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
 
-      const role = screen.getByLabelText('Role:')
+      const role = screen.getByLabelText('Role')
       expect(
         within(role)
           .getAllByRole('option')
@@ -255,25 +267,38 @@ describe('UsersPage', () => {
         ),
       )
 
-      await user.click(screen.getByRole('button', { name: /^Inactive/ }))
+      await user.selectOptions(screen.getByLabelText('User status'), 'inactive')
       await waitFor(() =>
         expect(list).toHaveBeenCalledWith(
           expect.objectContaining({ role: 'warehouse', status: 'inactive', page: 1 }),
         ),
       )
-      expect(screen.getByRole('button', { name: /^Inactive/ })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
+      expect(screen.getByLabelText('User status')).toHaveValue('inactive')
 
       // "Clear All" resets both; the default query is still cached, so it shows at once.
       await user.click(screen.getByRole('button', { name: 'Clear All' }))
-      expect(screen.getByLabelText('Role:')).toHaveValue('')
-      expect(screen.getByRole('button', { name: /^All Users/ })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
+      expect(screen.getByLabelText('Role')).toHaveValue('')
+      expect(screen.getByLabelText('User status')).toHaveValue('')
       expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
+    })
+
+    it('has no status tabs and no role dropdown outside the Filters grid', async () => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      expect(screen.queryByRole('group', { name: 'Filter by status' })).toBeNull()
+      const grid = document.getElementById('user-filter-grid')!
+      expect(grid).toHaveAttribute('inert')
+      // Both are the first fields of the (collapsed) grid, in this order.
+      const selects = [...grid.querySelectorAll('select')]
+      expect(selects.map((select) => select.id)).toEqual(['filter-status', 'filter-role'])
+      // The Filters button is in the search row, beside the search box.
+      const search = screen.getByRole('searchbox', { name: 'Search users' })
+      const filters = screen.getByRole('button', { name: 'Filters' })
+      expect(search.closest('section')).toContainElement(filters)
+      expect(filters.parentElement).toBe(
+        screen.getByRole('button', { name: 'Clear All' }).parentElement,
+      )
     })
 
     it('shows the backend message when loading fails, and retries', async () => {
@@ -297,7 +322,7 @@ describe('UsersPage', () => {
       expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
     })
 
-    it('shows a count on every status tab, honouring the other filters', async () => {
+    it('asks for no status counts until Filters is opened, then shows one on every choice', async () => {
       list.mockImplementation((params) => {
         const byStatus = { active: 48, inactive: 12 }
         const total = params.status ? byStatus[params.status] : 60
@@ -306,20 +331,20 @@ describe('UsersPage', () => {
       const user = userEvent.setup()
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(list.mock.calls.some(([params]) => isCountQuery(params))).toBe(false)
 
-      const tabs = screen.getByRole('group', { name: 'Filter by status' })
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      const status = screen.getByLabelText('User status')
+      await within(status).findByRole('option', { name: 'All Users (60)' })
       expect(
-        await within(tabs).findByRole('button', { name: /^All Userss*60$/ }),
-      ).toBeInTheDocument()
-      expect(
-        within(tabs).getByRole('button', { name: /^Actives*48$/ }),
-      ).toBeInTheDocument()
-      expect(
-        within(tabs).getByRole('button', { name: /^Inactives*12$/ }),
-      ).toBeInTheDocument()
+        within(status)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['All Users (60)', 'Active (48)', 'Inactive (12)'])
 
-      // The role filter narrows every tab's count (the count queries carry it).
-      await user.selectOptions(screen.getByLabelText('Role:'), 'warehouse')
+      // The role filter narrows every choice's count (the count queries carry it).
+      await user.selectOptions(screen.getByLabelText('Role'), 'warehouse')
       await waitFor(() =>
         expect(list).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -329,6 +354,53 @@ describe('UsersPage', () => {
           }),
         ),
       )
+    })
+  })
+
+  describe('the figures above the list', () => {
+    const card = (label: string) =>
+      screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
+
+    it('shows four cards on top: the list total and what the roles say', async () => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      // 60 matching users; roles: admin 1, office 40 + warehouse 19, three roles.
+      expect(within(card('Users')).getByText('60')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(within(card('Administrators')).getByText('1')).toBeInTheDocument(),
+      )
+      expect(within(card('Other staff')).getByText('59')).toBeInTheDocument()
+      expect(within(card('Roles')).getByText('3')).toBeInTheDocument()
+      expect(
+        within(card('Administrators')).getByText('Can see every store'),
+      ).toBeVisible()
+    })
+
+    it('sit above the toolbar and the table, and ask for nothing of their own', async () => {
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      const order = (element: HTMLElement) =>
+        [...document.querySelectorAll('*')].indexOf(element)
+      expect(order(card('Users'))).toBeLessThan(
+        order(screen.getByRole('searchbox', { name: 'Search users' })),
+      )
+      expect(order(card('Users'))).toBeLessThan(order(screen.getByRole('table')))
+      // The list once, the roles once (they feed the cards, the Role filter and the form).
+      expect(list).toHaveBeenCalledTimes(1)
+      expect(rolesList).toHaveBeenCalledTimes(1)
+    })
+
+    it('show dashes until their answers arrive', async () => {
+      list.mockImplementation(() => new Promise<never>(() => undefined))
+      rolesList.mockImplementation(() => new Promise<never>(() => undefined))
+      renderWithProviders(<UsersPage />)
+
+      await waitFor(() => expect(within(card('Users')).getByText('—')).toBeVisible())
+      expect(within(card('Administrators')).getByText('—')).toBeVisible()
+      expect(within(card('Roles')).getByText('—')).toBeVisible()
     })
   })
 
@@ -416,44 +488,69 @@ describe('UsersPage', () => {
   })
 
   describe('add user', () => {
-    const openPanel = async (user: ReturnType<typeof userEvent.setup>) => {
-      renderWithProviders(<UsersPage />)
+    const formOf = () => screen.findByRole('region', { name: 'Add user' })
+    const openForm = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage()
       await screen.findByText('First2 Last2')
       await user.click(screen.getByRole('button', { name: 'Add user' }))
-      return screen.findByRole('dialog', { name: 'Add user' })
+      return formOf()
     }
 
-    it('opens a form with the roles from the API, office selected, and every store to choose', async () => {
-      const dialog = await openPanel(userEvent.setup())
+    it('opens in place of the list as a "New user" tab, not in a slide-over', async () => {
+      const user = userEvent.setup()
+      const form = await openForm(user)
 
-      expect(within(dialog).getByLabelText('First name')).toHaveFocus()
-      const role = within(dialog).getByLabelText('Role')
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(within(form).getByRole('heading', { name: 'Add user' })).toBeInTheDocument()
+      // The list stays mounted but hidden; the figures give way to the form too.
+      expect(
+        screen.getByRole('table', { hidden: true }).closest('.hidden'),
+      ).not.toBeNull()
+      const strip = screen.getByRole('navigation', { name: 'Open users' })
+      expect(within(strip).getByRole('button', { name: 'All Users' })).toBeVisible()
+      expect(
+        within(strip).getByRole('button', { name: /^User\s*New user$/ }),
+      ).toHaveAttribute('aria-current', 'page')
+    })
+
+    it('opens at /users/new straight away (a reload, a link)', async () => {
+      renderPage('/users/new')
+
+      expect(await formOf()).toBeInTheDocument()
+      expect(screen.getByRole('navigation', { name: 'Open users' })).toBeInTheDocument()
+    })
+
+    it('opens a form with the roles from the API, office selected, and every store to choose', async () => {
+      const form = await openForm(userEvent.setup())
+
+      expect(within(form).getByLabelText('First name')).toHaveFocus()
+      const role = within(form).getByLabelText('Role')
       expect(role).toHaveValue('office')
       expect(
         within(role)
           .getAllByRole('option')
           .map((option) => option.textContent),
       ).toEqual(['Administrator', 'Office', 'Warehouse'])
-      expect(await within(dialog).findByLabelText('Polymer UK')).not.toBeChecked()
-      expect(within(dialog).getByLabelText('Polymer EU')).not.toBeChecked()
+      expect(await within(form).findByLabelText('Polymer UK')).not.toBeChecked()
+      expect(within(form).getByLabelText('Polymer EU')).not.toBeChecked()
     })
 
     it('validates the required fields without calling the API', async () => {
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
+      const form = await openForm(user)
 
-      await user.click(within(dialog).getByRole('button', { name: 'Create user' }))
+      await user.click(within(form).getAllByRole('button', { name: 'Create user' })[0])
 
-      expect(within(dialog).getByText('Enter a first name')).toBeInTheDocument()
-      expect(within(dialog).getByText('Enter a valid email address')).toBeInTheDocument()
+      expect(within(form).getByText('Enter a first name')).toBeInTheDocument()
+      expect(within(form).getByText('Enter a valid email address')).toBeInTheDocument()
       expect(create).not.toHaveBeenCalled()
 
       // Typing clears that field's message.
-      await user.type(within(dialog).getByLabelText('First name'), 'Jane')
-      expect(within(dialog).queryByText('Enter a first name')).not.toBeInTheDocument()
+      await user.type(within(form).getByLabelText('First name'), 'Jane')
+      expect(within(form).queryByText('Enter a first name')).not.toBeInTheDocument()
     })
 
-    it('creates the user, closes the panel, confirms, and refreshes the list', async () => {
+    it('creates the user, goes back to the list, confirms, and refreshes it', async () => {
       create.mockResolvedValue({
         ...makeUser(99),
         first_name: 'Jane',
@@ -462,8 +559,8 @@ describe('UsersPage', () => {
         email: 'jane@company.com',
       })
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
-      const within_ = within(dialog)
+      const form = await openForm(user)
+      const within_ = within(form)
 
       await user.type(within_.getByLabelText('First name'), '  Jane ')
       await user.type(within_.getByLabelText(/^Last name/), 'Doe')
@@ -472,7 +569,7 @@ describe('UsersPage', () => {
       await user.click(await within_.findByLabelText('Polymer UK'))
       const callsBefore = list.mock.calls.length
 
-      await user.click(within_.getByRole('button', { name: 'Create user' }))
+      await user.click(within_.getAllByRole('button', { name: 'Create user' })[0])
 
       // Trimmed, email lower-cased, default role, only the ticked store.
       await waitFor(() =>
@@ -487,9 +584,10 @@ describe('UsersPage', () => {
       )
       await waitFor(() =>
         expect(
-          screen.queryByRole('dialog', { name: 'Add user' }),
+          screen.queryByRole('region', { name: 'Add user' }),
         ).not.toBeInTheDocument(),
       )
+      expect(screen.queryByRole('navigation', { name: 'Open users' })).toBeNull()
       expect(
         screen.getByText('Jane Doe (jane@company.com) was added. They can now sign in.'),
       ).toBeInTheDocument()
@@ -500,8 +598,8 @@ describe('UsersPage', () => {
     it('does not ask for stores for an administrator, and sends none', async () => {
       create.mockResolvedValue(makeUser(98))
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
-      const within_ = within(dialog)
+      const form = await openForm(user)
+      const within_ = within(form)
       await within_.findByLabelText('Polymer UK')
       await user.click(within_.getByLabelText('Polymer UK'))
 
@@ -512,7 +610,7 @@ describe('UsersPage', () => {
 
       await user.type(within_.getByLabelText('First name'), 'Ada')
       await user.type(within_.getByLabelText('Email address'), 'ada@polymer.co')
-      await user.click(within_.getByRole('button', { name: 'Create user' }))
+      await user.click(within_.getAllByRole('button', { name: 'Create user' })[0])
 
       await waitFor(() =>
         expect(create).toHaveBeenCalledWith({
@@ -525,22 +623,22 @@ describe('UsersPage', () => {
       )
     })
 
-    it("keeps the panel open and shows the backend's message when creating fails", async () => {
+    it("keeps the form open and shows the backend's message when creating fails", async () => {
       create.mockRejectedValue(
         new ApiError('A user with this email already exists.', { status: 409 }),
       )
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
-      const within_ = within(dialog)
+      const form = await openForm(user)
+      const within_ = within(form)
       await user.type(within_.getByLabelText('First name'), 'Jane')
       await user.type(within_.getByLabelText('Email address'), 'jane@company.com')
 
-      await user.click(within_.getByRole('button', { name: 'Create user' }))
+      await user.click(within_.getAllByRole('button', { name: 'Create user' })[0])
 
       expect(
         await within_.findByText('A user with this email already exists.'),
       ).toBeInTheDocument()
-      expect(screen.getByRole('dialog', { name: 'Add user' })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Add user' })).toBeInTheDocument()
 
       // Editing a field dismisses the stale error so the user can try again.
       await user.type(within_.getByLabelText('Email address'), 'x')
@@ -549,30 +647,76 @@ describe('UsersPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('closes on Escape and Cancel, and starts clean when reopened', async () => {
+    it('leaves at once with nothing typed, and asks first when something was', async () => {
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
-      await user.type(within(dialog).getByLabelText('First name'), 'Jane')
+      const form = await openForm(user)
 
-      await user.keyboard('{Escape}')
-      expect(screen.queryByRole('dialog', { name: 'Add user' })).not.toBeInTheDocument()
+      // Nothing entered: Back just goes back to the list.
+      await user.click(within(form).getByRole('button', { name: 'Back' }))
+      expect(screen.queryByRole('region', { name: 'Add user' })).not.toBeInTheDocument()
 
+      // Something typed: asked first; Keep editing keeps it all.
       await user.click(screen.getByRole('button', { name: 'Add user' }))
-      const reopened = await screen.findByRole('dialog', { name: 'Add user' })
-      expect(within(reopened).getByLabelText('First name')).toHaveValue('')
-      await user.click(within(reopened).getByRole('button', { name: 'Cancel' }))
-      expect(screen.queryByRole('dialog', { name: 'Add user' })).not.toBeInTheDocument()
+      const again = await formOf()
+      await user.type(within(again).getByLabelText('First name'), 'Jane')
+      await user.click(within(again).getByRole('button', { name: 'Back' }))
+      const dialog = await screen.findByRole('alertdialog', { name: 'Cancel editing?' })
+      await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
+      expect(within(await formOf()).getByLabelText('First name')).toHaveValue('Jane')
+
+      // Yes, cancel: gone, and a new form starts clean.
+      await user.click(within(again).getByRole('button', { name: 'Cancel' }))
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Yes, cancel',
+        }),
+      )
+      expect(screen.queryByRole('region', { name: 'Add user' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Add user' }))
+      expect(within(await formOf()).getByLabelText('First name')).toHaveValue('')
+    })
+
+    it('keeps what was typed while you look at the list, and the tab brings it back', async () => {
+      const user = userEvent.setup()
+      const form = await openForm(user)
+      await user.type(within(form).getByLabelText('First name'), 'Jane')
+      const strip = screen.getByRole('navigation', { name: 'Open users' })
+
+      await user.click(within(strip).getByRole('button', { name: 'All Users' }))
+      expect(screen.getByRole('table')).toBeVisible()
+      expect(
+        screen.getByRole('region', { name: 'Add user', hidden: true }),
+      ).toBeInTheDocument()
+
+      await user.click(within(strip).getByRole('button', { name: /^User\s*New user$/ }))
+      expect(within(await formOf()).getByLabelText('First name')).toHaveValue('Jane')
+    })
+
+    it('closes from the tab’s ✕ (asking first when something was typed)', async () => {
+      const user = userEvent.setup()
+      const form = await openForm(user)
+      await user.type(within(form).getByLabelText('First name'), 'Jane')
+
+      await user.click(screen.getByRole('button', { name: 'Close New user' }))
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Yes, cancel',
+        }),
+      )
+
+      expect(screen.queryByRole('region', { name: 'Add user' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('navigation', { name: 'Open users' })).toBeNull()
     })
 
     it('explains when the roles cannot be loaded and lets the user retry', async () => {
       rolesList.mockRejectedValueOnce(new ApiError('Server error', { status: 500 }))
       const user = userEvent.setup()
-      const dialog = await openPanel(user)
+      const form = await openForm(user)
 
-      expect(await within(dialog).findByText(/Couldn't load roles/)).toBeInTheDocument()
+      expect(await within(form).findByText(/Couldn't load roles/)).toBeInTheDocument()
 
-      await user.click(within(dialog).getByRole('button', { name: 'Try again' }))
-      expect(await within(dialog).findByLabelText('Role')).toHaveValue('office')
+      await user.click(within(form).getByRole('button', { name: 'Try again' }))
+      expect(await within(form).findByLabelText('Role')).toHaveValue('office')
     })
   })
 })
