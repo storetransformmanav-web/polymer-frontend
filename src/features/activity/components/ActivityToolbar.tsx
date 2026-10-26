@@ -35,7 +35,7 @@ interface ActivityToolbarProps {
 
 /**
  * Search, the Filters button and Clear All in one row, and the collapsible filter grid under
- * it (method — "All Methods (total)" — action, date range). Typing in the search box is
+ * it (method — "All Methods (total)" — and action; the date range sits in the search row). Typing in the search box is
  * instant locally and sent to the API once the user pauses (see useDebouncedField);
  * dropdowns and dates apply immediately.
  */
@@ -109,7 +109,20 @@ export function ActivityToolbar({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`${FIELD_LABEL} whitespace-nowrap`}>
+            <CalendarIcon width={16} height={16} className="text-text-muted" />
+            Date
+          </span>
+          <div className="min-w-0">
+            <DateRangePicker
+              id="filter-dates"
+              label="Date range"
+              from={filters.from.slice(0, 10)}
+              to={filters.to.slice(0, 10)}
+              onChange={(range) => onChange(toDateFilters(range))}
+            />
+          </div>
           <button
             type="button"
             aria-expanded={filtersOpen}
@@ -171,19 +184,6 @@ export function ActivityToolbar({
               options={actionOptions}
               onChange={(action) => onChange({ action })}
             />
-            <div className="flex min-w-0 flex-col gap-1.5 min-[480px]:col-span-2">
-              <span id="filter-dates-label" className={FIELD_LABEL}>
-                <CalendarIcon width={16} height={16} className="text-text-muted" />
-                Date range
-              </span>
-              <DateRangePicker
-                id="filter-dates"
-                label="Date range"
-                from={filters.from.slice(0, 10)}
-                to={filters.to.slice(0, 10)}
-                onChange={(range) => onChange(toDateFilters(range))}
-              />
-            </div>
           </div>
         </div>
       </div>

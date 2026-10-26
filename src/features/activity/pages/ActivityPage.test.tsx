@@ -354,6 +354,25 @@ describe('ActivityPage', () => {
       expect(filters.parentElement).toBe(clear.parentElement)
     })
 
+    it('has the date range in the search row, right of the search box — not in the Filters grid', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<ActivityPage />)
+      await screen.findByText('Manav viewed product 1')
+
+      const date = screen.getByRole('button', { name: /^Date range/ })
+      const grid = document.getElementById('activity-filter-grid')!
+      // Reachable without opening Filters, and not inside the grid.
+      expect(grid).toHaveAttribute('inert')
+      expect(grid.contains(date)).toBe(false)
+      const search = screen.getByRole('searchbox', { name: 'Search activity' })
+      expect(
+        search.compareDocumentPosition(date) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+
+      await user.click(screen.getByRole('button', { name: 'Filters' }))
+      expect(grid.contains(date)).toBe(false)
+    })
+
     it('filters by method: only that list is asked for, from page 1, and Clear All undoes it', async () => {
       const user = userEvent.setup()
       renderWithProviders(<ActivityPage />)
