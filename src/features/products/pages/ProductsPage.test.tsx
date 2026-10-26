@@ -877,21 +877,20 @@ describe('ProductsPage details', () => {
       details.mockResolvedValue(detail)
     }
 
-    it('shows them as an accordion inside the one “Description” card, closed', async () => {
+    it('shows them on their own as an accordion — no “Description” card around them — closed', async () => {
       withApd(SETTINGS)
       const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
 
-      const card = screen.getByRole('button', { name: /^Description/ })
       const first = screen.getByRole('button', { name: /^Product Description/ })
       const second = screen.getByRole('button', { name: /^Product Information/ })
-      expect(card).toHaveAttribute('aria-expanded', 'true')
       expect(first).toHaveAttribute('aria-expanded', 'false')
       expect(second).toHaveAttribute('aria-expanded', 'false')
-      // Both rows live in the Description card, which replaces the product's own description.
-      expect(card.closest('section')).toContainElement(first)
-      expect(card.closest('section')).toContainElement(second)
+      // No card header of its own: the two rows are all there is (the product's own
+      // description is not shown either).
+      expect(screen.queryByRole('button', { name: /^Description/ })).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'Description' })).toBeNull()
       expect(screen.queryByText('The plain store description')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Product Details/ })).toBeNull()
       expect(screen.queryByText(/Hippo Microwave/)).not.toBeInTheDocument()

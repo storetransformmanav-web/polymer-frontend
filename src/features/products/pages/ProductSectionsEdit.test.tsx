@@ -188,15 +188,13 @@ describe('editing the description sections (metafield apd)', () => {
     vi.clearAllMocks()
   })
 
-  it('puts both sections in the one “Description” card, with one pencil, the rows closed', async () => {
+  it('shows both sections on their own, with one pencil above them and the rows closed', async () => {
     const user = await openDetails()
 
-    expect(screen.getByRole('button', { name: /^Description/ })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
+    // No "Description" card around them.
+    expect(screen.queryByRole('button', { name: /^Description/ })).toBeNull()
     expect(pencil()).toBeInTheDocument()
-    // One pencil for the Description card (the specifications have their own).
+    // One pencil for the sections (the specifications have their own).
     expect(screen.getAllByRole('button', { name: /^Edit desc/ })).toHaveLength(1)
     expect(screen.getByRole('button', { name: /^Product Information/ })).toHaveAttribute(
       'aria-expanded',

@@ -283,8 +283,12 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
           />
 
           {sections ? (
-            // The description app's sections (metafield apd) are the Description: an accordion in one card.
-            <DescriptionCard product={product} sections={sections} onSaved={onSaved} />
+            // The description app's sections (metafield apd) stand on their own: just the accordion.
+            <DescriptionSectionsBlock
+              product={product}
+              sections={sections}
+              onSaved={onSaved}
+            />
           ) : (
             // A product without sections keeps its own description (description_html).
             <EditableCard
@@ -316,16 +320,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   )
 }
 
-// --- Description (the description sections) ---------------------------------------
+// --- Description sections ----------------------------------------------------------
 
 /**
- * "Description": one card, like the ones above, holding the description sections
- * (Product Description, Product Information…) as an accordion, closed to begin with.
- * Its pencil turns all the sections into an editor in place (titles, formatted text,
- * order, add / remove). Saving sends the product's `apd` metafield (`metafields` of
- * `PUT /products/{id}`).
+ * The description sections (Product Description, Product Information…) shown on their own
+ * as an accordion, closed to begin with — there is no "Description" card around them. A
+ * slim row above has just the pencil, which turns all the sections into an editor in place
+ * (titles, formatted text, order, add / remove). Saving sends the product's `apd`
+ * metafield (`metafields` of `PUT /products/{id}`).
  */
-function DescriptionCard({
+function DescriptionSectionsBlock({
   product,
   sections,
   onSaved,
@@ -335,17 +339,31 @@ function DescriptionCard({
   onSaved?: SavedHandler
 }) {
   return (
-    <EditableCard
+    <EditableTab
       product={product}
-      title="Description"
-      count={sections.sections.length}
-      icon={CheckCircleIcon}
       what="description"
-      onEditIntent={preloadRichTextEditor}
       errorPrefixes={SECTIONS_ERRORS}
       onSaved={onSaved}
+      header={(edit) => (
+        <div className="flex min-h-8 items-center justify-end gap-1.5">
+          {edit.editing && (
+            <p className="text-text-muted mr-auto text-[0.82rem] font-medium">
+              Editing description
+            </p>
+          )}
+          <SectionEditControls
+            edit={edit}
+            what="description"
+            onIntent={preloadRichTextEditor}
+          />
+        </div>
+      )}
       view={<DescriptionAccordion {...sections} />}
-      editor={(section) => <DescriptionSectionsEditor {...section} />}
+      editor={(section) => (
+        <div className={`${CARD} p-5`}>
+          <DescriptionSectionsEditor {...section} />
+        </div>
+      )}
     />
   )
 }
