@@ -113,7 +113,6 @@ export function CustomersPage() {
       <div className={activeId ? 'hidden' : 'flex flex-col gap-4'}>
         <CustomersToolbar
           filters={filters}
-          facets={customers.facets}
           total={data?.total ?? null}
           hasFilters={customers.hasFilters}
           onChange={customers.setFilters}

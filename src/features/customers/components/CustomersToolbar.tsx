@@ -1,8 +1,5 @@
 import { useState } from 'react'
-import type {
-  CustomerFilters,
-  CustomersFacets,
-} from '../../../app/store/customersSlice.ts'
+import type { CustomerFilters } from '../../../app/store/customersSlice.ts'
 import {
   ArrowUpDownIcon,
   ChevronDownIcon,
@@ -15,7 +12,6 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
-import { withAll } from '../../../components/ui/selectOptions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useCustomerRoleCounts } from '../hooks/useCustomerRoleCounts.ts'
@@ -60,7 +56,6 @@ const ORDER_OPTIONS: SelectOption[] = [
 
 interface CustomersToolbarProps {
   filters: CustomerFilters
-  facets: CustomersFacets
   total: number | null
   hasFilters: boolean
   onChange: (changes: Partial<CustomerFilters>) => void
@@ -68,14 +63,13 @@ interface CustomersToolbarProps {
 }
 
 /**
- * Search, country, the Filters button and Clear All in one row, and the collapsible
+ * Search, the Filters button and Clear All in one row, and the collapsible
  * filter grid under it (its first field is the role, with a count on every choice). Typing in the
  * search box is instant locally and sent to the API once the user
  * pauses (see useDebouncedField); selects apply immediately.
  */
 export function CustomersToolbar({
   filters,
-  facets,
   total,
   hasFilters,
   onChange,
@@ -136,16 +130,6 @@ export function CustomersToolbar({
             height={16}
             className="text-text-muted hidden sm:block"
           />
-          <div className="min-w-0 flex-1 lg:w-64 lg:flex-none">
-            <SelectField
-              inline
-              id="filter-country"
-              label="Country"
-              value={filters.country}
-              options={withAll('All Countries', facets.countries, filters.country)}
-              onChange={(country) => onChange({ country })}
-            />
-          </div>
           <button
             type="button"
             aria-expanded={filtersOpen}

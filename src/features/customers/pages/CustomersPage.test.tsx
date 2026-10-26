@@ -380,23 +380,12 @@ describe('CustomersPage', () => {
     )
   })
 
-  it('offers countries seen so far and filters by them', async () => {
-    const user = userEvent.setup()
+  it('has no Country filter on the page', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
-    expect(
-      within(screen.getByLabelText('Country:')).getByRole('option', {
-        name: 'United Kingdom',
-      }),
-    ).toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText('Country:'), 'United Kingdom')
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ country: 'United Kingdom', page: 1 }),
-      ),
-    )
+    expect(screen.queryByLabelText('Country:')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Country')).not.toBeInTheDocument()
   })
 
   it('opens with page 1 only, asks for another page when its button is clicked, and re-visits pages from cache', async () => {
