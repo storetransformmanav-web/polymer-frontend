@@ -161,15 +161,14 @@ describe('buildUpdateBody', () => {
     expect(body).toEqual({ seo: { title: 'Hippo carrier bag', description: 'A bag' } })
   })
 
-  it('removes collections, and adds new ones by id (ignoring ones already there)', () => {
-    const NEW = '44444444-4444-4444-8444-444444444444'
+  it('removes collections and adds new ones, both by name (ignoring ones already there)', () => {
     const body = edit(makeProduct(), (draft) => {
       draft.removedCollectionIds = [COLLECTION]
-      draft.addedCollectionIds = [NEW, NEW, COLLECTION]
+      draft.addedCollections = ['Food Packaging', ' food packaging ', 'All']
     })
 
-    expect(body.collections_remove).toEqual([COLLECTION])
-    expect(body.collections_add).toEqual([NEW])
+    expect(body.collections_remove).toEqual(['All'])
+    expect(body.collections_add).toEqual(['Food Packaging'])
   })
 
   describe('variants', () => {
@@ -344,7 +343,7 @@ describe('the update body only has fields the API has', () => {
       draft.tags = ['new']
       draft.seoTitle = 'S'
       draft.seoDescription = 'SD'
-      draft.addedCollectionIds = ['44444444-4444-4444-8444-444444444444']
+      draft.addedCollections = ['Food Packaging']
       draft.removedCollectionIds = [COLLECTION]
       draft.images[0].alt = 'changed'
       draft.images = [draft.images[1], draft.images[0], draft.images[2]]
@@ -441,9 +440,9 @@ describe('validateDraft', () => {
     expect(errors).toEqual({})
   })
 
-  it('checks that a collection to add is a real id', () => {
+  it('checks that a collection to add has a name', () => {
     const errors = problems((d) => {
-      d.addedCollectionIds = ['not-a-uuid', '44444444-4444-4444-8444-444444444444']
+      d.addedCollections = ['  ', 'Food Packaging']
     })
 
     expect(errors['addedCollections.0']).toBeDefined()

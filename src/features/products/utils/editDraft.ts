@@ -13,6 +13,7 @@ import {
   type WeightUnit,
 } from '../../../lib/api/endpoints.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
+import { collectionKey } from './collectionSuggestions.ts'
 import {
   APD_MAX_LENGTH,
   buildSectionsMetafield,
@@ -84,7 +85,8 @@ export interface ProductDraft {
   seoTitle: string
   seoDescription: string
   removedCollectionIds: string[]
-  addedCollectionIds: string[]
+  /** Names of the collections to put the product in (the API takes names). */
+  addedCollections: string[]
   variants: VariantDraft[]
   /** Existing images in their current order (reordering changes this order). */
   images: ImageDraft[]
@@ -97,6 +99,7 @@ export const LIMITS = {
   title: 255,
   vendor: 255,
   productType: 255,
+  collectionName: 255,
   handle: 255,
   templateSuffix: 100,
   categoryGid: 120,
@@ -109,8 +112,6 @@ export const LIMITS = {
   /** Media the API attaches in one call (`POST /media`). */
   newMedia: 20,
 } as const
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 let keyCounter = 0
 /** A fresh key for a row that has no id yet. */
@@ -181,7 +182,7 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
     seoTitle: product.seo?.title ?? '',
     seoDescription: product.seo?.description ?? '',
     removedCollectionIds: [],
-    addedCollectionIds: [],
+    addedCollections: [],
     variants: product.variants.map((variant) =>
       draftFromVariant(variant, product.images),
     ),
@@ -305,13 +306,24 @@ export function buildUpdateBody(
     body.seo = { title: draft.seoTitle.trim(), description: draft.seoDescription.trim() }
   }
 
-  const known = new Set(product.collections.map((collection) => collection.id))
-  const collectionsAdd = [...new Set(draft.addedCollectionIds)].filter(
-    (id) => !known.has(id),
+  // Collections to add go by name (`collections_add`); ones the product is in, and repeats, are dropped.
+  const inNames = new Set(
+    product.collections.map((collection) => collectionKey(collection.title)),
   )
+  const collectionsAdd: string[] = []
+  for (const name of draft.addedCollections) {
+    const key = collectionKey(name)
+    if (!key || inNames.has(key)) continue
+    inNames.add(key)
+    collectionsAdd.push(name.trim())
+  }
   if (collectionsAdd.length) body.collections_add = collectionsAdd
-  if (draft.removedCollectionIds.length)
-    body.collections_remove = draft.removedCollectionIds
+  // Collections come out by name, like they go in; the draft remembers which tiles were ticked by id.
+  const leaving = new Set(draft.removedCollectionIds)
+  const collectionsRemove = product.collections
+    .filter((collection) => leaving.has(collection.id))
+    .map((collection) => collection.title)
+  if (collectionsRemove.length) body.collections_remove = collectionsRemove
 
   const variantEdits: ProductVariantInput[] = []
   const variantsRemove: string[] = []
@@ -440,8 +452,13 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     tooLong('The SEO description', draft.seoDescription, LIMITS.seoDescription),
   )
 
-  draft.addedCollectionIds.forEach((id, index) => {
-    put(`addedCollections.${index}`, UUID.test(id) ? null : 'Not a valid collection ID')
+  draft.addedCollections.forEach((name, index) => {
+    put(
+      `addedCollections.${index}`,
+      name.trim() === '' || name.trim().length > LIMITS.collectionName
+        ? 'Not a valid collection name'
+        : null,
+    )
   })
 
   // The store needs at least one variant: removing them all would leave an unsellable product.

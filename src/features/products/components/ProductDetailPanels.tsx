@@ -30,7 +30,9 @@ import {
   readDescriptionSections,
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
-import { htmlToText, safeUrl, statusLabel } from '../utils/format.ts'
+import { htmlToText, safeUrl, statusLabel, svgImageWarning } from '../utils/format.ts'
+import { classifySync, readableSyncError } from '../utils/sync.ts'
+import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -796,6 +798,7 @@ function MediaView({
   product,
   pending,
   slow,
+  pushFailure,
   onDismiss,
   onDelete,
 }: {
@@ -803,6 +806,8 @@ function MediaView({
   pending: ProductMediaInput[]
   /** The store is taking longer than usual to finish the waiting files. */
   slow: boolean
+  /** Why the store's latest push failed, when it did. */
+  pushFailure: string | null
   onDismiss: () => void
   onDelete: (image: ProductImageData, position: number) => void
 }) {
@@ -839,6 +844,9 @@ function MediaView({
   if (tiles.length === 0 && pending.length === 0) {
     return <Empty icon={ImageIcon}>This product has no images.</Empty>
   }
+  // An address that can never work (an SVG) is the likeliest reason a file never arrives.
+  const addressProblem =
+    pending.map((item) => svgImageWarning(item.url)).find((text) => text !== null) ?? null
 
   return (
     <>
@@ -853,6 +861,14 @@ function MediaView({
             direct, public link to an image file (a web page link won&apos;t work). The
             image will appear here once the store has it, and Sync products brings it in
             too.
+            {addressProblem && (
+              <span className="mt-1 block font-semibold">{addressProblem}</span>
+            )}
+            {pushFailure && (
+              <span className="mt-1 block font-semibold">
+                The store said: {pushFailure}
+              </span>
+            )}
           </p>
           <button
             type="button"
@@ -1273,7 +1289,7 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
           onClose={() => setRemoving(null)}
           onDone={(result) => {
             setRemoving(null)
-            onSaved?.(result, product, { collections_remove: [removing.id] })
+            onSaved?.(result, product, { collections_remove: [removing.title] })
           }}
         />
       )}
@@ -1288,6 +1304,15 @@ export function MediaPanel({ product, onSaved }: TabProps) {
     position: number
   } | null>(null)
   const media = usePendingMedia(product)
+  // Only once the store is slow: ask what its latest push said, so the notice can give the reason.
+  const pushes = useProductSyncHistory(product.id, product.shop?.key, {
+    enabled: media.slow,
+  })
+  const latestPush = pushes.items[0]
+  const pushFailure =
+    latestPush && classifySync(latestPush.status) === 'failed' && latestPush.error
+      ? readableSyncError(latestPush.error)
+      : null
 
   return (
     <>
@@ -1309,6 +1334,7 @@ export function MediaPanel({ product, onSaved }: TabProps) {
             product={product}
             pending={media.pending}
             slow={media.slow}
+            pushFailure={pushFailure}
             onDismiss={media.dismiss}
             onDelete={(image, position) => setDeleting({ image, position })}
           />

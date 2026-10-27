@@ -31,7 +31,7 @@ export function RemoveCollectionDialog({
   const smart = collection.collection_type?.toLowerCase() === 'smart'
 
   async function confirm() {
-    const result = await remove(collection.id)
+    const result = await remove(collection.title)
     if (result) onDone(result)
   }
 

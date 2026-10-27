@@ -91,7 +91,7 @@ describe('patchDetail', () => {
 
   it('removes collections and variants, and updates variant fields as text', () => {
     const next = patchDetail(detail, {
-      collections_remove: ['c1'],
+      collections_remove: [' one '],
       variants_remove: ['v2'],
       variants: [{ id: 'v1', price: 12.5, compare_at_price: null, sku: 'NEW' }],
     })
@@ -118,7 +118,7 @@ describe('patchDetail', () => {
   })
 
   it('does not mutate the cached product', () => {
-    patchDetail(detail, { title: 'Changed', collections_remove: ['c1'] })
+    patchDetail(detail, { title: 'Changed', collections_remove: ['One'] })
 
     expect(detail.title).toBe('Old')
     expect(detail.collections).toHaveLength(2)

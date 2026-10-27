@@ -206,7 +206,10 @@ export function patchDetail(
     )
   }
 
-  const collectionsRemoved = new Set(body.collections_remove ?? [])
+  // `collections_remove` carries collection names, like `collections_add`.
+  const collectionsRemoved = new Set(
+    (body.collections_remove ?? []).map((name) => name.trim().toLowerCase()),
+  )
   const metafields = patchMetafields(product.metafields, body)
 
   return {
@@ -222,7 +225,7 @@ export function patchDetail(
     metafields,
     seo: body.seo ? { ...product.seo, ...body.seo } : product.seo,
     collections: product.collections.filter(
-      (collection) => !collectionsRemoved.has(collection.id),
+      (collection) => !collectionsRemoved.has(collection.title.trim().toLowerCase()),
     ),
     variants: product.variants
       .map((variant) => patchVariant(variant, body))

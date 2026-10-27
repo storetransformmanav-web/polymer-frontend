@@ -18,6 +18,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   api: {
     shops: { list: vi.fn() },
     inventory: { locations: vi.fn() },
+    collections: { list: vi.fn() },
     products: {
       list: vi.fn(),
       details: vi.fn(),
@@ -132,6 +133,26 @@ function renderPage() {
   )
 }
 
+/** A `GET /collections` answer holding these rows. */
+function collectionsPage(
+  items: { id: string; title: string; handle?: string }[],
+  total = items.length,
+) {
+  return {
+    items: items.map((item) => ({
+      handle: item.title.toLowerCase().replace(/ /g, '-'),
+      collection_type: 'custom',
+      editable: true,
+      ...item,
+    })),
+    page: 1,
+    page_size: 50,
+    total,
+    total_pages: 1,
+    has_next: false,
+  }
+}
+
 describe('adding a product', () => {
   beforeEach(() => {
     list.mockResolvedValue(page([EXISTING]))
@@ -139,6 +160,7 @@ describe('adding a product', () => {
     locations.mockResolvedValue([])
     create.mockResolvedValue(CREATED)
     vi.mocked(api.products.syncHistory).mockResolvedValue([])
+    vi.mocked(api.collections.list).mockResolvedValue(collectionsPage([]))
   })
 
   afterEach(() => {
@@ -615,7 +637,7 @@ describe('adding a product', () => {
     })
   })
 
-  it('refuses a media address that is not https, and a collection that is not an ID', async () => {
+  it('refuses a media address that is not https, and a collection that does not exist', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
     await user.type(
@@ -625,7 +647,7 @@ describe('adding a product', () => {
     await user.type(within(form).getByLabelText('Search collections'), 'nope{Enter}')
 
     expect(
-      await within(form).findByText('That is not a valid collection ID'),
+      await within(form).findByText('No collection is called “nope”'),
     ).toBeInTheDocument()
     await user.click(submit(form))
     expect(
@@ -697,20 +719,34 @@ describe('adding a product', () => {
       ).toHaveLength(1)
     })
 
-    it('lists every known collection when the Collections box is clicked, and sends the picked ones', async () => {
-      seedKnown()
+    it('lists the store’s collections from the backend when the Collections box is clicked, and sends the picked ones', async () => {
+      const search = vi.mocked(api.collections.list)
+      search.mockResolvedValue(
+        collectionsPage([
+          { id: RETAIL, title: 'Retail bags' },
+          { id: WHOLESALE, title: 'Wholesale' },
+        ]),
+      )
       const { user, form } = await openForm()
+      // Nothing is asked until the box is opened.
+      expect(search).not.toHaveBeenCalled()
 
       await user.click(within(form).getByLabelText('Search collections'))
       const choices = await within(form).findByRole('list', {
         name: 'Collections to add',
       })
-      // Both manual collections, by name; the smart one cannot be used on create.
       await within(choices).findByRole('button', { name: 'Retail bags' })
       expect(
         within(choices).getByRole('button', { name: 'Wholesale' }),
       ).toBeInTheDocument()
-      expect(within(choices).queryByRole('button', { name: 'Auto bags' })).toBeNull()
+      // The store's manual collections, first page by title, for the store the product goes to.
+      expect(search).toHaveBeenCalledWith({
+        type: 'custom',
+        sort: 'title',
+        order: 'asc',
+        page_size: 50,
+        shop: 'polymer-uk',
+      })
 
       await user.click(within(choices).getByRole('button', { name: 'Wholesale' }))
       expect(within(form).getByRole('list', { name: 'Collections' })).toHaveTextContent(
@@ -719,11 +755,62 @@ describe('adding a product', () => {
       expect(
         within(form).getByRole('button', { name: 'Remove collection Wholesale' }),
       ).toBeInTheDocument()
+      // The picked one leaves the list, the other stays.
+      expect(
+        within(choices).queryByRole('button', { name: 'Wholesale' }),
+      ).not.toBeInTheDocument()
 
       await fillBasics(user, form)
       await user.click(submit(form))
       await waitFor(() => expect(create).toHaveBeenCalled())
       expect(create.mock.calls[0][0].collections).toEqual([WHOLESALE])
+    })
+
+    it('searches the backend as you type, says how many more there are, and adds by name on Enter', async () => {
+      const search = vi.mocked(api.collections.list)
+      search.mockImplementation(async (params) =>
+        params.search
+          ? collectionsPage([{ id: RETAIL, title: 'Retail bags' }])
+          : collectionsPage([{ id: WHOLESALE, title: 'Wholesale' }], 120),
+      )
+      const { user, form } = await openForm()
+
+      await user.click(within(form).getByLabelText('Search collections'))
+      expect(
+        await within(form).findByText(
+          'Showing 1 of 120 — keep typing to narrow the list.',
+        ),
+      ).toBeVisible()
+
+      await user.type(
+        within(form).getByLabelText('Search collections'),
+        'retail BAGS{Enter}',
+      )
+
+      expect(
+        await within(form).findByRole('button', {
+          name: 'Remove collection Retail bags',
+        }),
+      ).toBeInTheDocument()
+      expect(search).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'retail BAGS' }),
+      )
+    })
+
+    it('says so when the backend has no collections, or the search fails', async () => {
+      const search = vi.mocked(api.collections.list)
+      const { user, form } = await openForm()
+
+      await user.click(within(form).getByLabelText('Search collections'))
+      expect(await within(form).findByText('No collections found.')).toBeVisible()
+
+      search.mockRejectedValue(new ApiError('Server error', { status: 500 }))
+      await user.type(within(form).getByLabelText('Search collections'), 'zz')
+      expect(
+        await within(form).findByText(
+          'Could not load the collections. Try again in a moment.',
+        ),
+      ).toBeVisible()
     })
 
     it('Inventory tracked and Physical product are switches that are sent', async () => {

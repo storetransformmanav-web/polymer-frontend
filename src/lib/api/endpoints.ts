@@ -51,6 +51,12 @@ export const ENDPOINTS = {
     /** `GET` the stock list — also names the stores' stock locations. */
     list: '/inventory',
   },
+  collections: {
+    /** `GET` one page of collections (search, type, sort, order, shop, page). */
+    list: '/collections',
+    /** `GET` one collection with its products; `id` is its CRM UUID. */
+    detail: (id: string) => `/collections/${encodeURIComponent(id)}`,
+  },
   sync: {
     /** `POST` starts a background sync of every product of one store. */
     products: '/sync/products',
@@ -1210,8 +1216,9 @@ export interface ProductUpdateBody {
   template_suffix?: string
   /** Shopify taxonomy id, gid://shopify/TaxonomyCategory/… */
   category_gid?: string
-  /** CRM collection ids. */
+  /** Names of the collections to put the product in (e.g. "Food Packaging"). */
   collections_add?: string[]
+  /** Names of the collections to take the product out of (e.g. "Hot Food Packaging"). */
   collections_remove?: string[]
   /** New product options (Size → Small, Large). */
   options_add?: { name: string; values: string[] }[]
@@ -1252,6 +1259,74 @@ export interface ProductListParams {
   in_stock?: boolean
   sort?: ProductSort
   order?: 'asc' | 'desc'
+  page?: number
+  page_size?: number
+}
+
+// --- Collections (GET /collections, GET /collections/{id}) ------------------------
+
+/** One row of `GET /collections`. */
+const collectionListItemSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  title: z.string(),
+  handle: z.string(),
+  /** "smart" (filled by rules) or "custom" (picked by hand). */
+  collection_type: z.string().nullish(),
+  /** False for a smart collection: its products come from its rules. */
+  editable: z.boolean().nullish(),
+  sort_order: z.string().nullish(),
+  image_url: z.string().nullish(),
+  products_count: z.number().nullish(),
+  shop: shopRefSchema.nullish(),
+  shopify_updated_at: z.string().nullish(),
+})
+
+const collectionListResponseSchema = z.object({
+  items: z.array(collectionListItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+/** `GET /collections/{id}` answers `{ collection }`, with the collection's products. */
+const collectionDetailSchema = collectionListItemSchema.extend({
+  shopify_gid: z.string().nullish(),
+  description_html: z.string().nullish(),
+  rules: z.unknown().nullish(),
+  seo_title: z.string().nullish(),
+  seo_description: z.string().nullish(),
+  products: z
+    .array(
+      z.object({
+        id: z.string(),
+        shopify_id: z.number().nullish(),
+        title: z.string(),
+        handle: z.string().nullish(),
+        status: z.string().nullish(),
+        total_inventory: z.number().nullish(),
+        image_url: z.string().nullish(),
+      }),
+    )
+    .default([]),
+})
+
+const collectionDetailResponseSchema = z.object({ collection: collectionDetailSchema })
+
+export type CollectionListItem = z.infer<typeof collectionListItemSchema>
+export type CollectionListResponse = z.infer<typeof collectionListResponseSchema>
+export type CollectionDetail = z.infer<typeof collectionDetailSchema>
+
+/** Query parameters accepted by `GET /collections` (all optional). */
+export interface CollectionListParams {
+  search?: string
+  type?: 'custom' | 'smart'
+  sort?: 'title' | 'products' | 'updated'
+  order?: 'asc' | 'desc'
+  /** Store key or domain; omit for every store. */
+  shop?: string
   page?: number
   page_size?: number
 }
@@ -1314,6 +1389,20 @@ export const api = {
         params: { include_raw: includeRaw },
       })
       return customerDetailResponseSchema.parse(data).customer
+    },
+  },
+
+  collections: {
+    /** One page of collections, searched/sorted server-side. */
+    async list(params: CollectionListParams): Promise<CollectionListResponse> {
+      const data = await apiClient.get(ENDPOINTS.collections.list, { params })
+      return collectionListResponseSchema.parse(data)
+    },
+
+    /** One collection with its products; `id` is its CRM UUID. */
+    async detail(id: string): Promise<CollectionDetail> {
+      const data = await apiClient.get(ENDPOINTS.collections.detail(id))
+      return collectionDetailResponseSchema.parse(data).collection
     },
   },
 

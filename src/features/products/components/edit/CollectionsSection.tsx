@@ -2,26 +2,28 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Badge } from '../../../../components/ui/Badge.tsx'
 import { PlusIcon, XIcon } from '../../../../components/ui/icons.tsx'
-import { useKnownCollections } from '../../hooks/useKnownCollections.ts'
+import { ApiError } from '../../../../lib/api/ApiError.ts'
+import { useCollectionSearch } from '../../hooks/useCollectionSearch.ts'
 import {
   COLLECTION_LIST_LIMIT,
-  matchCollections,
+  collectionKey,
+  offerFoundCollections,
 } from '../../utils/collectionSuggestions.ts'
 import { FIELD_INPUT, TEXT_BUTTON, type SectionProps } from './fields.tsx'
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Room the dropdown wants below the box before it opens above it instead (px). */
 const LIST_ROOM = 340
 
 /**
  * Remove the product from a collection, or put it in one. Adding is by name: type part of a
- * collection's name and pick it from the dropdown of the collections the app already knows
- * (those of the products it has loaded — the backend has no "list collections" endpoint
- * yet); it stays closed until something is typed, then shows the related ones, ten at most.
- * "Add" / Enter takes a name that is exactly one collection's (or narrows to just one). A
- * collection that isn't listed can still be added by pasting its CRM ID (a UUID) — the API
- * itself takes ids.
+ * collection's name and the store's collections are searched on the backend
+ * (`GET /collections?search=`, for the product's own store); the dropdown stays closed until
+ * something is typed, then shows the matches, ten at most. "Add" / Enter takes a name that is
+ * exactly one collection's. The product is put in a collection **by its name**
+ * (`collections_add: ["Food Packaging"]`); the backend refuses a name that isn't an existing
+ * collection (422 "not found"), so a new one can't be made here. Searching is the only
+ * `GET /collections` call, and nothing is sent to the product until the section's Save is
+ * confirmed.
  *
  * The "add a collection" box and the collections about to be added sit on top of the
  * list. The Collections tab keeps the box hidden until "Add collection" is
@@ -47,22 +49,33 @@ export function CollectionsSection({
   }, [showAdd, focusAdd])
   const [input, setInput] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
   const removed = new Set(draft.removedCollectionIds)
 
-  // The dropdown under the box: the known collections related to what is typed, ten at most —
-  // and nothing at all until something is typed. Opening the box already reads the details of
-  // the products on the list (to learn their collections), so they are ready when typing starts.
-  const { collections: known, loading } = useKnownCollections(showAdd)
+  // The dropdown under the box: the backend's matches for what is typed, ten at most — and
+  // nothing at all (no request either) until something is typed.
+  const {
+    found,
+    total: foundTotal,
+    loading,
+    failed,
+    lookup,
+  } = useCollectionSearch(input, product.shop?.key)
   const listId = useId()
   const [focused, setFocused] = useState(false)
   const [active, setActive] = useState(-1)
   const skip = useMemo(
-    () => new Set([...product.collections.map((c) => c.id), ...draft.addedCollectionIds]),
-    [product.collections, draft.addedCollectionIds],
+    () =>
+      new Set(
+        [...product.collections.map((c) => c.title), ...draft.addedCollections].map(
+          collectionKey,
+        ),
+      ),
+    [product.collections, draft.addedCollections],
   )
   const { shown, total } = useMemo(
-    () => matchCollections(known, input, skip, COLLECTION_LIST_LIMIT),
-    [known, input, skip],
+    () => offerFoundCollections(found, foundTotal, skip, COLLECTION_LIST_LIMIT),
+    [found, foundTotal, skip],
   )
   const typed = input.trim() !== ''
   const panelOpen = focused && typed
@@ -109,7 +122,6 @@ export function CollectionsSection({
       window.removeEventListener('resize', measure)
     }
   }, [panelOpen, input, shown.length])
-  const titleOf = (id: string) => known.find((collection) => collection.id === id)?.title
 
   function toggleRemoved(id: string) {
     onChange({
@@ -119,51 +131,47 @@ export function CollectionsSection({
     })
   }
 
-  /** Puts the product in a collection chosen from the list. */
-  function pick(id: string) {
-    onChange({ addedCollectionIds: [...draft.addedCollectionIds, id] })
+  /** Puts the product in a collection chosen from the list (it goes by its name). */
+  function pick(collection: { title: string }) {
+    onChange({ addedCollections: [...draft.addedCollections, collection.title.trim()] })
     setInput('')
     setInputError(null)
     setActive(-1)
   }
 
-  function add() {
+  async function add() {
     const text = input.trim()
-    if (!text) return
-    // A name: the collection called exactly that, else the only one the text narrows to.
-    if (!UUID.test(text)) {
-      const named = known.find(
-        (collection) =>
-          !skip.has(collection.id) &&
-          collection.title.trim().toLowerCase() === text.toLowerCase(),
-      )
-      if (named) return pick(named.id)
-      if (
-        product.collections.some(
-          (collection) => collection.title.trim().toLowerCase() === text.toLowerCase(),
-        )
-      ) {
-        return setInputError('The product is already in that collection')
-      }
-      if (shown.length === 1) return pick(shown[0].id)
-      return setInputError(
-        shown.length > 1
-          ? 'Choose a collection from the list'
-          : `No collection is called “${text}”`,
-      )
-    }
-    const id = text.toLowerCase()
-    if (product.collections.some((collection) => collection.id === id)) {
+    if (!text || checking) return
+    if (product.collections.some((c) => collectionKey(c.title) === collectionKey(text))) {
       return setInputError('The product is already in that collection')
     }
-    if (draft.addedCollectionIds.includes(id)) return setInputError('Already added')
-    onChange({ addedCollectionIds: [...draft.addedCollectionIds, id] })
-    setInput('')
-    setInputError(null)
+    if (
+      draft.addedCollections.some((name) => collectionKey(name) === collectionKey(text))
+    ) {
+      return setInputError('Already added')
+    }
+    setChecking(true)
+    try {
+      // The store's collection called exactly that, asked of the backend now so Enter doesn't
+      // have to wait for the typing pause. The product update only takes collections that
+      // exist (it answers 422 "not found" for any other name), so there is no "new" one.
+      const answer = await lookup(text)
+      const named = answer.items.find(
+        (collection) => collectionKey(collection.title) === collectionKey(text),
+      )
+      if (named) return pick(named)
+      return setInputError(`No collection is called “${text}”. Pick one from the list.`)
+    } catch (error) {
+      setInputError(
+        error instanceof ApiError ? error.message : 'Could not search the collections',
+      )
+    } finally {
+      setChecking(false)
+    }
   }
 
   const nothingListed =
-    product.collections.length === 0 && draft.addedCollectionIds.length === 0
+    product.collections.length === 0 && draft.addedCollections.length === 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -218,22 +226,26 @@ export function CollectionsSection({
                   setActive(-1)
                 } else if (event.key === 'Enter') {
                   event.preventDefault()
-                  if (listOpen && active >= 0) pick(shown[active].id)
-                  else add()
+                  if (listOpen && active >= 0) pick(shown[active])
+                  else void add()
                 }
               }}
               className={FIELD_INPUT}
             />
             <button
               type="button"
-              onClick={add}
-              disabled={!input.trim()}
+              onClick={() => void add()}
+              disabled={!input.trim() || checking}
               className="border-border bg-bg text-text hover:border-accent inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
               <PlusIcon width={14} height={14} />
               Add
             </button>
           </div>
+          <p className="text-text-muted text-[0.76rem]">
+            Only collections that already exist can be added. Smart collections
+            aren&apos;t listed — their products come from rules.
+          </p>
           {inputError && (
             <p role="alert" className="text-danger text-[0.78rem]">
               {inputError}
@@ -263,7 +275,7 @@ export function CollectionsSection({
                       // Keep the focus in the box: leaving it would close the list before the click.
                       onMouseDown={(event) => event.preventDefault()}
                       onMouseEnter={() => setActive(index)}
-                      onClick={() => pick(collection.id)}
+                      onClick={() => pick(collection)}
                       className={`flex cursor-pointer items-center gap-3 px-3.5 py-2 ${
                         index === active ? 'bg-accent-tint/60' : ''
                       }`}
@@ -296,18 +308,17 @@ export function CollectionsSection({
                 {shown.length === 0 && (
                   <p className="text-text-muted px-3.5 py-3 text-[0.82rem]">
                     {loading
-                      ? 'Loading collections…'
-                      : `No collection matches “${input.trim()}”. Check the name, or paste its ID and press Add.`}
+                      ? 'Searching collections…'
+                      : failed
+                        ? 'Could not search the collections. Try again in a moment.'
+                        : `No collection matches “${input.trim()}”. Only collections that already exist can be added.`}
                   </p>
                 )}
                 {shown.length > 0 && (total > COLLECTION_LIST_LIMIT || loading) && (
                   <p className="border-border text-text-muted border-t px-3.5 py-2 text-[0.76rem]">
-                    {total > COLLECTION_LIST_LIMIT
-                      ? `Showing ${COLLECTION_LIST_LIMIT} of ${total}`
-                      : `${total} ${total === 1 ? 'collection' : 'collections'}`}
                     {loading
-                      ? ' so far — more are loading…'
-                      : ' — keep typing to narrow the list.'}
+                      ? 'Searching…'
+                      : `Showing ${COLLECTION_LIST_LIMIT} of ${total} — keep typing to narrow the list.`}
                   </p>
                 )}
               </div>,
@@ -322,16 +333,13 @@ export function CollectionsSection({
         </p>
       ) : (
         <ul aria-label="Collections" className="flex flex-col gap-2">
-          {draft.addedCollectionIds.map((id, index) => (
+          {draft.addedCollections.map((name, index) => (
             <li
-              key={id}
+              key={name}
               className="border-accent/40 bg-accent-tint/40 flex items-center gap-3 rounded-xl border px-3.5 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[0.88rem] font-semibold">
-                  {titleOf(id) ?? 'Collection to add'}
-                </p>
-                <p className="text-text-muted truncate font-mono text-[0.74rem]">{id}</p>
+                <p className="truncate text-[0.88rem] font-semibold">{name}</p>
                 {errors[`addedCollections.${index}`] && (
                   <p role="alert" className="text-danger text-[0.78rem]">
                     {errors[`addedCollections.${index}`]}
@@ -341,11 +349,11 @@ export function CollectionsSection({
               <Badge tone="success">New</Badge>
               <button
                 type="button"
-                aria-label={`Don't add collection ${id}`}
+                aria-label={`Don't add collection ${name}`}
                 onClick={() =>
                   onChange({
-                    addedCollectionIds: draft.addedCollectionIds.filter(
-                      (value) => value !== id,
+                    addedCollections: draft.addedCollections.filter(
+                      (value) => value !== name,
                     ),
                   })
                 }

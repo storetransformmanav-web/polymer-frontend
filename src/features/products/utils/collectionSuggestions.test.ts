@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  collectionsOf,
-  COLLECTION_LIST_LIMIT,
-  matchCollections,
+  collectionKey,
+  offerFoundCollections,
   type KnownCollection,
 } from './collectionSuggestions.ts'
 
@@ -14,68 +13,38 @@ const make = (n: number, title = `Collection ${n}`): KnownCollection => ({
   collection_type: n % 2 ? 'smart' : 'custom',
 })
 
-describe('collectionsOf', () => {
-  it('gathers each collection once, whichever product it came from, by title', () => {
-    const result = collectionsOf([
-      { collections: [make(2, 'Zebra'), make(1, 'Apple')] },
-      { collections: [make(2, 'Zebra'), make(3, 'Mango')] },
-      null,
-      undefined,
-    ])
+describe('offerFoundCollections', () => {
+  const found = [
+    make(1, 'Aaa bags'),
+    make(2, 'Bags'),
+    make(3, 'Carrier bags'),
+    make(4, 'Bags on roll'),
+  ]
 
-    expect(result.map((collection) => collection.title)).toEqual([
-      'Apple',
-      'Mango',
-      'Zebra',
+  it('keeps the backend order and rows untouched', () => {
+    expect(offerFoundCollections(found, 4, new Set()).shown.map((c) => c.title)).toEqual([
+      'Aaa bags',
+      'Bags',
+      'Carrier bags',
+      'Bags on roll',
     ])
+  })
+
+  it('leaves out the ones the product is in and corrects the total by them', () => {
+    const result = offerFoundCollections(found, 4, new Set(['bags']))
+    expect(result.shown.map((c) => c.id)).toEqual(['id-1', 'id-3', 'id-4'])
+    expect(result.total).toBe(3)
+  })
+
+  it('counts the matches on later pages in the total, and shows only the limit', () => {
+    const result = offerFoundCollections(found, 149, new Set(), 2)
+    expect(result.shown).toHaveLength(2)
+    expect(result.total).toBe(149)
   })
 })
 
-describe('matchCollections', () => {
-  const known = Array.from({ length: 25 }, (_, i) => make(i + 1))
-
-  it('gives every match — or only the first few when a limit is given — and says how many matched', () => {
-    const all = matchCollections(known, '', new Set())
-    expect(COLLECTION_LIST_LIMIT).toBe(10)
-    expect(all.shown).toHaveLength(25)
-    expect(all.total).toBe(25)
-
-    const first = matchCollections(known, '', new Set(), COLLECTION_LIST_LIMIT)
-    expect(first.shown).toHaveLength(10)
-    expect(first.total).toBe(25)
-
-    // Typed text: still ten at most, all of them matches.
-    const typed = matchCollections(
-      known,
-      'collection 1',
-      new Set(),
-      COLLECTION_LIST_LIMIT,
-    )
-    expect(typed.shown).toHaveLength(10)
-    expect(typed.total).toBe(11)
-    expect(typed.shown.every((c) => c.title.toLowerCase().includes('collection 1'))).toBe(
-      true,
-    )
-  })
-
-  it('narrows by title, handle or id, in any case', () => {
-    expect(matchCollections(known, 'COLLECTION 2', new Set()).total).toBe(7)
-    expect(matchCollections(known, 'collection-25', new Set()).shown[0].id).toBe('id-25')
-    expect(matchCollections(known, 'id-7', new Set()).shown.map((c) => c.id)).toEqual([
-      'id-7',
-    ])
-  })
-
-  it('leaves out collections the product is in or has been given, and puts title-starts first', () => {
-    const list = [
-      make(1, 'Best sellers'),
-      make(2, 'Not the best'),
-      make(3, 'Best of all'),
-    ]
-
-    expect(
-      matchCollections(list, 'best', new Set(['id-3'])).shown.map((c) => c.title),
-    ).toEqual(['Best sellers', 'Not the best'])
-    expect(matchCollections(list, 'nothing like it', new Set()).total).toBe(0)
+describe('collectionKey', () => {
+  it('compares names trimmed and in any case', () => {
+    expect(collectionKey('  Food Packaging ')).toBe(collectionKey('food packaging'))
   })
 })

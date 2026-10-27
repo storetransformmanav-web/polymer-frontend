@@ -6,8 +6,8 @@ import {
   PRODUCT_EDIT_STATUSES,
   type ProductEditStatus,
 } from '../../../../lib/api/endpoints.ts'
-import { useKnownCollections } from '../../hooks/useKnownCollections.ts'
-import { matchCollections } from '../../utils/collectionSuggestions.ts'
+import { useCollectionSearch } from '../../hooks/useCollectionSearch.ts'
+import { collectionKey } from '../../utils/collectionSuggestions.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { statusLabel } from '../../utils/format.ts'
 import { TAG_CHIP, TagsInput } from '../edit/TagsSection.tsx'
@@ -15,6 +15,9 @@ import { EditField, FIELD_INPUT } from '../edit/fields.tsx'
 import { CARD, type CreateSectionProps } from './CreateCard.tsx'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Collections asked for when the box opens (the backend's page size). */
+const LIST_SIZE = 50
 
 const STATUS_OPTIONS: SelectOption[] = PRODUCT_EDIT_STATUSES.map((status) => ({
   value: status,
@@ -25,26 +28,30 @@ const STATUS_OPTIONS: SelectOption[] = PRODUCT_EDIT_STATUSES.map((status) => ({
 const BLOCK = 'border-border flex flex-col gap-3.5 border-t p-4 first:border-t-0'
 
 /**
- * Collections: a search box that, once it has the focus, lists **every collection the app
- * already knows** (those of the products it has loaded — the backend has no "list
- * collections" endpoint, so opening the box also reads the details of the products on the
- * list page) to pick from, leaving out smart collections (the API takes manual ones only);
- * typing narrows the list. Picked ones are chips with a ✕ under the
- * box. A collection that isn't listed can still be added by pasting its CRM ID (a UUID) and
- * pressing Enter. The product is sent with the collections' ids.
+ * Collections: a search box that, once it has the focus, lists **the store's collections from
+ * the backend** (`GET /collections?type=custom`, the first 50 by title — the create API takes
+ * manual collections only) to pick from; typing searches the backend (`search=`), and the
+ * list says how many more there are. Picked ones are chips with a ✕ under the box. A
+ * collection can also be added by pasting its CRM ID (a UUID) and pressing Enter — the create
+ * API takes ids. The product is sent with the collections' ids.
  */
 function CollectionsPicker({
   ids,
   errors,
+  shop,
   onChange,
 }: {
   ids: string[]
   errors: CreateSectionProps['errors']
+  /** The store the product is created in (its collections are the ones listed). */
+  shop: string
   onChange: (ids: string[]) => void
 }) {
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // The names of the picked collections, learnt from the rows they were picked from.
+  const [titles, setTitles] = useState<Record<string, string>>({})
   const root = useRef<HTMLDivElement>(null)
 
   // Close on a click anywhere outside the field.
@@ -57,27 +64,43 @@ function CollectionsPicker({
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
 
-  // The create API takes manual collections only, so smart ones (filled by rules) aren't offered.
-  const { collections: everyone, loading } = useKnownCollections(open)
-  const known = useMemo(
-    () =>
-      everyone.filter(
-        (collection) => collection.collection_type?.toLowerCase() !== 'smart',
-      ),
-    [everyone],
-  )
+  // Nothing is asked until the box is opened; then the backend's first page, or its search.
+  const { found, total, loading, failed, lookup } = useCollectionSearch(input, shop, {
+    all: open,
+    pageSize: LIST_SIZE,
+  })
   const chosen = useMemo(() => new Set(ids), [ids])
-  const { shown, total } = useMemo(
-    () => matchCollections(known, input, chosen),
-    [known, input, chosen],
+  const shown = useMemo(
+    () => found.filter((collection) => !chosen.has(collection.id)),
+    [found, chosen],
   )
-  const titleOf = (id: string) => known.find((collection) => collection.id === id)?.title
   const typedId = UUID.test(input.trim()) ? input.trim().toLowerCase() : null
 
-  function add(id: string) {
+  function add(id: string, title?: string) {
     if (!chosen.has(id)) onChange([...ids, id])
+    if (title) setTitles((known) => ({ ...known, [id]: title }))
     setInput('')
     setProblem(null)
+  }
+
+  async function submitText() {
+    const text = input.trim()
+    if (!text) return
+    if (typedId) return add(typedId)
+    // The collection called exactly that, asked of the backend now so Enter doesn't have to
+    // wait for the typing pause.
+    try {
+      const answer = await lookup(text)
+      const named = answer.items.find(
+        (collection) =>
+          !chosen.has(collection.id) &&
+          collectionKey(collection.title) === collectionKey(text),
+      )
+      if (named) return add(named.id, named.title)
+      setProblem(`No collection is called “${text}”`)
+    } catch {
+      setProblem('Could not search the collections')
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -89,21 +112,10 @@ function CollectionsPicker({
     }
     if (event.key !== 'Enter') return
     event.preventDefault()
-    const text = input.trim()
-    if (!text) return
-    if (typedId) return add(typedId)
-    // A name: the collection called exactly that, else the only one the text narrows to.
-    const named = shown.find(
-      (collection) => collection.title.trim().toLowerCase() === text.toLowerCase(),
-    )
-    if (named) return add(named.id)
-    if (total === 1) return add(shown[0].id)
-    setProblem(
-      total > 1
-        ? 'Choose a collection from the list'
-        : 'That is not a valid collection ID',
-    )
+    void submitText()
   }
+
+  const more = total - found.length
 
   return (
     <div ref={root} className="flex flex-col gap-2">
@@ -160,7 +172,7 @@ function CollectionsPicker({
             <li key={collection.id}>
               <button
                 type="button"
-                onClick={() => add(collection.id)}
+                onClick={() => add(collection.id, collection.title)}
                 className="hover:bg-accent-tint/60 flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border-none bg-transparent px-2.5 py-2 text-left text-[0.85rem] font-medium"
               >
                 <span className="min-w-0 truncate">{collection.title}</span>
@@ -171,16 +183,20 @@ function CollectionsPicker({
             <li className="text-text-muted px-2.5 py-2 text-[0.8rem]" role="status">
               {loading
                 ? 'Loading collections…'
-                : known.length === 0
-                  ? 'No collections known yet. Paste a collection ID to add one.'
-                  : input.trim()
-                    ? 'No collection matches.'
-                    : 'Every known collection is already added.'}
+                : failed
+                  ? 'Could not load the collections. Try again in a moment.'
+                  : found.length > 0
+                    ? 'Every listed collection is already added.'
+                    : input.trim()
+                      ? `No collection matches “${input.trim()}”.`
+                      : 'No collections found.'}
             </li>
           )}
-          {shown.length > 0 && loading && (
+          {shown.length > 0 && (loading || more > 0) && (
             <li className="text-text-muted px-2.5 py-1.5 text-[0.76rem]" role="status">
-              More collections are loading…
+              {loading
+                ? 'Loading collections…'
+                : `Showing ${found.length} of ${total} — keep typing to narrow the list.`}
             </li>
           )}
         </ul>
@@ -197,11 +213,11 @@ function CollectionsPicker({
           {ids.map((id, index) => (
             <li key={id} className={`${TAG_CHIP} flex items-center gap-1 pr-1.5`}>
               <span className="max-w-44 truncate" title={id}>
-                {titleOf(id) ?? id}
+                {titles[id] ?? id}
               </span>
               <button
                 type="button"
-                aria-label={`Remove collection ${titleOf(id) ?? id}`}
+                aria-label={`Remove collection ${titles[id] ?? id}`}
                 onClick={() => onChange(ids.filter((value) => value !== id))}
                 className="hover:text-danger inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current"
               >
@@ -311,6 +327,7 @@ export function CreateSidebarCard({
           <CollectionsPicker
             ids={draft.collections}
             errors={errors}
+            shop={shop}
             onChange={(collections) => update({ collections })}
           />
         </EditField>
