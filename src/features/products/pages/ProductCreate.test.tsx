@@ -23,6 +23,8 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       list: vi.fn(),
       details: vi.fn(),
       create: vi.fn(),
+      uploadTarget: vi.fn(),
+      addMedia: vi.fn(),
       update: vi.fn(),
       syncHistory: vi.fn(),
     },
@@ -634,6 +636,122 @@ describe('adding a product', () => {
         await within(form).findByText('Use a public https:// address'),
       ).toBeInTheDocument()
       expect(create).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('files chosen from the computer', () => {
+    const uploadTarget = vi.mocked(api.products.uploadTarget)
+    const addMedia = vi.mocked(api.products.addMedia)
+    const fetchMock = vi.fn()
+    const TARGET = {
+      uploadUrl: 'https://shopify-staged-uploads.storage.googleapis.com/',
+      resourceUrl:
+        'https://shopify-staged-uploads.storage.googleapis.com/tmp/1/photo.png',
+      method: 'POST' as const,
+      parameters: [{ name: 'key', value: 'tmp/1/photo.png' }],
+    }
+    const choose = (form: HTMLElement) =>
+      within(form).getByLabelText('Choose files from your computer')
+
+    beforeEach(() => {
+      uploadTarget.mockResolvedValue(TARGET)
+      addMedia.mockResolvedValue({
+        product_id: 'new-id',
+        sync_status: 'pending',
+        push_id: 'p1',
+        changes: {},
+        message: 'Media queued for Shopify',
+      })
+      fetchMock.mockResolvedValue({ ok: true, status: 204 })
+      vi.stubGlobal('fetch', fetchMock)
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      fetchMock.mockReset()
+    })
+
+    it('lists the file, uploads nothing yet, and sends the product without it', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+
+      await user.upload(
+        choose(form),
+        new File(['pixels'], 'photo.png', { type: 'image/png' }),
+      )
+
+      expect(within(form).getByText('photo.png')).toBeInTheDocument()
+      expect(
+        within(form).getByText(/uploaded to the product right after it is created/),
+      ).toBeInTheDocument()
+      expect(uploadTarget).not.toHaveBeenCalled()
+      await user.click(submit(form))
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      // The file is not part of the create request: the product has to exist first.
+      expect(create.mock.calls[0][0].media).toBeUndefined()
+    })
+
+    it('uploads the file to the new product right after it is created, then attaches it', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.upload(
+        choose(form),
+        new File(['pixels'], 'photo.png', { type: 'image/png' }),
+      )
+      await user.click(submit(form))
+
+      await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
+      expect(uploadTarget).toHaveBeenCalledWith(
+        'new-id',
+        {
+          filename: 'photo.png',
+          mime_type: 'image/png',
+          file_size: 6,
+          media_type: 'IMAGE',
+        },
+        'polymer-uk',
+      )
+      expect(fetchMock.mock.calls[0][0]).toBe(TARGET.uploadUrl)
+      expect(addMedia).toHaveBeenCalledWith(
+        'new-id',
+        [{ url: TARGET.resourceUrl, media_type: 'IMAGE' }],
+        'polymer-uk',
+      )
+      expect(
+        await screen.findByText(/1 file uploaded; the store is processing them\./),
+      ).toBeInTheDocument()
+    })
+
+    it('still creates the product when a file fails, and says which files to add later', async () => {
+      uploadTarget.mockRejectedValue(new ApiError('Storage is full.', { status: 500 }))
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.upload(
+        choose(form),
+        new File(['pixels'], 'photo.png', { type: 'image/png' }),
+      )
+      await user.click(submit(form))
+
+      expect(
+        await screen.findByText(
+          /1 file could not be uploaded — add it from the product's Media tab\./,
+        ),
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Created “Sushi Tray”/)).toBeInTheDocument()
+      expect(addMedia).not.toHaveBeenCalled()
+    })
+
+    it('counts a chosen file as something to lose when the form is closed', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      const { user, form } = await openForm()
+      await user.upload(
+        choose(form),
+        new File(['pixels'], 'photo.png', { type: 'image/png' }),
+      )
+
+      await user.click(within(form).getByRole('button', { name: 'Back to list' }))
+
+      expect(confirm).toHaveBeenCalled()
+      expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
     })
   })
 

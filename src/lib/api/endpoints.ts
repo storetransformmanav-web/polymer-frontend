@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ApiError } from './ApiError.ts'
 import { apiClient } from './client.ts'
 
 /**
@@ -56,6 +57,8 @@ export const ENDPOINTS = {
     list: '/collections',
     /** `GET` one collection with its products; `id` is its CRM UUID. */
     detail: (id: string) => `/collections/${encodeURIComponent(id)}`,
+    /** `POST` makes a manual collection in the store (and the CRM), optionally with products in it. */
+    create: '/collections',
   },
   sync: {
     /** `POST` starts a background sync of every product of one store. */
@@ -75,6 +78,9 @@ export const ENDPOINTS = {
     create: '/products',
     /** `POST` attaches images/videos by public URL (`id` is the product's CRM UUID). */
     media: (id: string) => `/products/${encodeURIComponent(id)}/media`,
+    /** `POST` asks for a place to upload a file from the computer (`id` is the product's CRM UUID). */
+    uploadTarget: (id: string) =>
+      `/products/${encodeURIComponent(id)}/media/upload-target`,
     /** `DELETE` removes one media attachment (its CRM UUID) from the product. */
     mediaItem: (id: string, attachmentId: string) =>
       `/products/${encodeURIComponent(id)}/media/${encodeURIComponent(attachmentId)}`,
@@ -1189,6 +1195,79 @@ export interface ProductMetafieldRemoval {
   key: string
 }
 
+/** What the backend is told about a file the user chose, to get a place to upload it. */
+export interface UploadTargetRequest {
+  filename: string
+  mime_type: string
+  file_size: number
+  media_type: MediaType
+}
+
+/**
+ * Where to send a file: the answer of `POST /products/{id}/media/upload-target`. It is
+ * read leniently (the spec doesn't show it): the upload address (`url` / `upload_url`),
+ * the form fields to send with it (`parameters`, a list of `{ name, value }` or a plain
+ * object), the HTTP method when it says one, and `resource_url` — the address that then goes
+ * in `url` of `POST /products/{id}/media`. The fields can sit at the top, or under
+ * `result` / `target` / `upload` / `data`.
+ */
+export const uploadTargetSchema = z.object({
+  uploadUrl: z.string().min(1),
+  resourceUrl: z.string().min(1),
+  method: z.enum(['POST', 'PUT']),
+  parameters: z.array(z.object({ name: z.string(), value: z.string() })),
+})
+export type UploadTarget = z.infer<typeof uploadTargetSchema>
+
+const targetFieldsSchema = z.object({
+  url: z.string().nullish(),
+  upload_url: z.string().nullish(),
+  uploadUrl: z.string().nullish(),
+  resource_url: z.string().nullish(),
+  resourceUrl: z.string().nullish(),
+  method: z.string().nullish(),
+  http_method: z.string().nullish(),
+  parameters: z
+    .union([
+      z.array(z.object({ name: z.string(), value: z.string().nullish() })),
+      z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+    ])
+    .nullish(),
+  fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).nullish(),
+})
+
+/** Finds the upload target in the backend's answer, wherever it nests it. */
+export function readUploadTarget(data: unknown): UploadTarget {
+  const holders = ['result', 'target', 'upload', 'data']
+  const candidates: unknown[] = [data]
+  if (typeof data === 'object' && data !== null) {
+    for (const key of holders) {
+      const inner = (data as Record<string, unknown>)[key]
+      if (typeof inner === 'object' && inner !== null) candidates.push(inner)
+    }
+  }
+  for (const candidate of candidates) {
+    const parsed = targetFieldsSchema.safeParse(candidate)
+    if (!parsed.success) continue
+    const fields = parsed.data
+    const uploadUrl = fields.upload_url ?? fields.uploadUrl ?? fields.url
+    const resourceUrl = fields.resource_url ?? fields.resourceUrl
+    if (!uploadUrl || !resourceUrl) continue
+    const given = fields.parameters ?? fields.fields ?? []
+    const parameters = Array.isArray(given)
+      ? given.map((item) => ({ name: item.name, value: item.value ?? '' }))
+      : Object.entries(given).map(([name, value]) => ({ name, value: String(value) }))
+    const method = (fields.method ?? fields.http_method ?? '').toUpperCase()
+    return {
+      uploadUrl,
+      resourceUrl,
+      method: method === 'PUT' ? 'PUT' : 'POST',
+      parameters,
+    }
+  }
+  throw new ApiError('The store did not give an address to upload the file to.')
+}
+
 /** A picture or video to attach, by public https URL. */
 export interface ProductMediaInput {
   url: string
@@ -1315,6 +1394,31 @@ const collectionDetailSchema = collectionListItemSchema.extend({
 
 const collectionDetailResponseSchema = z.object({ collection: collectionDetailSchema })
 
+/**
+ * `POST /collections` answers `{ code: 201, status, message, collection }`, the collection
+ * as `GET /collections/{id}` has it (with its products). Only the collection is required.
+ */
+const collectionCreateResponseSchema = z.object({
+  message: z.string().nullish(),
+  collection: collectionDetailSchema,
+})
+
+/** The body of `POST /collections` (manual collections only). */
+export interface CollectionCreateBody {
+  /** The new collection's name. */
+  title: string
+  /** The store's key (`polymer-uk`). */
+  shop: string
+  /** CRM ids of the products to put in it straight away. */
+  products?: string[]
+}
+
+export interface CollectionCreateResult {
+  /** What the backend says it did, e.g. "Collection 'Juice Bottles' created in Shopify with 1 product(s).". */
+  message: string
+  collection: CollectionDetail
+}
+
 export type CollectionListItem = z.infer<typeof collectionListItemSchema>
 export type CollectionListResponse = z.infer<typeof collectionListResponseSchema>
 export type CollectionDetail = z.infer<typeof collectionDetailSchema>
@@ -1403,6 +1507,16 @@ export const api = {
     async detail(id: string): Promise<CollectionDetail> {
       const data = await apiClient.get(ENDPOINTS.collections.detail(id))
       return collectionDetailResponseSchema.parse(data).collection
+    },
+
+    /** Makes a manual collection in the store with the given products in it. Never retried. */
+    async create(body: CollectionCreateBody): Promise<CollectionCreateResult> {
+      const data = await apiClient.post(ENDPOINTS.collections.create, body)
+      const parsed = collectionCreateResponseSchema.parse(data)
+      return {
+        message: parsed.message ?? `Collection '${parsed.collection.title}' created.`,
+        collection: parsed.collection,
+      }
     },
   },
 
@@ -1527,6 +1641,22 @@ export const api = {
         { params: shop ? { shop } : undefined },
       )
       return productWriteResponseSchema.parse(data)
+    },
+
+    /**
+     * Asks where to upload a file chosen from the computer. The file is then sent to the
+     * address in the answer (see `lib/api/upload.ts`) and its `resourceUrl` is attached with
+     * `addMedia`. Never retried automatically.
+     */
+    async uploadTarget(
+      id: string,
+      file: UploadTargetRequest,
+      shop?: string | null,
+    ): Promise<UploadTarget> {
+      const data = await apiClient.post(ENDPOINTS.products.uploadTarget(id), file, {
+        params: shop ? { shop } : undefined,
+      })
+      return readUploadTarget(data)
     },
 
     /** Removes one media attachment from a product ("Media removal queued"). Never retried automatically. */

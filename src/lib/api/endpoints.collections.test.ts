@@ -147,6 +147,65 @@ describe('api.collections', () => {
     expect(collection.products[1].image_url).toBeNull()
   })
 
+  it('makes a collection with POST /collections and reads { collection } from the 201 answer', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      code: 201,
+      status: 'Created',
+      message: "Collection 'Juice Bottles' created in Shopify with 1 product(s).",
+      collection: {
+        id: '2ac9d27a-77c2-43e7-8790-796c094c9111',
+        shopify_id: 694879420801,
+        shopify_gid: 'gid://shopify/Collection/694879420801',
+        title: 'Juice Bottles',
+        handle: 'juice-bottles',
+        description_html: '',
+        collection_type: 'custom',
+        editable: true,
+        rules: null,
+        sort_order: 'MOST_RELEVANT',
+        seo_title: null,
+        seo_description: null,
+        image_url: null,
+        products_count: 1,
+        products: [
+          {
+            id: '23ea21e1-d3a8-4919-b698-f5d9aca2b698',
+            shopify_id: 15577234473345,
+            title: 'Example T-Shirt',
+            handle: 'example-t-shirt',
+            status: 'DRAFT',
+            total_inventory: 100,
+            image_url: 'https://cdn.shopify.com/s/files/1/0000/files/600x600.png?v=1',
+          },
+        ],
+        shop: SHOP,
+        shopify_updated_at: '2026-10-27T12:27:24Z',
+      },
+    })
+
+    const result = await api.collections.create({
+      products: ['23ea21e1-d3a8-4919-b698-f5d9aca2b698'],
+      shop: 'polymer-uk',
+      title: 'Juice Bottles',
+    })
+
+    expect(apiClient.post).toHaveBeenCalledWith('/collections', {
+      products: ['23ea21e1-d3a8-4919-b698-f5d9aca2b698'],
+      shop: 'polymer-uk',
+      title: 'Juice Bottles',
+    })
+    expect(result.message).toBe(
+      "Collection 'Juice Bottles' created in Shopify with 1 product(s).",
+    )
+    expect(result.collection).toMatchObject({
+      title: 'Juice Bottles',
+      handle: 'juice-bottles',
+      collection_type: 'custom',
+      editable: true,
+    })
+    expect(result.collection.products).toHaveLength(1)
+  })
+
   it('rejects an answer that is not a collection list', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ items: 'nope' })
 

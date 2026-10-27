@@ -22,6 +22,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       details: vi.fn(),
       update: vi.fn(),
       addMedia: vi.fn(),
+      uploadTarget: vi.fn(),
       removeMedia: vi.fn(),
       push: vi.fn(),
       syncHistory: vi.fn(),
@@ -283,6 +284,169 @@ describe('adding and deleting media', () => {
       )
       expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
       expect(addMedia).toHaveBeenCalledTimes(1)
+    })
+
+    describe('upload from your computer', () => {
+      const uploadTarget = vi.mocked(api.products.uploadTarget)
+      const TARGET = {
+        uploadUrl: 'https://shopify-staged-uploads.storage.googleapis.com/',
+        resourceUrl:
+          'https://shopify-staged-uploads.storage.googleapis.com/tmp/1/photo.png',
+        method: 'POST' as const,
+        parameters: [{ name: 'key', value: 'tmp/1/photo.png' }],
+      }
+      const fetchMock = vi.fn()
+
+      beforeEach(() => {
+        uploadTarget.mockResolvedValue(TARGET)
+        fetchMock.mockResolvedValue({ ok: true, status: 204 })
+        vi.stubGlobal('fetch', fetchMock)
+      })
+      afterEach(() => {
+        vi.unstubAllGlobals()
+        fetchMock.mockReset()
+      })
+
+      const choose = (dialog: HTMLElement) =>
+        within(dialog).getByLabelText('Choose files from your computer')
+      const PHOTO = () => new File(['pixels'], 'photo.png', { type: 'image/png' })
+
+      it('lists a chosen file with its type and size, and sends nothing until Add to product', async () => {
+        const { user, dialog } = await openDialog()
+
+        await user.upload(choose(dialog), PHOTO())
+
+        const list = within(dialog).getByRole('list', { name: 'Files to upload' })
+        expect(within(list).getByText('photo.png')).toBeInTheDocument()
+        expect(within(list).getByText(/Image · 1 KB/)).toBeInTheDocument()
+        expect(uploadTarget).not.toHaveBeenCalled()
+        expect(fetchMock).not.toHaveBeenCalled()
+        expect(addMedia).not.toHaveBeenCalled()
+      })
+
+      it('uploads the file, then attaches the store’s resource address as a new image', async () => {
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), PHOTO())
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
+        expect(uploadTarget).toHaveBeenCalledWith(
+          'id-1',
+          {
+            filename: 'photo.png',
+            mime_type: 'image/png',
+            file_size: 6,
+            media_type: 'IMAGE',
+          },
+          'polymer-uk',
+        )
+        // The file went to the storage address, as a form with the target's fields first.
+        const [url, init] = fetchMock.mock.calls[0]
+        expect(url).toBe(TARGET.uploadUrl)
+        expect([...(init.body as FormData).keys()]).toEqual(['key', 'file'])
+        // And it is attached by its resource address — the empty address row adds nothing.
+        expect(addMedia).toHaveBeenCalledWith(
+          'id-1',
+          [{ url: TARGET.resourceUrl, media_type: 'IMAGE' }],
+          'polymer-uk',
+        )
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(await screen.findByLabelText('Processing')).toBeInTheDocument()
+      })
+
+      it('adds uploaded files together with typed addresses, in one request', async () => {
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), PHOTO())
+        await user.type(
+          within(dialog).getByLabelText('Web address'),
+          'https://cdn.example.com/a.jpg',
+        )
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
+        expect(addMedia).toHaveBeenCalledWith(
+          'id-1',
+          [
+            { url: 'https://cdn.example.com/a.jpg', media_type: 'IMAGE' },
+            { url: TARGET.resourceUrl, media_type: 'IMAGE' },
+          ],
+          'polymer-uk',
+        )
+      })
+
+      it('refuses a file over its limit, by the file’s name, and keeps the good ones', async () => {
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), PHOTO())
+
+        const big = new File(['x'], 'big.png', { type: 'image/png' })
+        Object.defineProperty(big, 'size', { value: 25 * 1024 * 1024 })
+        await user.upload(choose(dialog), big)
+
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+          'big.png — This image is 25.0 MB; the most is 20.0 MB.',
+        )
+        const list = within(dialog).getByRole('list', { name: 'Files to upload' })
+        expect(within(list).getByText('photo.png')).toBeInTheDocument()
+        expect(within(list).queryByText('big.png')).not.toBeInTheDocument()
+      })
+
+      it('removes a chosen file before sending', async () => {
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), PHOTO())
+
+        await user.click(within(dialog).getByRole('button', { name: 'Remove photo.png' }))
+
+        expect(within(dialog).queryByText('photo.png')).not.toBeInTheDocument()
+      })
+
+      it('adds nothing when a file fails to upload, says which, and does not send the others twice on retry', async () => {
+        uploadTarget
+          .mockResolvedValueOnce(TARGET)
+          .mockRejectedValueOnce(new ApiError('Storage is full.', { status: 500 }))
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), [
+          PHOTO(),
+          new File(['more'], 'second.jpg', { type: 'image/jpeg' }),
+        ])
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        expect(await within(dialog).findByText('Storage is full.')).toBeInTheDocument()
+        expect(
+          within(dialog).getByText(/1 file could not be uploaded/),
+        ).toBeInTheDocument()
+        expect(addMedia).not.toHaveBeenCalled()
+        expect(screen.getByRole('dialog', { name: 'Add media' })).toBeInTheDocument()
+
+        // Trying again only redoes the failed file.
+        uploadTarget.mockResolvedValueOnce({
+          ...TARGET,
+          resourceUrl:
+            'https://shopify-staged-uploads.storage.googleapis.com/tmp/2/second.jpg',
+        })
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
+        expect(uploadTarget).toHaveBeenCalledTimes(3)
+        expect(addMedia.mock.calls[0][1]).toEqual([
+          { url: TARGET.resourceUrl, media_type: 'IMAGE' },
+          {
+            url: 'https://shopify-staged-uploads.storage.googleapis.com/tmp/2/second.jpg',
+            media_type: 'IMAGE',
+          },
+        ])
+      })
+
+      it('shows the storage’s refusal as the file’s own error', async () => {
+        fetchMock.mockResolvedValue({ ok: false, status: 403 })
+        const { user, dialog } = await openDialog()
+        await user.upload(choose(dialog), PHOTO())
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        expect(
+          await within(dialog).findByText(/The store refused the file \(error 403\)/),
+        ).toBeInTheDocument()
+        expect(addMedia).not.toHaveBeenCalled()
+      })
     })
 
     it('closes on Cancel without sending anything', async () => {

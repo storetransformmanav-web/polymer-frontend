@@ -7,6 +7,7 @@ import { useShops } from '../../../hooks/useShops.ts'
 import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
 import { useCreateProduct } from '../hooks/useCreateProduct.ts'
 import { useStockLocations } from '../hooks/useStockLocations.ts'
+import type { PickedFile } from '../utils/mediaFiles.ts'
 import {
   blankCreateDraft,
   firstImageUrl,
@@ -34,7 +35,16 @@ interface ProductCreateViewProps {
    * image address it was created with, when it has one: the store is still
    * downloading that file.
    */
-  onCreated: (result: ProductCreateResult, info: { previewUrl: string | null }) => void
+  onCreated: (
+    result: ProductCreateResult,
+    info: {
+      previewUrl: string | null
+      /** Why some chosen files didn't go up (the product itself was created). */
+      uploadProblem?: string | null
+      /** How many files were chosen from the computer. */
+      uploadedFiles?: number
+    },
+  ) => void
 }
 
 const BUTTON =
@@ -54,7 +64,9 @@ export function ProductCreateView({
   onDirtyChange,
 }: ProductCreateViewProps) {
   const { shops, selected } = useShops()
-  const { create, isCreating, error, clearError } = useCreateProduct()
+  const { create, isCreating, error, uploadStates, clearError } = useCreateProduct()
+  // Files chosen from the computer; they are uploaded to the product right after it is created.
+  const [files, setFiles] = useState<PickedFile[]>([])
   const [draft, setDraft] = useState<CreateDraft>(() => blankCreateDraft(''))
   const [showErrors, setShowErrors] = useState(false)
 
@@ -85,14 +97,14 @@ export function ProductCreateView({
     })
   }
 
-  const dirty = isCreateDirty(effective)
+  const dirty = isCreateDirty(effective) || files.length > 0
   useEffect(() => {
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
 
   function back() {
     if (
-      isCreateDirty(effective) &&
+      dirty &&
       !window.confirm('Discard this new product? What you entered will be lost.')
     ) {
       return
@@ -104,8 +116,14 @@ export function ProductCreateView({
     setShowErrors(true)
     if (Object.keys(problems).length > 0) return
     const createdShop = shops.find((candidate) => shopValue(candidate) === shop)
-    const result = await create(effective, createdShop ?? null)
-    if (result) onCreated(result, { previewUrl: firstImageUrl(effective) })
+    const result = await create(effective, createdShop ?? null, files)
+    if (result) {
+      onCreated(result.product, {
+        previewUrl: firstImageUrl(effective),
+        uploadProblem: result.uploadProblem,
+        uploadedFiles: files.length,
+      })
+    }
   }
 
   const createButton = (
@@ -160,6 +178,10 @@ export function ProductCreateView({
             errors={errors}
             update={update}
             pictures={pictures}
+            files={files}
+            onFiles={setFiles}
+            uploadStates={uploadStates}
+            uploading={isCreating}
           />
           <CreatePriceCard draft={effective} errors={errors} update={update} />
           <CreateInventoryCard

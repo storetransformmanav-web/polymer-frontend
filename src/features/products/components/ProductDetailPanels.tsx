@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   BoxesIcon,
@@ -59,7 +60,8 @@ import {
   TitleField,
   VendorField,
 } from './edit/BasicsSection.tsx'
-import { CollectionsSection as CollectionsEditor } from './edit/CollectionsSection.tsx'
+import { AddCollectionDialog } from './AddCollectionDialog.tsx'
+import { CollectionAdder } from './CollectionAdder.tsx'
 import { DescriptionSectionsSection as DescriptionSectionsEditor } from './edit/DescriptionSectionsSection.tsx'
 import {
   EditableCard,
@@ -97,7 +99,6 @@ const NO_ERRORS = [] as const
 const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
 const SECTIONS_ERRORS = ['descriptionSections'] as const
 const VARIANT_ERRORS = ['variants'] as const
-const COLLECTION_ERRORS = ['addedCollections'] as const
 const MEDIA_ERRORS = ['images'] as const
 
 const yesNo = (value: boolean | null | undefined) =>
@@ -694,22 +695,19 @@ function CollectionsView({
 
 /**
  * One row above the tiles: "In 10 collections" + a badge per type on the left;
- * the filter box and "Add collection" on the right. While adding, Save / Discard
- * appear beside it and the summary says what is being edited.
+ * the filter box and "Add collection" (which opens or tucks away the add box) on the right.
  */
 function CollectionsHeader({
   product,
   query,
   onQuery,
-  edit,
   addOpen,
   onAdd,
 }: {
   product: ProductDetail
   query: string
   onQuery: (value: string) => void
-  edit: SectionEdit
-  /** Whether the "add a collection" box is open (only meaningful while editing). */
+  /** Whether the "add a collection" box is open. */
   addOpen: boolean
   onAdd: () => void
 }) {
@@ -726,9 +724,8 @@ function CollectionsHeader({
     return [...byType.entries()]
   }, [collections])
 
-  const summary = edit.editing
-    ? 'Editing collections'
-    : collections.length === 0
+  const summary =
+    collections.length === 0
       ? 'Not in any collection'
       : `In ${collections.length} ${collections.length === 1 ? 'collection' : 'collections'}`
 
@@ -736,15 +733,14 @@ function CollectionsHeader({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <div className="mr-auto flex min-w-0 flex-wrap items-center gap-2">
         <p className="text-[0.95rem] font-semibold">{summary}</p>
-        {!edit.editing &&
-          counts.map(([label, count]) => (
-            <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
-              {count} {label}
-            </Badge>
-          ))}
+        {counts.map(([label, count]) => (
+          <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
+            {count} {label}
+          </Badge>
+        ))}
       </div>
 
-      {!edit.editing && collections.length >= COLLECTION_FILTER_MIN && (
+      {collections.length >= COLLECTION_FILTER_MIN && (
         <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 w-full items-center gap-2 rounded-lg border px-3 focus-within:outline-2 sm:w-64">
           <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
           <input
@@ -760,15 +756,14 @@ function CollectionsHeader({
       )}
 
       <div className="flex items-center gap-1.5">
-        {/* No pencil: collections are added with "Add collection" (Save / Discard appear
-            then) and taken out with the ✕ on a tile. */}
-        {edit.editing && <SectionEditControls edit={edit} what="collections" />}
+        {/* No pencil and no Save: a collection is added with the box that "Add collection"
+            opens (Add sends it, after asking) and taken out with the ✕ on a tile. */}
         <button
           type="button"
           onClick={onAdd}
-          aria-expanded={edit.editing ? addOpen : undefined}
+          aria-expanded={addOpen}
           className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors ${
-            edit.editing && addOpen
+            addOpen
               ? 'border-accent text-accent bg-accent-tint'
               : 'border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint'
           }`}
@@ -1246,6 +1241,10 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
   // The "add a collection" box stays hidden until "Add collection" is clicked, then
   // sits on top of the list.
   const [addOpen, setAddOpen] = useState(false)
+  // The name chosen with Add, waiting for "Yes, add" (or "Yes, create" for a new one).
+  const [adding, setAdding] = useState<{ name: string; isNew: boolean } | null>(null)
+  // What the backend said about a collection it just made.
+  const [created, setCreated] = useState<string | null>(null)
   // The collection whose ✕ was clicked, waiting for "Remove".
   const [removing, setRemoving] = useState<ProductDetail['collections'][number] | null>(
     null,
@@ -1253,33 +1252,43 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
 
   return (
     <>
-      <EditableTab
-        product={product}
-        what="collections"
-        errorPrefixes={COLLECTION_ERRORS}
-        onSaved={onSaved}
-        header={(edit) => (
-          <CollectionsHeader
+      <div className="flex flex-col gap-4">
+        <CollectionsHeader
+          product={product}
+          query={query}
+          onQuery={setQuery}
+          addOpen={addOpen}
+          onAdd={() => setAddOpen((open) => !open)}
+        />
+        {created && <FormMessage tone="success">{created}</FormMessage>}
+        {addOpen && (
+          <CollectionAdder
             product={product}
-            query={query}
-            onQuery={setQuery}
-            edit={edit}
-            addOpen={addOpen}
-            onAdd={() => {
-              if (edit.editing) {
-                setAddOpen((open) => !open)
-              } else {
-                setAddOpen(true)
-                edit.start()
-              }
-            }}
+            onChoose={(name, isNew) => setAdding({ name, isNew })}
           />
         )}
-        view={<CollectionsView product={product} query={query} onRemove={setRemoving} />}
-        editor={(section) => (
-          <CollectionsEditor {...section} showAdd={addOpen} focusAdd />
-        )}
-      />
+        <CollectionsView product={product} query={query} onRemove={setRemoving} />
+      </div>
+
+      {adding !== null && (
+        <AddCollectionDialog
+          key={`${adding.isNew ? 'new' : 'add'}-${adding.name}`}
+          product={product}
+          collectionName={adding.name}
+          isNew={adding.isNew}
+          onClose={() => setAdding(null)}
+          onDone={(outcome) => {
+            setAdding(null)
+            setAddOpen(false)
+            if (outcome.created) {
+              setCreated(outcome.message)
+              return
+            }
+            setCreated(null)
+            onSaved?.(outcome.result, product, { collections_add: [outcome.name] })
+          }}
+        />
+      )}
 
       {removing && (
         <RemoveCollectionDialog
@@ -1289,6 +1298,7 @@ export function CollectionsPanel({ product, onSaved }: TabProps) {
           onClose={() => setRemoving(null)}
           onDone={(result) => {
             setRemoving(null)
+            setCreated(null)
             onSaved?.(result, product, { collections_remove: [removing.title] })
           }}
         />

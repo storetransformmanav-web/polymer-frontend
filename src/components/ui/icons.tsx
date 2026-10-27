@@ -737,3 +737,13 @@ export function InfoIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 13V3.5" />
+      <path d="m6.5 7 3.5-3.5L13.5 7" />
+      <path d="M3.5 12.5v2A1.5 1.5 0 0 0 5 16h10a1.5 1.5 0 0 0 1.5-1.5v-2" />
+    </svg>
+  )
+}

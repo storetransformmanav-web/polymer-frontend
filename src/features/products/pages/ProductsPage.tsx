@@ -163,7 +163,11 @@ export function ProductsPage() {
 
   function handleCreated(
     result: ProductCreateResult,
-    info: { previewUrl: string | null },
+    info: {
+      previewUrl: string | null
+      uploadProblem?: string | null
+      uploadedFiles?: number
+    },
   ) {
     closeCreate()
     // What the store made, as it reports it (the counts are of what it accepted).
@@ -174,7 +178,7 @@ export function ProductsPage() {
     setNotice(
       `Created “${result.title}”${made.length ? ` with ${made.join(' and ')}` : ''}. ${result.message || 'It is in your store and in the list below.'}${
         info.previewUrl ? ' Its image is being downloaded by the store.' : ''
-      }`,
+      }${info.uploadProblem ? ` ${info.uploadProblem}` : info.uploadedFiles ? ` ${plural(info.uploadedFiles, 'file')} uploaded; the store is processing them.` : ''}`,
     )
     if (info.previewUrl) {
       setAwaitingImage({

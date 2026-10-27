@@ -26,6 +26,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
     },
     collections: {
       list: vi.fn(),
+      create: vi.fn(),
     },
     auth: {},
   },
@@ -177,6 +178,17 @@ function renderPage(route = '/products') {
 }
 
 const never = () => new Promise<never>(() => undefined)
+
+const NEW_COLLECTION = {
+  id: '2ac9d27a-77c2-43e7-8790-796c094c9111',
+  shopify_id: 694879420801,
+  title: 'Juice Bottles',
+  handle: 'juice-bottles',
+  collection_type: 'custom',
+  editable: true,
+  products_count: 1,
+  products: [],
+}
 
 describe('editing a product', () => {
   beforeEach(() => {
@@ -711,8 +723,11 @@ describe('editing a section in place', () => {
       ...OTHERS,
     ]
     const search = vi.mocked(api.collections.list)
+    const create = vi.mocked(api.collections.create)
 
     beforeEach(() => {
+      // Nothing a test said about creating a collection carries over to the next one.
+      create.mockReset()
       // A fake `GET /collections`: the collections whose name or handle contains `search`.
       search.mockImplementation(async (params) => {
         const needle = (params.search ?? '').toLowerCase()
@@ -907,32 +922,42 @@ describe('editing a section in place', () => {
       }
     })
 
-    it('says so when nothing matches, and does not offer a new collection', async () => {
+    it('says so when nothing matches, and offers to create it with Add', async () => {
       const user = await openAdd()
 
       await user.type(box(), 'avdcd')
 
       expect(
         await screen.findByText(
-          'No collection matches “avdcd”. Only collections that already exist can be added.',
+          'No collection matches “avdcd”. Press Add to create it as a new collection.',
         ),
       ).toBeVisible()
       expect(within(list()!).queryByRole('option')).toBeNull()
     })
 
-    it('adds the clicked collection by its id, shows it by name, and saves it', async () => {
+    /** Answers "Add to “X”?" with Yes. */
+    const confirmAdd = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+      const alert = await screen.findByRole('alertdialog', { name: `Add to “${name}”?` })
+      await user.click(within(alert).getByRole('button', { name: 'Yes, add' }))
+    }
+
+    it('fills the box with the clicked collection; Add then asks, and only "Yes, add" sends the PUT', async () => {
       const user = await openAdd()
       await user.type(box(), 'range 03')
       await user.click(await screen.findByRole('option', { name: /Range 03/ }))
 
-      expect(box()).toHaveValue('')
-      expect(screen.getByText('Range 03')).toBeInTheDocument()
-      expect(screen.getByText('New')).toBeInTheDocument()
-      // Picked from the list, so its name is known without asking the backend again.
+      // Choosing only fills the box (no list, nothing sent, no second search).
+      expect(box()).toHaveValue('Range 03')
+      expect(list()).toBeNull()
+      expect(update).not.toHaveBeenCalled()
       expect(search).toHaveBeenCalledTimes(1)
 
-      await user.click(saveButton('collections'))
-      await confirmUpdate(user)
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      const alert = await screen.findByRole('alertdialog', { name: 'Add to “Range 03”?' })
+      expect(within(alert).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      expect(update).not.toHaveBeenCalled()
+
+      await user.click(within(alert).getByRole('button', { name: 'Yes, add' }))
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith(
           'id-1',
@@ -940,9 +965,17 @@ describe('editing a section in place', () => {
           'polymer-uk',
         ),
       )
+      expect(update).toHaveBeenCalledTimes(1)
+      // Still just the one search: the chosen name needed no second look-up.
+      expect(search).toHaveBeenCalledTimes(1)
+      // Done: the dialog and the box are put away.
+      await waitFor(() =>
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+      )
+      expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
     })
 
-    it('moves with the arrow keys and adds the highlighted one on Enter; Escape closes only the list', async () => {
+    it('moves with the arrow keys and fills the box with the highlighted one on Enter; Escape closes only the list', async () => {
       const user = await openAdd()
       await user.type(box(), 'range')
       await options()
@@ -954,65 +987,151 @@ describe('editing a section in place', () => {
       )
       await user.keyboard('{Escape}')
       expect(list()).toBeNull()
-      expect(saveButton('collections')).toBeInTheDocument()
 
       // Clicking the box brings the list back (what was typed is still there).
       await user.click(box())
       expect(list()).not.toBeNull()
       await user.keyboard('{ArrowDown}{Enter}')
-      expect(screen.getByText('Range 01')).toBeInTheDocument()
-    })
+      expect(box()).toHaveValue('Range 01')
+      expect(update).not.toHaveBeenCalled()
 
-    it('adds a collection by typing its name and pressing Enter or Add — without waiting for the pause', async () => {
-      const user = await openAdd()
-
-      // The exact name (any case), no need to click the list.
-      await user.type(box(), 'range 04{Enter}')
-      expect(await screen.findByText('Range 04')).toBeInTheDocument()
-      expect(box()).toHaveValue('')
-
-      // Part of a name that narrows to one collection works with the Add button.
-      await user.type(box(), 'range 12')
-      await user.click(screen.getByRole('button', { name: 'Add' }))
-      expect(await screen.findByText('Range 12')).toBeInTheDocument()
-
-      await user.click(saveButton('collections'))
-      await confirmUpdate(user)
+      // A second Enter is "Add".
+      await user.keyboard('{Enter}')
+      await confirmAdd(user, 'Range 01')
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith(
           'id-1',
-          { collections_add: ['Range 04', 'Range 12'] },
+          { collections_add: ['Range 01'] },
           'polymer-uk',
         ),
       )
     })
 
-    it('on Enter, uses the collection called exactly that (any case); any other name is refused', async () => {
+    it('adds a collection typed in full with Enter or the Add button — without waiting for the pause', async () => {
       const user = await openAdd()
 
-      // Only part of a name, or a name nobody has: nothing is added, nothing is sent.
-      await user.type(box(), 'range 0{Enter}')
-      expect(await screen.findByRole('alert')).toHaveTextContent(
-        'No collection is called “range 0”',
-      )
-      expect(screen.queryByText('New')).toBeNull()
-      await user.clear(box())
-      await user.type(box(), 'avdcd{Enter}')
+      // The exact name (any case), no need to click the list.
+      await user.type(box(), 'range 04{Enter}')
+      await confirmAdd(user, 'Range 04')
       await waitFor(() =>
-        expect(screen.getByRole('alert')).toHaveTextContent(
-          'No collection is called “avdcd”',
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_add: ['Range 04'] },
+          'polymer-uk',
         ),
       )
-      expect(screen.queryByText('New')).toBeNull()
+      await waitFor(() =>
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+      )
+
+      // The box was put away; open it again and use the Add button.
+      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+      await user.type(box(), 'Range 12')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      await confirmAdd(user, 'Range 12')
+      await waitFor(() =>
+        expect(update).toHaveBeenLastCalledWith(
+          'id-1',
+          { collections_add: ['Range 12'] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    /** Answers "Create “X”?" with Yes. */
+    const confirmCreate = async (
+      user: ReturnType<typeof userEvent.setup>,
+      name: string,
+    ) => {
+      const alert = await screen.findByRole('alertdialog', { name: `Create “${name}”?` })
+      await user.click(within(alert).getByRole('button', { name: 'Yes, create' }))
+    }
+
+    it('makes a new collection for a name the store does not have: POST /collections, with this product in it', async () => {
+      create.mockResolvedValue({
+        message: "Collection 'Juice Bottles' created in Shopify with 1 product(s).",
+        collection: {
+          ...NEW_COLLECTION,
+          title: 'Juice Bottles',
+          handle: 'juice-bottles',
+        },
+      })
+      const user = await openAdd()
+
+      // Not in the list: the dropdown says so, and Add offers to make it.
+      await user.type(box(), 'Juice Bottles')
+      expect(
+        await screen.findByText(
+          /No collection matches “Juice Bottles”\. Press Add to create/,
+        ),
+      ).toBeVisible()
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      const alert = await screen.findByRole('alertdialog', {
+        name: 'Create “Juice Bottles”?',
+      })
+      expect(within(alert).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      expect(create).not.toHaveBeenCalled()
+
+      await user.click(within(alert).getByRole('button', { name: 'Yes, create' }))
+      await waitFor(() =>
+        expect(create).toHaveBeenCalledWith({
+          title: 'Juice Bottles',
+          shop: 'polymer-uk',
+          products: ['id-1'],
+        }),
+      )
+      expect(create).toHaveBeenCalledTimes(1)
+      // Making it is not an update of the product: no PUT.
       expect(update).not.toHaveBeenCalled()
+      expect(
+        await screen.findByText(
+          "Collection 'Juice Bottles' created in Shopify with 1 product(s).",
+        ),
+      ).toBeVisible()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
+    })
 
-      // A name the store has (any case): that collection's own name is used.
-      await user.clear(box())
+    it('keeps the question open with the backend’s message when making the collection fails', async () => {
+      create.mockRejectedValue(
+        new ApiError('A collection called “Juice Bottles” already exists.', {
+          status: 422,
+        }),
+      )
+      const user = await openAdd()
+
+      await user.type(box(), 'Juice Bottles{Enter}')
+      await confirmCreate(user, 'Juice Bottles')
+
+      expect(
+        await screen.findByText('A collection called “Juice Bottles” already exists.'),
+      ).toBeVisible()
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing when Cancel is pressed on the "Create" question', async () => {
+      const user = await openAdd()
+
+      await user.type(box(), 'Juice Bottles{Enter}')
+      const alert = await screen.findByRole('alertdialog', {
+        name: 'Create “Juice Bottles”?',
+      })
+      await user.click(within(alert).getByRole('button', { name: 'Cancel' }))
+
+      expect(create).not.toHaveBeenCalled()
+      expect(update).not.toHaveBeenCalled()
+      expect(box()).toHaveValue('Juice Bottles')
+    })
+
+    it('adds to the existing collection, not a new one, when the typed name is one the store has (any case)', async () => {
+      const user = await openAdd()
+
       await user.type(box(), 'RANGE 08{Enter}')
-      expect(await screen.findByText('Range 08')).toBeInTheDocument()
+      await confirmAdd(user, 'Range 08')
 
-      await user.click(saveButton('collections'))
-      await confirmUpdate(user)
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith(
           'id-1',
@@ -1020,16 +1139,78 @@ describe('editing a section in place', () => {
           'polymer-uk',
         ),
       )
+      expect(create).not.toHaveBeenCalled()
     })
 
-    it('adds nothing when the search fails, since it cannot tell whether the name exists', async () => {
+    it('uses the store’s own spelling when the typed name is one the list shows', async () => {
+      const user = await openAdd()
+
+      await user.type(box(), 'RANGE 08')
+      await screen.findByRole('option', { name: /Range 08/ })
+      await user.keyboard('{Enter}')
+      await confirmAdd(user, 'Range 08')
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_add: ['Range 08'] },
+          'polymer-uk',
+        ),
+      )
+      expect(create).not.toHaveBeenCalled()
+    })
+
+    it('does not risk a second collection when the search cannot say whether the name exists', async () => {
       search.mockRejectedValue(new ApiError('Server error', { status: 500 }))
       const user = await openAdd()
 
       await user.type(box(), 'zzz{Enter}')
+      // Unknown, so the safe request (the update, which the backend refuses for an unknown name).
+      await confirmAdd(user, 'zzz')
 
-      expect(await screen.findByRole('alert')).toHaveTextContent('Server error')
-      expect(screen.queryByText('New')).toBeNull()
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { collections_add: ['zzz'] },
+          'polymer-uk',
+        ),
+      )
+      expect(create).not.toHaveBeenCalled()
+    })
+
+    it('does not make a collection when the answer was cut short and the name could be further on', async () => {
+      search.mockResolvedValue({
+        items: OTHERS.slice(0, 3),
+        page: 1,
+        page_size: 50,
+        total: 80,
+        total_pages: 2,
+        has_next: true,
+      })
+      const user = await openAdd()
+
+      await user.type(box(), 'range{Enter}')
+      await confirmAdd(user, 'range')
+
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+      expect(create).not.toHaveBeenCalled()
+    })
+
+    it('explains, and switches off "Yes, add", when the store has no collection to add to', async () => {
+      search.mockRejectedValue(new ApiError('Server error', { status: 500 }))
+      update.mockRejectedValue(
+        new ApiError("Collection problem: 'adbc' not found", { status: 422 }),
+      )
+      const user = await openAdd()
+
+      await user.type(box(), 'adbc{Enter}')
+      await confirmAdd(user, 'adbc')
+
+      expect(
+        await screen.findByText("Collection problem: 'adbc' not found"),
+      ).toBeVisible()
+      expect(screen.getByText(/The store has no collection called “adbc”/)).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Yes, add' })).toBeDisabled()
+      expect(update).toHaveBeenCalledTimes(1)
     })
 
     it('says so when the name is of a collection the product is already in', async () => {
@@ -1040,48 +1221,46 @@ describe('editing a section in place', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'The product is already in that collection',
       )
-    })
-
-    it('adds by the collection’s name: the PUT carries the name, not an id', async () => {
-      const user = await openAdd()
-
-      await user.type(box(), 'range 05{Enter}')
-      expect(await screen.findByText('Range 05')).toBeInTheDocument()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       expect(update).not.toHaveBeenCalled()
-
-      await user.click(saveButton('collections'))
-      await confirmUpdate(user)
-      await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-      expect(update).toHaveBeenCalledWith(
-        'id-1',
-        { collections_add: ['Range 05'] },
-        'polymer-uk',
-      )
     })
 
-    it('does not add a name twice', async () => {
+    it('sends nothing on Cancel, and keeps what was typed', async () => {
+      const user = await openAdd()
+      await user.type(box(), 'range 05{Enter}')
+
+      const alert = await screen.findByRole('alertdialog', { name: 'Add to “Range 05”?' })
+      await user.click(within(alert).getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      expect(box()).toHaveValue('range 05')
+    })
+
+    it('keeps the question open with the backend’s message when the store refuses', async () => {
+      update.mockRejectedValue(
+        new ApiError("'Range 06' is a smart collection.", { status: 422 }),
+      )
       const user = await openAdd()
       await user.type(box(), 'range 06{Enter}')
-      await screen.findByText('Range 06')
+      await confirmAdd(user, 'Range 06')
 
-      await user.type(box(), 'RANGE 06{Enter}')
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('Already added')
-      expect(screen.getAllByText('Range 06')).toHaveLength(1)
+      expect(await screen.findByText("'Range 06' is a smart collection.")).toBeVisible()
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     })
 
-    it('calls GET /collections only to search, and PUT only when the change is saved', async () => {
+    it('calls GET /collections only to search, and PUT only after the question is answered', async () => {
       const user = await openAdd()
 
       await user.type(box(), 'range 03')
       await user.click(await screen.findByRole('option', { name: /Range 03/ }))
+      await user.click(screen.getByRole('button', { name: 'Add' }))
 
-      // Searching asked for the list; picking one sent nothing.
+      // Searching asked for the list; choosing one and pressing Add sent nothing yet.
       expect(search).toHaveBeenCalledTimes(1)
       expect(update).not.toHaveBeenCalled()
 
-      await user.click(saveButton('collections'))
-      await confirmUpdate(user)
+      await confirmAdd(user, 'Range 03')
       await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
       expect(update).toHaveBeenCalledWith(
         'id-1',
@@ -1092,21 +1271,21 @@ describe('editing a section in place', () => {
     })
   })
 
-  it('has no Edit pencil on the collections tab: the summary and Add collection only', async () => {
+  it('has no Edit pencil and no Save on the collections tab: the summary and Add collection only', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
 
     expect(screen.getByText('In 1 collection')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit collections' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Save collections' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add collection' })).toBeInTheDocument()
 
-    // Add collection starts the edit: Save / Discard appear, Add collection stays.
+    // Add collection opens the box — there is nothing to save or discard.
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
-    expect(saveButton('collections')).toBeInTheDocument()
-    expect(discardButton('collections')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add collection' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit collections' })).toBeNull()
+    expect(screen.getByLabelText('Add to a collection')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save collections' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Discard collections changes' }),
+    ).toBeNull()
   })
 
   it('keeps the box on top of the list, and tucks it away when Add collection is clicked again', async () => {
@@ -1128,13 +1307,10 @@ describe('editing a section in place', () => {
     expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
 
-  it('opens the editor with the add box on top from "Add collection", and shows added ones first', async () => {
+  it('adds a collection from the tab: type its name, Add, "Yes, add" — and it shows in the list', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Collections/ }))
     await user.click(screen.getByRole('button', { name: 'Add collection' }))
-
-    const box = screen.getByLabelText('Add to a collection')
-    expect(box).toHaveFocus()
 
     vi.mocked(api.collections.list).mockResolvedValue({
       items: [
@@ -1152,24 +1328,42 @@ describe('editing a section in place', () => {
       total_pages: 1,
       has_next: false,
     })
-    await user.type(box, 'Food Packaging{Enter}')
-    await screen.findByText('Food Packaging')
-
-    const items = within(screen.getByRole('list', { name: 'Collections' })).getAllByRole(
-      'listitem',
+    // The store's own copy has it once the update went through.
+    details.mockResolvedValue({
+      ...DETAIL,
+      collections: [
+        ...DETAIL.collections,
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          shopify_id: 555,
+          title: 'Food Packaging',
+          handle: 'food-packaging',
+          collection_type: 'custom',
+        },
+      ],
+    })
+    await user.type(screen.getByLabelText('Add to a collection'), 'Food Packaging{Enter}')
+    await user.click(
+      within(
+        await screen.findByRole('alertdialog', { name: 'Add to “Food Packaging”?' }),
+      ).getByRole('button', { name: 'Yes, add' }),
     )
-    expect(items[0]).toHaveTextContent('Food Packaging')
-    expect(items[1]).toHaveTextContent('Best Sellers')
 
-    await user.click(saveButton('collections'))
-
-    await confirmUpdate(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         'id-1',
         { collections_add: ['Food Packaging'] },
         'polymer-uk',
       ),
+    )
+    const items = await within(
+      await screen.findByRole('list', { name: 'Collections' }),
+    ).findAllByRole('listitem')
+    expect(items.map((item) => item.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Food Packaging'),
+        expect.stringContaining('Best Sellers'),
+      ]),
     )
   })
 

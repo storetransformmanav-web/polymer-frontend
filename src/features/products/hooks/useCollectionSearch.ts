@@ -14,6 +14,9 @@ const DEFAULT_PAGE_SIZE = 10
 
 const STALE = 60_000
 
+/** An exact-name look-up reads a wider page than the dropdown, so the one match is in it. */
+const LOOKUP_PAGE_SIZE = 50
+
 function searchOptions(text: string, shop: string | null | undefined, pageSize: number) {
   return {
     queryKey: ['collections', 'search', shop ?? '', text, pageSize] as const,
@@ -45,7 +48,7 @@ interface CollectionSearchOptions {
  * pauses, and the previous answer stays on screen while the next one loads. With `all` the
  * first page of every collection is listed too while nothing is typed. `loading` is true from
  * the first keystroke until the answer for the text on screen has arrived. `lookup` asks for
- * a text right away (same cache), for Enter pressed before the pause is over.
+ * a text right away (a wider page, same cache), for Enter pressed before the pause is over.
  */
 export function useCollectionSearch(
   text: string,
@@ -73,7 +76,10 @@ export function useCollectionSearch(
   })
 
   const lookup = useCallback(
-    (value: string) => client.fetchQuery(searchOptions(value.trim(), shop, pageSize)),
+    (value: string) =>
+      client.fetchQuery(
+        searchOptions(value.trim(), shop, Math.max(pageSize, LOOKUP_PAGE_SIZE)),
+      ),
     [client, shop, pageSize],
   )
 

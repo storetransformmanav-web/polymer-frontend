@@ -2,7 +2,10 @@ import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
 import { CREATE_LIMITS } from '../../utils/createDraft.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { CheckField, EditField, FIELD_INPUT } from '../edit/fields.tsx'
+import { FilePicker } from '../FilePicker.tsx'
 import { MediaRows } from '../MediaRows.tsx'
+import type { FileUploadState } from '../../hooks/useFileUpload.ts'
+import type { PickedFile } from '../../utils/mediaFiles.ts'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
 export const PICTURES_LIST = 'create-variant-pictures'
@@ -16,9 +19,19 @@ export function CreateBasicsCard({
   errors,
   update,
   pictures,
+  files,
+  onFiles,
+  uploadStates,
+  uploading,
 }: CreateSectionProps & {
   /** The picture URLs listed under Media, offered as suggestions for a variant's picture. */
   pictures: string[]
+  /** Files chosen from the computer: uploaded to the product right after it is created. */
+  files: PickedFile[]
+  onFiles: (files: PickedFile[]) => void
+  uploadStates: Record<string, FileUploadState>
+  /** The product is being created / its files uploaded. */
+  uploading: boolean
 }) {
   const single =
     draft.variants.length === 1 && draft.variants[0].optionValues.length === 0
@@ -64,6 +77,20 @@ export function CreateBasicsCard({
           idPrefix="create-media"
           minRows={0}
         />
+        <FilePicker
+          files={files}
+          onChange={onFiles}
+          max={LIMITS.newMedia}
+          states={uploadStates}
+          disabled={uploading}
+          idPrefix="create-media"
+        />
+        {files.length > 0 && (
+          <p className="text-text-muted text-[0.76rem]">
+            Files from your computer are uploaded to the product right after it is
+            created.
+          </p>
+        )}
         {errors['media.rows'] && (
           <p role="alert" className="text-danger text-[0.78rem]">
             {errors['media.rows']}
