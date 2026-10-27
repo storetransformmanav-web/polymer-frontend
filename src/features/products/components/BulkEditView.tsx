@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
+  ArrowLeftIcon,
   CheckIcon,
   CheckCircleIcon,
   ChevronDownIcon,
@@ -26,7 +27,7 @@ import { ConfirmUpdateDialog } from './ConfirmUpdateDialog.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
-type ColumnId = 'status' | 'productType' | 'price' | 'compareAtPrice' | 'sku' | 'barcode'
+type ColumnId = 'status' | 'price' | 'compareAtPrice' | 'sku'
 
 interface Column {
   id: ColumnId
@@ -38,19 +39,25 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { id: 'status', label: 'Status', level: 'product', width: 'w-40' },
-  { id: 'productType', label: 'Product type', level: 'product', width: 'w-52' },
   { id: 'price', label: 'Price', level: 'variant', width: 'w-36' },
   { id: 'compareAtPrice', label: 'Compare-at price', level: 'variant', width: 'w-44' },
   { id: 'sku', label: 'SKU', level: 'variant', width: 'w-48' },
-  { id: 'barcode', label: 'Barcode', level: 'variant', width: 'w-48' },
 ]
-const DEFAULT_COLUMNS: ColumnId[] = ['status', 'productType', 'price']
+const DEFAULT_COLUMNS: ColumnId[] = ['status', 'price', 'sku']
 
 const NUMERIC: ColumnId[] = ['price', 'compareAtPrice']
 
 const TH =
   'text-text-muted border-border bg-surface sticky top-0 z-[2] border-b px-3 py-2.5 text-left text-[0.8rem] font-semibold whitespace-nowrap'
 const TD = 'border-border border-b border-l p-0 align-middle first:border-l-0'
+
+/**
+ * A product's own row stands out from its variants' rows: a darker sage band, a bar on its
+ * left edge and a bold title. The variant rows under it stay plain and muted.
+ */
+const PRODUCT_ROW =
+  'border-border-strong bg-table-head/50 hover:bg-table-head/70 border-b border-t transition-colors'
+const PRODUCT_ROW_BAR = 'shadow-[inset_3px_0_0_var(--color-accent)]'
 
 const CELL =
   'h-10 w-full min-w-0 border-none bg-transparent px-3 text-[0.85rem] outline-none transition-colors focus:bg-bg focus:outline-2 focus:-outline-offset-2 focus:outline-accent disabled:opacity-60'
@@ -67,6 +74,8 @@ interface CellProps {
   error?: string
   numeric?: boolean
   maxLength?: number
+  /** Extra classes for the input (e.g. a bold product title). */
+  className?: string
   onChange: (value: string) => void
 }
 
@@ -77,6 +86,7 @@ function TextCell({
   error,
   numeric,
   maxLength,
+  className = '',
   onChange,
 }: CellProps) {
   const changed = value !== original
@@ -90,7 +100,7 @@ function TextCell({
       inputMode={numeric ? 'decimal' : undefined}
       autoComplete="off"
       onChange={(event) => onChange(event.target.value)}
-      className={`${CELL} ${numeric ? 'text-right' : ''} ${
+      className={`${CELL} ${className} ${numeric ? 'text-right' : ''} ${
         error ? 'outline-danger bg-danger-bg outline-2 -outline-offset-2' : ''
       } ${changed && !error ? 'bg-accent-tint/60' : ''}`}
     />
@@ -180,12 +190,12 @@ function ResultCell({ row }: { row: BulkRow }) {
   return null
 }
 
-/** Which columns the "all products" row can set: not SKU or barcode, which are unique per variant. */
-const COMMON_COLUMNS: ColumnId[] = ['status', 'productType', 'price', 'compareAtPrice']
+/** Which columns the "all products" row can set: not SKU, which is unique per variant. */
+const COMMON_COLUMNS: ColumnId[] = ['status', 'price', 'compareAtPrice']
 
 /**
  * The first row of the table: whatever is set here is applied to every product at once
- * (status and product type to each product, price and compare-at to each of its variants),
+ * (status to each product, price and compare-at to each of its variants),
  * and shows in the rows below like any other edit — nothing is sent until Save. A cell
  * left blank changes nothing, so it can never wipe the products' own values.
  */
@@ -200,11 +210,9 @@ function CommonRow({
 }) {
   const [values, setValues] = useState<Record<ColumnId, string>>({
     status: '',
-    productType: '',
     price: '',
     compareAtPrice: '',
     sku: '',
-    barcode: '',
   })
 
   function set(id: ColumnId, value: string) {
@@ -212,7 +220,6 @@ function CommonRow({
     // Blank = leave every product as it is.
     if (value === '' || value.trim() === '') return
     if (id === 'status') edit.changeAll({ status: value })
-    else if (id === 'productType') edit.changeAll({ productType: value })
     else if (id === 'price') edit.changeAllVariants({ price: value })
     else if (id === 'compareAtPrice') edit.changeAllVariants({ compareAtPrice: value })
   }
@@ -266,7 +273,7 @@ function CommonRow({
                 aria-label={label}
                 value={values[column.id]}
                 placeholder="Set for all…"
-                maxLength={column.id === 'productType' ? 255 : 20}
+                maxLength={20}
                 inputMode={NUMERIC.includes(column.id) ? 'decimal' : undefined}
                 autoComplete="off"
                 onChange={(event) => set(column.id, event.target.value)}
@@ -303,8 +310,8 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
 
   if (!row.product || !row.draft || !original) {
     return (
-      <tr className="border-border border-b">
-        <td className={`${TD} px-3 py-2.5`}>
+      <tr className={PRODUCT_ROW}>
+        <td className={`${TD} ${PRODUCT_ROW_BAR} px-3 py-2.5`}>
           <div className="flex items-center gap-3">
             <ProductImage src={preview?.image_url ?? null} alt="" />
             <span className="text-text-muted truncate text-[0.85rem]">
@@ -352,7 +359,6 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
 
   const productValue = (id: ColumnId): [string, string] | null => {
     if (id === 'status') return [draft.status, original.status]
-    if (id === 'productType') return [draft.productType, original.productType]
     return null
   }
 
@@ -363,10 +369,8 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
         return [variant.price, before?.price ?? '']
       case 'compareAtPrice':
         return [variant.compareAtPrice, before?.compareAtPrice ?? '']
-      case 'sku':
-        return [variant.sku, before?.sku ?? '']
       default:
-        return [variant.barcode, before?.barcode ?? '']
+        return [variant.sku, before?.sku ?? '']
     }
   }
 
@@ -374,8 +378,7 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
   const variantPatch = (id: ColumnId, value: string): Partial<VariantDraft> => {
     if (id === 'price') return { price: value }
     if (id === 'compareAtPrice') return { compareAtPrice: value }
-    if (id === 'sku') return { sku: value }
-    return { barcode: value }
+    return { sku: value }
   }
   const variantErrorKey = (id: ColumnId, variant: VariantDraft) =>
     `variants.${variantIndex(variant)}.${id}`
@@ -388,7 +391,7 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
         value={value}
         original={before}
         numeric={NUMERIC.includes(column.id)}
-        maxLength={column.id === 'sku' || column.id === 'barcode' ? 255 : 20}
+        maxLength={column.id === 'sku' ? 255 : 20}
         error={row.errors[variantErrorKey(column.id, variant)]}
         onChange={(next) => setVariant(variant, variantPatch(column.id, next))}
       />
@@ -397,8 +400,8 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
 
   return (
     <Fragment>
-      <tr className="border-border hover:bg-accent-tint/30 border-b">
-        <td className={TD}>
+      <tr className={PRODUCT_ROW}>
+        <td className={`${TD} ${PRODUCT_ROW_BAR}`}>
           <div className="flex items-center gap-2 pl-3">
             <ProductImage src={product.featured_image_url ?? null} alt="" />
             <div className="min-w-0 flex-1">
@@ -408,6 +411,7 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
                 original={original.title}
                 maxLength={255}
                 error={row.errors.title}
+                className="font-semibold"
                 onChange={(title) => setProduct({ title })}
               />
             </div>
@@ -434,23 +438,12 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
             const [value, before] = productValue(column.id) ?? ['', '']
             return (
               <td key={column.id} className={TD}>
-                {column.id === 'status' ? (
-                  <StatusCell
-                    label={`Status for ${product.title}`}
-                    value={value}
-                    original={before}
-                    onChange={(status) => setProduct({ status })}
-                  />
-                ) : (
-                  <TextCell
-                    label={`${column.label} for ${product.title}`}
-                    value={value}
-                    original={before}
-                    maxLength={255}
-                    error={row.errors[column.id]}
-                    onChange={(productType) => setProduct({ productType })}
-                  />
-                )}
+                <StatusCell
+                  label={`Status for ${product.title}`}
+                  value={value}
+                  original={before}
+                  onChange={(status) => setProduct({ status })}
+                />
               </td>
             )
           }
@@ -472,7 +465,7 @@ function ProductRows({ row, preview, columns, expanded, onToggle, edit }: RowsPr
 
       {showVariants &&
         variants.map((variant) => (
-          <tr key={variant.key} className="border-border bg-surface/50 border-b">
+          <tr key={variant.key} className="border-border bg-bg border-b">
             <td
               className={`${TD} text-text-muted truncate py-2 pr-3 pl-16 text-[0.85rem]`}
             >
@@ -500,15 +493,20 @@ interface BulkEditViewProps {
   onBack: () => void
   /** Called with the products that were saved, so the page can follow their store push. */
   onSaved: (saved: BulkSavedItem[]) => void
+  /**
+   * Every changed product was saved: the editor then goes back to the list (`onBack`) and
+   * says so here, since its own summary goes away with it.
+   */
+  onAllSaved?: (message: string) => void
 }
 
 /**
  * The spreadsheet-style bulk editor: every chosen product is a row, with
- * editable cells (title, status, product type, and the price/SKU of each
+ * editable cells (title, status, and the price/SKU of each
  * variant underneath). Nothing is sent until Save; each changed product is then
  * saved on its own, so one failure never loses the others.
  */
-export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
+export function BulkEditView({ items, onBack, onSaved, onAllSaved }: BulkEditViewProps) {
   const ids = useMemo(() => items.map((item) => item.id), [items])
   const edit = useBulkEdit(ids)
   const [confirming, setConfirming] = useState(false)
@@ -551,10 +549,11 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
         text: `Saved ${outcome.saved.length} of ${outcome.saved.length + outcome.failed} products. ${plural(outcome.failed, 'product')} could not be saved — they keep your changes, so you can try again.`,
       })
     } else if (outcome.saved.length > 0) {
-      setSummary({
-        tone: 'success',
-        text: `Saved ${plural(outcome.saved.length, 'product')}. They are being sent to the store.`,
-      })
+      // All done: back to the main list, which confirms it and highlights what was saved.
+      onAllSaved?.(
+        `Saved ${plural(outcome.saved.length, 'product')}. They are being sent to the store.`,
+      )
+      onBack()
     }
   }
 
@@ -634,6 +633,19 @@ export function BulkEditView({ items, onBack, onSaved }: BulkEditViewProps) {
             disabled={edit.isSaving}
             onClick={cancel}
           />
+          {/* Same button as on the product's details page. */}
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={edit.isSaving}
+            aria-label="Back to list"
+            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+          >
+            <ArrowLeftIcon width={16} height={16} />
+            <span className="hidden sm:inline" aria-hidden="true">
+              Back to list
+            </span>
+          </button>
         </div>
       </div>
 

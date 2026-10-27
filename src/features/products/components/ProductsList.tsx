@@ -57,6 +57,8 @@ interface ProductsListProps {
   onPrefetch: (id: string) => void
   /** Ids of the ticked rows (the checkbox column). */
   selected: ReadonlySet<string>
+  /** Products just saved from the bulk editor: their rows are highlighted for a moment. */
+  highlighted?: ReadonlySet<string>
   onToggleSelected: (id: string) => void
   /** Ticks (or unticks) every row on this page. */
   onTogglePage: (checked: boolean) => void
@@ -118,6 +120,8 @@ function ShopifyLink({ product }: { product: ProductListItem }) {
   )
 }
 
+const NONE_HIGHLIGHTED: ReadonlySet<string> = new Set()
+
 export function ProductsList({
   items,
   isPending,
@@ -132,6 +136,7 @@ export function ProductsList({
   onDelete,
   onPrefetch,
   selected,
+  highlighted = NONE_HIGHLIGHTED,
   onToggleSelected,
   onTogglePage,
   sort,
@@ -212,7 +217,11 @@ export function ProductsList({
                   onPointerEnter={() => onPrefetch(product.id)}
                   onFocus={() => onPrefetch(product.id)}
                   aria-label={`View ${product.title}`}
-                  className="border-border bg-bg hover:border-accent flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-colors"
+                  className={`hover:border-accent flex w-full cursor-pointer items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                    highlighted.has(product.id)
+                      ? 'border-accent bg-accent-tint'
+                      : 'border-border bg-bg'
+                  }`}
                 >
                   <ProductImage src={product.image_url} alt="" />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -317,7 +326,11 @@ export function ProductsList({
                 <tr
                   key={product.id}
                   className={`border-border hover:bg-accent-tint/60 border-b transition-colors ${
-                    selected.has(product.id) ? 'bg-accent-tint/40' : 'even:bg-surface'
+                    highlighted.has(product.id)
+                      ? 'bg-accent-tint shadow-[inset_3px_0_0_var(--color-accent)]'
+                      : selected.has(product.id)
+                        ? 'bg-accent-tint/40'
+                        : 'even:bg-surface'
                   }`}
                 >
                   <td className={TD}>
@@ -353,6 +366,11 @@ export function ProductsList({
                       >
                         <Highlight text={product.title} />
                       </button>
+                      {highlighted.has(product.id) && (
+                        <span className="bg-accent text-accent-contrast shrink-0 rounded-md px-1.5 py-0.5 text-[0.68rem] leading-none font-semibold">
+                          Updated
+                        </span>
+                      )}
                       {/* Always visible, right beside the name: copy, then open in Shopify. */}
                       <span className="flex h-5 shrink-0 items-center gap-1">
                         <CopyButton

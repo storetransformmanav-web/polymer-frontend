@@ -1,8 +1,8 @@
 import {
-  ListChecksIcon,
-  StoreIcon,
+  CheckCircleIcon,
   UserCogIcon,
   UsersIcon,
+  XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import { KpiCards, type Kpi } from '../../../components/ui/KpiCards.tsx'
 import type { Role, UserListResponse } from '../../../lib/api/endpoints.ts'
@@ -12,11 +12,12 @@ const count = (value: number | null | undefined) =>
   value == null ? '—' : value.toLocaleString('en-GB')
 
 /**
- * Four figures above the users list, read from the list answer's `totals` block
- * (`users`, `administrators`, `other_staff`, `roles`) — they make no request of their own.
- * `totals` also carries `active` and `inactive`; the status filter shows those. An older
- * answer without `totals` falls back to what the page already has: the answer's `total`
- * and the per-role user counts from `GET /roles` (which feeds the Role filter anyway).
+ * Four figures above the users list, in this order — **Users**, **Administrators**,
+ * **Active**, **Inactive** — read from the list answer's `totals` block
+ * (`users`, `administrators`, `active`, `inactive`); they make no request of their own.
+ * An older answer without `totals` falls back to what the page already has for the two
+ * it can: the answer's `total` and the administrators from `GET /roles` (which feeds the
+ * Role filter anyway); Active and Inactive show a dash until the answer has them.
  */
 export function UsersKpis({
   totals,
@@ -49,19 +50,19 @@ export function UsersKpis({
       value: count(totals?.administrators ?? fromRoles((role) => isAdminRole(role.name))),
       hint: 'Can see every store',
       icon: UserCogIcon,
+    },
+    {
+      label: 'Active',
+      value: count(totals?.active),
+      hint: 'Can sign in',
+      icon: CheckCircleIcon,
       tone: 'good',
     },
     {
-      label: 'Other staff',
-      value: count(totals?.other_staff ?? fromRoles((role) => !isAdminRole(role.name))),
-      hint: 'Limited to their own stores',
-      icon: StoreIcon,
-    },
-    {
-      label: 'Roles',
-      value: count(totals?.roles ?? (rolesLoaded ? roles.length : null)),
-      hint: 'Kinds of access you can give',
-      icon: ListChecksIcon,
+      label: 'Inactive',
+      value: count(totals?.inactive),
+      hint: 'Cannot sign in',
+      icon: XCircleIcon,
     },
   ]
   return <KpiCards items={kpis} />

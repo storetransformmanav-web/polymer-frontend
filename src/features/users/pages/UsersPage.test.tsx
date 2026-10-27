@@ -104,10 +104,10 @@ function respond(params: UserListParams): UserListResponse {
     // The answer's own `totals` block (deliberately different from what /roles adds up to).
     totals: {
       users: matches,
-      active: matches,
-      inactive: 0,
+      active: matches - 5,
+      inactive: 5,
       administrators: 2,
-      other_staff: 58,
+      other_staff: matches - 2,
       roles: 2,
     },
     total_pages: Math.max(1, Math.ceil(matches / pageSize)),
@@ -380,7 +380,8 @@ describe('UsersPage', () => {
 
   describe('the figures above the list', () => {
     const card = (label: string) =>
-      screen.getByText(label, { selector: 'span' }).parentElement!.parentElement!
+      // The cards come first on the page; a status badge in the table can say the same word.
+      screen.getAllByText(label, { selector: 'span' })[0].parentElement!.parentElement!
 
     it('shows four cards on top, read from the answer’s totals', async () => {
       renderWithProviders(<UsersPage />)
@@ -388,11 +389,20 @@ describe('UsersPage', () => {
 
       expect(within(card('Users')).getByText('60')).toBeInTheDocument()
       expect(within(card('Administrators')).getByText('2')).toBeInTheDocument()
-      expect(within(card('Other staff')).getByText('58')).toBeInTheDocument()
-      expect(within(card('Roles')).getByText('2')).toBeInTheDocument()
+      expect(within(card('Active')).getByText('55')).toBeInTheDocument()
+      expect(within(card('Inactive')).getByText('5')).toBeInTheDocument()
+      // Left to right: Users, Administrators, Active, Inactive.
+      const position = (label: string) =>
+        [...document.querySelectorAll('*')].indexOf(card(label))
+      expect(position('Users')).toBeLessThan(position('Administrators'))
+      expect(position('Administrators')).toBeLessThan(position('Active'))
+      expect(position('Active')).toBeLessThan(position('Inactive'))
       expect(
         within(card('Administrators')).getByText('Can see every store'),
       ).toBeVisible()
+      // Other staff and Roles are no longer cards.
+      expect(screen.queryByText('Other staff', { selector: 'span' })).toBeNull()
+      expect(screen.queryByText('Roles', { selector: 'span' })).toBeNull()
     })
 
     it('fall back to the total and the role counts when the answer has no totals', async () => {
@@ -403,13 +413,13 @@ describe('UsersPage', () => {
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
 
-      // 60 matching users; roles: admin 1, office 40 + warehouse 19, three roles.
+      // 60 matching users; roles: admin 1. Active and Inactive have no source: dashes.
       expect(within(card('Users')).getByText('60')).toBeInTheDocument()
       await waitFor(() =>
         expect(within(card('Administrators')).getByText('1')).toBeInTheDocument(),
       )
-      expect(within(card('Other staff')).getByText('59')).toBeInTheDocument()
-      expect(within(card('Roles')).getByText('3')).toBeInTheDocument()
+      expect(within(card('Active')).getByText('—')).toBeInTheDocument()
+      expect(within(card('Inactive')).getByText('—')).toBeInTheDocument()
     })
 
     it('sit above the toolbar and the table, and ask for nothing of their own', async () => {
@@ -434,8 +444,9 @@ describe('UsersPage', () => {
       renderWithProviders(<UsersPage />)
 
       await waitFor(() => expect(within(card('Users')).getByText('—')).toBeVisible())
+      expect(within(card('Active')).getByText('—')).toBeVisible()
+      expect(within(card('Inactive')).getByText('—')).toBeVisible()
       expect(within(card('Administrators')).getByText('—')).toBeVisible()
-      expect(within(card('Roles')).getByText('—')).toBeVisible()
     })
   })
 
@@ -940,7 +951,7 @@ describe('UsersPage', () => {
       await openUser(user)
 
       expect(
-        screen.getByText('Roles', { selector: 'span' }).closest('.hidden'),
+        screen.getByText('Administrators', { selector: 'span' }).closest('.hidden'),
       ).not.toBeNull()
     })
 

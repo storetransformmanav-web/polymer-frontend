@@ -98,7 +98,7 @@ export function EmailStep() {
         />
         <span>
           Remember me
-          <span className="text-text-muted"> · stay signed in for 30 days</span>
+          <span className="text-text-muted"> </span>
         </span>
       </label>
 

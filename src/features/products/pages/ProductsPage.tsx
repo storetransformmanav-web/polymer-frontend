@@ -34,6 +34,9 @@ import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
 import { statusLabel } from '../utils/format.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 
+/** How long the products just saved from the bulk editor stay highlighted in the list. */
+const UPDATED_HIGHLIGHT_MS = 10_000
+
 /**
  * How often, and for how long, to look for the image of a just-created product:
  * every 4 s at first; after 40 s say it is taking long and look every 16 s; stop at 10 min.
@@ -86,6 +89,8 @@ export function ProductsPage() {
   // Ticked rows (by id) and the products open in the bulk editor, if it is open.
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [bulkItems, setBulkItems] = useState<ProductListItem[] | null>(null)
+  // Products just saved from the bulk editor (highlighted in the list for a moment).
+  const [updatedIds, setUpdatedIds] = useState<ReadonlySet<string>>(() => new Set())
   // The "Add product" form is open (as a tab), and whether it holds anything typed.
   const [creating, setCreating] = useState(false)
   const [createDirty, setCreateDirty] = useState(false)
@@ -178,6 +183,8 @@ export function ProductsPage() {
   }
 
   function handleBulkSaved(saved: BulkSavedItem[]) {
+    // Their rows in the list are highlighted for a few seconds (see the effect below).
+    setUpdatedIds(new Set(saved.map((item) => item.product.id)))
     setSavedStatus((current) => ({
       ...current,
       ...Object.fromEntries(
@@ -185,6 +192,13 @@ export function ProductsPage() {
       ),
     }))
   }
+
+  // The highlight on just-saved products fades after a few seconds.
+  useEffect(() => {
+    if (updatedIds.size === 0) return undefined
+    const timer = window.setTimeout(() => setUpdatedIds(new Set()), UPDATED_HIGHLIGHT_MS)
+    return () => window.clearTimeout(timer)
+  }, [updatedIds])
 
   useEffect(() => {
     if (!noticeState) return undefined
@@ -360,6 +374,7 @@ export function ProductsPage() {
             items={bulkItems}
             onBack={() => setBulkItems(null)}
             onSaved={handleBulkSaved}
+            onAllSaved={setNotice}
           />
         </div>
       )}
@@ -478,6 +493,7 @@ export function ProductsPage() {
               onDelete={askDelete}
               onPrefetch={products.prefetchDetails}
               selected={selected}
+              highlighted={updatedIds}
               onToggleSelected={toggleSelected}
               onTogglePage={togglePage}
               sort={filters.sort}
