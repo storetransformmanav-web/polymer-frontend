@@ -68,6 +68,8 @@ export const ENDPOINTS = {
   },
   products: {
     list: '/products',
+    /** `GET` the products as a Shopify-format CSV file (not JSON). */
+    export: '/products/export',
     /** `ref` is the product's UUID or Shopify ID. */
     detail: (ref: string) => `/products/${encodeURIComponent(ref)}`,
     /** `id` is the product's CRM UUID (`PUT` edits it). */
@@ -1342,6 +1344,32 @@ export interface ProductListParams {
   page_size?: number
 }
 
+/**
+ * Query parameters accepted by `GET /products/export` (all optional). The answer is a CSV
+ * file in Shopify's product-import layout: one row per variant/image, a column per
+ * metafield when `metafields` is on. There is no paging — one call returns every match.
+ */
+export interface ProductExportParams {
+  /** Lower case here, unlike the list's `status`. */
+  status?: 'active' | 'draft' | 'archived'
+  search?: string
+  /** Shopify product ids, comma-separated. */
+  ids?: string
+  /** Product handles, comma-separated. */
+  handles?: string
+  vendor?: string
+  product_type?: string
+  tag?: string
+  collection_id?: string
+  /** Add a column for every product metafield. */
+  metafields?: boolean
+  /** Store key or domain; omit for every store. */
+  shop?: string
+}
+
+/** The export reads every product in one call, so it gets longer than the usual 15 s. */
+export const PRODUCT_EXPORT_TIMEOUT_MS = 120_000
+
 // --- Collections (GET /collections, GET /collections/{id}) ------------------------
 
 /** One row of `GET /collections`. */
@@ -1570,6 +1598,30 @@ export const api = {
     async list(params: ProductListParams): Promise<ProductListResponse> {
       const data = await apiClient.get(ENDPOINTS.products.list, { params })
       return productListResponseSchema.parse(data)
+    },
+
+    /**
+     * The products matching `params` as the text of a Shopify-format CSV file. The body
+     * is a file, not JSON: anything else (a JSON error with a 200, an empty answer) is
+     * refused with a readable message instead of being saved as a broken download.
+     * Failures with a status already arrive as an `ApiError` carrying the backend's message.
+     */
+    async export(params: ProductExportParams, signal?: AbortSignal): Promise<string> {
+      const data = await apiClient.get<unknown>(ENDPOINTS.products.export, {
+        params,
+        signal,
+        timeout: PRODUCT_EXPORT_TIMEOUT_MS,
+        headers: { Accept: 'text/csv, application/json;q=0.5' },
+      })
+      if (typeof data === 'string' && data.trim() !== '') return data
+      const message =
+        typeof data === 'object' && data !== null && 'message' in data
+          ? String((data as { message: unknown }).message)
+          : ''
+      throw new ApiError(
+        message || 'The server did not send a file. Nothing was downloaded.',
+        {},
+      )
     },
 
     /**

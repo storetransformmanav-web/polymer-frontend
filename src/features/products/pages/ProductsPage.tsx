@@ -424,10 +424,9 @@ export function ProductsPage() {
       >
         <ProductsExport
           items={products.items}
-          page={data?.page ?? filters.page}
+          selected={selectedItems}
           filters={filters}
           total={data?.total ?? 0}
-          facets={products.facets}
           visible={
             !products.isPending &&
             !products.error &&

@@ -236,16 +236,13 @@ describe('Customer details', () => {
     expect(screen.getByText('No saved addresses.')).toBeInTheDocument()
   })
 
-  it('loads the raw Shopify data only when its tab is opened', async () => {
-    const user = userEvent.setup()
+  it('has no Raw data tab, and never asks for the raw payload', async () => {
     renderPage('/customers/cust-7')
     await screen.findByText('Contact & Account')
+
+    expect(screen.queryByRole('tab', { name: 'Raw data' })).not.toBeInTheDocument()
     expect(details).not.toHaveBeenCalledWith('cust-7', true)
-
-    await user.click(screen.getByRole('tab', { name: 'Raw data' }))
-
-    expect(await screen.findByText(/RAW-NOTE/)).toBeInTheDocument()
-    expect(details).toHaveBeenCalledWith('cust-7', true)
+    expect(screen.queryByText(/RAW-NOTE/)).not.toBeInTheDocument()
   })
 
   it('shows the backend message when a customer cannot be loaded, and goes back', async () => {

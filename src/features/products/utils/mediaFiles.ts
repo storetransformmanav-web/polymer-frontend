@@ -15,6 +15,8 @@ const KINDS: {
     extensions: [
       'jpg',
       'jpeg',
+      'jfif',
+      'jpe',
       'png',
       'webp',
       'gif',
@@ -47,7 +49,7 @@ export const FILE_ACCEPT = KINDS.flatMap((kind) =>
 
 /** The types in words, for the hint under the chooser. */
 export const FILE_HINT =
-  'Images (JPG, PNG, WebP, GIF, SVG, HEIC, TIFF, BMP) up to 20 MB · videos (MP4, MOV, WebM) up to 1 GB · 3D models (GLB, USDZ) up to 500 MB'
+  'Images (JPG/JPEG/JFIF, PNG, WebP, GIF, SVG, HEIC, TIFF, BMP) up to 20 MB · videos (MP4, MOV, WebM) up to 1 GB · 3D models (GLB, USDZ) up to 500 MB'
 
 /** A file the user chose from their computer, checked and ready to upload. */
 export interface PickedFile {
@@ -160,6 +162,8 @@ export function pickFiles(
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
+  jfif: 'image/jpeg',
+  jpe: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
   gif: 'image/gif',
@@ -180,4 +184,23 @@ export function mimeOf(file: Pick<File, 'name' | 'type'>): string {
   return (
     file.type || MIME_BY_EXTENSION[extensionOf(file.name)] || 'application/octet-stream'
   )
+}
+
+/** Extensions that are really another one's file (a JFIF or JPE picture is a JPEG). */
+const RENAMED: Record<string, string> = { jfif: 'jpg', jpe: 'jpg' }
+
+/**
+ * The file as it is sent to the store: a `.jfif` / `.jpe` picture is a plain JPEG, but the
+ * store goes by the name and type it is given, so it gets the usual `.jpg` name and
+ * `image/jpeg` type. Any other file is returned as it is.
+ */
+export function forUpload(file: File): File {
+  const extension = extensionOf(file.name)
+  const renamed = RENAMED[extension]
+  if (!renamed) return file
+  const stem = file.name.slice(0, file.name.length - extension.length - 1)
+  return new File([file], `${stem}.${renamed}`, {
+    type: 'image/jpeg',
+    lastModified: file.lastModified,
+  })
 }

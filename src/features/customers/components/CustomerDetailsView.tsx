@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { DetailSkeleton, RawJsonPanel } from '../../../components/ui/DetailSection.tsx'
+import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -23,7 +23,7 @@ import {
   CustomerOverviewPanel,
 } from './CustomerDetailPanels.tsx'
 
-type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields' | 'raw'
+type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -42,12 +42,6 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
   const details = useCustomerDetails(id)
   const { customer, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
-  const { loadRaw } = details
-
-  // The raw Shopify payload is big, so only fetch it when its tab opens.
-  useEffect(() => {
-    if (tab === 'raw') loadRaw()
-  }, [tab, loadRaw])
 
   const known = customer ?? preview
   const name = known ? customerName(known) : 'Loading customer…'
@@ -62,7 +56,6 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
       : []),
-    { id: 'raw', label: 'Raw data' },
   ]
 
   if (details.error) {
@@ -204,7 +197,7 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
         {tab === 'overview' && (
           <CustomerOverviewPanel customer={customer} preview={preview} />
         )}
-        {tab !== 'overview' && tab !== 'raw' && !customer && <DetailSkeleton />}
+        {tab !== 'overview' && !customer && <DetailSkeleton />}
         {customer && tab === 'addresses' && (
           <CustomerAddressesPanel customer={customer} />
         )}
@@ -213,14 +206,6 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
         )}
         {customer && tab === 'metafields' && (
           <CustomerMetafieldsPanel customer={customer} />
-        )}
-        {tab === 'raw' && (
-          <RawJsonPanel
-            raw={details.raw}
-            isLoading={details.isRawLoading}
-            error={details.rawError}
-            onRetry={details.loadRaw}
-          />
         )}
       </div>
     </article>

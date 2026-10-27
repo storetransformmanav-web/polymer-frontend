@@ -390,6 +390,30 @@ describe('adding and deleting media', () => {
         expect(within(list).queryByText('big.png')).not.toBeInTheDocument()
       })
 
+      it('uploads a .jfif picture as a .jpg (it is a JPEG)', async () => {
+        const { user, dialog } = await openDialog()
+        await user.upload(
+          choose(dialog),
+          new File(['pixels'], 'download (1).jfif', { type: 'image/jpeg' }),
+        )
+        expect(within(dialog).getByText('download (1).jfif')).toBeInTheDocument()
+        await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+        await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
+        expect(uploadTarget).toHaveBeenCalledWith(
+          'id-1',
+          {
+            filename: 'download (1).jpg',
+            mime_type: 'image/jpeg',
+            file_size: 6,
+            media_type: 'IMAGE',
+          },
+          'polymer-uk',
+        )
+        const form = fetchMock.mock.calls[0][1].body as FormData
+        expect((form.get('file') as File).name).toBe('download (1).jpg')
+      })
+
       it('removes a chosen file before sending', async () => {
         const { user, dialog } = await openDialog()
         await user.upload(choose(dialog), PHOTO())

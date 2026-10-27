@@ -1,187 +1,251 @@
-import { useId, useMemo, useState } from 'react'
-import type { ProductFilters, ProductsFacets } from '../../../app/store/productsSlice.ts'
-import { BoxesIcon, DollarSignIcon, TagIcon } from '../../../components/ui/icons.tsx'
-import { ExportDialog, type ExportScope } from '../../../components/ui/ExportDialog.tsx'
+import { useId, useState, type ReactNode } from 'react'
+import type { ProductFilters } from '../../../app/store/productsSlice.ts'
+import { UploadIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { Modal } from '../../../components/ui/Modal.tsx'
+import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import {
-  ExportFilterGrid,
-  ExportNumberField,
-} from '../../../components/ui/ExportFilterFields.tsx'
-import { withAll } from '../../../components/ui/selectOptions.ts'
-import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
-import { useMatchingCount } from '../../../hooks/useMatchingCount.ts'
-import { pickColumns, type ExportFormat } from '../../../lib/tableExport.ts'
-import { EXPORT_COLUMNS, type ProductExportColumn } from '../utils/exportColumns.ts'
-import { PRODUCTS_COUNT } from '../utils/exportSource.ts'
-import { STOCK_OPTIONS } from '../utils/filterOptions.ts'
-
-/** What the dialog asks for. */
-export interface ProductsExportRequest {
-  scope: ExportScope
-  format: ExportFormat
-  columns: ProductExportColumn[]
-  /** The list's filters with the dialog's changes. */
-  filters: ProductFilters
-  /** Are they different from the list's own (so the rows on screen are not the ones wanted)? */
-  filtersChanged: boolean
-}
+  buildExportParams,
+  hasExportableFilters,
+  hasUnsupportedFilters,
+  type ExportFileFormat,
+  type ExportScope,
+  type ProductsExportRequest,
+} from '../utils/exportRequest.ts'
 
 interface ProductsExportDialogProps {
-  /** Products on the page being shown. */
-  pageCount: number
-  /** Its page number. */
-  page: number
-  /** The list's own search, filters and sort — what the dialog starts from. */
+  /** The products on the page being shown. */
+  items: readonly ProductListItem[]
+  /** The ticked products on that page. */
+  selected: readonly ProductListItem[]
+  /** The list's search and filters. */
   filters: ProductFilters
   /** How many products match them, across every page. */
   total: number
-  facets: ProductsFacets
   onClose: () => void
   onExport: (request: ProductsExportRequest) => void
 }
 
-type DialogFilters = Pick<
-  ProductFilters,
-  'status' | 'productType' | 'tag' | 'stock' | 'minPrice' | 'maxPrice'
->
+const number = (value: number) => value.toLocaleString('en-GB')
+const plural = (count: number) =>
+  `${number(count)} ${count === 1 ? 'product' : 'products'}`
 
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Any status' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'ARCHIVED', label: 'Archived' },
-]
+const GROUP_TITLE = 'text-[0.95rem] font-semibold'
 
-const pickFilters = (filters: ProductFilters): DialogFilters => ({
-  status: filters.status,
-  productType: filters.productType,
-  tag: filters.tag,
-  stock: filters.stock,
-  minPrice: filters.minPrice,
-  maxPrice: filters.maxPrice,
-})
+interface ChoiceProps {
+  name: string
+  value: string
+  checked: boolean
+  disabled?: boolean
+  onSelect: () => void
+  children: ReactNode
+  /** A smaller line under the label. */
+  hint?: string
+}
 
-/** Do the dialog's filters differ from the list's own? */
-function filtersDiffer(listFilters: ProductFilters, values: DialogFilters): boolean {
-  const own = pickFilters(listFilters)
-  return (Object.keys(own) as (keyof DialogFilters)[]).some(
-    (key) => own[key] !== values[key],
+/** One radio of a group: the circle, its label and an optional hint. */
+function Choice({
+  name,
+  value,
+  checked,
+  disabled,
+  onSelect,
+  children,
+  hint,
+}: ChoiceProps) {
+  return (
+    <label
+      className={`flex items-start gap-3 py-1 text-[0.92rem] ${
+        disabled ? 'text-text-muted/60 cursor-not-allowed' : 'cursor-pointer'
+      }`}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        disabled={disabled}
+        onChange={onSelect}
+        className="accent-accent mt-[0.2rem] h-4 w-4 shrink-0 cursor-[inherit]"
+      />
+      <span className="flex flex-col">
+        <span>{children}</span>
+        {hint && <span className="text-text-muted text-[0.78rem]">{hint}</span>}
+      </span>
+    </label>
   )
 }
 
 /**
- * The products export dialog: the shared export layout (format, columns, rows) with the
- * product filters — status, stock, type, tag and price — in its "Advanced
- * filters", starting from the list's own. The list's search is kept as it is.
+ * The products export dialog, laid out like the store admin's: which products (this
+ * page, all, the ticked ones, or those matching the search), and the kind of CSV.
+ * "Export products" sends nothing itself — it hands the request to `ProductsExport`,
+ * which calls `GET /products/export`.
  */
 export function ProductsExportDialog({
-  pageCount,
-  page,
+  items,
+  selected,
   filters,
   total,
-  facets,
   onClose,
   onExport,
 }: ProductsExportDialogProps) {
   const base = useId()
-  const [values, setValues] = useState<DialogFilters>(() => pickFilters(filters))
-  const setFilter = (changes: Partial<DialogFilters>) =>
-    setValues((current) => ({ ...current, ...changes }))
+  const hasFilters = hasExportableFilters(filters)
+  const unsupported = hasUnsupportedFilters(filters)
+  const canMatch = hasFilters && !unsupported && total > 0
 
-  const exportFilters = useMemo<ProductFilters>(
-    () => ({ ...filters, ...values }),
-    [filters, values],
+  const [scope, setScope] = useState<ExportScope>(
+    selected.length > 0 ? 'selected' : 'page',
   )
-  // How many products match the filters (the list's own total until they are changed).
-  const matching = useMatchingCount(exportFilters, filters, total, PRODUCTS_COUNT)
-  const filtersChanged = filtersDiffer(filters, values)
-  // The current page: the rows shown, or — with other filters — that page of the matches.
-  const pageRows = filtersChanged
-    ? matching === null
-      ? null
-      : Math.max(0, Math.min(filters.pageSize, matching - (page - 1) * filters.pageSize))
-    : pageCount
-  const appliedFilters = (Object.keys(values) as (keyof DialogFilters)[]).filter(
-    (key) => values[key].trim() !== '',
-  ).length
+  const [format, setFormat] = useState<ExportFileFormat>('excel')
+  const [metafields, setMetafields] = useState(true)
+
+  const count =
+    scope === 'page'
+      ? items.length
+      : scope === 'selected'
+        ? selected.length
+        : scope === 'matching'
+          ? total
+          : null
+  const canExport =
+    scope === 'page'
+      ? items.length > 0
+      : scope === 'selected'
+        ? selected.length > 0
+        : scope === 'matching'
+          ? canMatch
+          : true
+
+  function submit() {
+    if (!canExport) return
+    onExport({
+      params: buildExportParams(scope, { items, selected, filters }, metafields),
+      format,
+      summary: count === null ? 'all products' : plural(count),
+    })
+  }
 
   return (
-    <ExportDialog
-      title="Export products"
-      noun={{ one: 'product', many: 'products' }}
-      columns={EXPORT_COLUMNS}
-      pageCount={pageCount}
-      page={page}
-      total={total}
-      pageRows={pageRows}
-      matching={matching}
-      filtersChanged={filtersChanged}
-      appliedFilters={appliedFilters}
-      filtersHint="Filter by status, type, tag, stock and price."
-      onResetFilters={() => setValues(pickFilters(filters))}
-      onClose={onClose}
-      onExport={(choice) =>
-        onExport({
-          scope: choice.scope,
-          format: choice.format,
-          columns: pickColumns(EXPORT_COLUMNS, choice.columnIds),
-          filters: exportFilters,
-          filtersChanged,
-        })
-      }
-      filters={
-        <ExportFilterGrid>
-          <SelectField
-            id={`${base}-status`}
-            label="Status"
-            icon={BoxesIcon}
-            value={values.status}
-            options={STATUS_OPTIONS}
-            onChange={(status) =>
-              setFilter({ status: status as DialogFilters['status'] })
+    <Modal label="Export products" onClose={onClose}>
+      <div className="flex flex-col gap-5 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-[1.15rem] leading-tight font-semibold">Export products</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="border-border text-text-muted hover:border-accent hover:text-text -mt-1 -mr-1 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border bg-transparent transition-colors"
+          >
+            <XIcon width={16} height={16} />
+          </button>
+        </div>
+
+        <p className="text-text-muted text-[0.9rem] leading-relaxed">
+          This CSV file has the same columns as the store admin&apos;s product export, so
+          it can be opened in a spreadsheet or imported back into the store. It holds
+          product information, not inventory quantities.
+        </p>
+
+        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-none p-0">
+          <legend className={`${GROUP_TITLE} mb-1.5`}>Export</legend>
+          <Choice
+            name={`${base}-scope`}
+            value="page"
+            checked={scope === 'page'}
+            disabled={items.length === 0}
+            onSelect={() => setScope('page')}
+          >
+            Current page
+          </Choice>
+          <Choice
+            name={`${base}-scope`}
+            value="all"
+            checked={scope === 'all'}
+            onSelect={() => setScope('all')}
+            hint={filters.shop ? 'From the store chosen at the top' : 'From every store'}
+          >
+            All products
+          </Choice>
+          <Choice
+            name={`${base}-scope`}
+            value="selected"
+            checked={scope === 'selected'}
+            disabled={selected.length === 0}
+            onSelect={() => setScope('selected')}
+          >
+            Selected: {plural(selected.length)}
+          </Choice>
+          <Choice
+            name={`${base}-scope`}
+            value="matching"
+            checked={scope === 'matching'}
+            disabled={!canMatch}
+            onSelect={() => setScope('matching')}
+            hint={
+              unsupported
+                ? 'Stock and price filters can’t be used in an export.'
+                : undefined
             }
-          />
-          <SelectField
-            id={`${base}-stock`}
-            label="Stock"
-            icon={BoxesIcon}
-            value={values.stock}
-            options={STOCK_OPTIONS}
-            onChange={(stock) => setFilter({ stock: stock as DialogFilters['stock'] })}
-          />
-          <SelectField
-            id={`${base}-type`}
-            label="Product type"
-            icon={BoxesIcon}
-            value={values.productType}
-            options={withAll('All types', facets.productTypes, values.productType)}
-            onChange={(productType) => setFilter({ productType })}
-          />
-          <SelectField
-            id={`${base}-tag`}
-            label="Tag"
-            icon={TagIcon}
-            value={values.tag}
-            options={withAll('All tags', facets.tags, values.tag)}
-            onChange={(tag) => setFilter({ tag })}
-          />
-          <ExportNumberField
-            id={`${base}-min`}
-            label="Min price"
-            icon={DollarSignIcon}
-            placeholder="0.00"
-            value={values.minPrice}
-            onChange={(minPrice) => setFilter({ minPrice })}
-          />
-          <ExportNumberField
-            id={`${base}-max`}
-            label="Max price"
-            icon={DollarSignIcon}
-            placeholder="Any"
-            value={values.maxPrice}
-            onChange={(maxPrice) => setFilter({ maxPrice })}
-          />
-        </ExportFilterGrid>
-      }
-    />
+          >
+            {plural(total)} matching your search
+          </Choice>
+        </fieldset>
+
+        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-none p-0">
+          <legend className={`${GROUP_TITLE} mb-1.5`}>Export as</legend>
+          <Choice
+            name={`${base}-format`}
+            value="excel"
+            checked={format === 'excel'}
+            onSelect={() => setFormat('excel')}
+          >
+            CSV for Excel, Numbers, or other spreadsheet programs
+          </Choice>
+          <Choice
+            name={`${base}-format`}
+            value="plain"
+            checked={format === 'plain'}
+            onSelect={() => setFormat('plain')}
+          >
+            Plain CSV file
+          </Choice>
+          <label className="mt-2 flex cursor-pointer items-start gap-3 py-1 text-[0.92rem]">
+            <input
+              type="checkbox"
+              checked={metafields}
+              onChange={(event) => setMetafields(event.target.checked)}
+              className="accent-accent mt-[0.2rem] h-4 w-4 shrink-0 cursor-pointer"
+            />
+            <span className="flex flex-col">
+              <span>Include metafields</span>
+              <span className="text-text-muted text-[0.78rem]">
+                Adds a column for every product metafield. Leave it off for a smaller,
+                faster file.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="border-border bg-bg text-text hover:border-accent h-10 cursor-pointer rounded-full border px-5 text-[0.88rem] font-semibold transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canExport}
+            onClick={submit}
+            className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border-none px-5 text-[0.88rem] font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-50"
+          >
+            <UploadIcon width={16} height={16} />
+            Export products
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

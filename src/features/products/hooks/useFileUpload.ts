@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import { api, type ProductMediaInput } from '../../../lib/api/endpoints.ts'
 import { sendFileToTarget } from '../../../lib/api/upload.ts'
-import { mimeOf, type PickedFile } from '../utils/mediaFiles.ts'
+import { forUpload, mimeOf, type PickedFile } from '../utils/mediaFiles.ts'
 
 export interface FileUploadState {
   status: 'uploading' | 'done' | 'failed'
@@ -38,17 +38,18 @@ export function useFileUpload() {
         if (done.current[picked.key]) continue
         set(picked.key, { status: 'uploading' })
         try {
+          const toSend = forUpload(picked.file)
           const target = await api.products.uploadTarget(
             productId,
             {
-              filename: picked.file.name,
-              mime_type: mimeOf(picked.file),
-              file_size: picked.file.size,
+              filename: toSend.name,
+              mime_type: mimeOf(toSend),
+              file_size: toSend.size,
               media_type: picked.type,
             },
             shop,
           )
-          await sendFileToTarget(target, picked.file)
+          await sendFileToTarget(target, toSend)
           done.current[picked.key] = target.resourceUrl
           set(picked.key, { status: 'done', resourceUrl: target.resourceUrl })
         } catch (error) {

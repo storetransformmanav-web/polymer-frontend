@@ -1,6 +1,5 @@
-import { useId, useMemo, useState, type ComponentType, type ReactNode } from 'react'
-import { CopyButton } from './CopyButton.tsx'
-import { ChevronDownIcon, ListChecksIcon, SpinnerIcon, type IconProps } from './icons.tsx'
+import { useId, useState, type ComponentType, type ReactNode } from 'react'
+import { ChevronDownIcon, type IconProps } from './icons.tsx'
 
 interface DetailSectionProps {
   title: string
@@ -182,57 +181,6 @@ export function DetailSkeleton() {
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-interface RawJsonPanelProps {
-  raw: Record<string, unknown> | null
-  isLoading: boolean
-  error: string | null
-  onRetry: () => void
-}
-
-/** The original Shopify payload as copyable JSON, with loading and error states. */
-export function RawJsonPanel({ raw, isLoading, error, onRetry }: RawJsonPanelProps) {
-  const json = useMemo(() => (raw ? JSON.stringify(raw, null, 2) : ''), [raw])
-
-  if (error) {
-    return (
-      <DetailEmpty icon={ListChecksIcon}>
-        <p className="text-text font-semibold">Couldn&apos;t load the raw data</p>
-        <p>{error}</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="border-border bg-bg text-text hover:border-accent mt-1 cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors"
-        >
-          Try again
-        </button>
-      </DetailEmpty>
-    )
-  }
-  if (!raw) {
-    return (
-      <div
-        role="status"
-        className={`${DETAIL_CARD} text-text-muted flex items-center justify-center gap-2 px-4 py-14 text-[0.9rem]`}
-      >
-        {isLoading && <SpinnerIcon width={16} height={16} className="animate-spin" />}
-        {isLoading ? 'Loading Shopify data…' : 'No raw data available.'}
-      </div>
-    )
-  }
-
-  return (
-    <div className={DETAIL_CARD}>
-      <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
-        <p className="text-text-muted text-[0.78rem]">Original Shopify payload</p>
-        <CopyButton value={json} label="Copy raw JSON" />
-      </div>
-      <pre className="max-h-[65svh] overflow-auto p-4 font-mono text-[0.78rem] leading-relaxed">
-        {json}
-      </pre>
     </div>
   )
 }

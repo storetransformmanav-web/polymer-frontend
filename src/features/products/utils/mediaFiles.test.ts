@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { FILE_ACCEPT, checkFile, formatBytes, mimeOf, pickFiles } from './mediaFiles.ts'
+import {
+  FILE_ACCEPT,
+  checkFile,
+  forUpload,
+  formatBytes,
+  mimeOf,
+  pickFiles,
+} from './mediaFiles.ts'
 
 const MB = 1024 * 1024
 /** A File that reports a size without holding that many bytes. */
@@ -14,6 +21,8 @@ describe('checkFile', () => {
     const images = [
       'a.jpg',
       'a.JPEG',
+      'download (1).jfif',
+      'a.JPE',
       'a.png',
       'a.webp',
       'a.gif',
@@ -103,8 +112,23 @@ describe('helpers', () => {
     expect(mimeOf({ name: 'a.xyz', type: '' })).toBe('application/octet-stream')
   })
 
+  it('sends a JFIF picture as the JPEG it is', () => {
+    const jfif = new File(['pixels'], 'download (1).jfif', { type: 'image/jpeg' })
+
+    const sent = forUpload(jfif)
+
+    expect(sent.name).toBe('download (1).jpg')
+    expect(sent.type).toBe('image/jpeg')
+    expect(sent.size).toBe(jfif.size)
+    // Other files, and plain JPEGs, go as they are.
+    const png = new File(['x'], 'a.png', { type: 'image/png' })
+    expect(forUpload(png)).toBe(png)
+    expect(mimeOf({ name: 'a.jfif', type: '' })).toBe('image/jpeg')
+  })
+
   it('offers every extension to the file chooser', () => {
     expect(FILE_ACCEPT.split(',')).toContain('.heic')
+    expect(FILE_ACCEPT.split(',')).toContain('.jfif')
     expect(FILE_ACCEPT.split(',')).toContain('.usdz')
   })
 })
