@@ -78,6 +78,11 @@ interface MediaRowsProps {
   autoFocusFirst?: boolean
   /** Rows can be removed down to this many (a form that needs none can go to 0). */
   minRows?: number
+  /**
+   * Draw the rows inside a dashed drop-zone box, with a centred "add" button while it is
+   * empty (the look of the store admin's media area). The files are still web addresses.
+   */
+  dropzone?: boolean
 }
 
 /**
@@ -93,12 +98,22 @@ export function MediaRows({
   idPrefix,
   autoFocusFirst = false,
   minRows = 1,
+  dropzone = false,
 }: MediaRowsProps) {
   const update = (index: number, patch: Partial<NewMediaDraft>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
 
+  const empty = rows.length === 0
   return (
-    <div className="text-text flex flex-col gap-3">
+    <div
+      className={`text-text flex flex-col gap-3 ${
+        dropzone
+          ? `border-border-strong bg-surface/30 rounded-xl border border-dashed p-4 ${
+              empty ? 'items-center py-8 text-center' : ''
+            }`
+          : ''
+      }`}
+    >
       {rows.map((row, index) => (
         <div
           key={row.key}
@@ -168,11 +183,20 @@ export function MediaRows({
         type="button"
         onClick={() => onChange([...rows, blankMedia()])}
         disabled={rows.length >= max}
-        className={`${TEXT_BUTTON} self-start disabled:pointer-events-none disabled:opacity-50`}
+        className={
+          dropzone && empty
+            ? 'border-border bg-bg text-text hover:border-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+            : `${TEXT_BUTTON} self-start disabled:pointer-events-none disabled:opacity-50`
+        }
       >
         <PlusIcon width={14} height={14} />
         {rows.length === 0 ? 'Add an image or video' : 'Add another file'}
       </button>
+      {dropzone && empty && (
+        <p className="text-text-muted text-[0.76rem]">
+          Images or videos, by a public web address
+        </p>
+      )}
     </div>
   )
 }

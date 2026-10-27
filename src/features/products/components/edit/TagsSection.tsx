@@ -41,6 +41,11 @@ interface TagsInputProps {
    * isn't already a chip) is listed under the box, to pick with the pointer or the arrow keys.
    */
   suggestions?: readonly string[]
+  /**
+   * With `suggestions`: also list every existing value as soon as the box is focused (before
+   * anything is typed), so the whole set can be browsed and picked from.
+   */
+  suggestAll?: boolean
 }
 
 /**
@@ -66,8 +71,10 @@ export function TagsInput({
   hint,
   autoFocus = false,
   suggestions = [],
+  suggestAll = false,
 }: TagsInputProps) {
   const [input, setInput] = useState('')
+  const [focused, setFocused] = useState(false)
   const box = useRef<HTMLInputElement>(null)
   const card = useRef<HTMLDivElement>(null)
   const listId = useId()
@@ -88,8 +95,10 @@ export function TagsInput({
   // What is being typed now: the text after the last comma.
   const query = input.split(',').pop() ?? ''
   const matches = useMemo(
-    () => matchSuggestions(suggestions, query, tags),
-    [suggestions, query, tags],
+    () =>
+      // Browsing everything only while the box has the focus; typing narrows it down.
+      matchSuggestions(suggestions, query, tags, suggestAll && focused),
+    [suggestions, query, tags, suggestAll, focused],
   )
   const open = !dismissed && matches.length > 0 && place !== null && place.visible
 
@@ -217,7 +226,14 @@ export function TagsInput({
             setActive(-1)
           }}
           onKeyDown={handleKeyDown}
-          onBlur={() => input.trim() && add(input)}
+          onFocus={() => {
+            setFocused(true)
+            setDismissed(false)
+          }}
+          onBlur={() => {
+            setFocused(false)
+            if (input.trim()) add(input)
+          }}
           className="text-text placeholder:text-text-muted/70 min-w-32 flex-1 border-none bg-transparent px-1 py-1 text-[0.85rem] outline-none"
         />
       </div>

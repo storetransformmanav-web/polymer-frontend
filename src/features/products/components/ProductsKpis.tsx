@@ -13,11 +13,10 @@ import type { ProductListResponse } from '../../../lib/api/endpoints.ts'
  * and out of stock, and the threshold that counts as "low". Nothing is worked out here.
  */
 function kpis(
-  data: ProductListResponse | null,
+  summary: ProductListResponse['stock_summary'],
   stock: ProductFilters['stock'],
   onStock: (stock: ProductFilters['stock']) => void,
 ): Kpi[] {
-  const summary = data?.stock_summary
   const count = (value: number | undefined) =>
     value === undefined ? '—' : value.toLocaleString('en-GB')
   const threshold = summary?.low_stock_threshold
@@ -62,16 +61,17 @@ function kpis(
 /**
  * The four stock figures above the products list. **In stock** and **Out of stock** are
  * buttons: pressing one shows only those products in the table (the same filter as Stock in
- * Filters), pressing it again shows everything.
+ * Filters), pressing it again shows everything. Pressing a card only adds that filter to the
+ * table — the four figures keep their values (see `useStockSummary`).
  */
 export function ProductsKpis({
-  data,
+  summary,
   stock,
   onStock,
 }: {
-  data: ProductListResponse | null
+  summary: ProductListResponse['stock_summary']
   stock: ProductFilters['stock']
   onStock: (stock: ProductFilters['stock']) => void
 }) {
-  return <KpiCards items={kpis(data, stock, onStock)} />
+  return <KpiCards items={kpis(summary, stock, onStock)} />
 }

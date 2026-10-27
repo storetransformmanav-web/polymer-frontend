@@ -129,6 +129,23 @@ export function statusCountFilters(
   }
 }
 
+/**
+ * The query whose `stock_summary` the stock cards show while a stock card is pressed: the
+ * same search/status/type/... filters but **without** the stock filter, one row per page
+ * (only the summary is read). The list answer's own summary describes the narrowed list
+ * (pressing "In stock" would make "Out of stock" read 0), so the cards read this instead.
+ */
+export function stockSummaryFilters(filters: ProductFilters): ProductFilters {
+  return {
+    ...filters,
+    stock: '',
+    page: 1,
+    pageSize: 1,
+    sort: DEFAULT_FILTERS.sort,
+    order: DEFAULT_FILTERS.order,
+  }
+}
+
 /** True when any narrowing filter (not sort/paging) is applied. */
 export function hasActiveFilters(filters: ProductFilters): boolean {
   return (

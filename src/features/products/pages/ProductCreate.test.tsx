@@ -177,17 +177,21 @@ describe('adding a product', () => {
     const { form } = await openForm()
 
     expect(within(form).getByLabelText('Title')).toHaveFocus()
+    // The cards of the store admin's Add product page, in its order (no Publishing card).
     for (const name of [
       'Basics',
-      'Media',
-      'Options and variants',
-      'Search listing',
-      'Metafields',
-      'Status and store',
-      'Organization',
+      'Pricing',
+      'Inventory',
+      'Shipping',
+      'Variants',
+      'Product metafields',
+      'Search engine listing',
+      'Product organization',
     ]) {
       expect(within(form).getByRole('region', { name })).toBeInTheDocument()
     }
+    expect(within(form).getByRole('group', { name: 'Media' })).toBeInTheDocument()
+    expect(within(form).queryByText(/Publishing/i)).not.toBeInTheDocument()
     expect(create).not.toHaveBeenCalled()
   })
 
@@ -270,7 +274,7 @@ describe('adding a product', () => {
         within(form).getAllByRole('button', { name: 'Creating…' })[0],
       ).toBeDisabled(),
     )
-    expect(within(form).getByRole('button', { name: 'Back' })).toBeDisabled()
+    expect(within(form).getByRole('button', { name: 'Back to list' })).toBeDisabled()
     expect(create).toHaveBeenCalledTimes(1)
   })
 
@@ -295,19 +299,19 @@ describe('adding a product', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const { user, form } = await openForm()
 
-    await user.click(within(form).getByRole('button', { name: 'Back' }))
+    await user.click(within(form).getByRole('button', { name: 'Back to list' }))
     expect(confirm).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'Add product' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add product' }))
     const again = await screen.findByRole('region', { name: 'Add product' })
     await user.type(within(again).getByLabelText('Title'), 'Half done')
-    await user.click(within(again).getByRole('button', { name: 'Back' }))
+    await user.click(within(again).getByRole('button', { name: 'Back to list' }))
     expect(confirm).toHaveBeenCalled()
     expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
 
     confirm.mockReturnValue(true)
-    await user.click(within(again).getByRole('button', { name: 'Back' }))
+    await user.click(within(again).getByRole('button', { name: 'Back to list' }))
     expect(screen.queryByRole('region', { name: 'Add product' })).not.toBeInTheDocument()
   })
 
@@ -475,7 +479,7 @@ describe('adding a product', () => {
     await user.type(within(form).getByLabelText(/^Vendor/), 'Polymer')
     await user.type(within(form).getByLabelText('Add tags'), 'eco, tray{Enter}')
     await user.type(
-      within(form).getByLabelText('Add a collection by ID'),
+      within(form).getByLabelText('Search collections'),
       '3fa85f64-5717-4562-b3fc-2c963f66afa6{Enter}',
     )
     await user.type(
@@ -549,6 +553,8 @@ describe('adding a product', () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
       await user.type(within(form).getByLabelText(/^Picture address/), A)
+      // The tax code sits behind the Price card's "Charge tax" pill.
+      await user.click(within(form).getByRole('button', { name: /^Charge tax/ }))
       await user.type(within(form).getByLabelText(/^Tax code/), 'P0000000')
       await user.click(submit(form))
 
@@ -616,7 +622,7 @@ describe('adding a product', () => {
       within(form).getByLabelText('Web address'),
       'http://insecure.example.com/a.jpg',
     )
-    await user.type(within(form).getByLabelText('Add a collection by ID'), 'nope{Enter}')
+    await user.type(within(form).getByLabelText('Search collections'), 'nope{Enter}')
 
     expect(
       await within(form).findByText('That is not a valid collection ID'),
@@ -626,5 +632,168 @@ describe('adding a product', () => {
       await within(form).findByText('Use a public https:// address'),
     ).toBeInTheDocument()
     expect(create).not.toHaveBeenCalled()
+  })
+
+  describe('the store admin Add product design', () => {
+    const WHOLESALE = '11111111-1111-4111-8111-111111111111'
+    const RETAIL = '22222222-2222-4222-8222-222222222222'
+    const SMART = '33333333-3333-4333-8333-333333333333'
+
+    function seedKnown() {
+      list.mockResolvedValue(
+        page([{ ...EXISTING, tags: ['Category_Food', 'Retail', 'Eco'] }]),
+      )
+      vi.mocked(api.products.details).mockResolvedValue({
+        id: 'id-1',
+        handle: 'hippo-bag',
+        title: 'Hippo Bag',
+        collections: [
+          {
+            id: WHOLESALE,
+            title: 'Wholesale',
+            handle: 'wholesale',
+            collection_type: 'CUSTOM',
+          },
+          {
+            id: RETAIL,
+            title: 'Retail bags',
+            handle: 'retail-bags',
+            collection_type: 'CUSTOM',
+          },
+          {
+            id: SMART,
+            title: 'Auto bags',
+            handle: 'auto-bags',
+            collection_type: 'SMART',
+          },
+        ],
+      } as never)
+    }
+
+    it('lists every existing tag as soon as the Tags box is clicked, and narrows as you type', async () => {
+      seedKnown()
+      const { user, form } = await openForm()
+
+      await user.click(within(form).getByLabelText('Add tags'))
+      const choices = await screen.findByRole('listbox', { name: 'Matching tags' })
+      expect(
+        within(choices)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Category_Food', 'Eco', 'Retail'])
+
+      await user.click(within(choices).getByRole('option', { name: 'Eco' }))
+      expect(within(form).getByRole('list', { name: 'Tags' })).toHaveTextContent('Eco')
+      // The picked one leaves the list, the others stay (it is still open for the next).
+      const again = await screen.findByRole('listbox', { name: 'Matching tags' })
+      expect(within(again).queryByRole('option', { name: 'Eco' })).not.toBeInTheDocument()
+      expect(within(again).getAllByRole('option')).toHaveLength(2)
+
+      await user.type(within(form).getByLabelText('Add tags'), 'ret')
+      expect(
+        within(
+          await screen.findByRole('listbox', { name: 'Matching tags' }),
+        ).getAllByRole('option'),
+      ).toHaveLength(1)
+    })
+
+    it('lists every known collection when the Collections box is clicked, and sends the picked ones', async () => {
+      seedKnown()
+      const { user, form } = await openForm()
+
+      await user.click(within(form).getByLabelText('Search collections'))
+      const choices = await within(form).findByRole('list', {
+        name: 'Collections to add',
+      })
+      // Both manual collections, by name; the smart one cannot be used on create.
+      await within(choices).findByRole('button', { name: 'Retail bags' })
+      expect(
+        within(choices).getByRole('button', { name: 'Wholesale' }),
+      ).toBeInTheDocument()
+      expect(within(choices).queryByRole('button', { name: 'Auto bags' })).toBeNull()
+
+      await user.click(within(choices).getByRole('button', { name: 'Wholesale' }))
+      expect(within(form).getByRole('list', { name: 'Collections' })).toHaveTextContent(
+        'Wholesale',
+      )
+      expect(
+        within(form).getByRole('button', { name: 'Remove collection Wholesale' }),
+      ).toBeInTheDocument()
+
+      await fillBasics(user, form)
+      await user.click(submit(form))
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      expect(create.mock.calls[0][0].collections).toEqual([WHOLESALE])
+    })
+
+    it('Inventory tracked and Physical product are switches that are sent', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      const tracked = within(form).getByRole('switch', { name: 'Inventory tracked' })
+      const physical = within(form).getByRole('switch', { name: 'Physical product' })
+      expect(tracked).toBeChecked()
+      expect(physical).toBeChecked()
+
+      await user.click(tracked)
+      await user.click(physical)
+      expect(within(form).queryByLabelText('Opening stock location ID')).toBeNull()
+      expect(within(form).queryByLabelText('Weight')).toBeNull()
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      expect(create.mock.calls[0][0].variants[0]).toMatchObject({
+        tracked: false,
+        requires_shipping: false,
+      })
+    })
+
+    it('opens Compare-at, Cost per item and the other price fields from the card pills', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      expect(within(form).queryByLabelText('Compare-at price')).toBeNull()
+
+      await user.click(within(form).getByRole('button', { name: 'Compare-at' }))
+      await user.type(within(form).getByLabelText('Compare-at price'), '12')
+      await user.type(within(form).getByLabelText('Cost per item'), '3.5')
+      // Sell when out of stock is a pill that switches straight over.
+      await user.click(
+        within(form).getByRole('button', { name: /^Sell when out of stock/ }),
+      )
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      expect(create.mock.calls[0][0].variants[0]).toMatchObject({
+        compare_at_price: '12',
+        cost: '3.5',
+        inventory_policy: 'CONTINUE',
+      })
+    })
+
+    it('folds an option into a summary with Done, and removes it with Delete', async () => {
+      const { user, form } = await openForm()
+      await user.click(
+        within(form).getByRole('button', { name: 'Add options like size or colour' }),
+      )
+      await user.type(within(form).getByLabelText('Option name'), 'Size')
+      await user.type(
+        within(form).getByLabelText('Add values for option 1'),
+        'Small, Large{Enter}',
+      )
+      await user.click(within(form).getByRole('button', { name: 'Done' }))
+
+      // Folded: the inputs are gone, the name and values show, and it opens again on click.
+      expect(within(form).queryByLabelText('Option name')).toBeNull()
+      const summary = within(form).getByRole('button', { name: 'Edit option Size' })
+      expect(summary).toHaveTextContent('Small')
+      expect(summary).toHaveTextContent('Large')
+      expect(within(form).getByLabelText('Price for Small')).toBeInTheDocument()
+
+      await user.click(summary)
+      await user.click(within(form).getByRole('button', { name: 'Remove option 1' }))
+      expect(within(form).queryByLabelText('Price for Small')).toBeNull()
+      expect(
+        within(form).getByRole('button', { name: 'Add options like size or colour' }),
+      ).toBeInTheDocument()
+    })
   })
 })

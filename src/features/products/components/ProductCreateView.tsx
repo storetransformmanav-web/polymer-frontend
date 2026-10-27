@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { ALL_SHOPS, shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { ArrowLeftIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
-import { RichTextEditor } from '../../../components/ui/RichTextEditor.tsx'
 import type { SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useShops } from '../../../hooks/useShops.ts'
 import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
@@ -10,23 +9,21 @@ import { useCreateProduct } from '../hooks/useCreateProduct.ts'
 import { useStockLocations } from '../hooks/useStockLocations.ts'
 import {
   blankCreateDraft,
-  CREATE_LIMITS,
   firstImageUrl,
   isCreateDirty,
   syncVariants,
   validateCreateDraft,
   type CreateDraft,
 } from '../utils/createDraft.ts'
-import { LIMITS } from '../utils/editDraft.ts'
-import { EditField, FIELD_INPUT, FIELD_TEXTAREA } from './edit/fields.tsx'
-import { CreateCard } from './create/CreateCard.tsx'
+import { CreateBasicsCard } from './create/CreateBasicsCard.tsx'
+import { CreateMetafieldsCard, CreateSeoCard } from './create/CreateListingCards.tsx'
 import {
-  CreateMetafieldsCard,
-  CreateOrganizationCard,
-  CreateStatusCard,
-} from './create/CreateSidebarCards.tsx'
+  CreateInventoryCard,
+  CreatePriceCard,
+  CreateShippingCard,
+} from './create/CreatePricingCards.tsx'
+import { CreateSidebarCard } from './create/CreateSidebarCards.tsx'
 import { CreateVariantsCard } from './create/CreateVariantsCard.tsx'
-import { MediaRows } from './MediaRows.tsx'
 
 interface ProductCreateViewProps {
   onBack: () => void
@@ -127,21 +124,26 @@ export function ProductCreateView({
     <section
       aria-label="Add product"
       aria-busy={isCreating}
-      className="flex flex-col gap-4"
+      className="flex w-full flex-col gap-5"
     >
-      <div className="border-border bg-bg flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-2.5">
-        <button
-          type="button"
-          onClick={back}
-          disabled={isCreating}
-          className="text-text hover:text-accent inline-flex h-9 cursor-pointer items-center gap-2 border-none bg-transparent px-1 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
-        >
-          <ArrowLeftIcon width={16} height={16} />
-          Back
-        </button>
-        <div className="bg-border hidden h-6 w-px sm:block" aria-hidden="true" />
-        <h2 className="text-[0.95rem] font-semibold">Add product</h2>
-        <div className="ml-auto">{createButton}</div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Same button as on a product's details page. */}
+          <button
+            type="button"
+            onClick={back}
+            disabled={isCreating}
+            aria-label="Back to list"
+            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+          >
+            <ArrowLeftIcon width={16} height={16} />
+            <span className="hidden sm:inline" aria-hidden="true">
+              Back to list
+            </span>
+          </button>
+          {createButton}
+        </div>
       </div>
 
       {error && <FormMessage tone="error">{error}</FormMessage>}
@@ -151,150 +153,40 @@ export function ProductCreateView({
         </FormMessage>
       )}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <CreateCard title="Basics">
-            <EditField
-              id="create-title"
-              label="Title"
-              error={errors.title}
-              counter={{ value: draft.title.trim().length, max: LIMITS.title }}
-            >
-              <input
-                id="create-title"
-                autoComplete="off"
-                autoFocus
-                value={draft.title}
-                aria-invalid={errors.title ? true : undefined}
-                onChange={(event) => update({ title: event.target.value })}
-                className={FIELD_INPUT}
-              />
-            </EditField>
-            <EditField id="create-description" label="Description" optional>
-              <RichTextEditor
-                id="create-description"
-                label="Description"
-                value={draft.descriptionHtml}
-                onChange={(descriptionHtml) => update({ descriptionHtml })}
-              />
-            </EditField>
-          </CreateCard>
-
-          <CreateCard
-            title="Media"
-            description="Pictures for the whole product, by public web address — the store downloads them, and the first image is the featured one. A variant's own picture is set in its row under Options and variants (it is added here automatically)."
-          >
-            <MediaRows
-              rows={draft.media}
-              onChange={(media) => update({ media })}
-              errors={errors}
-              prefix="media."
-              max={CREATE_LIMITS.media}
-              idPrefix="create-media"
-              minRows={0}
-            />
-            {errors['media.rows'] && (
-              <p role="alert" className="text-danger text-[0.78rem]">
-                {errors['media.rows']}
-              </p>
-            )}
-          </CreateCard>
-
-          <CreateVariantsCard
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <CreateBasicsCard
+            draft={effective}
+            errors={errors}
+            update={update}
+            pictures={pictures}
+          />
+          <CreatePriceCard draft={effective} errors={errors} update={update} />
+          <CreateInventoryCard
             draft={effective}
             errors={errors}
             update={update}
             locations={locations}
+          />
+          <CreateShippingCard draft={effective} errors={errors} update={update} />
+          <CreateVariantsCard
+            draft={effective}
+            errors={errors}
+            update={update}
             pictures={pictures}
           />
-
-          <CreateCard
-            title="Search listing"
-            description="How the product appears in search results and its web address."
-          >
-            <EditField
-              id="create-seo-title"
-              label="SEO title"
-              optional
-              error={errors.seoTitle}
-              counter={{ value: draft.seoTitle.trim().length, max: LIMITS.seoTitle }}
-            >
-              <input
-                id="create-seo-title"
-                autoComplete="off"
-                value={draft.seoTitle}
-                aria-invalid={errors.seoTitle ? true : undefined}
-                onChange={(event) => update({ seoTitle: event.target.value })}
-                className={FIELD_INPUT}
-              />
-            </EditField>
-            <EditField
-              id="create-seo-description"
-              label="SEO description"
-              optional
-              error={errors.seoDescription}
-              counter={{
-                value: draft.seoDescription.trim().length,
-                max: LIMITS.seoDescription,
-              }}
-            >
-              <textarea
-                id="create-seo-description"
-                rows={3}
-                value={draft.seoDescription}
-                aria-invalid={errors.seoDescription ? true : undefined}
-                onChange={(event) => update({ seoDescription: event.target.value })}
-                className={FIELD_TEXTAREA}
-              />
-            </EditField>
-            <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
-              <EditField
-                id="create-handle"
-                label="Handle"
-                optional
-                error={errors.handle}
-                hint="Leave blank and the store makes one from the title."
-              >
-                <input
-                  id="create-handle"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={draft.handle}
-                  aria-invalid={errors.handle ? true : undefined}
-                  onChange={(event) => update({ handle: event.target.value })}
-                  className={FIELD_INPUT}
-                />
-              </EditField>
-              <EditField
-                id="create-template"
-                label="Template suffix"
-                optional
-                error={errors.templateSuffix}
-              >
-                <input
-                  id="create-template"
-                  autoComplete="off"
-                  value={draft.templateSuffix}
-                  aria-invalid={errors.templateSuffix ? true : undefined}
-                  onChange={(event) => update({ templateSuffix: event.target.value })}
-                  className={FIELD_INPUT}
-                />
-              </EditField>
-            </div>
-          </CreateCard>
-
           <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
+          <CreateSeoCard draft={effective} errors={errors} update={update} />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <CreateStatusCard
+        <div className="flex min-w-0 flex-col gap-5 lg:sticky lg:top-0">
+          <CreateSidebarCard
             draft={effective}
             errors={errors}
             update={update}
             shopOptions={shopOptions}
             shop={shop}
           />
-          <CreateOrganizationCard draft={effective} errors={errors} update={update} />
         </div>
       </div>
 

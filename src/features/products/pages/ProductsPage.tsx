@@ -33,6 +33,7 @@ import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
 import { statusLabel } from '../utils/format.ts'
 import { useProducts } from '../hooks/useProducts.ts'
+import { useStockSummary } from '../hooks/useStockSummary.ts'
 
 /** How long the products just saved from the bulk editor stay highlighted in the list. */
 const UPDATED_HIGHLIGHT_MS = 10_000
@@ -72,6 +73,8 @@ export function ProductsPage() {
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = products
+  // The stock cards' figures: they do not change when a stock card is pressed.
+  const stockSummary = useStockSummary(filters, data)
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
@@ -349,7 +352,7 @@ export function ProductsPage() {
           the bulk editor and the create form take their place (kept mounted, only hidden). */}
       <div className={activeId || bulkItems || showCreate ? 'hidden' : undefined}>
         <ProductsKpis
-          data={data}
+          summary={stockSummary}
           stock={filters.stock}
           onStock={(stock) => products.setFilters({ stock })}
         />

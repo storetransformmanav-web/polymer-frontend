@@ -54,12 +54,19 @@ function respond(params: ProductListParams): ProductListResponse {
 
   return {
     items: Array.from({ length: count }, (_, i) => makeProduct(start + i + 1)),
-    stock_summary: {
-      in_stock: 859,
-      low_stock: 125,
-      out_of_stock: 407,
-      low_stock_threshold: 10,
-    },
+    // With a stock filter on, the answer describes only the narrowed list (the other
+    // figures read 0), as the real API does.
+    stock_summary:
+      params.in_stock === true
+        ? { in_stock: 859, low_stock: 0, out_of_stock: 0, low_stock_threshold: 10 }
+        : params.in_stock === false
+          ? { in_stock: 0, low_stock: 0, out_of_stock: 407, low_stock_threshold: 10 }
+          : {
+              in_stock: 859,
+              low_stock: 125,
+              out_of_stock: 407,
+              low_stock_threshold: 10,
+            },
     page,
     page_size: pageSize,
     total: matches,
@@ -461,6 +468,40 @@ describe('ProductsPage list', () => {
     )
     expect(screen.getByLabelText('Stock')).toHaveValue('')
     void outOfStock
+  })
+
+  it('keeps the other stock cards’ figures when a card is pressed — it only adds the filter', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+    const card = (label: string) =>
+      screen.getAllByText(label, { selector: 'span' })[0].parentElement!.parentElement!
+
+    await user.click(screen.getByRole('button', { name: /^In stock/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ in_stock: true })),
+    )
+    // The cards read the summary of the list without the stock filter.
+    await waitFor(() =>
+      expect(
+        list.mock.calls.some(
+          ([params]) => params.page_size === 1 && params.in_stock === undefined,
+        ),
+      ).toBe(true),
+    )
+    expect(within(card('In stock')).getByText('859')).toBeInTheDocument()
+    expect(within(card('Low stock')).getByText('125')).toBeInTheDocument()
+    expect(within(card('Out of stock')).getByText('407')).toBeInTheDocument()
+    expect(within(card('Low stock threshold')).getByText('10')).toBeInTheDocument()
+
+    // Switching to the other card keeps them too.
+    await user.click(screen.getByRole('button', { name: /^Out of stock/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ in_stock: false })),
+    )
+    expect(within(card('In stock')).getByText('859')).toBeInTheDocument()
+    expect(within(card('Low stock')).getByText('125')).toBeInTheDocument()
+    expect(within(card('Out of stock')).getByText('407')).toBeInTheDocument()
   })
 
   it('shows the API’s four stock figures in cards on top of the list', async () => {
