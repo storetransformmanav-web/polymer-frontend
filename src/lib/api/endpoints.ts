@@ -1,6 +1,14 @@
 import { z } from 'zod'
 import { ApiError } from './ApiError.ts'
 import { apiClient } from './client.ts'
+import {
+  buildImportForm,
+  readImportPlan,
+  readImportProgress,
+  type ProductImportOptions,
+  type ProductImportPlan,
+  type ProductImportProgress,
+} from './productImport.ts'
 
 /**
  * Every backend endpoint the app calls lives in this one file: the path,
@@ -70,6 +78,10 @@ export const ENDPOINTS = {
     list: '/products',
     /** `GET` the products as a Shopify-format CSV file (not JSON). */
     export: '/products/export',
+    /** `POST` a Shopify-format CSV (multipart): checks it (`dry_run`) or starts the import. */
+    import: '/products/import',
+    /** `GET` how a started import is going; `id` is the `import_id` its plan answered with. */
+    importStatus: (id: string) => `/products/import/${encodeURIComponent(id)}`,
     /** `ref` is the product's UUID or Shopify ID. */
     detail: (ref: string) => `/products/${encodeURIComponent(ref)}`,
     /** `id` is the product's CRM UUID (`PUT` edits it). */
@@ -1370,6 +1382,9 @@ export interface ProductExportParams {
 /** The export reads every product in one call, so it gets longer than the usual 15 s. */
 export const PRODUCT_EXPORT_TIMEOUT_MS = 120_000
 
+/** Sending a CSV and having it read and planned takes longer than the usual 15 s. */
+export const PRODUCT_IMPORT_TIMEOUT_MS = 120_000
+
 // --- Collections (GET /collections, GET /collections/{id}) ------------------------
 
 /** One row of `GET /collections`. */
@@ -1606,6 +1621,29 @@ export const api = {
      * refused with a readable message instead of being saved as a broken download.
      * Failures with a status already arrive as an `ApiError` carrying the backend's message.
      */
+    /**
+     * Sends a Shopify-format CSV (`POST /products/import`, multipart: `file`, `shop`,
+     * `dry_run`, `create_new`, `update_existing`). With `dryRun` the file is only checked and
+     * nothing changes; without it the answer is the plan and the import carries on in the
+     * background (its progress: `importStatus`). Rows with problems are skipped and reported.
+     * Never retried — a repeat could import everything twice. The answer is read leniently
+     * (`readImportPlan`): its exact fields aren't in the API's description.
+     */
+    async import(file: File, options: ProductImportOptions): Promise<ProductImportPlan> {
+      const data = await apiClient.post<unknown>(
+        ENDPOINTS.products.import,
+        buildImportForm(file, options),
+        { timeout: PRODUCT_IMPORT_TIMEOUT_MS },
+      )
+      return readImportPlan(data)
+    },
+
+    /** How a started import is going (`GET /products/import/{import_id}`), read leniently. */
+    async importStatus(importId: string): Promise<ProductImportProgress> {
+      const data = await apiClient.get<unknown>(ENDPOINTS.products.importStatus(importId))
+      return readImportProgress(data)
+    },
+
     async export(params: ProductExportParams, signal?: AbortSignal): Promise<string> {
       const data = await apiClient.get<unknown>(ENDPOINTS.products.export, {
         params,

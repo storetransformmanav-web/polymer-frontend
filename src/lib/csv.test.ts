@@ -1,5 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { buildCsv, csvCell } from './csv.ts'
+import { buildCsv, csvCell, parseCsv } from './csv.ts'
+
+describe('parseCsv', () => {
+  it('reads rows and cells, with CRLF, LF or CR line ends and a final line end or none', () => {
+    const expected = [
+      ['a', 'b'],
+      ['1', '2'],
+    ]
+    expect(parseCsv('a,b\r\n1,2\r\n')).toEqual(expected)
+    expect(parseCsv('a,b\n1,2')).toEqual(expected)
+    expect(parseCsv('a,b\r1,2\r')).toEqual(expected)
+  })
+
+  it('reads quoted cells: commas, doubled quotes and line breaks inside', () => {
+    expect(parseCsv('"a, b","say ""hi""","line1\nline2"\n')).toEqual([
+      ['a, b', 'say "hi"', 'line1\nline2'],
+    ])
+  })
+
+  it('keeps empty cells, and skips blank lines', () => {
+    expect(parseCsv('a,,c\n\n,,\n')).toEqual([
+      ['a', '', 'c'],
+      ['', '', ''],
+    ])
+  })
+
+  it('drops a leading byte-order mark', () => {
+    expect(parseCsv('﻿Handle,Title\n')).toEqual([['Handle', 'Title']])
+  })
+
+  it('reads back what buildCsv wrote', () => {
+    const headers = ['Handle', 'Body (HTML)', 'Note']
+    const rows = [
+      ['hippo-bag', '<p>Hello, "world"</p>', 'two\nlines'],
+      ['mop', '', ' padded '],
+    ]
+    expect(parseCsv(buildCsv(headers, rows))).toEqual([headers, ...rows])
+  })
+
+  it('gives nothing for an empty file', () => {
+    expect(parseCsv('')).toEqual([])
+    expect(parseCsv('\n\n')).toEqual([])
+  })
+})
 
 describe('csvCell', () => {
   it('writes plain text and numbers as they are, and nothing for a missing value', () => {

@@ -24,6 +24,7 @@ import {
   ProductsSelectionNote,
 } from '../components/ProductsBulkBar.tsx'
 import { ProductsExport } from '../components/ProductsExport.tsx'
+import { ProductsImport } from '../components/ProductsImport.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { ProductsKpis } from '../components/ProductsKpis.tsx'
@@ -443,6 +444,16 @@ export function ProductsPage() {
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
+        <ProductsImport
+          visible={
+            !products.isPending &&
+            !products.error &&
+            !activeId &&
+            !bulkItems &&
+            !showCreate
+          }
+        />
+
         <ProductsExport
           items={products.items}
           selected={selectedItems}

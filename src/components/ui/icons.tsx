@@ -747,3 +747,11 @@ export function UploadIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function PaperclipIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m16 9.2-6.1 6.1a3.9 3.9 0 0 1-5.5-5.5l6.6-6.6a2.6 2.6 0 0 1 3.7 3.7l-6.6 6.6a1.3 1.3 0 0 1-1.8-1.8l6-6" />
+    </svg>
+  )
+}
