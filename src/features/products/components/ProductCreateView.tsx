@@ -86,7 +86,6 @@ export function ProductCreateView({
   const problems = useMemo(() => validateCreateDraft(effective), [effective])
   const errors = showErrors ? problems : {}
   const { locations } = useStockLocations(shop)
-  const pictures = [...new Set(draft.media.map((row) => row.url.trim()).filter(Boolean))]
 
   function update(patch: Partial<CreateDraft>) {
     clearError()
@@ -145,7 +144,13 @@ export function ProductCreateView({
       className="flex w-full flex-col gap-5"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
+        <div className="min-w-0">
+          <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
+          <p className="text-text-muted mt-1 text-[0.85rem]">
+            Fill in the details below, then press Create product. Nothing is sent to the
+            store until then. Only the title and a price are required.
+          </p>
+        </div>
         <div className="ml-auto flex items-center gap-2">
           {/* Same button as on a product's details page. */}
           <button
@@ -177,7 +182,6 @@ export function ProductCreateView({
             draft={effective}
             errors={errors}
             update={update}
-            pictures={pictures}
             files={files}
             onFiles={setFiles}
             uploadStates={uploadStates}
@@ -191,12 +195,7 @@ export function ProductCreateView({
             locations={locations}
           />
           <CreateShippingCard draft={effective} errors={errors} update={update} />
-          <CreateVariantsCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            pictures={pictures}
-          />
+          <CreateVariantsCard draft={effective} errors={errors} update={update} />
           <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
           <CreateSeoCard draft={effective} errors={errors} update={update} />
         </div>

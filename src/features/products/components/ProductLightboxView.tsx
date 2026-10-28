@@ -8,8 +8,15 @@ import 'yet-another-react-lightbox/styles.css'
 import 'yet-another-react-lightbox/plugins/counter.css'
 import 'yet-another-react-lightbox/plugins/thumbnails.css'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { InfoIcon } from '../../../components/ui/icons.tsx'
-import type { LightboxSlide } from '../utils/slides.ts'
+import {
+  CheckIcon,
+  InfoIcon,
+  PencilIcon,
+  SpinnerIcon,
+  XIcon,
+} from '../../../components/ui/icons.tsx'
+import { LIMITS } from '../utils/editDraft.ts'
+import type { AltTextEditor, LightboxSlide } from '../utils/slides.ts'
 
 /** Space between the picture and its information card. */
 const CARD_GAP = 16
@@ -29,6 +36,158 @@ function InfoField({ label, children }: { label: string; children: ReactNode }) 
   )
 }
 
+const SMALL_BUTTON =
+  'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/25 disabled:pointer-events-none disabled:opacity-50'
+
+/**
+ * The alt text, with a pencil that turns it into a box: ✓ saves and ✕ discards (Escape
+ * discards too). Saving asks first — "Are you sure…" — because the change is also sent to
+ * Shopify; the question sits inside the card, since a dialog would open behind the
+ * lightbox. Only the alt text is sent (`media_update`); the card's other fields are not
+ * editable.
+ */
+function AltTextField({
+  imageId,
+  altText,
+  editor,
+}: {
+  imageId: string
+  altText: string
+  editor: AltTextEditor
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const { save, isSaving, error, clearError } = editor
+  const changed = draft !== null && draft.trim() !== altText.trim()
+
+  function begin() {
+    clearError()
+    setConfirming(false)
+    setDraft(altText)
+  }
+  function discard() {
+    if (isSaving) return
+    clearError()
+    setConfirming(false)
+    setDraft(null)
+  }
+  async function confirm() {
+    if (draft === null) return
+    setConfirming(false)
+    if (await save(imageId, draft)) setDraft(null)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[0.78rem] font-semibold text-white/90">Alt text</span>
+        {draft === null ? (
+          <button
+            type="button"
+            onClick={begin}
+            aria-label="Edit alt text"
+            title="Edit alt text"
+            className={SMALL_BUTTON}
+          >
+            <PencilIcon width={14} height={14} />
+          </button>
+        ) : (
+          <span className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              disabled={!changed || isSaving || confirming}
+              aria-label="Save alt text"
+              title="Save"
+              className={SMALL_BUTTON}
+            >
+              {isSaving ? (
+                <SpinnerIcon width={14} height={14} className="animate-spin" />
+              ) : (
+                <CheckIcon width={14} height={14} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={discard}
+              disabled={isSaving}
+              aria-label="Discard alt text changes"
+              title="Discard"
+              className={SMALL_BUTTON}
+            >
+              <XIcon width={14} height={14} />
+            </button>
+          </span>
+        )}
+      </div>
+
+      {draft === null ? (
+        <p className={`${VALUE_BOX} m-0`}>
+          {altText.trim() || (
+            <span className="font-normal text-white/60 italic">No alt text</span>
+          )}
+        </p>
+      ) : (
+        <>
+          <textarea
+            autoFocus
+            rows={3}
+            maxLength={LIMITS.mediaAlt}
+            value={draft}
+            disabled={isSaving}
+            aria-label="Alt text"
+            placeholder="Describe the picture"
+            onChange={(event) => {
+              setDraft(event.target.value)
+              if (error) clearError()
+            }}
+            onKeyDown={(event) => {
+              // Escape ends the edit; it must not also close the lightbox.
+              if (event.key === 'Escape') discard()
+            }}
+            className={`${VALUE_BOX} w-full resize-y outline-none placeholder:text-white/40 focus:border-white/50`}
+          />
+          {confirming && (
+            <div
+              role="alertdialog"
+              aria-label="Update alt text?"
+              className="flex flex-col gap-2 rounded-lg border border-white/20 bg-black/40 p-2.5 text-[0.78rem] leading-snug"
+            >
+              <p className="m-0 font-semibold">Update the alt text?</p>
+              <p className="m-0 text-white/75">
+                Are you sure you want to update this? These changes will also be updated
+                in Shopify.
+              </p>
+              <span className="flex gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setConfirming(false)}
+                  className="h-8 cursor-pointer rounded-md border border-white/25 bg-white/10 px-3 text-[0.78rem] font-semibold text-white hover:bg-white/25"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirm()}
+                  className="h-8 cursor-pointer rounded-md border-none bg-white px-3 text-[0.78rem] font-semibold text-black hover:bg-white/85"
+                >
+                  Yes, update
+                </button>
+              </span>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="m-0 text-[0.78rem] text-red-300">
+              {error}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 /**
  * The picture's information, in a card: its file name, alt text, type and size in pixels,
  * and its id — all from the product's image record. It sits just beside the picture, a
@@ -36,7 +195,13 @@ function InfoField({ label, children }: { label: string; children: ReactNode }) 
  * fits to the window), and falls back to the window's top-right corner when there is no
  * room beside it (a phone) or the picture can't be measured.
  */
-function ImageInfoCard({ slide }: { slide: LightboxSlide }) {
+function ImageInfoCard({
+  slide,
+  altEditor,
+}: {
+  slide: LightboxSlide
+  altEditor?: AltTextEditor
+}) {
   // Where the card's left edge goes, once the picture's position is known.
   const [left, setLeft] = useState<number | null>(null)
 
@@ -66,6 +231,10 @@ function ImageInfoCard({ slide }: { slide: LightboxSlide }) {
   return (
     <aside
       aria-label="Image information"
+      // Typing, clicking and scrolling in the card must not page, drag or close the lightbox.
+      onKeyDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
       style={
         left === null
           ? undefined
@@ -88,13 +257,23 @@ function ImageInfoCard({ slide }: { slide: LightboxSlide }) {
             <p className={`${VALUE_BOX} m-0 break-all`}>{slide.fileName}</p>
           </InfoField>
         )}
-        <InfoField label="Alt text">
-          <p className={`${VALUE_BOX} m-0`}>
-            {altText || (
-              <span className="font-normal text-white/60 italic">No alt text</span>
-            )}
-          </p>
-        </InfoField>
+        {altEditor && slide.id ? (
+          // Keyed by the image, so paging to another picture starts from its own text.
+          <AltTextField
+            key={slide.id}
+            imageId={slide.id}
+            altText={slide.altText ?? ''}
+            editor={altEditor}
+          />
+        ) : (
+          <InfoField label="Alt text">
+            <p className={`${VALUE_BOX} m-0`}>
+              {altText || (
+                <span className="font-normal text-white/60 italic">No alt text</span>
+              )}
+            </p>
+          </InfoField>
+        )}
         {details && (
           <InfoField label="Details">
             <p className="m-0 text-[0.82rem] text-white/80">{details}</p>
@@ -119,6 +298,7 @@ interface ProductLightboxViewProps {
   slides: LightboxSlide[]
   index: number
   onClose: () => void
+  altEditor?: AltTextEditor
 }
 
 /**
@@ -130,6 +310,7 @@ export default function ProductLightboxView({
   slides,
   index,
   onClose,
+  altEditor,
 }: ProductLightboxViewProps) {
   const [current, setCurrent] = useState(index)
   const slide = slides[current]
@@ -154,7 +335,9 @@ export default function ProductLightboxView({
         ...(slides.length < 2 ? { buttonPrev: () => null, buttonNext: () => null } : {}),
         // The picture's information, top right, beside the picture.
         controls: () =>
-          slide?.altText === undefined ? null : <ImageInfoCard slide={slide} />,
+          slide?.altText === undefined ? null : (
+            <ImageInfoCard slide={slide} altEditor={altEditor} />
+          ),
       }}
     />
   )

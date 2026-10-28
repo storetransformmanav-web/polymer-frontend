@@ -12,13 +12,24 @@ export interface FileUploadState {
 }
 
 /**
- * Uploads files chosen from the computer to a product, one after the other: for each, the
+ * How many files go up at the same time. Each file costs two round trips (the upload address,
+ * then the storage's answer) before and after its bytes, so doing them one by one made a
+ * handful of pictures take as long as all of those waits added together. A few at once keeps
+ * that waiting overlapped without opening a connection per file for a big batch.
+ */
+export const UPLOAD_CONCURRENCY = 3
+
+/**
+ * Uploads files chosen from the computer to a product, a few at a time: for each, the
  * backend gives an upload address (`POST /products/{id}/media/upload-target`), the file is
  * sent there, and the returned `resource_url` is what is attached afterwards (as `url` of
- * `POST /products/{id}/media` — the caller does that, with `items` this returns).
+ * `POST /products/{id}/media` — the caller does that, with `items` this returns, in the
+ * order the files were chosen whichever finished first, so the first one stays the featured
+ * image).
  *
  * A file that is already uploaded is not sent again, so trying again after a failure only
- * redoes the files that failed. `states` tells each file's progress, by its key.
+ * redoes the files that failed. A file that fails does not stop the others. `states` tells
+ * each file's progress, by its key.
  */
 export function useFileUpload() {
   const [states, setStates] = useState<Record<string, FileUploadState>>({})
@@ -34,8 +45,10 @@ export function useFileUpload() {
       files: readonly PickedFile[],
     ): Promise<{ items: ProductMediaInput[]; failed: number }> => {
       let failed = 0
-      for (const picked of files) {
-        if (done.current[picked.key]) continue
+      const waiting = files.filter((picked) => !done.current[picked.key])
+      let next = 0
+
+      async function uploadOne(picked: PickedFile) {
         set(picked.key, { status: 'uploading' })
         try {
           const toSend = forUpload(picked.file)
@@ -57,6 +70,18 @@ export function useFileUpload() {
           set(picked.key, { status: 'failed', error: toUserMessage(error) })
         }
       }
+
+      // A few workers each take the next waiting file, in the order chosen, until none is left.
+      async function worker() {
+        while (next < waiting.length) {
+          const picked = waiting[next]
+          next += 1
+          await uploadOne(picked)
+        }
+      }
+      await Promise.all(
+        Array.from({ length: Math.min(UPLOAD_CONCURRENCY, waiting.length) }, worker),
+      )
       const items: ProductMediaInput[] = files
         .filter((picked) => done.current[picked.key])
         .map((picked) => ({ url: done.current[picked.key], media_type: picked.type }))

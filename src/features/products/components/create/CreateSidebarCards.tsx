@@ -24,6 +24,13 @@ const STATUS_OPTIONS: SelectOption[] = PRODUCT_EDIT_STATUSES.map((status) => ({
   label: statusLabel(status),
 }))
 
+/** What each status means for customers, shown under the Status dropdown. */
+const STATUS_HINTS: Record<ProductEditStatus, string> = {
+  ACTIVE: 'Active: customers can see and buy this product on your store.',
+  DRAFT: 'Draft: hidden from customers until you make it Active.',
+  ARCHIVED: 'Archived: hidden from customers and kept out of your active products.',
+}
+
 /** A block of the sidebar card: separated from the one above by a thin line. */
 const BLOCK = 'border-border flex flex-col gap-3.5 border-t p-4 first:border-t-0'
 
@@ -134,7 +141,7 @@ function CollectionsPicker({
           autoComplete="off"
           spellCheck={false}
           value={input}
-          placeholder="Search or paste an ID"
+          placeholder="Search collections by name"
           aria-invalid={problem ? true : undefined}
           onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}
@@ -269,6 +276,9 @@ export function CreateSidebarCard({
           options={STATUS_OPTIONS}
           onChange={(status) => update({ status: status as ProductEditStatus })}
         />
+        <p className="text-text-muted -mt-1.5 text-[0.76rem]">
+          {STATUS_HINTS[draft.status]}
+        </p>
         <div className="flex flex-col gap-1.5">
           <SelectField
             compact
@@ -294,7 +304,12 @@ export function CreateSidebarCard({
         <h3 className="text-text-muted text-[0.82rem] font-semibold">
           Product organization
         </h3>
-        <EditField id="create-type" label="Type" error={errors.productType}>
+        <EditField
+          id="create-type"
+          label="Product type"
+          error={errors.productType}
+          hint="For grouping and filtering, e.g. Carrier bags."
+        >
           <input
             id="create-type"
             autoComplete="off"
@@ -308,6 +323,7 @@ export function CreateSidebarCard({
           id="create-vendor"
           label="Vendor"
           error={errors.vendor}
+          hint="The brand or supplier that makes the product."
           counter={
             draft.vendor.length > LIMITS.vendor * 0.8
               ? { value: draft.vendor.trim().length, max: LIMITS.vendor }
@@ -323,7 +339,11 @@ export function CreateSidebarCard({
             className={FIELD_INPUT}
           />
         </EditField>
-        <EditField id="create-collections" label="Collections">
+        <EditField
+          id="create-collections"
+          label="Collections"
+          hint="Add the product to manual collections. Smart collections fill themselves by rules, so they aren't listed."
+        >
           <CollectionsPicker
             ids={draft.collections}
             errors={errors}
@@ -352,6 +372,7 @@ export function CreateSidebarCard({
           id="create-template"
           label="Theme template"
           error={errors.templateSuffix}
+          hint="Optional. Leave blank to use your theme's standard product page."
         >
           <input
             id="create-template"

@@ -9,7 +9,6 @@ import {
 import { LIMITS } from '../../utils/editDraft.ts'
 import { TAG_CHIP, TagsInput } from '../edit/TagsSection.tsx'
 import { EditField, FIELD_INPUT } from '../edit/fields.tsx'
-import { PICTURES_LIST } from './CreateBasicsCard.tsx'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 import { isSingleVariant } from './CreatePricingCards.tsx'
 
@@ -18,11 +17,6 @@ const CELL =
 
 const TH =
   'text-text border-border-strong bg-table-head border-b px-2.5 py-2 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
-
-interface VariantsCardProps extends CreateSectionProps {
-  /** The picture URLs listed under Media, offered as suggestions for a variant's picture. */
-  pictures: string[]
-}
 
 const variantName = (variant: CreateVariantDraft) => variant.optionValues.join(' / ')
 
@@ -34,12 +28,7 @@ const variantName = (variant: CreateVariantDraft) => variant.optionValues.join('
  * SKU, barcode, opening stock and picture. Without options there is one variant, edited in
  * the Price, Inventory and Shipping cards.
  */
-export function CreateVariantsCard({
-  draft,
-  errors,
-  update,
-  pictures,
-}: VariantsCardProps) {
+export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps) {
   // Options folded to their summary with "Done". A new option starts open.
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set())
   const single = isSingleVariant(draft.variants)
@@ -121,6 +110,7 @@ export function CreateVariantsCard({
                       tags={option.values}
                       onChange={(values) => setOption(index, { values })}
                       placeholder="Small, Medium, Large"
+                      hint="Type a value and press Enter or a comma. Each combination of values becomes one variant."
                     />
                   </EditField>
                   <div className="flex items-center justify-between gap-3">
@@ -179,14 +169,9 @@ export function CreateVariantsCard({
 
       {!single && (
         <div className="border-border flex flex-col gap-3 border-t p-4">
-          <datalist id={PICTURES_LIST}>
-            {pictures.map((url) => (
-              <option key={url} value={url} />
-            ))}
-          </datalist>
           <p className="text-text-muted text-[0.8rem]">
-            {draft.variants.length} variants — every combination of the option values,
-            each with its own price.
+            {draft.variants.length} variants — one for every combination of the option
+            values. Give each its own price.
           </p>
           <div className="border-border overflow-x-auto rounded-xl border">
             <table className="w-full min-w-[1080px] border-collapse text-[0.85rem]">
@@ -194,13 +179,13 @@ export function CreateVariantsCard({
                 <tr>
                   <th className={TH}>Variant</th>
                   <th className={`${TH} w-28`}>Price</th>
-                  <th className={`${TH} w-28`}>Compare-at</th>
+                  <th className={`${TH} w-28`}>Compare-at price</th>
                   <th className={`${TH} w-24`}>Cost</th>
                   <th className={`${TH} w-24`}>Weight</th>
                   <th className={`${TH} w-32`}>SKU</th>
                   <th className={`${TH} w-32`}>Barcode</th>
                   {stockHere && <th className={`${TH} w-24`}>Stock</th>}
-                  <th className={`${TH} w-64`}>Picture address</th>
+                  <th className={`${TH} w-64`}>Image link</th>
                 </tr>
               </thead>
               <tbody>
@@ -255,9 +240,8 @@ export function CreateVariantsCard({
                         </td>
                       )}
                       <td className="px-1.5 py-1.5">
-                        {cell('imageUrl', 'Picture address', {
+                        {cell('imageUrl', 'Image link', {
                           type: 'url',
-                          list: PICTURES_LIST,
                           spellCheck: false,
                           placeholder: 'https://…',
                           maxLength: LIMITS.mediaUrl + 100,

@@ -17,6 +17,16 @@ export interface LightboxSlide {
   fileType?: string
 }
 
+/** What the lightbox needs to change an image's alt text (see `useImageAltSave`). */
+export interface AltTextEditor {
+  /** Saves the alt text of the image with this id; true once the server has confirmed. */
+  save: (imageId: string, alt: string) => Promise<boolean>
+  isSaving: boolean
+  /** The backend's message when the last save failed. */
+  error: string | null
+  clearError: () => void
+}
+
 /** "…/files/photo-1.jpg?v=179" → "photo-1.jpg". */
 export function fileNameOf(url: string): string {
   try {

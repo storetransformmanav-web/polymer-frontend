@@ -14,17 +14,54 @@ import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 const HEADING_BUTTON =
   'bg-surface text-text border-border hover:border-accent inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 
+/** Plain names for the metafield types; what is sent is still the API's own type. */
+const METAFIELD_TYPE_LABELS: Record<string, string> = {
+  single_line_text_field: 'Text (one line)',
+  multi_line_text_field: 'Text (several lines)',
+  number_integer: 'Whole number',
+  number_decimal: 'Decimal number',
+  boolean: 'Yes / No',
+  url: 'Web link',
+  json: 'JSON data',
+  date: 'Date',
+  date_time: 'Date and time',
+  color: 'Colour',
+  rich_text_field: 'Formatted text',
+  'list.single_line_text_field': 'List of texts',
+  'list.number_integer': 'List of whole numbers',
+  'list.number_decimal': 'List of decimal numbers',
+  'list.url': 'List of web links',
+  'list.date': 'List of dates',
+  'list.color': 'List of colours',
+}
+
+/** What to type as the value, for the kinds that need a specific format. */
+function valueHint(type: string): string | undefined {
+  if (type.startsWith('list.'))
+    return 'A list: write the values in square brackets, e.g. ["Plastic", "Paper"].'
+  if (type === 'boolean') return 'Type true or false.'
+  if (type === 'date') return 'Use the format YYYY-MM-DD, e.g. 2026-12-31.'
+  if (type === 'date_time')
+    return 'Use the format YYYY-MM-DDTHH:MM:SS, e.g. 2026-12-31T09:30:00.'
+  if (type === 'color') return 'A hex colour, e.g. #1a73e8.'
+  if (type === 'url') return 'A full web address, e.g. https://example.com.'
+  if (type === 'json') return 'Valid JSON, e.g. {"care": "Hand wash"}.'
+  return undefined
+}
+
 /** **Search engine listing**: the SEO title and description, and the product's web address (handle). */
 export function CreateSeoCard({ draft, errors, update }: CreateSectionProps) {
   return (
     <CreateCard title="Search engine listing" outside>
       <p className="text-text-muted text-[0.82rem]">
-        How the product might appear in a search engine listing, and its web address.
+        How this product can appear in Google and other search results, and the last part
+        of its web address. Everything here is optional.
       </p>
       <EditField
         id="create-seo-title"
         label="SEO title"
         error={errors.seoTitle}
+        hint="The headline shown in search results. Leave blank to use the product title."
         counter={{ value: draft.seoTitle.trim().length, max: LIMITS.seoTitle }}
       >
         <input
@@ -40,6 +77,7 @@ export function CreateSeoCard({ draft, errors, update }: CreateSectionProps) {
         id="create-seo-description"
         label="SEO description"
         error={errors.seoDescription}
+        hint="A short summary shown under the headline in search results. Leave blank to use the product description."
         counter={{
           value: draft.seoDescription.trim().length,
           max: LIMITS.seoDescription,
@@ -56,9 +94,9 @@ export function CreateSeoCard({ draft, errors, update }: CreateSectionProps) {
       </EditField>
       <EditField
         id="create-handle"
-        label="Handle"
+        label="URL handle"
         error={errors.handle}
-        hint="Leave blank and the store makes one from the title."
+        hint="The last part of the product's web address, e.g. hippo-bag. Leave blank and the store makes one from the title."
       >
         <input
           id="create-handle"
@@ -101,7 +139,9 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
     >
       {draft.metafields.length === 0 && (
         <p className="text-text-muted text-[0.85rem]">
-          Extra information stored with the product (material, care, size guide…).
+          Extra details saved with the product that the standard fields don't cover, such
+          as material, care instructions or a size guide. Give each one a group name
+          (namespace), a name (key), a type and a value.
         </p>
       )}
       {draft.metafields.map((field, index) => {
@@ -116,6 +156,7 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
                 id={`create-mf-ns-${field.key}`}
                 label="Namespace"
                 error={at('namespace')}
+                hint="A group name for your metafields, e.g. custom."
               >
                 <input
                   id={`create-mf-ns-${field.key}`}
@@ -130,6 +171,7 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
                 id={`create-mf-key-${field.key}`}
                 label="Key"
                 error={at('metaKey')}
+                hint="The name of this detail, e.g. material."
               >
                 <input
                   id={`create-mf-key-${field.key}`}
@@ -145,13 +187,17 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
                 id={`create-mf-type-${field.key}`}
                 label="Type"
                 value={field.type}
-                options={METAFIELD_TYPES.map((type) => ({ value: type, label: type }))}
+                options={METAFIELD_TYPES.map((type) => ({
+                  value: type,
+                  label: METAFIELD_TYPE_LABELS[type] ?? type,
+                }))}
                 onChange={(type) => setField(index, { type })}
               />
               <EditField
                 id={`create-mf-value-${field.key}`}
                 label="Value"
                 error={at('value')}
+                hint={valueHint(field.type)}
               >
                 <input
                   id={`create-mf-value-${field.key}`}

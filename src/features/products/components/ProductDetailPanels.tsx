@@ -50,6 +50,7 @@ import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChun
 import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
+import { useImageAltSave } from '../hooks/useImageAltSave.ts'
 import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
 import {
   CategoryField,
@@ -168,6 +169,7 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
     product?.featured_image_url ?? product?.images[0]?.url ?? preview?.image_url ?? null
   const heroSrc = safeUrl(imageUrl)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const altEditor = useImageAltSave(product, onSaved)
 
   const description = useMemo(() => htmlToText(product?.description_html), [product])
   // The description sections the store's description app saves in the `apd` metafield.
@@ -241,6 +243,7 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
           slides={slides}
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          altEditor={altEditor}
         />
       </div>
 
@@ -796,6 +799,7 @@ function MediaView({
   pushFailure,
   onDismiss,
   onDelete,
+  onSaved,
 }: {
   product: ProductDetail
   pending: ProductMediaInput[]
@@ -805,8 +809,10 @@ function MediaView({
   pushFailure: string | null
   onDismiss: () => void
   onDelete: (image: ProductImageData, position: number) => void
+  onSaved?: SavedHandler
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const altEditor = useImageAltSave(product, onSaved)
   // Only images with a safe (http/https) URL are shown; each keeps its own record for Delete.
   const tiles = useMemo<MediaTile[]>(
     () =>
@@ -938,6 +944,7 @@ function MediaView({
         slides={slides}
         index={lightboxIndex}
         onClose={() => setLightboxIndex(null)}
+        altEditor={altEditor}
       />
     </>
   )
@@ -1347,6 +1354,7 @@ export function MediaPanel({ product, onSaved }: TabProps) {
             pushFailure={pushFailure}
             onDismiss={media.dismiss}
             onDelete={(image, position) => setDeleting({ image, position })}
+            onSaved={onSaved}
           />
         }
         editor={(section) => <MediaEditor {...section} />}

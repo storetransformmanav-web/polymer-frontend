@@ -48,7 +48,12 @@ export function CreatePriceCard(props: CreateSectionProps) {
     <CreateCard title="Price" regionLabel="Pricing" outside>
       {single ? (
         <div className="max-w-xs">
-          <EditField id="create-price" label="Price" error={errors['variants.0.price']}>
+          <EditField
+            id="create-price"
+            label="Price"
+            error={errors['variants.0.price']}
+            hint="What the customer pays."
+          >
             <input
               id="create-price"
               inputMode="decimal"
@@ -101,6 +106,7 @@ export function CreatePriceCard(props: CreateSectionProps) {
                 id="create-compare"
                 label="Compare-at price"
                 error={errors['variants.0.compareAtPrice']}
+                hint="The original price, shown crossed out next to the price (for a sale)."
               >
                 <input
                   id="create-compare"
@@ -115,6 +121,7 @@ export function CreatePriceCard(props: CreateSectionProps) {
                 id="create-cost"
                 label="Cost per item"
                 error={errors['variants.0.cost']}
+                hint="What it costs you. Customers never see this."
               >
                 <input
                   id="create-cost"
@@ -131,6 +138,7 @@ export function CreatePriceCard(props: CreateSectionProps) {
             id="create-tax-code"
             label="Tax code"
             error={errors.taxCode}
+            hint="Optional. Only needed for special tax rules; most products leave it blank."
             counter={{ value: draft.taxCode.trim().length, max: CREATE_LIMITS.taxCode }}
           >
             <input
@@ -145,6 +153,7 @@ export function CreatePriceCard(props: CreateSectionProps) {
         </div>
         <CheckField
           label="Charge tax on this product"
+          hint="Tax is added at checkout using your store's tax settings. This applies to every variant."
           checked={draft.taxable}
           onChange={(taxable) => update({ taxable })}
         />
@@ -261,9 +270,10 @@ export function CreateInventoryCard(
           </div>
           {locations.length === 0 && (
             <p className="text-text-muted text-[0.76rem]">
-              This store has no stock locations on record yet. To set opening stock, enter
-              your Shopify location ID (Shopify admin → Settings → Locations: the number
-              at the end of the address), then a quantity for each variant.
+              This store has no stock locations on record yet. To set a starting quantity,
+              enter your Shopify location ID (in Shopify admin go to Settings → Locations;
+              it is the number at the end of the page address), then a quantity for each
+              variant.
             </p>
           )}
           {!single && stockHere && (
@@ -274,7 +284,8 @@ export function CreateInventoryCard(
         </div>
       ) : (
         <p className="text-text-muted text-[0.85rem]">
-          Stock is not tracked for this product.
+          Stock is not tracked for this product, so the store won&apos;t count how many
+          are left.
         </p>
       )}
 
@@ -296,7 +307,7 @@ export function CreateInventoryCard(
                   value={variant.barcode.trim() || undefined}
                   onClick={() => setOpen(true)}
                 >
-                  Barcodes
+                  Barcode
                 </Chip>
               </>
             )}
@@ -314,7 +325,12 @@ export function CreateInventoryCard(
       >
         {single && (
           <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
-            <EditField id="create-sku" label="SKU" error={errors['variants.0.sku']}>
+            <EditField
+              id="create-sku"
+              label="SKU"
+              error={errors['variants.0.sku']}
+              hint="Your own code for this product, used to find it in stock lists."
+            >
               <input
                 id="create-sku"
                 autoComplete="off"
@@ -328,6 +344,7 @@ export function CreateInventoryCard(
               id="create-barcode"
               label="Barcode"
               error={errors['variants.0.barcode']}
+              hint="ISBN, UPC, GTIN or similar."
             >
               <input
                 id="create-barcode"
@@ -401,7 +418,8 @@ export function CreateShippingCard(props: CreateSectionProps) {
         </div>
       ) : (
         <p className="text-text-muted text-[0.85rem]">
-          This product doesn&apos;t need shipping.
+          This product doesn&apos;t need shipping (for example a digital product or a
+          service).
         </p>
       )}
     </CreateCard>

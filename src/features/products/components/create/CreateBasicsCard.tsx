@@ -1,31 +1,25 @@
 import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
-import { CREATE_LIMITS } from '../../utils/createDraft.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { CheckField, EditField, FIELD_INPUT } from '../edit/fields.tsx'
 import { FilePicker } from '../FilePicker.tsx'
-import { MediaRows } from '../MediaRows.tsx'
 import type { FileUploadState } from '../../hooks/useFileUpload.ts'
 import type { PickedFile } from '../../utils/mediaFiles.ts'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
-export const PICTURES_LIST = 'create-variant-pictures'
-
 /**
- * The first card, after the store admin's: Title, Description, Media (a dashed box), Category
- * and, for a product without options, the one variant's own picture. The card has no heading.
+ * The first card, after the store admin's: Title, Description, Media (files uploaded from the
+ * computer), Category and, for a product without options, the one variant's own picture. The
+ * card has no heading.
  */
 export function CreateBasicsCard({
   draft,
   errors,
   update,
-  pictures,
   files,
   onFiles,
   uploadStates,
   uploading,
 }: CreateSectionProps & {
-  /** The picture URLs listed under Media, offered as suggestions for a variant's picture. */
-  pictures: string[]
   /** Files chosen from the computer: uploaded to the product right after it is created. */
   files: PickedFile[]
   onFiles: (files: PickedFile[]) => void
@@ -67,16 +61,6 @@ export function CreateBasicsCard({
 
       <div className="flex flex-col gap-1.5" role="group" aria-label="Media">
         <span className="text-text text-[0.82rem] font-semibold">Media</span>
-        <MediaRows
-          dropzone
-          rows={draft.media}
-          onChange={(media) => update({ media })}
-          errors={errors}
-          prefix="media."
-          max={CREATE_LIMITS.media}
-          idPrefix="create-media"
-          minRows={0}
-        />
         <FilePicker
           files={files}
           onChange={onFiles}
@@ -85,40 +69,28 @@ export function CreateBasicsCard({
           disabled={uploading}
           idPrefix="create-media"
         />
-        {files.length > 0 && (
-          <p className="text-text-muted text-[0.76rem]">
-            Files from your computer are uploaded to the product right after it is
-            created.
-          </p>
-        )}
         {errors['media.rows'] && (
           <p role="alert" className="text-danger text-[0.78rem]">
             {errors['media.rows']}
           </p>
         )}
         <p className="text-text-muted text-[0.76rem]">
-          The store downloads each file from its address; the first image is the featured
-          one.
+          Files are uploaded as soon as the product is created. The first image becomes
+          the main product image.
         </p>
       </div>
 
       {single && (
         <>
-          <datalist id={PICTURES_LIST}>
-            {pictures.map((url) => (
-              <option key={url} value={url} />
-            ))}
-          </datalist>
           <EditField
             id="create-variant-image"
-            label="Picture address (optional)"
+            label="Image link (optional)"
             error={errors['variants.0.imageUrl']}
-            hint="A public https:// link to this product's own picture. It is added to the media above if it isn't listed there."
+            hint="Instead of uploading, paste a public link to an image of this product (it must start with https://). The store downloads it and adds it to the product's media."
           >
             <input
               id="create-variant-image"
               type="url"
-              list={PICTURES_LIST}
               autoComplete="off"
               spellCheck={false}
               value={draft.variants[0].imageUrl}
@@ -138,9 +110,9 @@ export function CreateBasicsCard({
 
       <EditField
         id="create-category"
-        label="Category"
+        label="Product category"
         error={errors.categoryGid}
-        hint="Determines tax rates and adds metafields to improve search, filters, and cross-channel sales. Use the store's taxonomy ID."
+        hint="Optional. Helps the store with tax rates, search and filters. Paste the category's Shopify ID, which starts with gid://shopify/TaxonomyCategory/."
       >
         <input
           id="create-category"
@@ -154,7 +126,7 @@ export function CreateBasicsCard({
         />
       </EditField>
       <CheckField
-        label="This is a gift card"
+        label="This product is a gift card"
         checked={draft.giftCard}
         onChange={(giftCard) => update({ giftCard })}
       />

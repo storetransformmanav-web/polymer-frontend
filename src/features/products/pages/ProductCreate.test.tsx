@@ -507,7 +507,7 @@ describe('adding a product', () => {
       '3fa85f64-5717-4562-b3fc-2c963f66afa6{Enter}',
     )
     await user.type(
-      within(form).getByLabelText('Web address'),
+      within(form).getByLabelText(/^Image link/),
       'https://cdn.example.com/a.jpg',
     )
     await user.type(within(form).getByLabelText(/^SEO title/), 'Sushi tray SEO')
@@ -576,7 +576,7 @@ describe('adding a product', () => {
     it('sends a single product its picture address, listing it in media too, and the tax code', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
-      await user.type(within(form).getByLabelText(/^Picture address/), A)
+      await user.type(within(form).getByLabelText(/^Image link/), A)
       // The tax code sits behind the Price card's "Charge tax" pill.
       await user.click(within(form).getByRole('button', { name: /^Charge tax/ }))
       await user.type(within(form).getByLabelText(/^Tax code/), 'P0000000')
@@ -600,8 +600,8 @@ describe('adding a product', () => {
         within(form).getByLabelText('Add values for option 1'),
         'Small, Large{Enter}',
       )
-      await user.type(within(form).getByLabelText('Picture address for Small'), A)
-      await user.type(within(form).getByLabelText('Picture address for Large'), B)
+      await user.type(within(form).getByLabelText('Image link for Small'), A)
+      await user.type(within(form).getByLabelText('Image link for Large'), B)
       await user.click(submit(form))
 
       await waitFor(() => expect(create).toHaveBeenCalled())
@@ -614,26 +614,17 @@ describe('adding a product', () => {
       expect(body.media?.map((item) => item.url)).toEqual([A, B])
     }, 15_000)
 
-    it('suggests the addresses already listed under Media', async () => {
-      const { user, form } = await openForm()
-      await user.type(within(form).getByLabelText('Web address'), A)
-
-      const suggestions = form.querySelector('datalist#create-variant-pictures')
-      expect(suggestions?.querySelectorAll('option')).toHaveLength(1)
-      expect(suggestions?.querySelector('option')?.value).toBe(A)
-    })
-
     it('refuses a variant picture that is not an https address, and sends nothing', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
       await user.type(
-        within(form).getByLabelText(/^Picture address/),
+        within(form).getByLabelText(/^Image link/),
         'http://insecure.example.com/a.jpg',
       )
       await user.click(submit(form))
 
       expect(
-        await within(form).findByText('Use a public https:// address'),
+        await within(form).findByText('Use a public link that starts with https://'),
       ).toBeInTheDocument()
       expect(create).not.toHaveBeenCalled()
     })
@@ -681,7 +672,7 @@ describe('adding a product', () => {
 
       expect(within(form).getByText('photo.png')).toBeInTheDocument()
       expect(
-        within(form).getByText(/uploaded to the product right after it is created/),
+        within(form).getByText(/uploaded as soon as the product is created/),
       ).toBeInTheDocument()
       expect(uploadTarget).not.toHaveBeenCalled()
       await user.click(submit(form))
@@ -755,11 +746,11 @@ describe('adding a product', () => {
     })
   })
 
-  it('refuses a media address that is not https, and a collection that does not exist', async () => {
+  it('refuses a picture address that is not https, and a collection that does not exist', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
     await user.type(
-      within(form).getByLabelText('Web address'),
+      within(form).getByLabelText(/^Image link/),
       'http://insecure.example.com/a.jpg',
     )
     await user.type(within(form).getByLabelText('Search collections'), 'nope{Enter}')
@@ -769,7 +760,7 @@ describe('adding a product', () => {
     ).toBeInTheDocument()
     await user.click(submit(form))
     expect(
-      await within(form).findByText('Use a public https:// address'),
+      await within(form).findByText('Use a public link that starts with https://'),
     ).toBeInTheDocument()
     expect(create).not.toHaveBeenCalled()
   })

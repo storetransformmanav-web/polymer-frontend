@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -135,33 +135,17 @@ describe('a product created with an image', () => {
     return { user, form }
   }
 
+  const PICTURE_ADDRESS = /^Image link/
+
   const createButton = (form: HTMLElement) =>
     within(form).getAllByRole('button', { name: 'Create product' })[0]
 
   const newRowImage = () =>
     screen.getAllByRole('row')[1].querySelector('img') as HTMLImageElement | null
 
-  it('keeps showing the address it was created with while the store downloads it', async () => {
+  it('keeps showing the address it was created with while the store downloads it, and waits for the store’s copy', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
-    list.mockClear()
-    await user.click(createButton(form))
-
-    expect(await screen.findByText(/Created “Sushi Tray”/)).toBeInTheDocument()
-    expect(
-      screen.getByText(/Its image is being downloaded by the store/),
-    ).toBeInTheDocument()
-    // Not re-read at once — that would bring back a row with no image and wipe the preview.
-    expect(list).not.toHaveBeenCalled()
-    expect(
-      within(screen.getAllByRole('row')[1]).getByText('Sushi Tray'),
-    ).toBeInTheDocument()
-    expect(newRowImage()).toHaveAttribute('src', USER_URL)
-  })
-
-  it('shows a picture given only to the variant (no Media rows) on the new row, and waits for the store’s copy', async () => {
-    const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(/^Picture address/), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     list.mockClear()
     await user.click(createButton(form))
 
@@ -179,7 +163,7 @@ describe('a product created with an image', () => {
 
   it('looks again every few seconds and swaps in the store’s own image once it exists, then stops', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -195,7 +179,7 @@ describe('a product created with an image', () => {
 
   it('keeps the picture on the new row when the list is re-read without an image yet', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -210,7 +194,7 @@ describe('a product created with an image', () => {
 
   it('keeps the picture and keeps looking, more slowly, after the first 40 seconds', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -227,7 +211,7 @@ describe('a product created with an image', () => {
 
   it('keeps looking while the image has not arrived', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -240,7 +224,7 @@ describe('a product created with an image', () => {
 
   it('says so when the image never arrives, and what to check', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
+    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -264,74 +248,5 @@ describe('a product created with an image', () => {
     list.mockClear()
     await act(() => vi.advanceTimersByTimeAsync(15_000))
     expect(list).not.toHaveBeenCalled()
-  })
-})
-
-describe('the image address in the Add product form', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    list.mockResolvedValue(page([EXISTING]))
-    vi.mocked(api.shops.list).mockResolvedValue([SHOP])
-    vi.mocked(api.inventory.locations).mockResolvedValue([])
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.clearAllMocks()
-  })
-
-  async function openForm() {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    renderPage()
-    await screen.findByLabelText('Select Hippo Bag')
-    await user.click(screen.getByRole('button', { name: 'Add product' }))
-    const form = await screen.findByRole('region', { name: 'Add product' })
-    return { user, form }
-  }
-
-  it('says what kind of address is wanted', async () => {
-    const { form } = await openForm()
-
-    expect(
-      within(form).getByText(/direct, public link to the image file/),
-    ).toBeInTheDocument()
-  })
-
-  it('previews the image once typing pauses', async () => {
-    const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('Web address'), USER_URL)
-    expect(within(form).queryByAltText('Preview of this image')).not.toBeInTheDocument()
-
-    await act(() => vi.advanceTimersByTimeAsync(700))
-    expect(within(form).getByAltText('Preview of this image')).toHaveAttribute(
-      'src',
-      USER_URL,
-    )
-  })
-
-  it('warns when the address cannot be shown as an image', async () => {
-    const { user, form } = await openForm()
-    await user.type(
-      within(form).getByLabelText('Web address'),
-      'https://example.com/product-page',
-    )
-    await act(() => vi.advanceTimersByTimeAsync(700))
-
-    fireEvent.error(within(form).getByAltText('Preview of this image'))
-
-    expect(await within(form).findByRole('status')).toHaveTextContent(
-      /direct, public link to an image file/,
-    )
-  })
-
-  it('does not try to preview anything that is not an https address', async () => {
-    const { user, form } = await openForm()
-    await user.type(
-      within(form).getByLabelText('Web address'),
-      'http://insecure.example.com/a.jpg',
-    )
-    await act(() => vi.advanceTimersByTimeAsync(700))
-
-    expect(within(form).queryByAltText('Preview of this image')).not.toBeInTheDocument()
   })
 })

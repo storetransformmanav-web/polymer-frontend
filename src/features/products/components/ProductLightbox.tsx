@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import type { LightboxSlide } from '../utils/slides.ts'
+import type { AltTextEditor, LightboxSlide } from '../utils/slides.ts'
 
 const LightboxView = lazy(() => import('./ProductLightboxView.tsx'))
 
@@ -8,10 +8,17 @@ interface ProductLightboxProps {
   /** The slide to open on, or null while the lightbox is closed. */
   index: number | null
   onClose: () => void
+  /** When given, each product image's alt text can be edited from its information card. */
+  altEditor?: AltTextEditor
 }
 
 /** Full-screen image viewer with zoom, thumbnails and a counter. Loads on first open. */
-export function ProductLightbox({ slides, index, onClose }: ProductLightboxProps) {
+export function ProductLightbox({
+  slides,
+  index,
+  onClose,
+  altEditor,
+}: ProductLightboxProps) {
   if (index === null || slides.length === 0) return null
 
   return (
@@ -20,6 +27,7 @@ export function ProductLightbox({ slides, index, onClose }: ProductLightboxProps
         slides={slides}
         index={Math.min(index, slides.length - 1)}
         onClose={onClose}
+        altEditor={altEditor}
       />
     </Suspense>
   )

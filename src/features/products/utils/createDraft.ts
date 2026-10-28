@@ -9,7 +9,6 @@ import type {
   WeightUnit,
 } from '../../../lib/api/endpoints.ts'
 import {
-  blankMedia,
   buildMediaItems,
   LIMITS,
   newKey,
@@ -188,7 +187,7 @@ export function blankCreateDraft(shop: string): CreateDraft {
     inventoryPolicy: 'DENY',
     weightUnit: 'KILOGRAMS',
     locationId: '',
-    media: [blankMedia()],
+    media: [],
     collections: [],
     metafields: [],
   }
@@ -354,7 +353,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
         ? 'Enter a price'
         : DECIMAL.test(price)
           ? null
-          : 'Enter a number, 0 or more',
+          : 'Enter a price, for example 9.99',
     )
     for (const [field, label, value] of [
       ['compareAtPrice', 'Compare-at price', variant.compareAtPrice],
@@ -362,7 +361,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
       ['weight', 'Weight', variant.weight],
     ] as const) {
       if (value.trim() !== '' && !DECIMAL.test(value.trim()))
-        put(at(field), `${label}: enter a number, 0 or more`)
+        put(at(field), `${label}: enter a number such as 12.50`)
     }
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))
     put(at('barcode'), tooLong('The barcode', variant.barcode, LIMITS.barcode))
@@ -371,7 +370,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
       variant.stock.trim() !== '' &&
       !INTEGER.test(variant.stock.trim())
     ) {
-      put(at('stock'), 'Enter a whole number, 0 or more')
+      put(at('stock'), 'Enter a whole number, such as 25')
     }
     const imageUrl = variant.imageUrl.trim()
     if (imageUrl !== '') {
@@ -381,7 +380,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
           ? `The address can be at most ${LIMITS.mediaUrl} characters`
           : /^https:\/\/\S+$/i.test(imageUrl)
             ? null
-            : 'Use a public https:// address',
+            : 'Use a public link that starts with https://',
       )
     }
   })
@@ -392,7 +391,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
   ]).size
   if (mediaCount > CREATE_LIMITS.media) {
     errors['media.rows'] =
-      `Media and variant pictures together can be at most ${CREATE_LIMITS.media} files`
+      `Uploaded media and variant images together can be at most ${CREATE_LIMITS.media} files`
   }
   if (draft.locationId !== '' && !INTEGER.test(draft.locationId)) {
     errors.locationId = 'The location ID is a number (digits only)'
@@ -416,7 +415,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
           ? `The address can be at most ${LIMITS.mediaUrl} characters`
           : /^https:\/\//i.test(url)
             ? null
-            : 'Use a public https:// address',
+            : 'Use a public link that starts with https://',
     )
     put(`media.${index}.alt`, tooLong('The alt text', row.alt, LIMITS.mediaAlt))
   })
@@ -459,7 +458,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
       field.value.trim()
         ? (tooLong('The value', field.value, CREATE_LIMITS.metafieldValue) ??
             (field.type.startsWith('list.') && !isJsonArray(field.value)
-              ? 'A list needs a JSON array, e.g. ["Plastic", "Paper"]'
+              ? 'A list needs a JSON array: values in square brackets, e.g. ["Plastic", "Paper"]'
               : null))
         : 'Enter a value',
     )

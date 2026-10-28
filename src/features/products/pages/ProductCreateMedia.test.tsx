@@ -98,7 +98,7 @@ const CREATED: ProductCreateResult = {
   status: 'DRAFT',
   shop: 'polymer-uk',
   variants: 1,
-  media: 2,
+  media: 1,
   message: 'Product created in Shopify and saved',
 }
 
@@ -111,7 +111,6 @@ const WRITE_OK: ProductWriteResult = {
 }
 
 const A = 'https://cdn.example.com/a.jpg'
-const B = 'https://cdn.example.com/b.jpg'
 const C = 'https://cdn.example.com/c.jpg'
 
 /** The new product as the CRM returns it, with the images it knows about so far. */
@@ -182,7 +181,7 @@ describe('images added when a product is created, and added later from the Media
     vi.clearAllMocks()
   })
 
-  /** Creates "Sushi Tray" with two images, then opens its Media tab. */
+  /** Creates "Sushi Tray" with an image (its Image link), then opens its Media tab. */
   async function createAndOpenMedia() {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderPage()
@@ -191,9 +190,7 @@ describe('images added when a product is created, and added later from the Media
     const form = await screen.findByRole('region', { name: 'Add product' })
     await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')
     await user.type(within(form).getByLabelText('Price'), '9.99')
-    await user.type(within(form).getByLabelText('Web address'), A)
-    await user.click(within(form).getByRole('button', { name: 'Add another file' }))
-    await user.type(within(form).getAllByLabelText('Web address')[1], B)
+    await user.type(within(form).getByLabelText(/^Image link/), A)
     await user.click(within(form).getAllByRole('button', { name: 'Create product' })[0])
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -205,14 +202,14 @@ describe('images added when a product is created, and added later from the Media
   it('shows the images it was created with as processing on the details page, not "No images"', async () => {
     await createAndOpenMedia()
 
-    expect(await screen.findAllByLabelText('Processing')).toHaveLength(2)
-    expect(screen.getByText('2 processing')).toBeInTheDocument()
+    expect(await screen.findAllByLabelText('Processing')).toHaveLength(1)
+    expect(screen.getByText('1 processing')).toBeInTheDocument()
     expect(screen.queryByText('No images')).not.toBeInTheDocument()
   })
 
   it('adds a new image alongside them — nothing is replaced or hidden', async () => {
     const user = await createAndOpenMedia()
-    expect(await screen.findAllByLabelText('Processing')).toHaveLength(2)
+    expect(await screen.findAllByLabelText('Processing')).toHaveLength(1)
 
     await user.click(screen.getByRole('button', { name: 'Add media' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add media' })
@@ -221,8 +218,8 @@ describe('images added when a product is created, and added later from the Media
 
     await waitFor(() => expect(addMedia).toHaveBeenCalled())
     expect(addMedia.mock.calls[0][1]).toEqual([{ url: C, media_type: 'IMAGE' }])
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(3))
-    expect(screen.getByText('3 processing')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(2))
+    expect(screen.getByText('2 processing')).toBeInTheDocument()
   })
 
   it('swaps each waiting file for its real image as the store finishes, keeping the others', async () => {
@@ -232,22 +229,21 @@ describe('images added when a product is created, and added later from the Media
     const dialog = await screen.findByRole('dialog', { name: 'Add media' })
     await user.type(within(dialog).getByLabelText('Web address'), C)
     await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(3))
+    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(2))
 
-    // One file is downloaded: it is now a real image, the other two still wait.
+    // One file is downloaded: it is now a real image, the other still waits.
     details.mockResolvedValue(
       detail([{ id: 'img-a', url: 'https://cdn.shopify.com/a.jpg' }]),
     )
     await act(() => vi.advanceTimersByTimeAsync(4100))
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(2))
-    expect(screen.getByText('1 image · 2 processing')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(1))
+    expect(screen.getByText('1 image · 1 processing')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete image 1' })).toBeInTheDocument()
 
-    // Then the rest arrive: nothing is left waiting, all three are real images.
+    // Then the rest arrives: nothing is left waiting, both are real images.
     details.mockResolvedValue(
       detail([
         { id: 'img-a', url: 'https://cdn.shopify.com/a.jpg' },
-        { id: 'img-b', url: 'https://cdn.shopify.com/b.jpg' },
         { id: 'img-c', url: 'https://cdn.shopify.com/c.jpg' },
       ]),
     )
@@ -255,7 +251,7 @@ describe('images added when a product is created, and added later from the Media
     await waitFor(() =>
       expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
     )
-    expect(screen.getByText('3 images')).toBeInTheDocument()
+    expect(screen.getByText('2 images')).toBeInTheDocument()
   })
 
   it('keeps the created images listed when the store is slow, instead of dropping them', async () => {
@@ -264,7 +260,7 @@ describe('images added when a product is created, and added later from the Media
 
     await act(() => vi.advanceTimersByTimeAsync(65_000))
 
-    expect(screen.getAllByLabelText('Processing')).toHaveLength(2)
+    expect(screen.getAllByLabelText('Processing')).toHaveLength(1)
     expect(screen.getByText(/taking longer than usual/)).toBeInTheDocument()
   })
 })
