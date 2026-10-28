@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Provider as ReduxProvider } from 'react-redux'
 import { env } from '../../config/env.ts'
+import { useDevToolsGuard } from '../../hooks/useDevToolsGuard.ts'
 import { queryClient } from '../queryClient.ts'
 import { store } from '../store/store.ts'
 
@@ -18,6 +19,9 @@ import { store } from '../store/store.ts'
  * session) here too, not in `App.tsx` or `main.tsx`.
  */
 export function AppProviders({ children }: { children: ReactNode }) {
+  // Right-click menu and developer-tools shortcuts off (production builds; see config/env.ts).
+  useDevToolsGuard(env.blockDevTools)
+
   return (
     <ReduxProvider store={store}>
       <QueryClientProvider client={queryClient}>

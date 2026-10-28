@@ -18,8 +18,22 @@ function requireEnv(key: keyof ImportMetaEnv, fallback?: string): string {
   return value
 }
 
+/** A `true` / `false` setting: anything else (unset, empty, "yes"…) is the `fallback`. */
+export function readFlag(value: string | undefined, fallback: boolean): boolean {
+  const text = value?.trim().toLowerCase()
+  if (text === 'true') return true
+  if (text === 'false') return false
+  return fallback
+}
+
 export const env = {
   apiBaseUrl: requireEnv('VITE_API_BASE_URL', '/api'),
+  /**
+   * Turn off the right-click menu and the shortcuts that open the browser's developer tools
+   * (`lib/devToolsGuard.ts`). On in production builds, off in `npm run dev` (developers need
+   * their tools) unless `VITE_BLOCK_DEVTOOLS` says otherwise.
+   */
+  blockDevTools: readFlag(import.meta.env.VITE_BLOCK_DEVTOOLS, import.meta.env.PROD),
   /** OAuth client ID for Google sign-in; empty hides the Google button. */
   googleClientId: requireEnv('VITE_GOOGLE_CLIENT_ID', ''),
   mode: import.meta.env.MODE,

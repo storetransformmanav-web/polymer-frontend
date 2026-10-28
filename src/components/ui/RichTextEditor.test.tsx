@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { installDevToolsGuard } from '../../lib/devToolsGuard.ts'
 import { RichTextEditor } from './RichTextEditor.tsx'
 
 /** Holds the value like a form does, and reports every change. */
@@ -99,6 +100,27 @@ describe('RichTextEditor', () => {
       expect(tool(name)).toHaveAttribute('aria-pressed', 'true')
       await user.click(tool(name))
       expect(tool(name)).toHaveAttribute('aria-pressed', 'false')
+    }
+  })
+
+  it('still underlines with Ctrl+U, and keeps its other shortcuts, while the developer-tools guard is on', async () => {
+    // The guard blocks Ctrl+U (view source) on the page; in a text field it is underline.
+    const uninstall = installDevToolsGuard(document)
+    try {
+      const { user, last, editable } = await setup()
+      await user.click(editable)
+      await user.keyboard('{Control>}a{/Control}')
+
+      await user.keyboard('{Control>}u{/Control}')
+      expect(last()).toContain('<u>')
+      expect(tool('Underline')).toHaveAttribute('aria-pressed', 'true')
+
+      await user.keyboard('{Control>}b{/Control}')
+      expect(last()).toContain('<strong>')
+      await user.keyboard('{Control>}i{/Control}')
+      expect(last()).toContain('<em>')
+    } finally {
+      uninstall()
     }
   })
 
