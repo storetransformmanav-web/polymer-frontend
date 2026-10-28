@@ -103,7 +103,7 @@ export function checkFile(
 let counter = 0
 
 /** A temporary address of the file for the preview ('' where the browser can't make one). */
-function previewOf(file: File): string {
+export function previewOf(file: File): string {
   return typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : ''
 }
 

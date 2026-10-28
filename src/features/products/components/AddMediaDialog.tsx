@@ -1,51 +1,50 @@
 import { useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
-import { FormMessage } from '../../../components/ui/FormMessage.tsx'
-import { SpinnerIcon } from '../../../components/ui/icons.tsx'
-import {
-  type ProductDetail,
-  type ProductMediaInput,
-  type ProductWriteResult,
-} from '../../../lib/api/endpoints.ts'
-import { useProductMedia } from '../hooks/useProductMedia.ts'
-import {
-  blankMedia,
-  buildMediaItems,
-  LIMITS,
-  validateNewMedia,
-  type NewMediaDraft,
-} from '../utils/editDraft.ts'
-import { MediaRows } from './MediaRows.tsx'
+import type { ProductDetail, ProductWriteResult } from '../../../lib/api/endpoints.ts'
+import { useAddLocalMedia } from '../hooks/useLocalMedia.ts'
+import { LIMITS } from '../utils/editDraft.ts'
+import type { PickedFile } from '../utils/mediaFiles.ts'
+import { FilePicker } from './FilePicker.tsx'
 
 const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 
 interface AddMediaDialogProps {
   product: ProductDetail
+  /** How many images the product will have once everything already on its way has arrived. */
+  baseline: number
   onClose: () => void
-  /** The files were accepted (the store is downloading them); `items` is what was sent. */
-  onDone: (result: ProductWriteResult, items: ProductMediaInput[]) => void
+  /** The store accepted the files (called later, once the upload is through). */
+  onSent?: (result: ProductWriteResult) => void
 }
 
 /**
- * "Add media": images and videos by a public https address (the store downloads them
- * itself). Nothing is sent until "Add to product", which checks the addresses first (https
- * only, the API's length limits) and attaches them in one request (at most 20).
+ * "Add media": files chosen from the computer (images, videos, 3D models). There is no web
+ * address option. "Add to product" closes the dialog at once: the files appear in the Media
+ * tab straight away, from their own previews, and go up in the background — a file that
+ * fails is marked on its tile with the reason and a way to try again.
  */
-export function AddMediaDialog({ product, onClose, onDone }: AddMediaDialogProps) {
-  const { add, isAdding, error } = useProductMedia(product)
-  const [rows, setRows] = useState<NewMediaDraft[]>(() => [blankMedia()])
-  const [showErrors, setShowErrors] = useState(false)
-
-  const problems = validateNewMedia(rows)
-  const visible = showErrors ? problems : {}
-
-  async function submit() {
-    setShowErrors(true)
-    if (Object.keys(problems).length > 0) return
-    const items = buildMediaItems(rows)
-    const result = await add(items)
-    if (result) onDone(result, items)
+export function AddMediaDialog({
+  product,
+  baseline,
+  onClose,
+  onSent,
+}: AddMediaDialogProps) {
+  const { start } = useAddLocalMedia()
+  const [files, setFiles] = useState<PickedFile[]>([])
+  function submit() {
+    if (files.length === 0) return
+    start(
+      {
+        id: product.id,
+        shop: product.shop?.key,
+        baseline,
+      },
+      files,
+      onSent,
+    )
+    // The tiles made their own previews; the picker lets go of its own as the dialog closes.
+    onClose()
   }
 
   return (
@@ -54,12 +53,10 @@ export function AddMediaDialog({ product, onClose, onDone }: AddMediaDialogProps
       role="dialog"
       wide
       onClose={onClose}
-      closeDisabled={isAdding}
       footer={
         <>
           <button
             type="button"
-            disabled={isAdding}
             onClick={onClose}
             className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
           >
@@ -67,32 +64,26 @@ export function AddMediaDialog({ product, onClose, onDone }: AddMediaDialogProps
           </button>
           <button
             type="button"
-            disabled={isAdding}
-            onClick={() => void submit()}
+            disabled={files.length === 0}
+            onClick={submit}
             className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`}
           >
-            {isAdding && <SpinnerIcon width={14} height={14} className="animate-spin" />}
             Add to product
           </button>
         </>
       }
     >
       <p>
-        Add an image or video by its public web address. The store processes the files, so
-        they appear in the product a moment after you add them.
+        Choose images, videos or 3D models from your computer. They show up in this
+        product straight away while they are sent to the store in the background.
       </p>
 
-      <MediaRows
-        rows={rows}
-        onChange={setRows}
-        errors={visible}
+      <FilePicker
+        files={files}
+        onChange={setFiles}
         max={LIMITS.newMedia}
         idPrefix="add-media"
-        autoFocusFirst
       />
-
-      {visible.rows && <FormMessage tone="error">{visible.rows}</FormMessage>}
-      {error && <FormMessage tone="error">{error}</FormMessage>}
     </Dialog>
   )
 }

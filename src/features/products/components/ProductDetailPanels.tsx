@@ -48,7 +48,9 @@ import {
 } from '../../../components/ui/DetailSection.tsx'
 import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChunk.ts'
 import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
+import type { LocalMediaItem } from '../../../app/store/productsSlice.ts'
 import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
+import { useAddLocalMedia, useLocalMedia } from '../hooks/useLocalMedia.ts'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import { useImageAltSave } from '../hooks/useImageAltSave.ts'
 import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
@@ -82,6 +84,7 @@ import {
 } from '../utils/metafields.ts'
 import { DescriptionAccordion } from './DescriptionAccordion.tsx'
 import { AddMediaDialog } from './AddMediaDialog.tsx'
+import { LocalMediaTile, LocalPreview } from './LocalMediaTile.tsx'
 import { RemoveCollectionDialog } from './RemoveCollectionDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
 import { ProductImage } from './ProductImage.tsx'
@@ -178,11 +181,29 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   // The lightbox pages through every product image. The hero image is normally
   // one of them; if it isn't (still loading, or a featured image that isn't in
   // the list) it's put first so "View Full" always opens on what's shown.
-  const gallery = useMemo(
-    () => (product ? toSlides(product.images, title) : []),
-    [product, title],
+  // Pictures just chosen from the computer show here at once, from their own previews, until
+  // the store's copies are in the product.
+  const local = useLocalMedia(product)
+  const localImages = useMemo(
+    () =>
+      local.items.filter(
+        (item) =>
+          item.mediaType === 'IMAGE' &&
+          item.status !== 'failed' &&
+          item.previewUrl !== '',
+      ),
+    [local.items],
   )
-  const hero: LightboxSlide | null = heroSrc ? { src: heroSrc, alt: title } : null
+  const gallery = useMemo(
+    () => [
+      ...(product ? toSlides(product.images, title) : []),
+      ...localImages.map((item) => ({ src: item.previewUrl, alt: item.name })),
+    ],
+    [product, title, localImages],
+  )
+  const hero: LightboxSlide | null = heroSrc
+    ? { src: heroSrc, alt: title }
+    : (gallery[0] ?? null)
   const heroInGallery = hero !== null && gallery.some((slide) => slide.src === hero.src)
   const slides = hero && !heroInGallery ? [hero, ...gallery] : gallery
   const offset = slides.length - gallery.length
@@ -200,7 +221,11 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                 aria-label={`View ${title} full size`}
                 className="focus-visible:outline-accent block w-full cursor-zoom-in rounded-xl border-none bg-transparent p-0 focus-visible:outline-2"
               >
-                <ProductImage src={imageUrl} alt={title} size="xl" />
+                {heroSrc ? (
+                  <ProductImage src={imageUrl} alt={title} size="xl" />
+                ) : (
+                  <LocalPreview item={localImages[0]} />
+                )}
               </button>
               <button
                 type="button"
@@ -231,7 +256,16 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                     aria-label={`Open image ${index + 1} of ${gallery.length}`}
                     className="hover:border-accent focus-visible:outline-accent block w-full cursor-zoom-in overflow-hidden rounded-lg border border-transparent bg-transparent p-0 transition-colors focus-visible:outline-2"
                   >
-                    <ProductImage src={slide.src} alt={slide.alt} size="thumb" />
+                    {slide.src.startsWith('blob:') ? (
+                      <img
+                        src={slide.src}
+                        alt={slide.alt}
+                        decoding="async"
+                        className="border-border bg-surface aspect-square w-full rounded-lg border object-cover"
+                      />
+                    ) : (
+                      <ProductImage src={slide.src} alt={slide.alt} size="thumb" />
+                    )}
                   </button>
                 </li>
               ))}
@@ -796,6 +830,10 @@ function MediaView({
   product,
   pending,
   slow,
+  local,
+  localSlow,
+  onRetryLocal,
+  onRemoveLocal,
   pushFailure,
   onDismiss,
   onDelete,
@@ -805,6 +843,12 @@ function MediaView({
   pending: ProductMediaInput[]
   /** The store is taking longer than usual to finish the waiting files. */
   slow: boolean
+  /** Files chosen from the computer that are not in the product yet (shown from their own previews). */
+  local: LocalMediaItem[]
+  /** The store is taking longer than usual to process the uploaded ones. */
+  localSlow: boolean
+  onRetryLocal: (item: LocalMediaItem) => void
+  onRemoveLocal: (item: LocalMediaItem) => void
   /** Why the store's latest push failed, when it did. */
   pushFailure: string | null
   onDismiss: () => void
@@ -842,7 +886,7 @@ function MediaView({
     [product.images, product.title],
   )
 
-  if (tiles.length === 0 && pending.length === 0) {
+  if (tiles.length === 0 && pending.length === 0 && local.length === 0) {
     return <Empty icon={ImageIcon}>This product has no images.</Empty>
   }
   // An address that can never work (an SVG) is the likeliest reason a file never arrives.
@@ -851,6 +895,32 @@ function MediaView({
 
   return (
     <>
+      {localSlow && (
+        <div
+          role="status"
+          className="bg-warning-bg text-text mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-[0.85rem]"
+        >
+          <p className="min-w-0 flex-1">
+            Your files are uploaded, but the store is taking longer than usual to process
+            them. They will appear here once it has them, and Sync products brings them in
+            too.
+            {pushFailure && (
+              <span className="mt-1 block font-semibold">
+                The store said: {pushFailure}
+              </span>
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              local.filter((item) => item.status === 'sent').forEach(onRemoveLocal)
+            }
+            className="text-accent cursor-pointer border-none bg-transparent p-0 text-[0.85rem] font-semibold hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {pending.length > 0 && slow && (
         <div
           role="status"
@@ -937,6 +1007,16 @@ function MediaView({
               {slow ? 'Still waiting for the store' : 'Waiting for the store'}
             </p>
           </li>
+        ))}
+
+        {local.map((item) => (
+          <LocalMediaTile
+            key={`local-${item.key}`}
+            item={item}
+            slow={localSlow}
+            onRetry={() => onRetryLocal(item)}
+            onRemove={() => onRemoveLocal(item)}
+          />
         ))}
       </ul>
 
@@ -1321,9 +1401,17 @@ export function MediaPanel({ product, onSaved }: TabProps) {
     position: number
   } | null>(null)
   const media = usePendingMedia(product)
+  const local = useLocalMedia(product)
+  const localMedia = useAddLocalMedia()
+  const target = {
+    id: product.id,
+    shop: product.shop?.key,
+    // Files added by address are counted first when the store's copies start to arrive.
+    baseline: product.images.length + media.pending.length,
+  }
   // Only once the store is slow: ask what its latest push said, so the notice can give the reason.
   const pushes = useProductSyncHistory(product.id, product.shop?.key, {
-    enabled: media.slow,
+    enabled: media.slow || local.slow,
   })
   const latestPush = pushes.items[0]
   const pushFailure =
@@ -1341,7 +1429,10 @@ export function MediaPanel({ product, onSaved }: TabProps) {
         header={(edit) => (
           <MediaHeader
             count={product.images.length}
-            waiting={media.pending.length}
+            waiting={
+              media.pending.length +
+              local.items.filter((item) => item.status !== 'failed').length
+            }
             edit={edit}
             onAdd={() => setAdding(true)}
           />
@@ -1351,6 +1442,12 @@ export function MediaPanel({ product, onSaved }: TabProps) {
             product={product}
             pending={media.pending}
             slow={media.slow}
+            local={local.items}
+            localSlow={local.slow}
+            onRetryLocal={(item) =>
+              localMedia.retry(target, item, (result) => onSaved?.(result, product, {}))
+            }
+            onRemoveLocal={(item) => localMedia.remove(product.id, item)}
             pushFailure={pushFailure}
             onDismiss={media.dismiss}
             onDelete={(image, position) => setDeleting({ image, position })}
@@ -1363,12 +1460,9 @@ export function MediaPanel({ product, onSaved }: TabProps) {
       {adding && (
         <AddMediaDialog
           product={product}
+          baseline={target.baseline}
           onClose={() => setAdding(false)}
-          onDone={(result, items) => {
-            setAdding(false)
-            media.queue(items)
-            onSaved?.(result, product, {})
-          }}
+          onSent={(result) => onSaved?.(result, product, {})}
         />
       )}
 

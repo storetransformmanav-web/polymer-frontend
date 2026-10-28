@@ -870,12 +870,13 @@ describe('adding a product', () => {
         [{ url: TARGET.resourceUrl, media_type: 'IMAGE' }],
         'polymer-uk',
       )
+      // The form was not held up by the upload: the page says it carries on in the background.
       expect(
-        await screen.findByText(/1 file uploaded; the store is processing them\./),
+        await screen.findByText(/1 file is uploading in the background/),
       ).toBeInTheDocument()
     })
 
-    it('still creates the product when a file fails, and says which files to add later', async () => {
+    it('still creates the product when a file fails, without holding the form up', async () => {
       uploadTarget.mockRejectedValue(new ApiError('Storage is full.', { status: 500 }))
       const { user, form } = await openForm()
       await fillBasics(user, form)
@@ -885,12 +886,10 @@ describe('adding a product', () => {
       )
       await user.click(submit(form))
 
-      expect(
-        await screen.findByText(
-          /1 file could not be uploaded — add it from the product's Media tab\./,
-        ),
-      ).toBeInTheDocument()
-      expect(screen.getByText(/Created “Sushi Tray”/)).toBeInTheDocument()
+      // The product is created and the page moves on; the failure is on the file's own tile
+      // in the product's Media tab (with a way to try again), not a message here.
+      expect(await screen.findByText(/Created “Sushi Tray”/)).toBeInTheDocument()
+      await waitFor(() => expect(uploadTarget).toHaveBeenCalled())
       expect(addMedia).not.toHaveBeenCalled()
     })
 

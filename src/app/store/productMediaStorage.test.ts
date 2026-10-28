@@ -129,6 +129,40 @@ describe('the products store across a page refresh', () => {
     expect(window.sessionStorage.getItem(PRODUCT_MEDIA_STORAGE_KEY)).toBeNull()
   })
 
+  it('remembers chosen-from-the-computer files the store already has, as waiting files — not the ones still uploading or failed', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+    const { createAppStore, slice } = await freshStore()
+    const store = createAppStore()
+    const item = (key: string, status: 'uploading' | 'sent' | 'failed') => ({
+      key,
+      name: `${key}.png`,
+      mediaType: 'IMAGE' as const,
+      previewUrl: `blob:${key}`,
+      status,
+      resourceUrl: `https://uploads.example.com/${key}.png`,
+    })
+
+    store.dispatch(
+      slice.localMediaAdded({
+        id: 'p7',
+        baseline: 2,
+        items: [item('a', 'sent'), item('b', 'uploading'), item('c', 'failed')],
+      }),
+    )
+    // Nothing is handed over yet except what is `sent`: a refresh keeps only that one.
+    store.dispatch(slice.localMediaStatus({ id: 'p7', keys: ['a'], status: 'sent' }))
+
+    const saved = JSON.parse(
+      window.sessionStorage.getItem(PRODUCT_MEDIA_STORAGE_KEY) ?? 'null',
+    )
+    expect(saved.pendingMedia.p7.items).toEqual([
+      { url: 'https://uploads.example.com/a.png', media_type: 'IMAGE' },
+    ])
+    expect(saved.pendingMedia.p7.baseline).toBe(2)
+    // The in-memory previews are never written down.
+    expect(JSON.stringify(saved)).not.toContain('blob:')
+  })
+
   it('does not restore anything for someone who is signed out', async () => {
     window.sessionStorage.setItem(PRODUCT_MEDIA_STORAGE_KEY, JSON.stringify(DATA))
     const { createAppStore } = await freshStore()

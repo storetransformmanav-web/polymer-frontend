@@ -22,6 +22,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       details: vi.fn(),
       update: vi.fn(),
       addMedia: vi.fn(),
+      uploadTarget: vi.fn(),
       removeMedia: vi.fn(),
       push: vi.fn(),
       syncHistory: vi.fn(),
@@ -124,8 +125,23 @@ const list = vi.mocked(api.products.list)
 const details = vi.mocked(api.products.details)
 const addMedia = vi.mocked(api.products.addMedia)
 const removeMedia = vi.mocked(api.products.removeMedia)
+const uploadTarget = vi.mocked(api.products.uploadTarget)
 const syncHistory = vi.mocked(api.products.syncHistory)
 const never = () => new Promise<never>(() => undefined)
+
+const TARGET = {
+  uploadUrl: 'https://shopify-staged-uploads.storage.googleapis.com/',
+  resourceUrl: 'https://shopify-staged-uploads.storage.googleapis.com/tmp/1/photo.png',
+  method: 'POST' as const,
+  parameters: [{ name: 'key', value: 'tmp/1/photo.png' }],
+}
+
+/** The store's file storage answers, and the browser can make (and let go of) a file's preview. */
+function stubUploads() {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
+  URL.createObjectURL = vi.fn((file: Blob) => `blob:${(file as File).name}`)
+  URL.revokeObjectURL = vi.fn()
+}
 
 function renderPage() {
   return renderWithProviders(
@@ -143,10 +159,13 @@ describe('adding and deleting media', () => {
     addMedia.mockResolvedValue(WRITE_OK)
     removeMedia.mockResolvedValue({ ...WRITE_OK, message: 'Media removal queued' })
     syncHistory.mockResolvedValue([])
+    uploadTarget.mockResolvedValue(TARGET)
+    stubUploads()
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   async function openMediaTab() {
@@ -171,125 +190,179 @@ describe('adding and deleting media', () => {
       await user.click(await screen.findByRole('button', { name: 'Add media' }))
       return { user, dialog: await screen.findByRole('dialog', { name: 'Add media' }) }
     }
+    const choose = (dialog: HTMLElement) =>
+      within(dialog).getByLabelText('Choose files from your computer')
+    const photo = (name = 'photo.png') =>
+      new File(['pixels'], name, { type: 'image/png' })
 
-    it('warns, without blocking, that a placehold.co address without an extension gives an SVG', async () => {
-      const { user, dialog } = await openDialog()
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'https://placehold.co/600x600?text=Small+Carrier+Bag',
-      )
-
-      expect(
-        await within(dialog).findByText(/gives an SVG/, undefined, { timeout: 3000 }),
-      ).toBeInTheDocument()
-      expect(within(dialog).getByRole('button', { name: 'Add to product' })).toBeEnabled()
-    })
-
-    it('opens a form with the cursor in the first address, and sends nothing yet', async () => {
+    it('offers files from the computer only — there is no web address option', async () => {
       const { dialog } = await openDialog()
 
-      expect(within(dialog).getByLabelText('Web address')).toHaveFocus()
+      expect(choose(dialog)).toBeInTheDocument()
+      expect(within(dialog).queryByLabelText('Web address')).not.toBeInTheDocument()
+      expect(within(dialog).queryByText('Add another file')).not.toBeInTheDocument()
+      // Nothing is chosen yet, so there is nothing to add — and nothing was sent.
+      expect(
+        within(dialog).getByRole('button', { name: 'Add to product' }),
+      ).toBeDisabled()
+      expect(uploadTarget).not.toHaveBeenCalled()
       expect(addMedia).not.toHaveBeenCalled()
     })
 
-    it('sends the files to POST /media for the product’s store, then shows them as processing', async () => {
+    it('shows the picture in the Media tab at once, before anything has been uploaded', async () => {
+      // The upload never finishes: the tile must not depend on it.
+      uploadTarget.mockImplementation(never)
       const { user, dialog } = await openDialog()
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'https://cdn.example.com/new.jpg',
+      await user.upload(choose(dialog), photo())
+      await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      const tile = await screen.findByLabelText('photo.png: Uploading')
+      // The file's own preview, not a spinner or a "processing" placeholder.
+      expect(within(tile).getByRole('img', { name: 'photo.png' })).toHaveAttribute(
+        'src',
+        'blob:photo.png',
       )
-      await user.type(within(dialog).getByLabelText(/^Alt text/), 'Fresh')
+      expect(screen.queryByText('Processing…')).not.toBeInTheDocument()
+      expect(screen.getByText('2 images · 1 processing')).toBeInTheDocument()
+    })
+
+    it('uploads in the background, then sends the file to POST /media for the product’s store', async () => {
+      const { user, dialog } = await openDialog()
+      await user.upload(choose(dialog), photo())
       await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
 
       await waitFor(() =>
         expect(addMedia).toHaveBeenCalledWith(
           'id-1',
-          [{ url: 'https://cdn.example.com/new.jpg', alt: 'Fresh', media_type: 'IMAGE' }],
+          [{ url: TARGET.resourceUrl, media_type: 'IMAGE' }],
           'polymer-uk',
         ),
       )
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-      // Not in the product yet (the store is still downloading it): a processing tile stands in.
-      expect(await screen.findByLabelText('Processing')).toBeInTheDocument()
-      expect(screen.getByText('Processing…')).toBeInTheDocument()
-      expect(await screen.findByText(/Media queued for Shopify/)).toBeInTheDocument()
+      expect(uploadTarget).toHaveBeenCalledWith(
+        'id-1',
+        {
+          filename: 'photo.png',
+          mime_type: 'image/png',
+          size_bytes: 6,
+          media_type: 'IMAGE',
+        },
+        'polymer-uk',
+      )
+      // Still the picture itself while the store processes it.
+      expect(
+        await screen.findByLabelText('photo.png: Syncing with the store'),
+      ).toBeInTheDocument()
     })
 
-    it('adds several files at once', async () => {
+    it('adds several files at once, attached in one request in the order they were chosen', async () => {
+      uploadTarget
+        .mockResolvedValueOnce({
+          ...TARGET,
+          resourceUrl: 'https://uploads.example.com/a.png',
+        })
+        .mockResolvedValueOnce({
+          ...TARGET,
+          resourceUrl: 'https://uploads.example.com/b.png',
+        })
       const { user, dialog } = await openDialog()
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'https://cdn.example.com/a.jpg',
-      )
-      await user.click(within(dialog).getByRole('button', { name: 'Add another file' }))
-      const addresses = within(dialog).getAllByLabelText('Web address')
-      await user.type(addresses[1], 'https://cdn.example.com/b.jpg')
+      await user.upload(choose(dialog), [photo('a.png'), photo('b.png')])
       await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
 
       await waitFor(() => expect(addMedia).toHaveBeenCalledTimes(1))
-      expect(addMedia.mock.calls[0][1]).toHaveLength(2)
+      expect(addMedia.mock.calls[0][1]).toEqual([
+        { url: 'https://uploads.example.com/a.png', media_type: 'IMAGE' },
+        { url: 'https://uploads.example.com/b.png', media_type: 'IMAGE' },
+      ])
+      expect(
+        await screen.findByLabelText('a.png: Syncing with the store'),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('b.png: Syncing with the store')).toBeInTheDocument()
     })
 
-    it('checks the addresses first: https only, and at least one', async () => {
-      const { user, dialog } = await openDialog()
-      await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
-      expect(await within(dialog).findByText(/at least one file/)).toBeInTheDocument()
-
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'http://insecure.example.com/a.jpg',
+    it('marks a file that fails with the backend’s reason, and Try again uploads it', async () => {
+      uploadTarget.mockRejectedValueOnce(
+        new ApiError('Storage is full.', { status: 500 }),
       )
+      const { user, dialog } = await openDialog()
+      await user.upload(choose(dialog), photo())
       await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
-      expect(
-        await within(dialog).findByText('Use a public https:// address'),
-      ).toBeInTheDocument()
+
+      expect(await screen.findByText('Storage is full.')).toBeInTheDocument()
+      expect(screen.getByLabelText('photo.png: Not uploaded')).toBeInTheDocument()
       expect(addMedia).not.toHaveBeenCalled()
-    })
 
-    it('keeps the form open with the backend’s message when it fails', async () => {
-      addMedia.mockRejectedValue(
-        new ApiError('Shopify cannot reach that address.', { status: 422 }),
-      )
-      const { user, dialog } = await openDialog()
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'https://cdn.example.com/a.jpg',
-      )
-      await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
 
       expect(
-        await within(dialog).findByText('Shopify cannot reach that address.'),
+        await screen.findByLabelText('photo.png: Syncing with the store'),
       ).toBeInTheDocument()
-      expect(screen.getByRole('dialog', { name: 'Add media' })).toBeInTheDocument()
-      expect(within(dialog).getByLabelText('Web address')).toHaveValue(
-        'https://cdn.example.com/a.jpg',
-      )
-      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument()
+      expect(screen.queryByText('Storage is full.')).not.toBeInTheDocument()
+      expect(addMedia).toHaveBeenCalledTimes(1)
     })
 
-    it('locks the form while it is sending, so it cannot go twice', async () => {
-      addMedia.mockImplementation(never)
+    it('does not upload a file twice when only attaching it failed', async () => {
+      addMedia.mockRejectedValueOnce(
+        new ApiError('Shopify cannot take that file.', { status: 422 }),
+      )
       const { user, dialog } = await openDialog()
-      await user.type(
-        within(dialog).getByLabelText('Web address'),
-        'https://cdn.example.com/a.jpg',
-      )
+      await user.upload(choose(dialog), photo())
       await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+      expect(
+        await screen.findByText('Shopify cannot take that file.'),
+      ).toBeInTheDocument()
 
-      await waitFor(() =>
-        expect(
-          within(dialog).getByRole('button', { name: 'Add to product' }),
-        ).toBeDisabled(),
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+      expect(
+        await screen.findByLabelText('photo.png: Syncing with the store'),
+      ).toBeInTheDocument()
+      expect(uploadTarget).toHaveBeenCalledTimes(1)
+      expect(addMedia).toHaveBeenCalledTimes(2)
+    })
+
+    it('lets a failed file be removed from the tab', async () => {
+      uploadTarget.mockRejectedValueOnce(
+        new ApiError('Storage is full.', { status: 500 }),
       )
-      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
-      expect(addMedia).toHaveBeenCalledTimes(1)
+      const { user, dialog } = await openDialog()
+      await user.upload(choose(dialog), photo())
+      await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+      await screen.findByText('Storage is full.')
+
+      await user.click(screen.getByRole('button', { name: 'Remove photo.png' }))
+
+      expect(screen.queryByLabelText(/photo\.png/)).not.toBeInTheDocument()
+      expect(screen.getByText('2 images')).toBeInTheDocument()
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo.png')
+    })
+
+    it('shows the picture on the Overview too, at once', async () => {
+      uploadTarget.mockImplementation(never)
+      const { user, dialog } = await openDialog()
+      await user.upload(choose(dialog), photo())
+      await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+      await screen.findByLabelText('photo.png: Uploading')
+
+      await user.click(screen.getByRole('tab', { name: /^Overview/ }))
+
+      // Three thumbnails: the product's two images and the new one, from its own preview.
+      expect(
+        await screen.findByRole('button', { name: 'Open image 3 of 3' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'photo.png' })).toHaveAttribute(
+        'src',
+        'blob:photo.png',
+      )
     })
 
     it('closes on Cancel without sending anything', async () => {
       const { user, dialog } = await openDialog()
+      await user.upload(choose(dialog), photo())
       await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(uploadTarget).not.toHaveBeenCalled()
       expect(addMedia).not.toHaveBeenCalled()
     })
   })
@@ -627,32 +700,36 @@ describe('adding and deleting media', () => {
   })
 })
 
-describe('files the store has not finished downloading', () => {
-  const NEW_URL = 'https://cdn.example.com/new.jpg'
-
+describe('files the store has not finished processing', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     list.mockResolvedValue(LIST)
     details.mockResolvedValue(product([]))
     addMedia.mockResolvedValue(WRITE_OK)
     syncHistory.mockResolvedValue([])
+    uploadTarget.mockResolvedValue(TARGET)
+    stubUploads()
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   async function addOne() {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync })
     renderPage()
     await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
     await user.click(screen.getByRole('tab', { name: /^Media/ }))
     await user.click(await screen.findByRole('button', { name: 'Add media' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add media' })
-    await user.type(within(dialog).getByLabelText('Web address'), NEW_URL)
+    await user.upload(
+      within(dialog).getByLabelText('Choose files from your computer'),
+      new File(['pixels'], 'photo.png', { type: 'image/png' }),
+    )
     await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
-    await screen.findByLabelText('Processing')
+    await screen.findByLabelText('photo.png: Syncing with the store')
     return user
   }
 
@@ -668,12 +745,12 @@ describe('files the store has not finished downloading', () => {
 
     await user.click(screen.getByRole('tab', { name: /^Overview/ }))
     await user.click(screen.getByRole('tab', { name: /^Media/ }))
-    expect(await screen.findByLabelText('Processing')).toBeInTheDocument()
+    expect(await screen.findByLabelText(/^photo\.png/)).toBeInTheDocument()
 
     await act(() => vi.advanceTimersByTimeAsync(65_000))
-    expect(screen.getByLabelText('Processing')).toBeInTheDocument()
+    expect(screen.getByLabelText(/^photo\.png/)).toBeInTheDocument()
     expect(await screen.findByText(/taking longer than usual/)).toBeInTheDocument()
-    expect(screen.getByText('Still waiting for the store')).toBeInTheDocument()
+    expect(screen.getByText('Still syncing with the store')).toBeInTheDocument()
   })
 
   it('look for the image less often once the store is slow', async () => {
@@ -699,10 +776,12 @@ describe('files the store has not finished downloading', () => {
     await act(() => vi.advanceTimersByTimeAsync(17_000))
 
     await waitFor(() =>
-      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText(/^photo\.png/)).not.toBeInTheDocument(),
     )
     expect(screen.queryByText(/taking longer than usual/)).not.toBeInTheDocument()
     expect(screen.getByText('1 image')).toBeInTheDocument()
+    // The picture's temporary address is let go once the real image is there.
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo.png')
   })
 
   it('look for the image every couple of seconds at first, so it shows as soon as it is ready', async () => {
@@ -714,7 +793,7 @@ describe('files the store has not finished downloading', () => {
     await act(() => vi.advanceTimersByTimeAsync(2200))
 
     await waitFor(() =>
-      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText(/^photo\.png/)).not.toBeInTheDocument(),
     )
     expect(screen.getByText('1 image')).toBeInTheDocument()
   })
@@ -729,18 +808,18 @@ describe('files the store has not finished downloading', () => {
     await act(() => vi.advanceTimersByTimeAsync(4100))
 
     await waitFor(() =>
-      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText(/^photo\.png/)).not.toBeInTheDocument(),
     )
     await waitFor(() => expect(list).toHaveBeenCalled())
   })
 
-  it('can be dismissed', async () => {
+  it('can be dismissed once the store is slow', async () => {
     const user = await addOne()
     await act(() => vi.advanceTimersByTimeAsync(65_000))
 
     await user.click(await screen.findByRole('button', { name: 'Dismiss' }))
 
-    expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^photo\.png/)).not.toBeInTheDocument()
     expect(screen.getByText('No images')).toBeInTheDocument()
   })
 })

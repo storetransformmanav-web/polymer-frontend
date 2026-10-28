@@ -8,6 +8,8 @@ import {
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
 import type { ProductDetail, ProductEditStatus } from '../../../lib/api/endpoints.ts'
+import { useLocalMediaSync } from '../hooks/useLocalMedia.ts'
+import { usePendingMediaSync } from '../hooks/usePendingMedia.ts'
 import { useProductDetails } from '../hooks/useProductDetails.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import type { SavedHandler } from '../hooks/useSectionEdit.ts'
@@ -62,6 +64,11 @@ export function ProductDetailsView({
 }: ProductDetailsViewProps) {
   const details = useProductDetails(id)
   const { product, preview } = details
+  // Pictures just chosen from the computer wait here for the store's copies (see useLocalMedia).
+  useLocalMediaSync(product)
+  // Files the store is still processing (also remembered across a page refresh) are looked for
+  // on whichever tab is open, not only on the Media tab.
+  usePendingMediaSync(product)
   const [tab, setTab] = useState<TabId>('overview')
   // The status picked in the header, waiting for "Yes, update" (it is also changed in Shopify).
   const statusChange = useProductStatusChange()

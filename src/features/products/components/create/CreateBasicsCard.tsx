@@ -2,7 +2,6 @@ import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { CheckField, EditField, FIELD_INPUT } from '../edit/fields.tsx'
 import { FilePicker } from '../FilePicker.tsx'
-import type { FileUploadState } from '../../hooks/useFileUpload.ts'
 import type { PickedFile } from '../../utils/mediaFiles.ts'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
@@ -16,14 +15,12 @@ export function CreateBasicsCard({
   update,
   files,
   onFiles,
-  uploadStates,
   uploading,
 }: CreateSectionProps & {
   /** Files chosen from the computer: uploaded to the product right after it is created. */
   files: PickedFile[]
   onFiles: (files: PickedFile[]) => void
-  uploadStates: Record<string, FileUploadState>
-  /** The product is being created / its files uploaded. */
+  /** The product is being created. */
   uploading: boolean
 }) {
   return (
@@ -61,7 +58,6 @@ export function CreateBasicsCard({
           files={files}
           onChange={onFiles}
           max={LIMITS.newMedia}
-          states={uploadStates}
           disabled={uploading}
           idPrefix="create-media"
         />

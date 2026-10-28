@@ -33,6 +33,8 @@ const storedSchema = z.object({
         items: z.array(mediaInputSchema).max(100),
         baseline: z.number().int().min(0),
         startedAt: z.number(),
+        leading: z.boolean().optional(),
+        placed: z.number().int().min(0).optional(),
       }),
     )
     .default({}),

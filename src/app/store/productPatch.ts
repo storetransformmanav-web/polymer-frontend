@@ -185,6 +185,7 @@ export function patchDetail(
   body: ProductUpdateBody,
 ): ProductDetail {
   let images = product.images
+  let featured = product.featured_image_url
   if (body.media_remove?.length) {
     const removed = new Set(body.media_remove)
     images = images.filter((image) => !removed.has(image.id))
@@ -204,6 +205,8 @@ export function patchDetail(
         (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
         (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
     )
+    // The first image is the main one, so the featured image follows the new order.
+    featured = images[0]?.url ?? featured
   }
 
   // `collections_remove` carries collection names, like `collections_add`.
@@ -223,6 +226,7 @@ export function patchDetail(
     template_suffix: body.template_suffix ?? product.template_suffix,
     tags: patchTags(product.tags, body),
     metafields,
+    featured_image_url: featured,
     seo: body.seo ? { ...product.seo, ...body.seo } : product.seo,
     collections: product.collections.filter(
       (collection) => !collectionsRemoved.has(collection.title.trim().toLowerCase()),

@@ -40,8 +40,6 @@ interface ProductCreateViewProps {
     result: ProductCreateResult,
     info: {
       previewUrl: string | null
-      /** Why some chosen files didn't go up (the product itself was created). */
-      uploadProblem?: string | null
       /** How many files were chosen from the computer. */
       uploadedFiles?: number
     },
@@ -66,7 +64,7 @@ export function ProductCreateView({
   onDirtyChange,
 }: ProductCreateViewProps) {
   const { shops, selected } = useShops()
-  const { create, isCreating, error, uploadStates, clearError } = useCreateProduct()
+  const { create, isCreating, error, clearError } = useCreateProduct()
   // Files chosen from the computer; they are uploaded to the product right after it is created.
   const [files, setFiles] = useState<PickedFile[]>([])
   const [draft, setDraft] = useState<CreateDraft>(() => blankCreateDraft(''))
@@ -126,7 +124,6 @@ export function ProductCreateView({
     if (result) {
       onCreated(result.product, {
         previewUrl: firstImageUrl(effective),
-        uploadProblem: result.uploadProblem,
         uploadedFiles: files.length,
       })
     }
@@ -214,7 +211,6 @@ export function ProductCreateView({
             update={update}
             files={files}
             onFiles={setFiles}
-            uploadStates={uploadStates}
             uploading={isCreating}
           />
           <CreatePriceCard

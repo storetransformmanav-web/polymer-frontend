@@ -9,6 +9,35 @@ import { productMediaRestored, productsReducer } from './productsSlice.ts'
 import { shopReducer } from './shopSlice.ts'
 import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
 
+type ProductsState = ReturnType<typeof productsReducer>
+
+/**
+ * What to remember of the files still being processed: the ones added by address, and the
+ * chosen-from-the-computer files the store already has (their in-memory previews can't survive
+ * a refresh, so they come back as the store's own addresses, like any other waiting file).
+ */
+function waitingMedia(products: ProductsState): ProductsState['pendingMedia'] {
+  let merged: ProductsState['pendingMedia'] | null = null
+  for (const [id, local] of Object.entries(products.localMedia)) {
+    if (products.pendingMedia[id]) continue
+    const items = local.items.flatMap((item) =>
+      item.status === 'sent' && item.resourceUrl?.startsWith('https://')
+        ? [{ url: item.resourceUrl, media_type: item.mediaType }]
+        : [],
+    )
+    if (items.length === 0) continue
+    merged ??= { ...products.pendingMedia }
+    merged[id] = {
+      items,
+      baseline: local.baseline,
+      startedAt: local.startedAt,
+      // They are still to be moved to the front once the store has them, after a refresh too.
+      ...(local.leading ? { leading: true, placed: local.placed ?? 0 } : {}),
+    }
+  }
+  return merged ?? products.pendingMedia
+}
+
 /**
  * Builds a fresh, fully-configured store (reducers + the localStorage
  * persistence subscription below). The app uses the single `store`
@@ -16,12 +45,6 @@ import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, uiReducer } from './uiSlice.ts'
  * to get an isolated store per test instead of sharing — and having
  * to manually reset — the app's singleton.
  */
-const pickProductMedia = (products: ReturnType<typeof productsReducer>) => ({
-  pendingMedia: products.pendingMedia,
-  removedMedia: products.removedMedia,
-  previewImages: products.previewImages,
-})
-
 export function createAppStore() {
   const appStore = configureStore({
     reducer: {
@@ -44,6 +67,22 @@ export function createAppStore() {
   if (appStore.getState().auth.session) {
     const saved = loadProductMedia()
     if (saved) appStore.dispatch(productMediaRestored(saved))
+  }
+  // What is saved changes only when one of these does (`waitingMedia` builds a new object).
+  let lastPending: ProductsState['pendingMedia'] | null = null
+  let lastLocal: ProductsState['localMedia'] | null = null
+  let lastWaiting: ProductsState['pendingMedia'] = {}
+  const pickProductMedia = (products: ProductsState) => {
+    if (products.pendingMedia !== lastPending || products.localMedia !== lastLocal) {
+      lastPending = products.pendingMedia
+      lastLocal = products.localMedia
+      lastWaiting = waitingMedia(products)
+    }
+    return {
+      pendingMedia: lastWaiting,
+      removedMedia: products.removedMedia,
+      previewImages: products.previewImages,
+    }
   }
   let previousMedia = pickProductMedia(appStore.getState().products)
 

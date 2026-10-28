@@ -24,6 +24,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       details: vi.fn(),
       create: vi.fn(),
       addMedia: vi.fn(),
+      uploadTarget: vi.fn(),
       syncHistory: vi.fn(),
     },
     auth: {},
@@ -111,7 +112,7 @@ const WRITE_OK: ProductWriteResult = {
 }
 
 const A = 'https://cdn.example.com/a.jpg'
-const C = 'https://cdn.example.com/c.jpg'
+const UPLOADED = 'https://shopify-staged-uploads.storage.googleapis.com/tmp/1/c.png'
 
 /** The new product as the CRM returns it, with the images it knows about so far. */
 function detail(images: { id: string; url: string }[]): ProductDetail {
@@ -153,6 +154,7 @@ const list = vi.mocked(api.products.list)
 const details = vi.mocked(api.products.details)
 const create = vi.mocked(api.products.create)
 const addMedia = vi.mocked(api.products.addMedia)
+const uploadTarget = vi.mocked(api.products.uploadTarget)
 
 function renderPage() {
   return renderWithProviders(
@@ -172,6 +174,15 @@ describe('images added when a product is created, and added later from the Media
     vi.mocked(api.products.syncHistory).mockResolvedValue([])
     create.mockResolvedValue(CREATED)
     addMedia.mockResolvedValue(WRITE_OK)
+    uploadTarget.mockResolvedValue({
+      uploadUrl: 'https://shopify-staged-uploads.storage.googleapis.com/',
+      resourceUrl: UPLOADED,
+      method: 'POST',
+      parameters: [],
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
+    URL.createObjectURL = vi.fn((file: Blob) => `blob:${(file as File).name}`)
+    URL.revokeObjectURL = vi.fn()
     // The store hasn't downloaded anything yet.
     details.mockResolvedValue(detail([]))
   })
@@ -179,6 +190,7 @@ describe('images added when a product is created, and added later from the Media
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   /** Creates "Sushi Tray" with an image (a variant's Image link), then opens its Media tab. */
@@ -216,36 +228,48 @@ describe('images added when a product is created, and added later from the Media
     expect(screen.queryByText('No images')).not.toBeInTheDocument()
   })
 
+  /** Adds "c.png" from the computer in the Media tab's Add media dialog. */
+  async function addUpload(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Add media' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add media' })
+    await user.upload(
+      within(dialog).getByLabelText('Choose files from your computer'),
+      new File(['pixels'], 'c.png', { type: 'image/png' }),
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+  }
+
   it('adds a new image alongside them — nothing is replaced or hidden', async () => {
     const user = await createAndOpenMedia()
     expect(await screen.findAllByLabelText('Processing')).toHaveLength(1)
 
-    await user.click(screen.getByRole('button', { name: 'Add media' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Add media' })
-    await user.type(within(dialog).getByLabelText('Web address'), C)
-    await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
+    await addUpload(user)
 
     await waitFor(() => expect(addMedia).toHaveBeenCalled())
-    expect(addMedia.mock.calls[0][1]).toEqual([{ url: C, media_type: 'IMAGE' }])
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(2))
+    expect(addMedia.mock.calls[0][1]).toEqual([{ url: UPLOADED, media_type: 'IMAGE' }])
+    // The created one still waits; the new one is its own picture straight away.
+    expect(screen.getAllByLabelText('Processing')).toHaveLength(1)
+    expect(
+      await screen.findByLabelText('c.png: Syncing with the store'),
+    ).toBeInTheDocument()
     expect(screen.getByText('2 processing')).toBeInTheDocument()
   })
 
   it('swaps each waiting file for its real image as the store finishes, keeping the others', async () => {
     const user = await createAndOpenMedia()
     await screen.findAllByLabelText('Processing')
-    await user.click(screen.getByRole('button', { name: 'Add media' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Add media' })
-    await user.type(within(dialog).getByLabelText('Web address'), C)
-    await user.click(within(dialog).getByRole('button', { name: 'Add to product' }))
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(2))
+    await addUpload(user)
+    await screen.findByLabelText('c.png: Syncing with the store')
 
     // One file is downloaded: it is now a real image, the other still waits.
     details.mockResolvedValue(
       detail([{ id: 'img-a', url: 'https://cdn.shopify.com/a.jpg' }]),
     )
     await act(() => vi.advanceTimersByTimeAsync(4100))
-    await waitFor(() => expect(screen.getAllByLabelText('Processing')).toHaveLength(1))
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+    )
+    expect(screen.getByLabelText('c.png: Syncing with the store')).toBeInTheDocument()
     expect(screen.getByText('1 image · 1 processing')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete image 1' })).toBeInTheDocument()
 
@@ -258,9 +282,47 @@ describe('images added when a product is created, and added later from the Media
     )
     await act(() => vi.advanceTimersByTimeAsync(4100))
     await waitFor(() =>
-      expect(screen.queryByLabelText('Processing')).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText(/^c\.png/)).not.toBeInTheDocument(),
     )
     expect(screen.getByText('2 images')).toBeInTheDocument()
+  })
+
+  it('does not hold the form up for a picture chosen from the computer, and shows it on the new product at once', async () => {
+    // The upload never finishes: nothing on screen may wait for it.
+    uploadTarget.mockImplementation(() => new Promise<never>(() => undefined))
+    // With no picture address the list is re-read after creating: the backend now has the row.
+    list.mockResolvedValue(page([EXISTING, row('new-id', 'Sushi Tray')]))
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderPage()
+    await screen.findByLabelText('Select Hippo Bag')
+    await user.click(screen.getByRole('button', { name: 'Add product' }))
+    const form = await screen.findByRole('region', { name: 'Add product' })
+    await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')
+    await user.type(within(form).getByLabelText('Price'), '9.99')
+    await user.upload(
+      within(form).getByLabelText('Choose files from your computer'),
+      new File(['pixels'], 'tray.png', { type: 'image/png' }),
+    )
+    await user.click(within(form).getAllByRole('button', { name: 'Create product' })[0])
+
+    // Created and back on the list while the file is still going up.
+    expect(await screen.findByText(/Created “Sushi Tray”/)).toBeInTheDocument()
+    expect(screen.getByText(/1 file is uploading in the background/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'View Sushi Tray' }))
+    // Overview: the picture is the product's main image and its thumbnail.
+    expect(
+      await screen.findByRole('button', { name: 'Open image 1 of 1' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('img', { name: 'tray.png' })[0]).toHaveAttribute(
+      'src',
+      'blob:tray.png',
+    )
+    // Media tab: the same picture, no "Processing…" spinner, not "No images".
+    await user.click(await screen.findByRole('tab', { name: /^Media/ }))
+    expect(await screen.findByLabelText('tray.png: Uploading')).toBeInTheDocument()
+    expect(screen.queryByText('Processing…')).not.toBeInTheDocument()
+    expect(screen.queryByText('No images')).not.toBeInTheDocument()
   })
 
   it('keeps the created images listed when the store is slow, instead of dropping them', async () => {

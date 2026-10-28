@@ -13,6 +13,7 @@ import {
   type ProductCreateResult,
   type ProductListItem,
   type ProductListParams,
+  type MediaType,
   type ProductMediaInput,
   type ProductListResponse,
   type ProductSort,
@@ -191,6 +192,14 @@ export interface ProductsState {
    */
   pendingMedia: Record<string, PendingMedia>
   /**
+   * Files chosen from the computer for a product, by product id: each is shown at once from
+   * its own local preview (so nothing waits on the upload or on the store) while it goes up
+   * in the background, and leaves the list when the store's own copy shows up in the product.
+   * Not saved across a page refresh (the previews are in-memory) — see `store.ts`, which
+   * keeps the files already handed to the store as `pendingMedia` instead.
+   */
+  localMedia: Record<string, LocalMedia>
+  /**
    * Images just deleted, by product id. The store only *queues* a delete, so the next
    * read of the product can still list them; they stay hidden until it stops doing so.
    */
@@ -208,6 +217,42 @@ export interface PendingMedia {
   /** How many images the product had when they were added. */
   baseline: number
   startedAt: number
+  /** Files from the Add product form: moved in front of the product's other images once they arrive. */
+  leading?: boolean
+  /** How many of the product's first images are already files that were moved to the front. */
+  placed?: number
+}
+
+export interface LocalMediaItem {
+  /** Distinguishes two files with the same name (the picked file's key). */
+  key: string
+  name: string
+  mediaType: MediaType
+  /** An in-memory address of the file itself, owned by this item (revoked when it leaves). */
+  previewUrl: string
+  /**
+   * `uploading`: on its way to the store's file storage or being attached; `sent`: the store
+   * has it and is processing it (the product doesn't list it yet); `failed`: it didn't go.
+   */
+  status: 'uploading' | 'sent' | 'failed'
+  error?: string
+  /** Where the store keeps the file once uploaded — what `POST /media` attaches. */
+  resourceUrl?: string
+}
+
+export interface LocalMedia {
+  items: LocalMediaItem[]
+  /** How many images the product had when the first waiting file was added. */
+  baseline: number
+  startedAt: number
+  /**
+   * The files are the product's own pictures, chosen on the Add product form: once the store
+   * has them they are moved to the front, so the first one is the main image (the pictures
+   * that went in with the product — a variant's — come after them).
+   */
+  leading?: boolean
+  /** How many of the product's first images are already files that were moved to the front. */
+  placed?: number
 }
 
 export interface ProductTab {
@@ -234,6 +279,7 @@ const initialState: ProductsState = {
   tabs: [],
   details: {},
   pendingMedia: {},
+  localMedia: {},
   removedMedia: {},
   previewImages: {},
 }
@@ -601,14 +647,84 @@ const productsSlice = createSlice({
         items: ProductMediaInput[]
         baseline: number
         startedAt: number
+        leading?: boolean
+        placed?: number
       }>,
     ) {
-      const { id, items, baseline, startedAt } = action.payload
+      const { id, items, baseline, startedAt, leading, placed } = action.payload
       const existing = state.pendingMedia[id]
       // More added while some are still waiting: they wait together, from the older baseline.
       state.pendingMedia[id] = existing
         ? { ...existing, items: [...existing.items, ...items] }
-        : { items, baseline, startedAt }
+        : {
+            items,
+            baseline,
+            startedAt,
+            ...(leading ? { leading, placed: placed ?? 0 } : {}),
+          }
+    },
+    /** Files were chosen for a product: show them at once, from their local previews. */
+    localMediaAdded(
+      state,
+      action: PayloadAction<{
+        id: string
+        items: LocalMediaItem[]
+        baseline: number
+        leading?: boolean
+      }>,
+    ) {
+      const { id, items, baseline, leading } = action.payload
+      const existing = state.localMedia[id]
+      state.localMedia[id] = existing
+        ? { ...existing, items: [...existing.items, ...items] }
+        : { items, baseline, startedAt: Date.now(), ...(leading ? { leading } : {}) }
+    },
+    /** One file reached the store's file storage (it is attached to the product afterwards). */
+    localMediaUploaded(
+      state,
+      action: PayloadAction<{ id: string; key: string; resourceUrl: string }>,
+    ) {
+      const item = state.localMedia[action.payload.id]?.items.find(
+        (candidate) => candidate.key === action.payload.key,
+      )
+      if (item) item.resourceUrl = action.payload.resourceUrl
+    },
+    /** Moves files to a new state: handed to the store (`sent`), failed, or back to `uploading`. */
+    localMediaStatus(
+      state,
+      action: PayloadAction<{
+        id: string
+        keys: string[]
+        status: LocalMediaItem['status']
+        error?: string
+      }>,
+    ) {
+      const entry = state.localMedia[action.payload.id]
+      if (!entry) return
+      for (const item of entry.items) {
+        if (!action.payload.keys.includes(item.key)) continue
+        item.status = action.payload.status
+        item.error = action.payload.error
+      }
+      // The store's clock starts when it is handed something to process.
+      if (action.payload.status === 'sent') entry.startedAt = Date.now()
+    },
+    /** Files left the list: removed by the user, or the store's own copy is now in the product. */
+    localMediaLeft(
+      state,
+      action: PayloadAction<{ id: string; keys: string[]; arrived?: boolean }>,
+    ) {
+      const { id, keys, arrived = false } = action.payload
+      const entry = state.localMedia[id]
+      if (!entry) return
+      entry.items = entry.items.filter((item) => !keys.includes(item.key))
+      // Each arrived file is now one of the product's images: the next ones are counted after it.
+      if (arrived) {
+        entry.baseline += keys.length
+        entry.startedAt = Date.now()
+        if (entry.leading) entry.placed = (entry.placed ?? 0) + keys.length
+      }
+      if (entry.items.length === 0) delete state.localMedia[id]
     },
     /** A product was just created with a picture: show it on the row until the store's own arrives. */
     previewImageSet(state, action: PayloadAction<{ id: string; url: string }>) {
@@ -780,6 +896,10 @@ export const {
   tabsCleared,
   mediaQueued,
   mediaSettled,
+  localMediaAdded,
+  localMediaUploaded,
+  localMediaStatus,
+  localMediaLeft,
   previewImageSet,
   productMediaRestored,
 } = productsSlice.actions

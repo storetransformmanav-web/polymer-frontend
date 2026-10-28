@@ -1,6 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
-import { api, type ProductMediaInput } from '../../../lib/api/endpoints.ts'
+import {
+  api,
+  type MediaType,
+  type ProductMediaInput,
+} from '../../../lib/api/endpoints.ts'
 import { sendFileToTarget } from '../../../lib/api/upload.ts'
 import { forUpload, mimeOf, type PickedFile } from '../utils/mediaFiles.ts'
 
@@ -18,6 +22,32 @@ export interface FileUploadState {
  * that waiting overlapped without opening a connection per file for a big batch.
  */
 export const UPLOAD_CONCURRENCY = 3
+
+/**
+ * Sends one file to the store's file storage and returns where the store keeps it (what
+ * `POST /products/{id}/media` attaches): the backend gives an upload address
+ * (`POST /products/{id}/media/upload-target`), then the file goes there.
+ */
+export async function uploadFileToProduct(
+  productId: string,
+  shop: string | null | undefined,
+  file: File,
+  type: MediaType,
+): Promise<string> {
+  const toSend = forUpload(file)
+  const target = await api.products.uploadTarget(
+    productId,
+    {
+      filename: toSend.name,
+      mime_type: mimeOf(toSend),
+      size_bytes: toSend.size,
+      media_type: type,
+    },
+    shop,
+  )
+  await sendFileToTarget(target, toSend)
+  return target.resourceUrl
+}
 
 /**
  * Uploads files chosen from the computer to a product, a few at a time: for each, the
@@ -51,20 +81,14 @@ export function useFileUpload() {
       async function uploadOne(picked: PickedFile) {
         set(picked.key, { status: 'uploading' })
         try {
-          const toSend = forUpload(picked.file)
-          const target = await api.products.uploadTarget(
+          const resourceUrl = await uploadFileToProduct(
             productId,
-            {
-              filename: toSend.name,
-              mime_type: mimeOf(toSend),
-              size_bytes: toSend.size,
-              media_type: picked.type,
-            },
             shop,
+            picked.file,
+            picked.type,
           )
-          await sendFileToTarget(target, toSend)
-          done.current[picked.key] = target.resourceUrl
-          set(picked.key, { status: 'done', resourceUrl: target.resourceUrl })
+          done.current[picked.key] = resourceUrl
+          set(picked.key, { status: 'done', resourceUrl })
         } catch (error) {
           failed += 1
           set(picked.key, { status: 'failed', error: toUserMessage(error) })
