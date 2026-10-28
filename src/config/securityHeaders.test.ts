@@ -83,11 +83,21 @@ describe('vercel.json security headers', () => {
       "'self'",
       'https://polymeruk-api.vercel.app',
       'https://accounts.google.com/gsi/',
+      // Shopify's file storage, where a file chosen from the computer is uploaded to.
+      'https://*.storage.googleapis.com',
+      'https://*.s3.amazonaws.com',
     ])
     expect(csp['frame-src']).toEqual([
       'https://accounts.google.com/gsi/',
       'https://www.youtube-nocookie.com',
     ])
+  })
+
+  it('lets the page show previews of files chosen from the computer (blob: addresses)', () => {
+    // Without blob: the preview of a chosen picture or video is blocked on the live site.
+    expect(csp['img-src']).toContain('blob:')
+    expect(csp['media-src']).toContain('blob:')
+    expect(csp['img-src']).not.toContain('*')
   })
 
   it('allows inline styles only because Google’s sign-in button needs them (never scripts)', () => {

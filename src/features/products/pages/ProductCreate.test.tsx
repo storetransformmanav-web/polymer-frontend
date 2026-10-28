@@ -279,7 +279,6 @@ describe('adding a product', () => {
   it('creates a product with every detail the form offers, and sends them all', async () => {
     locations.mockResolvedValue([{ id: 77, name: 'Warehouse', variants: 3 }])
     const COLLECTION = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
-    const IMAGE = 'https://cdn.example.com/hippo.jpg'
     const { user, form } = await openForm()
     // Pasting (one event) keeps this long form quick to fill; typing is tested field by field elsewhere.
     const type = async (label: string | RegExp, text: string) => {
@@ -287,11 +286,10 @@ describe('adding a product', () => {
       await user.paste(text)
     }
 
-    // Basics: title, description, image, category, gift card.
+    // Basics: title, description, category, gift card (pictures are uploaded after creating).
     await type('Title', 'Hippo Bag')
     await user.click(await within(form).findByRole('button', { name: 'Edit HTML' }))
     await type('Description (HTML)', '<p>A roomy bag</p>')
-    await type(/^Image link/, IMAGE)
     await type('Product category', 'gid://shopify/TaxonomyCategory/aa-1')
     await user.click(
       within(form).getByRole('checkbox', { name: 'This product is a gift card' }),
@@ -368,10 +366,8 @@ describe('adding a product', () => {
           weight: '0.5',
           weight_unit: 'KILOGRAMS',
           stock: [{ location_id: 77, available: 12 }],
-          image_url: IMAGE,
         },
       ],
-      media: [{ url: IMAGE, media_type: 'IMAGE' }],
       collections: [COLLECTION],
       metafields: [
         {
@@ -660,7 +656,7 @@ describe('adding a product', () => {
     expect(create.mock.calls[0][0].description_html).toBe('Brand new copy')
   })
 
-  it('sends tags, collections, media, SEO and metafields that were entered', async () => {
+  it('sends tags, collections, SEO and metafields that were entered', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
     await user.type(within(form).getByLabelText(/^Vendor/), 'Polymer')
@@ -668,10 +664,6 @@ describe('adding a product', () => {
     await user.type(
       within(form).getByLabelText('Search collections'),
       '3fa85f64-5717-4562-b3fc-2c963f66afa6{Enter}',
-    )
-    await user.type(
-      within(form).getByLabelText(/^Image link/),
-      'https://cdn.example.com/a.jpg',
     )
     await user.type(within(form).getByLabelText(/^SEO title/), 'Sushi tray SEO')
     await user.click(within(form).getByRole('button', { name: 'Add a metafield' }))
@@ -684,7 +676,6 @@ describe('adding a product', () => {
       vendor: 'Polymer',
       tags: ['eco', 'tray'],
       collections: ['3fa85f64-5717-4562-b3fc-2c963f66afa6'],
-      media: [{ url: 'https://cdn.example.com/a.jpg', media_type: 'IMAGE' }],
       seo: { title: 'Sushi tray SEO' },
       metafields: [
         {
@@ -736,10 +727,11 @@ describe('adding a product', () => {
     const A = 'https://cdn.example.com/a.jpg'
     const B = 'https://cdn.example.com/b.jpg'
 
-    it('sends a single product its picture address, listing it in media too, and the tax code', async () => {
+    it('sends a single product’s tax code, and no picture address (pictures are uploaded)', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
-      await user.type(within(form).getByLabelText(/^Image link/), A)
+      // The single product has no "Image link" box any more: its pictures are uploaded.
+      expect(within(form).queryByLabelText(/^Image link/)).toBeNull()
       await user.click(within(form).getByRole('button', { name: 'Show more options' }))
       await user.type(within(form).getByLabelText(/^Tax code/), 'P0000000')
       await user.click(submit(form))
@@ -747,8 +739,9 @@ describe('adding a product', () => {
       await waitFor(() => expect(create).toHaveBeenCalled())
       const body = create.mock.calls[0][0]
       expect(body.variants).toHaveLength(1)
-      expect(body.variants[0]).toMatchObject({ image_url: A, tax_code: 'P0000000' })
-      expect(body.media).toEqual([{ url: A, media_type: 'IMAGE' }])
+      expect(body.variants[0]).toMatchObject({ tax_code: 'P0000000' })
+      expect(body.variants[0]).not.toHaveProperty('image_url')
+      expect(body).not.toHaveProperty('media')
     }, 15_000)
 
     it('gives each variant of a multi-variant product its own picture address', async () => {
@@ -779,14 +772,22 @@ describe('adding a product', () => {
     it('refuses a variant picture that is not an https address, and sends nothing', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
+      await user.click(
+        within(form).getByRole('button', { name: 'Add options like size or colour' }),
+      )
+      await user.type(within(form).getByLabelText('Option name'), 'Size')
       await user.type(
-        within(form).getByLabelText(/^Image link/),
+        within(form).getByLabelText('Add values for option 1'),
+        'Small{Enter}',
+      )
+      await user.type(
+        within(form).getByLabelText('Image link for Small'),
         'http://insecure.example.com/a.jpg',
       )
       await user.click(submit(form))
 
       expect(
-        await within(form).findByText('Use a public link that starts with https://'),
+        await within(form).findByText(/Use a public link that starts with https:\/\//),
       ).toBeInTheDocument()
       expect(create).not.toHaveBeenCalled()
     })
@@ -858,7 +859,7 @@ describe('adding a product', () => {
         {
           filename: 'photo.png',
           mime_type: 'image/png',
-          file_size: 6,
+          size_bytes: 6,
           media_type: 'IMAGE',
         },
         'polymer-uk',
@@ -909,22 +910,15 @@ describe('adding a product', () => {
     })
   })
 
-  it('refuses a picture address that is not https, and a collection that does not exist', async () => {
+  it('says so when a collection does not exist, and does not add it', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
-    await user.type(
-      within(form).getByLabelText(/^Image link/),
-      'http://insecure.example.com/a.jpg',
-    )
     await user.type(within(form).getByLabelText('Search collections'), 'nope{Enter}')
 
     expect(
       await within(form).findByText('No collection is called “nope”'),
     ).toBeInTheDocument()
-    await user.click(submit(form))
-    expect(
-      await within(form).findByText('Use a public link that starts with https://'),
-    ).toBeInTheDocument()
+    expect(within(form).queryByRole('list', { name: 'Collections' })).toBeNull()
     expect(create).not.toHaveBeenCalled()
   })
 

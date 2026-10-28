@@ -57,7 +57,7 @@ export function useFileUpload() {
             {
               filename: toSend.name,
               mime_type: mimeOf(toSend),
-              file_size: toSend.size,
+              size_bytes: toSend.size,
               media_type: picked.type,
             },
             shop,

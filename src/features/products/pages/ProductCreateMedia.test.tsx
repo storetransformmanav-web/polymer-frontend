@@ -181,7 +181,7 @@ describe('images added when a product is created, and added later from the Media
     vi.clearAllMocks()
   })
 
-  /** Creates "Sushi Tray" with an image (its Image link), then opens its Media tab. */
+  /** Creates "Sushi Tray" with an image (a variant's Image link), then opens its Media tab. */
   async function createAndOpenMedia() {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderPage()
@@ -190,7 +190,16 @@ describe('images added when a product is created, and added later from the Media
     const form = await screen.findByRole('region', { name: 'Add product' })
     await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')
     await user.type(within(form).getByLabelText('Price'), '9.99')
-    await user.type(within(form).getByLabelText(/^Image link/), A)
+    // The picture is entered in a variant's own column: a product with a single "Small" variant.
+    await user.click(
+      within(form).getByRole('button', { name: 'Add options like size or colour' }),
+    )
+    await user.type(within(form).getByLabelText('Option name'), 'Size')
+    await user.type(
+      within(form).getByLabelText('Add values for option 1'),
+      'Small{Enter}',
+    )
+    await user.type(within(form).getByLabelText('Image link for Small'), A)
     await user.click(within(form).getAllByRole('button', { name: 'Create product' })[0])
     await screen.findByText(/Created “Sushi Tray”/)
 

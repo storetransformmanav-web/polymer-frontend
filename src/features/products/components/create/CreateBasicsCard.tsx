@@ -8,8 +8,7 @@ import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
 /**
  * The first card, after the store admin's: Title, Description, Media (files uploaded from the
- * computer), Category and, for a product without options, the one variant's own image link. The
- * card has no heading.
+ * computer) and Category. The card has no heading.
  */
 export function CreateBasicsCard({
   draft,
@@ -27,9 +26,6 @@ export function CreateBasicsCard({
   /** The product is being created / its files uploaded. */
   uploading: boolean
 }) {
-  const single =
-    draft.variants.length === 1 && draft.variants[0].optionValues.length === 0
-
   return (
     <CreateCard title="Basics" hideTitle>
       <EditField
@@ -79,32 +75,6 @@ export function CreateBasicsCard({
           the main product image.
         </p>
       </div>
-
-      {single && (
-        <EditField
-          id="create-variant-image"
-          label="Image link (optional)"
-          error={errors['variants.0.imageUrl']}
-          hint="Instead of uploading, paste a public link to an image of this product (it must start with https://). The store downloads it and adds it to the product's media."
-        >
-          <input
-            id="create-variant-image"
-            type="url"
-            autoComplete="off"
-            spellCheck={false}
-            value={draft.variants[0].imageUrl}
-            maxLength={LIMITS.mediaUrl + 100}
-            placeholder="https://…"
-            aria-invalid={errors['variants.0.imageUrl'] ? true : undefined}
-            onChange={(event) =>
-              update({
-                variants: [{ ...draft.variants[0], imageUrl: event.target.value }],
-              })
-            }
-            className={FIELD_INPUT}
-          />
-        </EditField>
-      )}
 
       <EditField
         id="create-category"

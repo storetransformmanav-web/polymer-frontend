@@ -135,7 +135,26 @@ describe('a product created with an image', () => {
     return { user, form }
   }
 
-  const PICTURE_ADDRESS = /^Image link/
+  /**
+   * Gives the new product a picture by its address. The single product has no "Image link" box
+   * (its pictures are uploaded); an address is entered in a variant's own column, so this adds
+   * one option value — a product with a single "Small" variant — and types it there.
+   */
+  async function addImageLink(
+    user: ReturnType<typeof userEvent.setup>,
+    form: HTMLElement,
+    url: string,
+  ) {
+    await user.click(
+      within(form).getByRole('button', { name: 'Add options like size or colour' }),
+    )
+    await user.type(within(form).getByLabelText('Option name'), 'Size')
+    await user.type(
+      within(form).getByLabelText('Add values for option 1'),
+      'Small{Enter}',
+    )
+    await user.type(within(form).getByLabelText('Image link for Small'), url)
+  }
 
   const createButton = (form: HTMLElement) =>
     within(form).getAllByRole('button', { name: 'Create product' })[0]
@@ -145,7 +164,7 @@ describe('a product created with an image', () => {
 
   it('keeps showing the address it was created with while the store downloads it, and waits for the store’s copy', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     list.mockClear()
     await user.click(createButton(form))
 
@@ -163,7 +182,7 @@ describe('a product created with an image', () => {
 
   it('looks again every few seconds and swaps in the store’s own image once it exists, then stops', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -179,7 +198,7 @@ describe('a product created with an image', () => {
 
   it('keeps the picture on the new row when the list is re-read without an image yet', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -194,7 +213,7 @@ describe('a product created with an image', () => {
 
   it('keeps the picture and keeps looking, more slowly, after the first 40 seconds', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -211,7 +230,7 @@ describe('a product created with an image', () => {
 
   it('keeps looking while the image has not arrived', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 
@@ -224,7 +243,7 @@ describe('a product created with an image', () => {
 
   it('says so when the image never arrives, and what to check', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText(PICTURE_ADDRESS), USER_URL)
+    await addImageLink(user, form, USER_URL)
     await user.click(createButton(form))
     await screen.findByText(/Created “Sushi Tray”/)
 

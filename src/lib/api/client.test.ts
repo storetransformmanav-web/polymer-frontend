@@ -287,4 +287,80 @@ describe('apiClient requests', () => {
       expect(onUnauthorized).not.toHaveBeenCalled()
     })
   })
+
+  describe('credentials are never put in a URL', () => {
+    /** The request is refused before anything is sent, saying which name but never its value. */
+    async function refused(
+      send: (adapter: AxiosRequestConfig['adapter']) => Promise<unknown>,
+    ) {
+      const { adapter, calls } = scriptedAdapter(['ok'])
+      const { error } = await settle(send(adapter))
+      expect(calls).toHaveLength(0)
+      expect(error).toBeInstanceOf(ApiError)
+      expect((error as ApiError).code).toBe('ERR_CREDENTIAL_IN_URL')
+      expect(String((error as ApiError).message)).not.toContain('abc123')
+    }
+
+    it.each([
+      'token',
+      'access_token',
+      'accessToken',
+      'id_token',
+      'jwt',
+      'api_key',
+      'password',
+    ])('refuses a %s in params', async (name) => {
+      await refused((adapter) =>
+        apiClient.get('/x', { adapter, params: { [name]: 'abc123' } }),
+      )
+    })
+
+    it('refuses one written into the path, and one in a URLSearchParams', async () => {
+      await refused((adapter) => apiClient.get('/x?page=1&token=abc123', { adapter }))
+      await refused((adapter) =>
+        apiClient.get('/x', {
+          adapter,
+          params: new URLSearchParams({ Access_Token: 'abc123' }),
+        }),
+      )
+    })
+
+    it('refuses it on a write too, whatever the method', async () => {
+      await refused((adapter) =>
+        apiClient.post('/x', { fine: true }, { adapter, params: { token: 'abc123' } }),
+      )
+      await refused((adapter) => apiClient.delete('/x?session=abc123', { adapter }))
+    })
+
+    it('still sends ordinary parameters — filters, paging, a store key, tags', async () => {
+      const { adapter, calls } = scriptedAdapter(['ok'])
+
+      const { error } = await settle(
+        apiClient.get('/products?page=2', {
+          adapter,
+          params: {
+            search: 'bag',
+            status: 'ACTIVE',
+            shop: 'polymer-uk',
+            tag: 'eco',
+            page_size: 25,
+          },
+        }),
+      )
+
+      expect(error).toBeUndefined()
+      expect(calls).toHaveLength(1)
+    })
+
+    it('keeps the session token where it belongs: in the Authorization header, not the URL', async () => {
+      setAccessToken('session-abc123')
+      const { adapter, calls } = scriptedAdapter(['ok'])
+
+      await settle(apiClient.get('/products', { adapter, params: { page: 1 } }))
+
+      expect(calls[0].headers.get('Authorization')).toBe('Bearer session-abc123')
+      expect(calls[0].url).not.toContain('abc123')
+      expect(JSON.stringify(calls[0].params)).not.toContain('abc123')
+    })
+  })
 })

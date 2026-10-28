@@ -1213,7 +1213,7 @@ export interface ProductMetafieldRemoval {
 export interface UploadTargetRequest {
   filename: string
   mime_type: string
-  file_size: number
+  size_bytes: number
   media_type: MediaType
 }
 

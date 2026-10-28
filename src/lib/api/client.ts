@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import { env } from '../../config/env.ts'
+import { findSensitiveParams } from '../urlSecurity.ts'
 import { ApiError } from './ApiError.ts'
 
 /**
@@ -124,8 +125,22 @@ function isTransient(error: unknown): boolean {
  * an error. Writes (POST/PUT/PATCH/DELETE) are never retried: repeating one
  * could create or delete something twice. Timeouts, 4xx and 401s are never
  * retried either, and a cancelled request stops immediately.
+ *
+ * A request whose URL would carry a credential (`?token=…`, a `token`/`access_token`/… entry in
+ * `params`) is refused before anything is sent: a URL is logged, kept in history and passed on in
+ * the `Referer`. The session token goes in the `Authorization` header (added above), anything
+ * else secret in the body. See `lib/urlSecurity.ts`.
  */
 async function request<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  const inUrl = findSensitiveParams(path, config?.params)
+  if (inUrl.length > 0) {
+    // Names only — never the value.
+    throw new ApiError(
+      `Refused to send “${inUrl[0]}” in the URL. Credentials go in the Authorization header or the request body.`,
+      { code: 'ERR_CREDENTIAL_IN_URL' },
+    )
+  }
+
   const isRead = (config?.method ?? 'GET').toUpperCase() === 'GET'
 
   for (let attempt = 0; ; attempt += 1) {
