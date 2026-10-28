@@ -24,7 +24,7 @@ import {
   CreatePriceCard,
   CreateShippingCard,
 } from './create/CreatePricingCards.tsx'
-import { CreateOrganizationCards } from './create/CreateSidebarCards.tsx'
+import { CreateSidebarCard } from './create/CreateSidebarCards.tsx'
 import { CreateVariantsCard } from './create/CreateVariantsCard.tsx'
 
 interface ProductCreateViewProps {
@@ -90,6 +90,9 @@ export function ProductCreateView({
   const problems = useMemo(() => validateCreateDraft(effective), [effective])
   const errors = showErrors ? problems : {}
   const { locations } = useStockLocations(shop)
+  // The store's currency: the symbol in front of the price boxes, and what Profit is written in.
+  const currency =
+    shops.find((candidate) => shopValue(candidate) === shop)?.currency ?? null
 
   function update(patch: Partial<CreateDraft>) {
     clearError()
@@ -168,16 +171,12 @@ export function ProductCreateView({
       ref={sectionRef}
       aria-label="Add product"
       aria-busy={isCreating}
-      className="mx-auto flex w-full max-w-6xl flex-col gap-5"
+      // `relative` keeps the visually hidden labels (sr-only, positioned absolutely) inside this
+      // box: without it they sit at the page's own edge and make the whole page scroll.
+      className="relative flex w-full flex-col gap-5 lg:min-h-full"
     >
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-        <div className="min-w-0">
-          <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
-          <p className="text-text-muted mt-1 text-[0.85rem]">
-            Fill in the details below, then press Create product. Nothing is sent to the
-            store until then. Only a title and a price are required.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
         <div className="ml-auto flex items-center gap-2">
           {/* Same button as on a product's details page. */}
           <button
@@ -205,35 +204,49 @@ export function ProductCreateView({
         )}
       </div>
 
-      <CreateBasicsCard
-        draft={effective}
-        errors={errors}
-        update={update}
-        files={files}
-        onFiles={setFiles}
-        uploadStates={uploadStates}
-        uploading={isCreating}
-      />
-      <CreateOrganizationCards
-        draft={effective}
-        errors={errors}
-        update={update}
-        shopOptions={shopOptions}
-        shop={shop}
-      />
-      <CreatePriceCard draft={effective} errors={errors} update={update} />
-      <CreateInventoryCard
-        draft={effective}
-        errors={errors}
-        update={update}
-        locations={locations}
-      />
-      <CreateShippingCard draft={effective} errors={errors} update={update} />
-      <CreateVariantsCard draft={effective} errors={errors} update={update} />
-      <CreateSeoCard draft={effective} errors={errors} update={update} />
-      <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
+      {/* The store admin's layout: the product's own details in a wide column, and a sidebar
+          (status, organization, theme) that stays in view beside it from `lg` up. */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <CreateBasicsCard
+            draft={effective}
+            errors={errors}
+            update={update}
+            files={files}
+            onFiles={setFiles}
+            uploadStates={uploadStates}
+            uploading={isCreating}
+          />
+          <CreatePriceCard
+            draft={effective}
+            errors={errors}
+            update={update}
+            currency={currency}
+          />
+          <CreateInventoryCard
+            draft={effective}
+            errors={errors}
+            update={update}
+            locations={locations}
+          />
+          <CreateShippingCard draft={effective} errors={errors} update={update} />
+          <CreateVariantsCard draft={effective} errors={errors} update={update} />
+          <CreateSeoCard draft={effective} errors={errors} update={update} />
+          <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
+        </div>
 
-      <div className="border-border bg-bg sticky bottom-3 z-10 flex flex-wrap items-center justify-end gap-2 rounded-2xl border px-4 py-3 shadow-sm">
+        <div className="flex min-w-0 flex-col gap-5">
+          <CreateSidebarCard
+            draft={effective}
+            errors={errors}
+            update={update}
+            shopOptions={shopOptions}
+            shop={shop}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2 lg:mt-auto">
         <button
           type="button"
           onClick={back}

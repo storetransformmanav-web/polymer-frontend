@@ -205,6 +205,15 @@ describe('adding a product', () => {
     const { form } = await openForm()
 
     expect(within(form).getByLabelText('Title')).toHaveFocus()
+    expect(form).toHaveClass('lg:min-h-full')
+    // The form is the positioned box its visually hidden labels (sr-only) sit in. Without it they
+    // are placed at the page's own edge and the whole page gets a second scrollbar.
+    expect(form).toHaveClass('relative')
+    expect(
+      // The bar at the foot (the last Create product; the first is in the heading row).
+      within(form).getAllByRole('button', { name: 'Create product' }).at(-1)!
+        .parentElement,
+    ).toHaveClass('lg:mt-auto')
     // The cards of the store admin's Add product page, in its order (no Publishing card).
     for (const name of [
       'Basics',
@@ -266,6 +275,114 @@ describe('adding a product', () => {
     expect(within(form).getByLabelText('Price for Large')).toHaveFocus()
     expect(create).not.toHaveBeenCalled()
   }, 15_000)
+
+  it('creates a product with every detail the form offers, and sends them all', async () => {
+    locations.mockResolvedValue([{ id: 77, name: 'Warehouse', variants: 3 }])
+    const COLLECTION = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+    const IMAGE = 'https://cdn.example.com/hippo.jpg'
+    const { user, form } = await openForm()
+    // Pasting (one event) keeps this long form quick to fill; typing is tested field by field elsewhere.
+    const type = async (label: string | RegExp, text: string) => {
+      await user.click(within(form).getByLabelText(label))
+      await user.paste(text)
+    }
+
+    // Basics: title, description, image, category, gift card.
+    await type('Title', 'Hippo Bag')
+    await user.click(await within(form).findByRole('button', { name: 'Edit HTML' }))
+    await type('Description (HTML)', '<p>A roomy bag</p>')
+    await type(/^Image link/, IMAGE)
+    await type('Product category', 'gid://shopify/TaxonomyCategory/aa-1')
+    await user.click(
+      within(form).getByRole('checkbox', { name: 'This product is a gift card' }),
+    )
+
+    // The sidebar: status, type, vendor, collection, tags, theme template.
+    await user.selectOptions(within(form).getByLabelText('Status'), 'Active')
+    await type('Product type', 'Bags')
+    await type('Vendor', 'Polymer')
+    await type('Search collections', COLLECTION)
+    await user.keyboard('{Enter}')
+    await type('Add tags', 'eco, tray')
+    await user.keyboard('{Enter}')
+    await type('Theme template', 'gift')
+
+    // Price & stock.
+    await type('Price', '39.99')
+    // The Price card's extra fields are behind its pills: the Compare-at pill opens them.
+    await user.click(within(form).getByRole('button', { name: /^Compare-at/ }))
+    await type('Compare-at price', '49.99')
+    await type('Cost per item', '12.5')
+    await type(/^Tax code/, 'P0000000')
+    await user.click(
+      within(form).getByRole('checkbox', { name: 'Charge tax on this product' }),
+    )
+    await user.selectOptions(
+      await within(form).findByLabelText('Opening stock location'),
+      'Warehouse',
+    )
+    await type('Opening stock', '12')
+    await type('SKU (Stock Keeping Unit)', 'HB-1')
+    await type('Barcode', '123456')
+    await user.click(
+      within(form).getByRole('checkbox', { name: 'Continue selling when out of stock' }),
+    )
+
+    // Shipping, search listing and a metafield.
+    await type('Weight', '0.5')
+    await type(/^SEO title/, 'Hippo Bag | Polymer')
+    await type('SEO description', 'A roomy bag for everything.')
+    await type('URL handle', 'hippo-bag')
+    await user.click(within(form).getByRole('button', { name: 'Add a metafield' }))
+    await type('Key', 'material')
+    await type('Value', 'PET')
+
+    await user.click(submit(form))
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0][0]).toEqual({
+      shop: 'polymer-uk',
+      title: 'Hippo Bag',
+      description_html: expect.stringContaining('A roomy bag'),
+      status: 'ACTIVE',
+      gift_card: true,
+      vendor: 'Polymer',
+      product_type: 'Bags',
+      handle: 'hippo-bag',
+      tags: ['eco', 'tray'],
+      seo: { title: 'Hippo Bag | Polymer', description: 'A roomy bag for everything.' },
+      template_suffix: 'gift',
+      category_gid: 'gid://shopify/TaxonomyCategory/aa-1',
+      variants: [
+        {
+          price: '39.99',
+          compare_at_price: '49.99',
+          cost: '12.5',
+          sku: 'HB-1',
+          barcode: '123456',
+          taxable: false,
+          tax_code: 'P0000000',
+          inventory_policy: 'CONTINUE',
+          tracked: true,
+          requires_shipping: true,
+          weight: '0.5',
+          weight_unit: 'KILOGRAMS',
+          stock: [{ location_id: 77, available: 12 }],
+          image_url: IMAGE,
+        },
+      ],
+      media: [{ url: IMAGE, media_type: 'IMAGE' }],
+      collections: [COLLECTION],
+      metafields: [
+        {
+          namespace: 'custom',
+          key: 'material',
+          type: 'single_line_text_field',
+          value: 'PET',
+        },
+      ],
+    })
+  }, 60_000)
 
   it('creates a simple product in the store picked at the top (the first one by default)', async () => {
     const { user, form } = await openForm()
@@ -623,8 +740,7 @@ describe('adding a product', () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
       await user.type(within(form).getByLabelText(/^Image link/), A)
-      // The tax code sits behind the Price card's "Charge tax" pill.
-      await user.click(within(form).getByRole('button', { name: /^Charge tax/ }))
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
       await user.type(within(form).getByLabelText(/^Tax code/), 'P0000000')
       await user.click(submit(form))
 
@@ -888,7 +1004,7 @@ describe('adding a product', () => {
       expect(search).not.toHaveBeenCalled()
 
       await user.click(within(form).getByLabelText('Search collections'))
-      const choices = await within(form).findByRole('list', {
+      const choices = await screen.findByRole('list', {
         name: 'Collections to add',
       })
       await within(choices).findByRole('button', { name: 'Retail bags' })
@@ -933,9 +1049,7 @@ describe('adding a product', () => {
 
       await user.click(within(form).getByLabelText('Search collections'))
       expect(
-        await within(form).findByText(
-          'Showing 1 of 120 — keep typing to narrow the list.',
-        ),
+        await screen.findByText('Showing 1 of 120 — keep typing to narrow the list.'),
       ).toBeVisible()
 
       await user.type(
@@ -958,14 +1072,12 @@ describe('adding a product', () => {
       const { user, form } = await openForm()
 
       await user.click(within(form).getByLabelText('Search collections'))
-      expect(await within(form).findByText('No collections found.')).toBeVisible()
+      expect(await screen.findByText('No collections found.')).toBeVisible()
 
       search.mockRejectedValue(new ApiError('Server error', { status: 500 }))
       await user.type(within(form).getByLabelText('Search collections'), 'zz')
       expect(
-        await within(form).findByText(
-          'Could not load the collections. Try again in a moment.',
-        ),
+        await screen.findByText('Could not load the collections. Try again in a moment.'),
       ).toBeVisible()
     })
 
@@ -990,17 +1102,17 @@ describe('adding a product', () => {
       })
     })
 
-    it('opens Compare-at, Cost per item and the other price fields from the card pills', async () => {
+    it('has the compare-at price, cost per item and the continue-selling box in view, and sends them', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
-      expect(within(form).queryByLabelText('Compare-at price')).toBeNull()
 
-      await user.click(within(form).getByRole('button', { name: 'Compare-at' }))
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
       await user.type(within(form).getByLabelText('Compare-at price'), '12')
       await user.type(within(form).getByLabelText('Cost per item'), '3.5')
-      // Sell when out of stock is a pill that switches straight over.
       await user.click(
-        within(form).getByRole('button', { name: /^Sell when out of stock/ }),
+        within(form).getByRole('checkbox', {
+          name: 'Continue selling when out of stock',
+        }),
       )
       await user.click(submit(form))
 
@@ -1010,6 +1122,125 @@ describe('adding a product', () => {
         cost: '3.5',
         inventory_policy: 'CONTINUE',
       })
+    })
+
+    it('shows the store’s currency symbol in front of the money boxes', async () => {
+      const { user, form } = await openForm()
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
+      // The first store is in pounds: Price, Compare-at price and Cost per item all say so.
+      await waitFor(() =>
+        expect(within(form).getAllByText('£').length).toBeGreaterThanOrEqual(3),
+      )
+    })
+
+    it('works out Profit and Margin from the price and the cost as they are typed', async () => {
+      const { user, form } = await openForm()
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
+      const hint = () => within(form).getByText(/Customers never see/)
+      expect(hint()).toHaveTextContent('What it costs you.')
+
+      await user.type(within(form).getByLabelText('Price'), '40')
+      await user.type(within(form).getByLabelText('Cost per item'), '10')
+
+      await waitFor(() => expect(hint()).toHaveTextContent('Profit £30.00 · Margin 75%'))
+
+      // A half-typed cost is no cost at all.
+      await user.clear(within(form).getByLabelText('Cost per item'))
+      await user.type(within(form).getByLabelText('Cost per item'), '1.')
+      expect(hint()).toHaveTextContent('What it costs you.')
+    })
+
+    it('keeps the extra price fields closed until a pill or the chevron is pressed', async () => {
+      const { user, form } = await openForm()
+      const chevron = () =>
+        within(form).getByRole('button', { name: /^(Show|Hide) more options$/ })
+
+      // Closed to begin with: only the price box and the pills are there.
+      expect(chevron()).toHaveAttribute('aria-expanded', 'false')
+      expect(within(form).getByLabelText('Price')).toBeInTheDocument()
+      expect(within(form).queryByLabelText('Compare-at price')).toBeNull()
+      expect(within(form).queryByLabelText('Cost per item')).toBeNull()
+      expect(within(form).queryByLabelText('Tax code')).toBeNull()
+      expect(
+        within(form).getByRole('button', { name: /^Charge taxs*Yes$/ }),
+      ).toBeInTheDocument()
+
+      // A pill opens it and puts the cursor in its own field.
+      await user.click(within(form).getByRole('button', { name: 'Compare-at' }))
+      expect(chevron()).toHaveAttribute('aria-expanded', 'true')
+      await waitFor(() =>
+        expect(within(form).getByLabelText('Compare-at price')).toHaveFocus(),
+      )
+      expect(within(form).getByLabelText('Tax code')).toBeInTheDocument()
+
+      // The chevron closes it again, and opens it again.
+      await user.click(chevron())
+      expect(within(form).queryByLabelText('Compare-at price')).toBeNull()
+      await user.click(within(form).getByRole('button', { name: 'Cost per item' }))
+      await waitFor(() =>
+        expect(within(form).getByLabelText('Cost per item')).toHaveFocus(),
+      )
+
+      // The Charge tax pill opens it too.
+      await user.click(chevron())
+      await user.click(within(form).getByRole('button', { name: /^Charge tax/ }))
+      expect(
+        within(form).getByRole('checkbox', { name: 'Charge tax on this product' }),
+      ).toBeChecked()
+    })
+
+    it('shows what was typed in the pills, and keeps More details as its own section', async () => {
+      const { user, form } = await openForm()
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
+      await user.type(within(form).getByLabelText('Compare-at price'), '12')
+      await user.click(
+        within(form).getByRole('checkbox', { name: 'Charge tax on this product' }),
+      )
+      expect(
+        within(form).getByRole('button', { name: /^Compare-ats*12$/ }),
+      ).toBeInTheDocument()
+      expect(
+        within(form).getByRole('button', { name: /^Charge taxs*No$/ }),
+      ).toBeInTheDocument()
+
+      const details = within(form).getByRole('button', { name: 'More details' })
+      expect(details).toHaveAttribute('aria-expanded', 'true')
+      await user.click(details)
+      expect(within(form).queryByLabelText('SKU (Stock Keeping Unit)')).toBeNull()
+      await user.click(details)
+      expect(within(form).getByLabelText('SKU (Stock Keeping Unit)')).toBeInTheDocument()
+    })
+
+    it('opens a closed section again when a field in it has a problem', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(within(form).getByRole('button', { name: 'Show more options' }))
+      await user.type(within(form).getByLabelText('Compare-at price'), 'abc')
+      await user.click(within(form).getByRole('button', { name: 'Hide more options' }))
+      expect(within(form).queryByLabelText('Compare-at price')).toBeNull()
+      await user.click(submit(form))
+
+      expect(
+        await within(form).findByText(/Compare-at price: enter a number/),
+      ).toBeInTheDocument()
+      expect(
+        within(form).getByRole('button', { name: 'Hide more options' }),
+      ).toHaveAttribute('aria-expanded', 'true')
+      expect(create).not.toHaveBeenCalled()
+    })
+
+    it('lays the opening stock out as a Location and Quantity table', async () => {
+      locations.mockResolvedValue([{ id: 77, name: 'Warehouse', variants: 3 }])
+      const { user, form } = await openForm()
+      await user.selectOptions(
+        await within(form).findByLabelText('Opening stock location'),
+        'Warehouse',
+      )
+      await user.type(within(form).getByLabelText('Opening stock'), '12')
+
+      expect(within(form).getByText('Location')).toBeInTheDocument()
+      expect(within(form).getByText('Quantity')).toBeInTheDocument()
+      expect(within(form).getByLabelText('Opening stock')).toHaveValue('12')
     })
 
     it('folds an option into a summary with Done, and removes it with Delete', async () => {

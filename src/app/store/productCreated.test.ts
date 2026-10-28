@@ -177,11 +177,16 @@ describe('productCreated', () => {
     for (const entry of Object.values(state().entries)) expect(entry.fetchedAt).toBeNull()
   })
 
-  it('adds its type and tags to the filter choices', () => {
+  it('adds its type, vendor and tags to the suggestions', () => {
     const { store, state } = setup([item('a')])
-    store.dispatch(productCreated(item('new', { product_type: 'Trays', tags: ['eco'] })))
+    store.dispatch(
+      productCreated(
+        item('new', { product_type: 'Trays', vendor: 'Polymer', tags: ['eco'] }),
+      ),
+    )
 
     expect(state().facets.productTypes).toContain('Trays')
+    expect(state().facets.vendors).toContain('Polymer')
     expect(state().facets.tags).toContain('eco')
   })
 

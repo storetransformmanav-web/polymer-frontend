@@ -52,10 +52,11 @@ function valueHint(type: string): string | undefined {
 /** **Search engine listing**: the SEO title and description, and the product's web address (handle). */
 export function CreateSeoCard({ draft, errors, update }: CreateSectionProps) {
   return (
-    <CreateCard
-      title="Search engine listing"
-      description="How the product appears in Google and other search results, and the end of its web address."
-    >
+    <CreateCard title="Search engine listing" headingAbove>
+      <p className="text-text-muted text-[0.82rem]">
+        How the product appears in Google and other search results, and the end of its web
+        address. Everything here is optional.
+      </p>
       <EditField
         id="create-seo-title"
         label="SEO title"
@@ -123,7 +124,7 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
   return (
     <CreateCard
       title="Product metafields"
-      description="Extra details saved with the product that the standard fields don't cover."
+      headingAbove
       action={
         <button
           type="button"
@@ -137,13 +138,11 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
       }
     >
       {draft.metafields.length === 0 && (
-        <div className="border-border-strong bg-surface/30 text-text-muted flex flex-col items-center gap-1 rounded-xl border border-dashed px-4 py-6 text-center text-[0.85rem]">
-          <p className="text-text font-medium">No metafields yet</p>
-          <p>
-            Use them for things like material, care instructions or a size guide. Each one
-            has a group name (namespace), a name (key), a type and a value.
-          </p>
-        </div>
+        <p className="text-text-muted text-[0.85rem]">
+          Extra details saved with the product that the standard fields don't cover, such
+          as material, care instructions or a size guide. Give each one a group name
+          (namespace), a name (key), a type and a value.
+        </p>
       )}
       {draft.metafields.map((field, index) => {
         const at = (name: string) => errors[`metafields.${index}.${name}`]

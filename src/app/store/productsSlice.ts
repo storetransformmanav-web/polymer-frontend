@@ -168,6 +168,8 @@ export interface ProductsEntry {
 
 export interface ProductsFacets {
   productTypes: string[]
+  /** The vendors seen so far (suggested in the Add product form). */
+  vendors: string[]
   tags: string[]
 }
 
@@ -228,7 +230,7 @@ const initialState: ProductsState = {
   filters: DEFAULT_FILTERS,
   entries: {},
   lastData: null,
-  facets: { productTypes: [], tags: [] },
+  facets: { productTypes: [], vendors: [], tags: [] },
   tabs: [],
   details: {},
   pendingMedia: {},
@@ -432,6 +434,7 @@ function insertCreatedProduct(state: ProductsState, item: ProductListItem) {
 
   for (const entry of Object.values(state.entries)) entry.fetchedAt = null
   addSorted(state.facets.productTypes, [item.product_type])
+  addSorted(state.facets.vendors, [item.vendor])
   addSorted(state.facets.tags, item.tags)
 }
 
@@ -670,6 +673,10 @@ const productsSlice = createSlice({
         addSorted(
           state.facets.productTypes,
           data.items.map((item) => item.product_type),
+        )
+        addSorted(
+          state.facets.vendors,
+          data.items.map((item) => item.vendor),
         )
         addSorted(
           state.facets.tags,

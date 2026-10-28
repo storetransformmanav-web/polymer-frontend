@@ -6,10 +6,18 @@ import {
   type StockLocation,
   type WeightUnit,
 } from '../../../../lib/api/endpoints.ts'
+import { currencySymbol } from '../../../../lib/format.ts'
 import { CREATE_LIMITS, type CreateVariantDraft } from '../../utils/createDraft.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
-import { CheckField, EditField, FIELD_INPUT } from '../edit/fields.tsx'
-import { CardFooter, Chip, CreateCard, type CreateSectionProps } from './CreateCard.tsx'
+import { formatMoney, formatPercent, profitAndMargin } from '../../utils/margin.ts'
+import { CheckField, EditField, FIELD_INPUT, MoneyInput } from '../edit/fields.tsx'
+import {
+  CardFooter,
+  CardSection,
+  Chip,
+  CreateCard,
+  type CreateSectionProps,
+} from './CreateCard.tsx'
 
 const WEIGHT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
   value: unit,
@@ -26,44 +34,57 @@ function singleVariantSetter({ draft, update }: CreateSectionProps) {
     update({ variants: draft.variants.map((variant) => ({ ...variant, ...patch })) })
 }
 
+/** The location / quantity grid of the Inventory card (the quantity column is narrower on phones). */
+const STOCK_GRID =
+  'grid grid-cols-[minmax(0,1fr)_7rem] gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]'
+
 /**
  * **Price** — the price of a product without options (with options every variant is priced in
- * the Variants table), and a footer of pills — Compare-at · Charge tax · Cost per item — that
- * open the card's other fields: compare-at price, cost per item, whether tax is charged and
- * the tax code (the last two apply to every variant).
+ * the Variants table) and, under it, a footer of pill buttons — Compare-at · Charge tax · Cost
+ * per item — and a chevron. The footer's fields (compare-at price, cost per item with the
+ * profit and margin worked out from it, whether tax is charged and the tax code) stay closed
+ * until a pill or the chevron is pressed; a pill also moves the cursor to its own field.
  */
-export function CreatePriceCard(props: CreateSectionProps) {
-  const { draft, errors, update } = props
+export function CreatePriceCard(props: CreateSectionProps & { currency: string | null }) {
+  const { draft, errors, update, currency } = props
   const [open, setOpen] = useState(false)
   const single = isSingleVariant(draft.variants)
   const setVariant = singleVariantSetter(props)
   const variant = draft.variants[0]
+  const symbol = currencySymbol(currency)
+  // A problem in a closed section opens it: it can't be fixed from out of sight.
   const opened =
     open ||
     Boolean(
       errors['variants.0.compareAtPrice'] || errors['variants.0.cost'] || errors.taxCode,
     )
+  const { profit, margin } = profitAndMargin(variant.price, variant.cost)
+
+  // A pill opens the section, then the cursor goes to the field it stands for (once it is drawn).
+  function openAt(id: string | null) {
+    setOpen(true)
+    if (id) window.requestAnimationFrame(() => document.getElementById(id)?.focus())
+  }
 
   return (
-    <CreateCard
-      title="Price"
-      regionLabel="Pricing"
-      description="What customers pay for this product."
-    >
+    <CreateCard title="Price" regionLabel="Pricing" headingAbove>
       {single ? (
         <div className="max-w-xs">
-          <EditField id="create-price" label="Price" error={errors['variants.0.price']}>
-            <input
-              id="create-price"
-              inputMode="decimal"
-              autoComplete="off"
-              value={variant.price}
-              placeholder="0.00"
-              aria-invalid={errors['variants.0.price'] ? true : undefined}
-              onChange={(event) => setVariant({ price: event.target.value })}
-              className={FIELD_INPUT}
-            />
-          </EditField>
+          <label htmlFor="create-price" className="sr-only">
+            Price
+          </label>
+          <MoneyInput
+            id="create-price"
+            symbol={symbol}
+            value={variant.price}
+            invalid={Boolean(errors['variants.0.price'])}
+            onChange={(price) => setVariant({ price })}
+          />
+          {errors['variants.0.price'] && (
+            <p role="alert" className="text-danger mt-1 text-[0.78rem]">
+              {errors['variants.0.price']}
+            </p>
+          )}
         </div>
       ) : (
         <p className="text-text-muted text-[0.85rem]">
@@ -79,18 +100,18 @@ export function CreatePriceCard(props: CreateSectionProps) {
             {single && (
               <Chip
                 value={variant.compareAtPrice.trim() || undefined}
-                onClick={() => setOpen(true)}
+                onClick={() => openAt('create-compare')}
               >
                 Compare-at
               </Chip>
             )}
-            <Chip value={draft.taxable ? 'Yes' : 'No'} onClick={() => setOpen(true)}>
+            <Chip value={draft.taxable ? 'Yes' : 'No'} onClick={() => openAt(null)}>
               Charge tax
             </Chip>
             {single && (
               <Chip
                 value={variant.cost.trim() || undefined}
-                onClick={() => setOpen(true)}
+                onClick={() => openAt('create-cost')}
               >
                 Cost per item
               </Chip>
@@ -107,28 +128,30 @@ export function CreatePriceCard(props: CreateSectionProps) {
                 error={errors['variants.0.compareAtPrice']}
                 hint="The original price, shown crossed out next to the price (for a sale)."
               >
-                <input
+                <MoneyInput
                   id="create-compare"
-                  inputMode="decimal"
-                  autoComplete="off"
+                  symbol={symbol}
                   value={variant.compareAtPrice}
-                  onChange={(event) => setVariant({ compareAtPrice: event.target.value })}
-                  className={FIELD_INPUT}
+                  invalid={Boolean(errors['variants.0.compareAtPrice'])}
+                  onChange={(compareAtPrice) => setVariant({ compareAtPrice })}
                 />
               </EditField>
               <EditField
                 id="create-cost"
                 label="Cost per item"
                 error={errors['variants.0.cost']}
-                hint="What it costs you. Customers never see this."
+                hint={
+                  profit === null
+                    ? 'What it costs you. Customers never see this.'
+                    : `Profit ${formatMoney(profit, currency)} · Margin ${formatPercent(margin)}. Customers never see the cost.`
+                }
               >
-                <input
+                <MoneyInput
                   id="create-cost"
-                  inputMode="decimal"
-                  autoComplete="off"
+                  symbol={symbol}
                   value={variant.cost}
-                  onChange={(event) => setVariant({ cost: event.target.value })}
-                  className={FIELD_INPUT}
+                  invalid={Boolean(errors['variants.0.cost'])}
+                  onChange={(cost) => setVariant({ cost })}
                 />
               </EditField>
             </>
@@ -162,11 +185,11 @@ export function CreatePriceCard(props: CreateSectionProps) {
 }
 
 /**
- * **Inventory** — the "Inventory tracked" switch; while it is on, where the opening stock goes
- * (a location of the store, or its Shopify location number when none is on record) and, for a
- * product without options, how many. A footer of pills — SKU · Barcodes · Sell when out of
- * stock — opens the SKU and barcode fields (with options they are columns of the variants
- * table) and toggles whether to keep selling at zero.
+ * **Inventory** — the "Inventory tracked" switch; while it is on, a Location / Quantity table
+ * for the opening stock (the location is a dropdown of the store's locations, or the Shopify
+ * location number when none is on record; the quantity is for a product without options, or
+ * per variant in the Variants table), and a collapsible **More details** section: SKU, barcode
+ * (with options they are columns of the variants table) and whether to keep selling at zero.
  */
 export function CreateInventoryCard(
   props: CreateSectionProps & {
@@ -175,7 +198,7 @@ export function CreateInventoryCard(
   },
 ) {
   const { draft, errors, update, locations } = props
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const single = isSingleVariant(draft.variants)
   const setVariant = singleVariantSetter(props)
   const variant = draft.variants[0]
@@ -199,68 +222,88 @@ export function CreateInventoryCard(
   return (
     <CreateCard
       title="Inventory"
-      description="Whether the store counts your stock, and where the first units go."
       action={
         <Switch label="Inventory tracked" checked={draft.tracked} onChange={setTracked} />
       }
     >
       {draft.tracked ? (
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 items-start gap-4 min-[520px]:grid-cols-[minmax(0,1fr)_10rem]">
-            {locations.length > 0 ? (
-              <SelectField
-                id="create-location"
-                label="Opening stock location"
-                value={draft.locationId}
-                options={[
-                  { value: '', label: 'No opening stock' },
-                  ...locations.map((location) => ({
-                    value: String(location.id),
-                    label: location.name || `Location ${location.id}`,
-                  })),
-                ]}
-                onChange={(locationId) => update({ locationId })}
-              />
-            ) : (
-              <EditField
-                id="create-location-id"
-                label="Opening stock location ID"
-                error={errors.locationId}
-              >
-                <input
-                  id="create-location-id"
-                  inputMode="numeric"
-                  autoComplete="off"
+        <div className="flex flex-col gap-2">
+          <div className="border-border overflow-hidden rounded-xl border">
+            <div
+              className={`${STOCK_GRID} bg-surface text-text-muted px-3 py-2 text-[0.76rem] font-semibold`}
+            >
+              <span>Location</span>
+              <span className="text-right">Quantity</span>
+            </div>
+            <div className={`${STOCK_GRID} items-center p-3`}>
+              {locations.length > 0 ? (
+                <SelectField
+                  hideLabel
+                  id="create-location"
+                  label="Opening stock location"
                   value={draft.locationId}
-                  placeholder="e.g. 72843812"
-                  aria-invalid={errors.locationId ? true : undefined}
-                  onChange={(event) =>
-                    // Digits only: it is a Shopify location number.
-                    update({ locationId: event.target.value.replace(/\D/g, '') })
-                  }
-                  className={FIELD_INPUT}
+                  options={[
+                    { value: '', label: 'No opening stock' },
+                    ...locations.map((location) => ({
+                      value: String(location.id),
+                      label: location.name || `Location ${location.id}`,
+                    })),
+                  ]}
+                  onChange={(locationId) => update({ locationId })}
                 />
-              </EditField>
-            )}
-            {single && stockHere && (
-              <EditField
-                id="create-stock"
-                label="Opening stock"
-                error={errors['variants.0.stock']}
-              >
-                <input
-                  id="create-stock"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={variant.stock}
-                  placeholder="0"
-                  aria-invalid={errors['variants.0.stock'] ? true : undefined}
-                  onChange={(event) => setVariant({ stock: event.target.value })}
-                  className={`${FIELD_INPUT} text-right`}
-                />
-              </EditField>
-            )}
+              ) : (
+                <>
+                  <label htmlFor="create-location-id" className="sr-only">
+                    Opening stock location ID
+                  </label>
+                  <input
+                    id="create-location-id"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={draft.locationId}
+                    placeholder="Shopify location ID, e.g. 72843812"
+                    aria-invalid={errors.locationId ? true : undefined}
+                    onChange={(event) =>
+                      // Digits only: it is a Shopify location number.
+                      update({ locationId: event.target.value.replace(/\D/g, '') })
+                    }
+                    className={FIELD_INPUT}
+                  />
+                </>
+              )}
+              {single && stockHere ? (
+                <>
+                  <label htmlFor="create-stock" className="sr-only">
+                    Opening stock
+                  </label>
+                  <input
+                    id="create-stock"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={variant.stock}
+                    placeholder="0"
+                    aria-invalid={errors['variants.0.stock'] ? true : undefined}
+                    onChange={(event) => setVariant({ stock: event.target.value })}
+                    className={`${FIELD_INPUT} text-right`}
+                  />
+                </>
+              ) : (
+                <span className="text-text-muted text-right text-[0.8rem]">
+                  {single ? '—' : 'Per variant'}
+                </span>
+              )}
+            </div>
           </div>
+          {errors.locationId && (
+            <p role="alert" className="text-danger text-[0.78rem]">
+              {errors.locationId}
+            </p>
+          )}
+          {errors['variants.0.stock'] && (
+            <p role="alert" className="text-danger text-[0.78rem]">
+              {errors['variants.0.stock']}
+            </p>
+          )}
           {locations.length === 0 && (
             <p className="text-text-muted text-[0.76rem]">
               This store has no stock locations on record yet. To set a starting quantity,
@@ -282,45 +325,17 @@ export function CreateInventoryCard(
         </p>
       )}
 
-      <CardFooter
-        expandable={single}
-        open={opened && single}
+      <CardSection
+        title="More details"
+        open={opened}
         onToggle={() => setOpen(!opened)}
-        chips={
-          <>
-            {single && (
-              <>
-                <Chip
-                  value={variant.sku.trim() || undefined}
-                  onClick={() => setOpen(true)}
-                >
-                  SKU
-                </Chip>
-                <Chip
-                  value={variant.barcode.trim() || undefined}
-                  onClick={() => setOpen(true)}
-                >
-                  Barcode
-                </Chip>
-              </>
-            )}
-            <Chip
-              pressed={keepSelling}
-              value={keepSelling ? 'On' : 'Off'}
-              onClick={() =>
-                update({ inventoryPolicy: keepSelling ? 'DENY' : 'CONTINUE' })
-              }
-            >
-              Sell when out of stock
-            </Chip>
-          </>
-        }
+        last
       >
         {single && (
           <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
             <EditField
               id="create-sku"
-              label="SKU"
+              label="SKU (Stock Keeping Unit)"
               error={errors['variants.0.sku']}
               hint="Your own code for this product, used to find it in stock lists."
             >
@@ -329,6 +344,7 @@ export function CreateInventoryCard(
                 autoComplete="off"
                 value={variant.sku}
                 maxLength={LIMITS.sku + 50}
+                aria-invalid={errors['variants.0.sku'] ? true : undefined}
                 onChange={(event) => setVariant({ sku: event.target.value })}
                 className={FIELD_INPUT}
               />
@@ -344,13 +360,20 @@ export function CreateInventoryCard(
                 autoComplete="off"
                 value={variant.barcode}
                 maxLength={LIMITS.barcode + 50}
+                aria-invalid={errors['variants.0.barcode'] ? true : undefined}
                 onChange={(event) => setVariant({ barcode: event.target.value })}
                 className={FIELD_INPUT}
               />
             </EditField>
           </div>
         )}
-      </CardFooter>
+        <CheckField
+          label="Continue selling when out of stock"
+          hint="Customers can keep buying after the stock runs out."
+          checked={keepSelling}
+          onChange={(keep) => update({ inventoryPolicy: keep ? 'CONTINUE' : 'DENY' })}
+        />
+      </CardSection>
     </CreateCard>
   )
 }
@@ -368,7 +391,6 @@ export function CreateShippingCard(props: CreateSectionProps) {
   return (
     <CreateCard
       title="Shipping"
-      description="Whether the product is posted to the customer, and how much it weighs."
       action={
         <Switch
           label="Physical product"

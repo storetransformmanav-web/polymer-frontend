@@ -17,6 +17,63 @@ export const FIELD_INPUT =
 export const FIELD_TEXTAREA =
   'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint placeholder:text-text-muted/70 min-h-24 w-full min-w-0 resize-y rounded-lg border px-3 py-2.5 text-[0.88rem] leading-relaxed font-medium transition-colors outline-none focus:outline-2 aria-[invalid=true]:border-danger'
 
+/**
+ * A box for an amount of money with the currency's symbol in front ("£ 0.00"). The symbol is
+ * only drawn (the box is still a plain text field for the amount, so it is labelled and typed
+ * in as any other); with no symbol it is a plain decimal box.
+ */
+/** The same box, a little shorter, for a figure inside a small pill. */
+const FIELD_INPUT_COMPACT = FIELD_INPUT.replace('h-10', 'h-8').replace(
+  'text-[0.88rem]',
+  'text-[0.82rem]',
+)
+
+export function MoneyInput({
+  id,
+  value,
+  onChange,
+  symbol = '',
+  placeholder = '0.00',
+  invalid = false,
+  compact = false,
+  className = '',
+}: {
+  id: string
+  value: string
+  onChange: (value: string) => void
+  /** The currency symbol shown at the left ("£"). */
+  symbol?: string
+  placeholder?: string
+  invalid?: boolean
+  /** A shorter box, for inside a small pill. */
+  compact?: boolean
+  /** Extra classes for the box (a width, say). */
+  className?: string
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      {symbol && (
+        <span
+          aria-hidden="true"
+          className="text-text-muted pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[0.88rem] font-medium"
+        >
+          {symbol}
+        </span>
+      )}
+      <input
+        id={id}
+        inputMode="decimal"
+        autoComplete="off"
+        value={value}
+        placeholder={placeholder}
+        aria-invalid={invalid ? true : undefined}
+        onChange={(event) => onChange(event.target.value)}
+        className={`${compact ? FIELD_INPUT_COMPACT : FIELD_INPUT} ${symbol ? 'pl-8' : ''}`}
+      />
+    </div>
+  )
+}
+
 interface EditFieldProps {
   id: string
   label: string

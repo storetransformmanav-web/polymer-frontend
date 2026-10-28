@@ -85,11 +85,7 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
     })
 
   return (
-    <CreateCard
-      title="Variants"
-      description="Add options like size or colour. Every combination of values becomes a variant."
-      flush
-    >
+    <CreateCard title="Variants" headingAbove flush>
       <div className="flex flex-col">
         {draft.options.map((option, index) => {
           const usable = option.name.trim() !== '' && option.values.length > 0

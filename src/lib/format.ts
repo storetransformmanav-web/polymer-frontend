@@ -27,6 +27,24 @@ export function formatPrice(
   }
 }
 
+/**
+ * The symbol a currency is written with ("GBP" → "£", "USD" → "$"), for the front of a money
+ * box. An empty string when there is no currency; the code itself when Intl doesn't know it.
+ */
+export function currencySymbol(currency: string | null | undefined): string {
+  if (!currency) return ''
+  try {
+    const parts = new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0)
+    return parts.find((part) => part.type === 'currency')?.value ?? currency
+  } catch {
+    return currency
+  }
+}
+
 export function formatDate(isoString: string): string {
   return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
