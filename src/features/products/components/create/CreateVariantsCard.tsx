@@ -20,6 +20,18 @@ const TH =
 
 const variantName = (variant: CreateVariantDraft) => variant.optionValues.join(' / ')
 
+/** The table's columns, by the draft field each edits, as named in a problem message. */
+const CELL_LABELS: Record<string, string> = {
+  price: 'Price',
+  compareAtPrice: 'Compare-at price',
+  cost: 'Cost',
+  weight: 'Weight',
+  sku: 'SKU',
+  barcode: 'Barcode',
+  stock: 'Stock',
+  imageUrl: 'Image link',
+}
+
 /**
  * **Variants**, after the store admin's: each option (Size, Colour…) is a block with its name
  * and values and **Delete** / **Done** buttons (Done folds it into a one-line summary you can
@@ -33,6 +45,22 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set())
   const single = isSingleVariant(draft.variants)
   const stockHere = draft.locationId !== ''
+  // The table only shows a red border and a tooltip on a cell: say what is wrong in words too.
+  const cellProblems = draft.variants.flatMap((variant, index) =>
+    Object.entries(CELL_LABELS).flatMap(([field, label]) => {
+      const message = errors[`variants.${index}.${field}`]
+      return message
+        ? [
+            {
+              key: `${variant.key}-${field}`,
+              variant: variantName(variant),
+              label,
+              message,
+            },
+          ]
+        : []
+    }),
+  )
 
   const setOption = (index: number, patch: Partial<CreateOptionDraft>) =>
     update({
@@ -57,7 +85,11 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
     })
 
   return (
-    <CreateCard title="Variants" outside flush>
+    <CreateCard
+      title="Variants"
+      description="Add options like size or colour. Every combination of values becomes a variant."
+      flush
+    >
       <div className="flex flex-col">
         {draft.options.map((option, index) => {
           const usable = option.name.trim() !== '' && option.values.length > 0
@@ -253,6 +285,15 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
               </tbody>
             </table>
           </div>
+          {cellProblems.length > 0 && (
+            <ul role="alert" className="text-danger flex flex-col gap-0.5 text-[0.78rem]">
+              {cellProblems.map((problem) => (
+                <li key={problem.key}>
+                  <strong>{problem.variant}</strong> · {problem.label}: {problem.message}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </CreateCard>

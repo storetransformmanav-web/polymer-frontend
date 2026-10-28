@@ -5,7 +5,15 @@ const BUTTON =
 
 interface ConfirmCancelDialogProps {
   /** What would be lost, e.g. "your unsaved changes to 2 products". */
-  lose: string
+  lose?: string
+  /** A different question than "Cancel editing?" (say what is being thrown away). */
+  title?: string
+  /** The line under the title when `title` is given (else "Are you sure you want to cancel?"). */
+  question?: string
+  /** The line saying what is lost (else "You will lose {lose}."). */
+  detail?: string
+  keepLabel?: string
+  confirmLabel?: string
   /** Yes: leave and drop the changes. */
   onConfirm: () => void
   /** No: stay and keep editing. */
@@ -19,12 +27,17 @@ interface ConfirmCancelDialogProps {
  */
 export function ConfirmCancelDialog({
   lose,
+  title = 'Cancel editing?',
+  question = 'Are you sure you want to cancel?',
+  detail,
+  keepLabel = 'Keep editing',
+  confirmLabel = 'Yes, cancel',
   onConfirm,
   onKeep,
 }: ConfirmCancelDialogProps) {
   return (
     <Dialog
-      title="Cancel editing?"
+      title={title}
       onClose={onKeep}
       footer={
         <>
@@ -34,20 +47,20 @@ export function ConfirmCancelDialog({
             onClick={onKeep}
             className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
           >
-            Keep editing
+            {keepLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className={`${BUTTON} bg-danger border-transparent text-white hover:opacity-90`}
           >
-            Yes, cancel
+            {confirmLabel}
           </button>
         </>
       }
     >
-      <p>Are you sure you want to cancel?</p>
-      <p>{`You will lose ${lose}.`}</p>
+      {question && <p>{question}</p>}
+      <p>{detail ?? `You will lose ${lose}.`}</p>
     </Dialog>
   )
 }

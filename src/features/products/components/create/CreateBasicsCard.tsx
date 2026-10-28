@@ -7,9 +7,9 @@ import type { PickedFile } from '../../utils/mediaFiles.ts'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
 /**
- * The first card, after the store admin's: Title, Description, Media (files uploaded from the
- * computer), Category and, for a product without options, the one variant's own picture. The
- * card has no heading.
+ * The Basics step: three cards — **Title & description**, **Media** (files uploaded from the
+ * computer and, for a product without options, the one variant's own image link) and
+ * **Category** (with the gift-card box).
  */
 export function CreateBasicsCard({
   draft,
@@ -31,57 +31,64 @@ export function CreateBasicsCard({
     draft.variants.length === 1 && draft.variants[0].optionValues.length === 0
 
   return (
-    <CreateCard title="Basics" hideTitle>
-      <EditField
-        id="create-title"
-        label="Title"
-        error={errors.title}
-        counter={{ value: draft.title.trim().length, max: LIMITS.title }}
+    <>
+      <CreateCard
+        title="Title & description"
+        regionLabel="Basics"
+        description="The name and the text customers read on the product page."
       >
-        <input
+        <EditField
           id="create-title"
-          autoComplete="off"
-          autoFocus
-          value={draft.title}
-          placeholder="Short sleeve t-shirt"
-          aria-invalid={errors.title ? true : undefined}
-          onChange={(event) => update({ title: event.target.value })}
-          className={FIELD_INPUT}
-        />
-      </EditField>
+          label="Title"
+          error={errors.title}
+          counter={{ value: draft.title.trim().length, max: LIMITS.title }}
+        >
+          <input
+            id="create-title"
+            autoComplete="off"
+            autoFocus
+            value={draft.title}
+            placeholder="Short sleeve t-shirt"
+            aria-invalid={errors.title ? true : undefined}
+            onChange={(event) => update({ title: event.target.value })}
+            className={FIELD_INPUT}
+          />
+        </EditField>
 
-      <EditField id="create-description" label="Description">
-        <RichTextEditor
-          id="create-description"
-          label="Description"
-          value={draft.descriptionHtml}
-          onChange={(descriptionHtml) => update({ descriptionHtml })}
-        />
-      </EditField>
+        <EditField id="create-description" label="Description">
+          <RichTextEditor
+            id="create-description"
+            label="Description"
+            value={draft.descriptionHtml}
+            onChange={(descriptionHtml) => update({ descriptionHtml })}
+          />
+        </EditField>
+      </CreateCard>
 
-      <div className="flex flex-col gap-1.5" role="group" aria-label="Media">
-        <span className="text-text text-[0.82rem] font-semibold">Media</span>
-        <FilePicker
-          files={files}
-          onChange={onFiles}
-          max={LIMITS.newMedia}
-          states={uploadStates}
-          disabled={uploading}
-          idPrefix="create-media"
-        />
-        {errors['media.rows'] && (
-          <p role="alert" className="text-danger text-[0.78rem]">
-            {errors['media.rows']}
+      <CreateCard
+        title="Media"
+        description="Photos, videos or 3D models. The first image becomes the main product image."
+      >
+        <div className="flex flex-col gap-2" role="group" aria-label="Media">
+          <FilePicker
+            files={files}
+            onChange={onFiles}
+            max={LIMITS.newMedia}
+            states={uploadStates}
+            disabled={uploading}
+            idPrefix="create-media"
+          />
+          {errors['media.rows'] && (
+            <p role="alert" className="text-danger text-[0.78rem]">
+              {errors['media.rows']}
+            </p>
+          )}
+          <p className="text-text-muted text-[0.76rem]">
+            Files are uploaded as soon as the product is created.
           </p>
-        )}
-        <p className="text-text-muted text-[0.76rem]">
-          Files are uploaded as soon as the product is created. The first image becomes
-          the main product image.
-        </p>
-      </div>
+        </div>
 
-      {single && (
-        <>
+        {single && (
           <EditField
             id="create-variant-image"
             label="Image link (optional)"
@@ -105,31 +112,36 @@ export function CreateBasicsCard({
               className={FIELD_INPUT}
             />
           </EditField>
-        </>
-      )}
+        )}
+      </CreateCard>
 
-      <EditField
-        id="create-category"
-        label="Product category"
-        error={errors.categoryGid}
-        hint="Optional. Helps the store with tax rates, search and filters. Paste the category's Shopify ID, which starts with gid://shopify/TaxonomyCategory/."
+      <CreateCard
+        title="Category"
+        description="Optional. Helps the store with tax rates, search and filters."
       >
-        <input
+        <EditField
           id="create-category"
-          autoComplete="off"
-          spellCheck={false}
-          value={draft.categoryGid}
-          placeholder="gid://shopify/TaxonomyCategory/…"
-          aria-invalid={errors.categoryGid ? true : undefined}
-          onChange={(event) => update({ categoryGid: event.target.value })}
-          className={FIELD_INPUT}
+          label="Product category"
+          error={errors.categoryGid}
+          hint="Paste the category's Shopify ID, which starts with gid://shopify/TaxonomyCategory/."
+        >
+          <input
+            id="create-category"
+            autoComplete="off"
+            spellCheck={false}
+            value={draft.categoryGid}
+            placeholder="gid://shopify/TaxonomyCategory/…"
+            aria-invalid={errors.categoryGid ? true : undefined}
+            onChange={(event) => update({ categoryGid: event.target.value })}
+            className={FIELD_INPUT}
+          />
+        </EditField>
+        <CheckField
+          label="This product is a gift card"
+          checked={draft.giftCard}
+          onChange={(giftCard) => update({ giftCard })}
         />
-      </EditField>
-      <CheckField
-        label="This product is a gift card"
-        checked={draft.giftCard}
-        onChange={(giftCard) => update({ giftCard })}
-      />
-    </CreateCard>
+      </CreateCard>
+    </>
   )
 }

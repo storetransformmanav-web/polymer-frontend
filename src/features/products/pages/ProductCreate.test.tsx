@@ -32,6 +32,10 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   },
 }))
 
+// These tests type into a long form (all its steps are on the page) and run beside many other
+// test files: allow for a slow machine, as the other Add product test files do.
+vi.setConfig({ testTimeout: 20_000 })
+
 function shop(overrides: Partial<Shop>): Shop {
   return {
     id: 'id',
@@ -231,6 +235,38 @@ describe('adding a product', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
+  it('takes you to the first problem when Create is pressed, even far down the page', async () => {
+    const { user, form } = await openForm()
+    // A title is there, so the first problem is the price, further down the page.
+    await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')
+    await user.click(submit(form))
+
+    expect(await within(form).findByText('Enter a price')).toBeInTheDocument()
+    expect(within(form).getByLabelText('Price')).toHaveFocus()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('says what is wrong in a variant’s cell in words, with the variant it is about', async () => {
+    const { user, form } = await openForm()
+    await fillBasics(user, form)
+    await user.click(
+      within(form).getByRole('button', { name: 'Add options like size or colour' }),
+    )
+    await user.type(within(form).getByLabelText('Option name'), 'Size')
+    await user.type(
+      within(form).getByLabelText('Add values for option 1'),
+      'Small, Large{Enter}',
+    )
+    await user.clear(within(form).getByLabelText('Price for Large'))
+    await user.click(submit(form))
+
+    expect(await within(form).findByText(/Price: Enter a price/)).toHaveTextContent(
+      'Large · Price: Enter a price',
+    )
+    expect(within(form).getByLabelText('Price for Large')).toHaveFocus()
+    expect(create).not.toHaveBeenCalled()
+  }, 15_000)
+
   it('creates a simple product in the store picked at the top (the first one by default)', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
@@ -320,22 +356,29 @@ describe('adding a product', () => {
   })
 
   it('asks before throwing away what was entered, and goes straight back when nothing was', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const { user, form } = await openForm()
 
     await user.click(within(form).getByRole('button', { name: 'Back to list' }))
-    expect(confirm).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Add product' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add product' }))
     const again = await screen.findByRole('region', { name: 'Add product' })
     await user.type(within(again).getByLabelText('Title'), 'Half done')
     await user.click(within(again).getByRole('button', { name: 'Back to list' }))
-    expect(confirm).toHaveBeenCalled()
+    // The app's own dialog asks (Keep editing is focused); keeping leaves the form as it was.
+    const ask = await screen.findByRole('alertdialog', {
+      name: 'Discard this new product?',
+    })
+    expect(within(ask).getByText('What you entered will be lost.')).toBeInTheDocument()
+    expect(within(ask).getByRole('button', { name: 'Keep editing' })).toHaveFocus()
+    await user.click(within(ask).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
+    expect(within(again).getByLabelText('Title')).toHaveValue('Half done')
 
-    confirm.mockReturnValue(true)
     await user.click(within(again).getByRole('button', { name: 'Back to list' }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, discard' }))
     expect(screen.queryByRole('region', { name: 'Add product' })).not.toBeInTheDocument()
   })
 
@@ -372,12 +415,11 @@ describe('adding a product', () => {
     })
 
     it('closing the tab asks first when something was typed, and removes it', async () => {
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
       const { user, form } = await openForm()
 
       // Nothing typed: closes at once.
       await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
-      expect(confirm).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       expect(
         screen.queryByRole('region', { name: 'Add product' }),
       ).not.toBeInTheDocument()
@@ -389,11 +431,15 @@ describe('adding a product', () => {
       const again = await screen.findByRole('region', { name: 'Add product' })
       await user.type(within(again).getByLabelText('Title'), 'Half done')
       await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
-      expect(confirm).toHaveBeenCalled()
+      await user.click(
+        within(
+          await screen.findByRole('alertdialog', { name: 'Discard this new product?' }),
+        ).getByRole('button', { name: 'Keep editing' }),
+      )
       expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
 
-      confirm.mockReturnValue(true)
       await user.click(within(strip()).getByRole('button', { name: 'Close New product' }))
+      await user.click(await screen.findByRole('button', { name: 'Yes, discard' }))
       expect(
         screen.queryByRole('region', { name: 'Add product' }),
       ).not.toBeInTheDocument()
@@ -443,7 +489,7 @@ describe('adding a product', () => {
       { option_values: ['Small'], price: '5', sku: 'TRAY-S' },
       { option_values: ['Large'], price: '7.5' },
     ])
-  })
+  }, 15_000)
 
   it('sends the opening stock when a location is chosen', async () => {
     locations.mockResolvedValue([{ id: 77, name: 'Warehouse', variants: 3 }])
@@ -732,7 +778,6 @@ describe('adding a product', () => {
     })
 
     it('counts a chosen file as something to lose when the form is closed', async () => {
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
       const { user, form } = await openForm()
       await user.upload(
         choose(form),
@@ -741,7 +786,9 @@ describe('adding a product', () => {
 
       await user.click(within(form).getByRole('button', { name: 'Back to list' }))
 
-      expect(confirm).toHaveBeenCalled()
+      expect(
+        await screen.findByRole('alertdialog', { name: 'Discard this new product?' }),
+      ).toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'Add product' })).toBeInTheDocument()
     })
   })

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ALL_SHOPS, shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
+import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { ArrowLeftIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import type { SelectOption } from '../../../components/ui/SelectField.tsx'
@@ -23,7 +24,7 @@ import {
   CreatePriceCard,
   CreateShippingCard,
 } from './create/CreatePricingCards.tsx'
-import { CreateSidebarCard } from './create/CreateSidebarCards.tsx'
+import { CreateOrganizationCards } from './create/CreateSidebarCards.tsx'
 import { CreateVariantsCard } from './create/CreateVariantsCard.tsx'
 
 interface ProductCreateViewProps {
@@ -51,12 +52,13 @@ const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 
 /**
- * "Add product": a full form in place of the list (the list stays mounted behind
- * it) for everything the API accepts on create — title, description, media,
- * options and variants with prices and opening stock, SEO, tags, collections and
- * metafields. Nothing is sent until "Create product", which checks every field
- * first. Shopify creates the product (a second or two), and then it is simply in
- * the list: at the top, in the counts, with no refresh.
+ * "Add product": one page of cards in place of the list (the list stays mounted behind it) for
+ * everything the API accepts on create — title, description, media, organization, price, stock,
+ * shipping, options and variants, SEO and metafields. Every card has the same header band
+ * (title and a line saying what it is for). Nothing is sent until "Create product", which checks
+ * every field first and, when something is wrong, takes you to the first problem. Shopify
+ * creates the product (a second or two), and then it is simply in the list: at the top, in the
+ * counts, with no refresh.
  */
 export function ProductCreateView({
   onBack,
@@ -69,6 +71,8 @@ export function ProductCreateView({
   const [files, setFiles] = useState<PickedFile[]>([])
   const [draft, setDraft] = useState<CreateDraft>(() => blankCreateDraft(''))
   const [showErrors, setShowErrors] = useState(false)
+  // Counts the Create presses a problem stopped, so the page goes to the first problem each time.
+  const [stopped, setStopped] = useState(0)
 
   // The stores a product can go to; the one picked in the top bar (or the first) is the default.
   const usable = useMemo(() => {
@@ -101,19 +105,19 @@ export function ProductCreateView({
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
 
+  // Asks before throwing away what was entered (nothing typed goes straight back).
+  const [discarding, setDiscarding] = useState(false)
   function back() {
-    if (
-      dirty &&
-      !window.confirm('Discard this new product? What you entered will be lost.')
-    ) {
-      return
-    }
-    onBack()
+    if (dirty) setDiscarding(true)
+    else onBack()
   }
 
   async function submit() {
     setShowErrors(true)
-    if (Object.keys(problems).length > 0) return
+    if (Object.keys(problems).length > 0) {
+      setStopped((count) => count + 1)
+      return
+    }
     const createdShop = shops.find((candidate) => shopValue(candidate) === shop)
     const result = await create(effective, createdShop ?? null, files)
     if (result) {
@@ -124,6 +128,28 @@ export function ProductCreateView({
       })
     }
   }
+
+  // On a long page the first problem can be out of sight: once the errors are on show, go to it
+  // (the field with the problem gets the focus; a problem with no field of its own — the store,
+  // a collection — falls back to the message at the top).
+  const sectionRef = useRef<HTMLElement>(null)
+  const messageRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (stopped === 0) return
+    const field = sectionRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+    if (field) field.focus()
+    else if (typeof messageRef.current?.scrollIntoView === 'function') {
+      messageRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  }, [stopped])
+
+  // A failed create (the backend's message) is above the form: bring it into view.
+  useEffect(() => {
+    const element = messageRef.current
+    if (error && element && typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  }, [error])
 
   const createButton = (
     <button
@@ -139,16 +165,17 @@ export function ProductCreateView({
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Add product"
       aria-busy={isCreating}
-      className="flex w-full flex-col gap-5"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-5"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <div className="min-w-0">
           <h2 className="text-[1.5rem] leading-tight font-bold">Add product</h2>
           <p className="text-text-muted mt-1 text-[0.85rem]">
             Fill in the details below, then press Create product. Nothing is sent to the
-            store until then. Only the title and a price are required.
+            store until then. Only a title and a price are required.
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -169,49 +196,44 @@ export function ProductCreateView({
         </div>
       </div>
 
-      {error && <FormMessage tone="error">{error}</FormMessage>}
-      {showErrors && Object.keys(problems).length > 0 && !error && (
-        <FormMessage tone="error">
-          Fix the highlighted fields to create the product.
-        </FormMessage>
-      )}
-
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <CreateBasicsCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            files={files}
-            onFiles={setFiles}
-            uploadStates={uploadStates}
-            uploading={isCreating}
-          />
-          <CreatePriceCard draft={effective} errors={errors} update={update} />
-          <CreateInventoryCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            locations={locations}
-          />
-          <CreateShippingCard draft={effective} errors={errors} update={update} />
-          <CreateVariantsCard draft={effective} errors={errors} update={update} />
-          <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
-          <CreateSeoCard draft={effective} errors={errors} update={update} />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-5 lg:sticky lg:top-0">
-          <CreateSidebarCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            shopOptions={shopOptions}
-            shop={shop}
-          />
-        </div>
+      <div ref={messageRef} className="flex flex-col gap-2 empty:hidden">
+        {error && <FormMessage tone="error">{error}</FormMessage>}
+        {showErrors && Object.keys(problems).length > 0 && !error && (
+          <FormMessage tone="error">
+            Fix the highlighted fields to create the product.
+          </FormMessage>
+        )}
       </div>
 
-      <div className="flex flex-wrap justify-end gap-2">
+      <CreateBasicsCard
+        draft={effective}
+        errors={errors}
+        update={update}
+        files={files}
+        onFiles={setFiles}
+        uploadStates={uploadStates}
+        uploading={isCreating}
+      />
+      <CreateOrganizationCards
+        draft={effective}
+        errors={errors}
+        update={update}
+        shopOptions={shopOptions}
+        shop={shop}
+      />
+      <CreatePriceCard draft={effective} errors={errors} update={update} />
+      <CreateInventoryCard
+        draft={effective}
+        errors={errors}
+        update={update}
+        locations={locations}
+      />
+      <CreateShippingCard draft={effective} errors={errors} update={update} />
+      <CreateVariantsCard draft={effective} errors={errors} update={update} />
+      <CreateSeoCard draft={effective} errors={errors} update={update} />
+      <CreateMetafieldsCard draft={effective} errors={errors} update={update} />
+
+      <div className="border-border bg-bg sticky bottom-3 z-10 flex flex-wrap items-center justify-end gap-2 rounded-2xl border px-4 py-3 shadow-sm">
         <button
           type="button"
           onClick={back}
@@ -222,6 +244,21 @@ export function ProductCreateView({
         </button>
         {createButton}
       </div>
+
+      {discarding && (
+        <ConfirmCancelDialog
+          title="Discard this new product?"
+          question=""
+          detail="What you entered will be lost."
+          keepLabel="Keep editing"
+          confirmLabel="Yes, discard"
+          onConfirm={() => {
+            setDiscarding(false)
+            onBack()
+          }}
+          onKeep={() => setDiscarding(false)}
+        />
+      )}
     </section>
   )
 }

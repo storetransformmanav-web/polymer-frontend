@@ -12,7 +12,7 @@ import { LIMITS } from '../../utils/editDraft.ts'
 import { statusLabel } from '../../utils/format.ts'
 import { TAG_CHIP, TagsInput } from '../edit/TagsSection.tsx'
 import { EditField, FIELD_INPUT } from '../edit/fields.tsx'
-import { CARD, type CreateSectionProps } from './CreateCard.tsx'
+import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -31,8 +31,8 @@ const STATUS_HINTS: Record<ProductEditStatus, string> = {
   ARCHIVED: 'Archived: hidden from customers and kept out of your active products.',
 }
 
-/** A block of the sidebar card: separated from the one above by a thin line. */
-const BLOCK = 'border-border flex flex-col gap-3.5 border-t p-4 first:border-t-0'
+/** Two fields across on wider screens, one on a phone. */
+const FIELD_GRID = 'grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2'
 
 /**
  * Collections: a search box that, once it has the focus, lists **the store's collections from
@@ -251,11 +251,11 @@ interface SidebarProps extends CreateSectionProps {
 }
 
 /**
- * The right-hand card, after the store admin's: **Status** (and the store the product goes
- * to), **Product organization** (type, vendor, collections, tags) and **Theme template**,
- * as blocks of one card separated by thin lines.
+ * The Organization step: **Status & store**, **Product organization** (type, vendor,
+ * collections, tags) and **Online store** (the theme template), each its own card with two
+ * fields across on wider screens.
  */
-export function CreateSidebarCard({
+export function CreateOrganizationCards({
   draft,
   errors,
   update,
@@ -266,125 +266,135 @@ export function CreateSidebarCard({
   const knownTags = useAppSelector((state) => state.products.facets.tags)
 
   return (
-    <section aria-label="Product organization" className={`${CARD} flex flex-col`}>
-      <div className={BLOCK}>
-        <SelectField
-          compact
-          id="create-status"
-          label="Status"
-          value={draft.status}
-          options={STATUS_OPTIONS}
-          onChange={(status) => update({ status: status as ProductEditStatus })}
-        />
-        <p className="text-text-muted -mt-1.5 text-[0.76rem]">
-          {STATUS_HINTS[draft.status]}
-        </p>
-        <div className="flex flex-col gap-1.5">
-          <SelectField
-            compact
-            id="create-shop"
-            label="Store"
-            value={shop}
-            options={
-              shopOptions.length > 0
-                ? shopOptions
-                : [{ value: '', label: 'No stores available' }]
-            }
-            onChange={(value) => update({ shop: value })}
-          />
-          {errors.shop && (
-            <p role="alert" className="text-danger text-[0.78rem]">
-              {errors.shop}
-            </p>
-          )}
+    <>
+      <CreateCard
+        title="Status & store"
+        description="Whether customers can see the product, and which store it is created in."
+      >
+        <div className={FIELD_GRID}>
+          <div className="flex flex-col gap-1.5">
+            <SelectField
+              id="create-status"
+              label="Status"
+              value={draft.status}
+              options={STATUS_OPTIONS}
+              onChange={(status) => update({ status: status as ProductEditStatus })}
+            />
+            <p className="text-text-muted text-[0.76rem]">{STATUS_HINTS[draft.status]}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <SelectField
+              id="create-shop"
+              label="Store"
+              value={shop}
+              options={
+                shopOptions.length > 0
+                  ? shopOptions
+                  : [{ value: '', label: 'No stores available' }]
+              }
+              onChange={(value) => update({ shop: value })}
+            />
+            {errors.shop && (
+              <p role="alert" className="text-danger text-[0.78rem]">
+                {errors.shop}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      </CreateCard>
 
-      <div className={BLOCK}>
-        <h3 className="text-text-muted text-[0.82rem] font-semibold">
-          Product organization
-        </h3>
-        <EditField
-          id="create-type"
-          label="Product type"
-          error={errors.productType}
-          hint="For grouping and filtering, e.g. Carrier bags."
-        >
-          <input
+      <CreateCard
+        title="Product organization"
+        description="How the product is grouped, so it is easy to find and filter."
+      >
+        <div className={FIELD_GRID}>
+          <EditField
             id="create-type"
-            autoComplete="off"
-            value={draft.productType}
-            aria-invalid={errors.productType ? true : undefined}
-            onChange={(event) => update({ productType: event.target.value })}
-            className={FIELD_INPUT}
-          />
-        </EditField>
-        <EditField
-          id="create-vendor"
-          label="Vendor"
-          error={errors.vendor}
-          hint="The brand or supplier that makes the product."
-          counter={
-            draft.vendor.length > LIMITS.vendor * 0.8
-              ? { value: draft.vendor.trim().length, max: LIMITS.vendor }
-              : undefined
-          }
-        >
-          <input
+            label="Product type"
+            error={errors.productType}
+            hint="For grouping and filtering, e.g. Carrier bags."
+          >
+            <input
+              id="create-type"
+              autoComplete="off"
+              value={draft.productType}
+              aria-invalid={errors.productType ? true : undefined}
+              onChange={(event) => update({ productType: event.target.value })}
+              className={FIELD_INPUT}
+            />
+          </EditField>
+          <EditField
             id="create-vendor"
-            autoComplete="off"
-            value={draft.vendor}
-            aria-invalid={errors.vendor ? true : undefined}
-            onChange={(event) => update({ vendor: event.target.value })}
-            className={FIELD_INPUT}
-          />
-        </EditField>
-        <EditField
-          id="create-collections"
-          label="Collections"
-          hint="Add the product to manual collections. Smart collections fill themselves by rules, so they aren't listed."
-        >
-          <CollectionsPicker
-            ids={draft.collections}
-            errors={errors}
-            shop={shop}
-            onChange={(collections) => update({ collections })}
-          />
-        </EditField>
-        <EditField id="create-tags" label="Tags">
-          <TagsInput
-            id="create-tags"
-            ariaLabel="Add tags"
-            listLabel="Tags"
-            removeLabel={(tag) => `Remove tag ${tag}`}
-            tags={draft.tags}
-            onChange={(tags) => update({ tags })}
-            suggestions={knownTags}
-            suggestAll
-            placeholder="Search or add tags"
-            hint="Pick an existing tag from the list, or type a new one and press Enter."
-          />
-        </EditField>
-      </div>
+            label="Vendor"
+            error={errors.vendor}
+            hint="The brand or supplier that makes the product."
+            counter={
+              draft.vendor.length > LIMITS.vendor * 0.8
+                ? { value: draft.vendor.trim().length, max: LIMITS.vendor }
+                : undefined
+            }
+          >
+            <input
+              id="create-vendor"
+              autoComplete="off"
+              value={draft.vendor}
+              aria-invalid={errors.vendor ? true : undefined}
+              onChange={(event) => update({ vendor: event.target.value })}
+              className={FIELD_INPUT}
+            />
+          </EditField>
+          <EditField
+            id="create-collections"
+            label="Collections"
+            hint="Add the product to manual collections. Smart collections fill themselves by rules, so they aren't listed."
+          >
+            <CollectionsPicker
+              ids={draft.collections}
+              errors={errors}
+              shop={shop}
+              onChange={(collections) => update({ collections })}
+            />
+          </EditField>
+          <EditField id="create-tags" label="Tags">
+            <TagsInput
+              id="create-tags"
+              ariaLabel="Add tags"
+              listLabel="Tags"
+              removeLabel={(tag) => `Remove tag ${tag}`}
+              tags={draft.tags}
+              onChange={(tags) => update({ tags })}
+              suggestions={knownTags}
+              suggestAll
+              placeholder="Search or add tags"
+              hint="Pick an existing tag from the list, or type a new one and press Enter."
+            />
+          </EditField>
+        </div>
+      </CreateCard>
 
-      <div className={BLOCK}>
-        <EditField
-          id="create-template"
-          label="Theme template"
-          error={errors.templateSuffix}
-          hint="Optional. Leave blank to use your theme's standard product page."
-        >
-          <input
+      <CreateCard
+        title="Online store"
+        description="Which page layout your theme uses for this product."
+      >
+        <div className="max-w-md">
+          <EditField
             id="create-template"
-            autoComplete="off"
-            value={draft.templateSuffix}
-            placeholder="Default product"
-            aria-invalid={errors.templateSuffix ? true : undefined}
-            onChange={(event) => update({ templateSuffix: event.target.value })}
-            className={FIELD_INPUT}
-          />
-        </EditField>
-      </div>
-    </section>
+            label="Theme template"
+            error={errors.templateSuffix}
+            hint="Optional. Leave blank to use your theme's standard product page."
+          >
+            <input
+              id="create-template"
+              autoComplete="off"
+              value={draft.templateSuffix}
+              placeholder="Default product"
+              aria-invalid={errors.templateSuffix ? true : undefined}
+              onChange={(event) => update({ templateSuffix: event.target.value })}
+              className={FIELD_INPUT}
+            />
+          </EditField>
+        </div>
+      </CreateCard>
+    </>
   )
 }

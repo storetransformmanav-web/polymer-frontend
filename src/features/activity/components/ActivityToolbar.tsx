@@ -145,7 +145,11 @@ export function ActivityToolbar({
             type="button"
             onClick={onReset}
             disabled={!hasFilters}
-            className="border-border text-text-muted hover:text-danger hover:border-danger flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+            className={`flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50 ${
+              hasFilters
+                ? 'border-danger text-danger hover:bg-danger-bg'
+                : 'border-border text-text-muted hover:border-danger hover:text-danger'
+            }`}
           >
             <XIcon width={14} height={14} />
             Clear All

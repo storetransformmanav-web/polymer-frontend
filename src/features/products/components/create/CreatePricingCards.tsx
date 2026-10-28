@@ -45,15 +45,14 @@ export function CreatePriceCard(props: CreateSectionProps) {
     )
 
   return (
-    <CreateCard title="Price" regionLabel="Pricing" outside>
+    <CreateCard
+      title="Price"
+      regionLabel="Pricing"
+      description="What customers pay for this product."
+    >
       {single ? (
         <div className="max-w-xs">
-          <EditField
-            id="create-price"
-            label="Price"
-            error={errors['variants.0.price']}
-            hint="What the customer pays."
-          >
+          <EditField id="create-price" label="Price" error={errors['variants.0.price']}>
             <input
               id="create-price"
               inputMode="decimal"
@@ -200,73 +199,67 @@ export function CreateInventoryCard(
   return (
     <CreateCard
       title="Inventory"
+      description="Whether the store counts your stock, and where the first units go."
       action={
         <Switch label="Inventory tracked" checked={draft.tracked} onChange={setTracked} />
       }
     >
       {draft.tracked ? (
         <div className="flex flex-col gap-3">
-          <div className="border-border overflow-hidden rounded-xl border">
-            <div className="bg-surface text-text-muted grid grid-cols-[minmax(0,1fr)_8rem] gap-3 px-3 py-2 text-[0.76rem] font-semibold">
-              <span>Location</span>
-              {single && stockHere && <span>Quantity</span>}
-            </div>
-            <div className="grid grid-cols-1 items-start gap-3 p-3 min-[520px]:grid-cols-[minmax(0,1fr)_8rem]">
-              {locations.length > 0 ? (
-                <SelectField
-                  compact
-                  id="create-location"
-                  label="Opening stock location"
-                  value={draft.locationId}
-                  options={[
-                    { value: '', label: 'No opening stock' },
-                    ...locations.map((location) => ({
-                      value: String(location.id),
-                      label: location.name || `Location ${location.id}`,
-                    })),
-                  ]}
-                  onChange={(locationId) => update({ locationId })}
-                />
-              ) : (
-                <EditField
+          <div className="grid grid-cols-1 items-start gap-4 min-[520px]:grid-cols-[minmax(0,1fr)_10rem]">
+            {locations.length > 0 ? (
+              <SelectField
+                id="create-location"
+                label="Opening stock location"
+                value={draft.locationId}
+                options={[
+                  { value: '', label: 'No opening stock' },
+                  ...locations.map((location) => ({
+                    value: String(location.id),
+                    label: location.name || `Location ${location.id}`,
+                  })),
+                ]}
+                onChange={(locationId) => update({ locationId })}
+              />
+            ) : (
+              <EditField
+                id="create-location-id"
+                label="Opening stock location ID"
+                error={errors.locationId}
+              >
+                <input
                   id="create-location-id"
-                  label="Opening stock location ID"
-                  error={errors.locationId}
-                >
-                  <input
-                    id="create-location-id"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={draft.locationId}
-                    placeholder="e.g. 72843812"
-                    aria-invalid={errors.locationId ? true : undefined}
-                    onChange={(event) =>
-                      // Digits only: it is a Shopify location number.
-                      update({ locationId: event.target.value.replace(/\D/g, '') })
-                    }
-                    className={FIELD_INPUT}
-                  />
-                </EditField>
-              )}
-              {single && stockHere && (
-                <EditField
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={draft.locationId}
+                  placeholder="e.g. 72843812"
+                  aria-invalid={errors.locationId ? true : undefined}
+                  onChange={(event) =>
+                    // Digits only: it is a Shopify location number.
+                    update({ locationId: event.target.value.replace(/\D/g, '') })
+                  }
+                  className={FIELD_INPUT}
+                />
+              </EditField>
+            )}
+            {single && stockHere && (
+              <EditField
+                id="create-stock"
+                label="Opening stock"
+                error={errors['variants.0.stock']}
+              >
+                <input
                   id="create-stock"
-                  label="Opening stock"
-                  error={errors['variants.0.stock']}
-                >
-                  <input
-                    id="create-stock"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={variant.stock}
-                    placeholder="0"
-                    aria-invalid={errors['variants.0.stock'] ? true : undefined}
-                    onChange={(event) => setVariant({ stock: event.target.value })}
-                    className={`${FIELD_INPUT} text-right`}
-                  />
-                </EditField>
-              )}
-            </div>
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={variant.stock}
+                  placeholder="0"
+                  aria-invalid={errors['variants.0.stock'] ? true : undefined}
+                  onChange={(event) => setVariant({ stock: event.target.value })}
+                  className={`${FIELD_INPUT} text-right`}
+                />
+              </EditField>
+            )}
           </div>
           {locations.length === 0 && (
             <p className="text-text-muted text-[0.76rem]">
@@ -375,6 +368,7 @@ export function CreateShippingCard(props: CreateSectionProps) {
   return (
     <CreateCard
       title="Shipping"
+      description="Whether the product is posted to the customer, and how much it weighs."
       action={
         <Switch
           label="Physical product"
@@ -408,7 +402,6 @@ export function CreateShippingCard(props: CreateSectionProps) {
             </p>
           )}
           <SelectField
-            compact
             id="create-weight-unit"
             label="Weight unit"
             value={draft.weightUnit}

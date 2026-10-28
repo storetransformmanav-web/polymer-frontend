@@ -25,6 +25,7 @@ import {
 } from '../components/ProductsBulkBar.tsx'
 import { ProductsExport } from '../components/ProductsExport.tsx'
 import { ProductsList } from '../components/ProductsList.tsx'
+import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { ProductsKpis } from '../components/ProductsKpis.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
@@ -149,16 +150,16 @@ export function ProductsPage() {
     if (creatingRoute) navigate(LIST_PATH)
   }
 
-  // Asks before throwing away what was typed (the form's own Back asks the same).
-  function discardCreate() {
-    if (
-      createDirty &&
-      !window.confirm('Discard this new product? What you entered will be lost.')
-    ) {
-      return false
+  // Asks before throwing away what was typed (the form's own Back asks the same); `then` runs
+  // once the form is closed, whether it was asked or not.
+  const [discardAsk, setDiscardAsk] = useState<{ then?: () => void } | null>(null)
+  function discardCreate(then?: () => void) {
+    if (createDirty) {
+      setDiscardAsk({ then })
+      return
     }
     closeCreate()
-    return true
+    then?.()
   }
 
   function handleCreated(
@@ -345,9 +346,12 @@ export function ProductsPage() {
   }
 
   function clearTabs() {
-    if (creating && !discardCreate()) return
-    tabs.clearTabs()
-    if (activeId) navigate(LIST_PATH)
+    const clear = () => {
+      tabs.clearTabs()
+      if (activeId) navigate(LIST_PATH)
+    }
+    if (creating) discardCreate(clear)
+    else clear()
   }
 
   return (
@@ -369,7 +373,7 @@ export function ProductsPage() {
         onShowList={() => navigate(LIST_PATH)}
         onSelect={(id) => navigate(detailsPath(id))}
         onSelectDraft={() => navigate(CREATE_PATH)}
-        onCloseDraft={discardCreate}
+        onCloseDraft={() => discardCreate()}
         onClose={closeTab}
         onClear={clearTabs}
       />
@@ -395,6 +399,23 @@ export function ProductsPage() {
             onDirtyChange={setCreateDirty}
           />
         </div>
+      )}
+
+      {discardAsk && (
+        <ConfirmCancelDialog
+          title="Discard this new product?"
+          question=""
+          detail="What you entered will be lost."
+          keepLabel="Keep editing"
+          confirmLabel="Yes, discard"
+          onConfirm={() => {
+            const { then } = discardAsk
+            setDiscardAsk(null)
+            closeCreate()
+            then?.()
+          }}
+          onKeep={() => setDiscardAsk(null)}
+        />
       )}
 
       {noticeState && (

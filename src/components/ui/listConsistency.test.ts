@@ -20,6 +20,11 @@ const TOOLBARS = {
   Products: 'src/features/products/components/ProductsToolbar.tsx',
   Customers: 'src/features/customers/components/CustomersToolbar.tsx',
 }
+const ALL_TOOLBARS = [
+  ...Object.values(TOOLBARS),
+  'src/features/activity/components/ActivityToolbar.tsx',
+  'src/features/users/components/UsersToolbar.tsx',
+]
 const source = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
 
 describe('Orders, Products and Customers lists look alike', () => {
@@ -86,5 +91,25 @@ describe('Orders, Products and Customers lists look alike', () => {
       // The filter grid's selects are the compact ones.
       expect(code, name).toContain('compact')
     }
+  })
+
+  it('marks enabled Clear All buttons red and keeps them disabled without filters', () => {
+    for (const path of ALL_TOOLBARS) {
+      const code = source(path)
+      const clearButtonStart = code.indexOf('onClick={onReset}')
+      const clearButtonEnd = code.indexOf('</button>', clearButtonStart)
+      const clearButton = code.slice(clearButtonStart, clearButtonEnd)
+
+      expect(clearButton, path).toContain('disabled={!hasFilters')
+      expect(clearButton, path).toContain('border-danger text-danger hover:bg-danger-bg')
+      expect(clearButton, path).toContain(
+        'border-border text-text-muted hover:border-danger',
+      )
+      expect(clearButton, path).toContain(
+        'disabled:pointer-events-none disabled:opacity-50',
+      )
+    }
+
+    expect(source(TOOLBARS.Products)).toContain('hasFilters || hasSelection')
   })
 })

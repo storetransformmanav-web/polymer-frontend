@@ -16,17 +16,15 @@ export interface CreateSectionProps {
 export const CARD = 'border-border bg-bg min-w-0 rounded-2xl border'
 
 /**
- * A card of the form. `title` names the region for assistive technology; it is also shown
- * as the card's heading — inside the card, or (`outside`) above it, the way the store admin
- * puts "Price", "Variants" and "Search engine listing" — unless `hideTitle` (the first card
- * has no heading). `action` sits at the heading's right edge.
+ * A card of the form: a tinted header band — the **title** (it also names the region for
+ * assistive technology, unless `regionLabel` says otherwise), a one-line `description` of what
+ * the card is for, and an `action` at the right edge — above its content. `flush` drops the
+ * content's padding and gaps (rows that run edge to edge bring their own).
  */
 export function CreateCard({
   title,
   regionLabel = title,
   description,
-  outside = false,
-  hideTitle = false,
   flush = false,
   action,
   children,
@@ -35,33 +33,26 @@ export function CreateCard({
   /** What the region is called for assistive technology, when that differs from the heading. */
   regionLabel?: string
   description?: string
-  outside?: boolean
-  hideTitle?: boolean
   /** No padding or gaps inside: the content brings its own (rows that run edge to edge). */
   flush?: boolean
   action?: ReactNode
   children: ReactNode
 }) {
-  const heading = !hideTitle && (
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h3 className="text-[0.95rem] font-semibold">{title}</h3>
-        {description && (
-          <p className="text-text-muted mt-0.5 text-[0.8rem]">{description}</p>
-        )}
-      </div>
-      {action}
-    </div>
-  )
   return (
-    <section aria-label={regionLabel} className="flex min-w-0 flex-col gap-2.5">
-      {outside && heading}
-      <div
-        className={`${CARD} flex flex-col ${flush ? 'overflow-hidden' : 'gap-4 p-4 sm:p-5'}`}
-      >
-        {!outside && heading}
-        {children}
+    <section
+      aria-label={regionLabel}
+      className={`${CARD} flex flex-col ${flush ? 'overflow-hidden' : ''}`}
+    >
+      <div className="border-border bg-accent-tint/40 flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <h4 className="text-[0.95rem] font-semibold">{title}</h4>
+          {description && (
+            <p className="text-text-muted mt-0.5 text-[0.8rem]">{description}</p>
+          )}
+        </div>
+        {action}
       </div>
+      <div className={flush ? '' : 'flex flex-col gap-4 p-4 sm:p-5'}>{children}</div>
     </section>
   )
 }

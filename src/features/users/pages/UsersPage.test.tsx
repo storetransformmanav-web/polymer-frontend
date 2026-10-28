@@ -273,6 +273,8 @@ describe('UsersPage', () => {
       const user = userEvent.setup()
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
+      const clearAll = screen.getByRole('button', { name: 'Clear All' })
+      expect(clearAll).toBeDisabled()
       await user.click(screen.getByRole('button', { name: 'Filters' }))
 
       const role = screen.getByLabelText('Role')
@@ -295,11 +297,15 @@ describe('UsersPage', () => {
         ),
       )
       expect(screen.getByLabelText('User status')).toHaveValue('inactive')
+      expect(clearAll).toHaveClass('border-danger', 'text-danger')
+      expect(clearAll).toBeEnabled()
 
       // "Clear All" resets both; the default query is still cached, so it shows at once.
-      await user.click(screen.getByRole('button', { name: 'Clear All' }))
+      await user.click(clearAll)
       expect(screen.getByLabelText('Role')).toHaveValue('')
       expect(screen.getByLabelText('User status')).toHaveValue('')
+      expect(clearAll).toBeDisabled()
+      expect(clearAll).not.toHaveClass('border-danger', 'text-danger')
       expect(await screen.findByText('First2 Last2')).toBeInTheDocument()
     })
 
