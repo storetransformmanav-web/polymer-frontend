@@ -72,6 +72,7 @@ import {
   SectionEditControls,
 } from './edit/EditableSection.tsx'
 import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
+import { MetafieldsSection as MetafieldsEditor } from './edit/MetafieldsSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
 import { TAG_CHIP, TagsSection as TagsEditor } from './edit/TagsSection.tsx'
 import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
@@ -104,6 +105,7 @@ const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
 const SECTIONS_ERRORS = ['descriptionSections'] as const
 const VARIANT_ERRORS = ['variants'] as const
 const MEDIA_ERRORS = ['images'] as const
+const METAFIELD_ERRORS = ['metafields'] as const
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
@@ -1185,10 +1187,10 @@ function MetafieldValue({ display }: { display: MetafieldDisplay }) {
  * name (`namespace.key`) stays underneath for anyone who needs it, and the original value
  * can be opened for structured data.
  */
-export function MetafieldsPanel({ product }: { product: ProductDetail }) {
+function MetafieldsView({ product }: { product: ProductDetail }) {
   const rows = getMetafieldRows(product)
   const sections = readDescriptionSections(product)
-  if (rows.length === 0) return <Empty icon={ListChecksIcon}>No metafields.</Empty>
+  if (rows.length === 0) return <Empty icon={ListChecksIcon}>No metafields yet.</Empty>
 
   return (
     <div className="flex flex-col gap-4">
@@ -1252,6 +1254,46 @@ export function MetafieldsPanel({ product }: { product: ProductDetail }) {
         </tbody>
       </TableWrap>
     </div>
+  )
+}
+
+/** "N metafields" and the pencil (or Save / Discard) in one row above the table. */
+function MetafieldsHeader({
+  product,
+  edit,
+}: {
+  product: ProductDetail
+  edit: SectionEdit
+}) {
+  const count =
+    product.metafields.length +
+    product.variants.reduce((sum, variant) => sum + variant.metafields.length, 0)
+  return (
+    <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2">
+      <p className="text-[0.95rem] font-semibold">
+        {edit.editing
+          ? 'Editing metafields'
+          : `${count} ${count === 1 ? 'metafield' : 'metafields'}`}
+      </p>
+      <div className="ml-auto flex items-center gap-1.5">
+        <SectionEditControls edit={edit} what="metafields" />
+      </div>
+    </div>
+  )
+}
+
+/** The Metafields tab: every detail in plain words, and a pencil to change, add or remove them. */
+export function MetafieldsPanel({ product, onSaved }: TabProps) {
+  return (
+    <EditableTab
+      product={product}
+      what="metafields"
+      errorPrefixes={METAFIELD_ERRORS}
+      onSaved={onSaved}
+      header={(edit) => <MetafieldsHeader product={product} edit={edit} />}
+      view={<MetafieldsView product={product} />}
+      editor={(section) => <MetafieldsEditor {...section} />}
+    />
   )
 }
 

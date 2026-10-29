@@ -271,4 +271,36 @@ describe('patchMetafields', () => {
 
     expect(next.metafields[0].value).toBe('new')
   })
+
+  it('also sets and removes a variant’s own metafields, leaving the other variants alone', () => {
+    const base = {
+      ...detail,
+      variants: detail.variants.map((variant) => ({
+        ...variant,
+        metafields: [
+          { namespace: 'my_fields', key: 'unit', type: 'number_integer', value: '500' },
+          { namespace: 'my_fields', key: 'gone', type: 'number_integer', value: '1' },
+        ],
+      })),
+    } as unknown as ProductDetail
+
+    const next = patchDetail(base, {
+      variants: [
+        {
+          id: 'v1',
+          metafields: [
+            { namespace: 'my_fields', key: 'unit', type: 'number_integer', value: '750' },
+            { namespace: 'custom', key: 'added', type: 'boolean', value: 'true' },
+          ],
+          metafields_remove: [{ namespace: 'my_fields', key: 'gone' }],
+        },
+      ],
+    })
+
+    expect(next.variants[0].metafields.map((field) => [field.key, field.value])).toEqual([
+      ['unit', '750'],
+      ['added', 'true'],
+    ])
+    expect(next.variants[1].metafields).toHaveLength(2)
+  })
 })

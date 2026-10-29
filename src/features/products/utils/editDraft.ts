@@ -7,6 +7,8 @@ import {
   type ProductDetail,
   type ProductImage,
   type ProductMediaInput,
+  type ProductMetafieldInput,
+  type ProductMetafieldRemoval,
   type ProductUpdateBody,
   type ProductVariant,
   type ProductVariantInput,
@@ -15,7 +17,9 @@ import {
 import { sameFile } from '../../../app/store/productPatch.ts'
 import { collectionKey } from './collectionSuggestions.ts'
 import {
+  APD_KEY,
   APD_MAX_LENGTH,
+  APD_NAMESPACE,
   buildSectionsMetafield,
   draftSections,
   SECTION_TITLE_MAX,
@@ -41,6 +45,11 @@ export interface VariantDraft {
   sku: string
   barcode: string
   taxable: boolean
+  /**
+   * The tax code to set (e.g. a Shopify Tax product code). The details answer does not say the
+   * variant's current one, so this starts empty and a typed value is the only thing sent.
+   */
+  taxCode: string
   inventoryPolicy: InventoryPolicy
   /** Track stock in Shopify. */
   tracked: boolean
@@ -62,6 +71,38 @@ export interface ImageDraft {
   id: string
   url: string
   alt: string
+}
+
+/**
+ * One metafield (an extra custom detail) of the product or of one of its variants, as edited
+ * in the Metafields tab. An existing one can have its value changed or be removed; a new one
+ * needs a namespace, a key, a type and a value.
+ */
+export interface MetafieldEditDraft {
+  /** Stable React key. */
+  key: string
+  /** The CRM variant id it belongs to; null = the whole product. */
+  variantId: string | null
+  namespace: string
+  metaKey: string
+  type: string
+  value: string
+  /** Added in this edit (it is not on the product yet). */
+  isNew: boolean
+  /** An existing one marked for deletion (deleted in the store on Save). */
+  removed: boolean
+}
+
+/**
+ * Metafields that are edited somewhere else on the page, so the Metafields tab only shows
+ * them: the description sections (their own editor) and the SEO title / description (the
+ * SEO card, which sends `seo`). Editing them in two places would fight.
+ */
+export function isManagedElsewhere(namespace: string, metaKey: string): boolean {
+  return (
+    (namespace === APD_NAMESPACE && metaKey === APD_KEY) ||
+    (namespace === 'global' && (metaKey === 'title_tag' || metaKey === 'description_tag'))
+  )
 }
 
 /** A picture or video to attach by URL (the "Add media" form's rows). */
@@ -92,6 +133,8 @@ export interface ProductDraft {
   images: ImageDraft[]
   /** The description sections (metafield apd), in order; [] when the product has none. */
   descriptionSections: SectionDraft[]
+  /** The product's and its variants' metafields (those edited elsewhere are left out). */
+  metafields: MetafieldEditDraft[]
 }
 
 /** The limits the API enforces (from its schema). */
@@ -107,6 +150,11 @@ export const LIMITS = {
   seoDescription: 320,
   sku: 255,
   barcode: 255,
+  taxCode: 50,
+  metafieldNamespace: 255,
+  metafieldKey: 64,
+  metafieldType: 64,
+  metafieldValue: 65535,
   mediaUrl: 2000,
   mediaAlt: 512,
   /** Media the API attaches in one call (`POST /media`). */
@@ -153,6 +201,7 @@ export function draftFromVariant(
     sku: text(variant.sku),
     barcode: text(variant.barcode),
     taxable: variant.taxable ?? true,
+    taxCode: '',
     inventoryPolicy: asInventoryPolicy(variant.inventory_policy),
     tracked: Boolean(variant.inventory_management),
     requiresShipping: variant.requires_shipping ?? true,
@@ -160,6 +209,51 @@ export function draftFromVariant(
     weight: text(variant.weight),
     weightUnit: asWeightUnit(variant.weight_unit),
     imageId: variantImageId(variant, images),
+    removed: false,
+  }
+}
+
+/** The metafields the Metafields tab edits: the product's, then each variant's. */
+export function draftMetafields(product: ProductDetail): MetafieldEditDraft[] {
+  const toDraft = (
+    variantId: string | null,
+    field: {
+      namespace: string
+      key: string
+      type?: string | null
+      value?: string | null
+    },
+  ): MetafieldEditDraft => ({
+    key: `${variantId ?? 'product'}:${field.namespace}.${field.key}`,
+    variantId,
+    namespace: field.namespace,
+    metaKey: field.key,
+    type: field.type || 'single_line_text_field',
+    value: field.value ?? '',
+    isNew: false,
+    removed: false,
+  })
+  return [
+    ...product.metafields
+      .filter((field) => !isManagedElsewhere(field.namespace, field.key))
+      .map((field) => toDraft(null, field)),
+    ...product.variants.flatMap((variant) =>
+      variant.metafields
+        .filter((field) => !isManagedElsewhere(field.namespace, field.key))
+        .map((field) => toDraft(variant.id, field)),
+    ),
+  ]
+}
+
+export function blankMetafieldEdit(): MetafieldEditDraft {
+  return {
+    key: newKey('new-metafield'),
+    variantId: null,
+    namespace: 'custom',
+    metaKey: '',
+    type: 'single_line_text_field',
+    value: '',
+    isNew: true,
     removed: false,
   }
 }
@@ -192,6 +286,7 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
       alt: image.alt_text ?? '',
     })),
     descriptionSections: draftSections(product),
+    metafields: draftMetafields(product),
   }
 }
 
@@ -245,6 +340,8 @@ function variantChanges(
   if (draft.sku.trim() !== base.sku) set('sku', draft.sku.trim())
   if (draft.barcode.trim() !== base.barcode) set('barcode', draft.barcode.trim())
   if (draft.taxable !== base.taxable) set('taxable', draft.taxable)
+  // Only a typed code is sent (the current one is not known to the form).
+  if (draft.taxCode.trim() !== '') set('tax_code', draft.taxCode.trim())
   if (draft.inventoryPolicy !== base.inventoryPolicy) {
     set('inventory_policy', draft.inventoryPolicy)
   }
@@ -336,6 +433,69 @@ export function buildUpdateBody(
     const edit = original ? variantChanges(original, variant, product.images) : null
     if (edit) variantEdits.push(edit)
   }
+  // Metafield changes: the product's go in `metafields` / `metafields_remove`, a variant's
+  // in its own entry of `variants` (a removed variant's are moot).
+  const productSets: ProductMetafieldInput[] = []
+  const productRemoves: ProductMetafieldRemoval[] = []
+  for (const field of draft.metafields) {
+    const variant = field.variantId
+      ? draft.variants.find((candidate) => candidate.id === field.variantId)
+      : null
+    if (field.variantId && (!variant || variant.removed)) continue
+
+    const sets: ProductMetafieldInput[] = []
+    const removes: ProductMetafieldRemoval[] = []
+    if (field.isNew) {
+      if (!field.removed) {
+        sets.push({
+          namespace: field.namespace.trim(),
+          key: field.metaKey.trim(),
+          type: field.type.trim(),
+          value: field.value,
+        })
+      }
+    } else {
+      const existing = field.variantId
+        ? product.variants.find((candidate) => candidate.id === field.variantId)
+            ?.metafields
+        : product.metafields
+      const original = existing?.find(
+        (candidate) =>
+          candidate.namespace === field.namespace && candidate.key === field.metaKey,
+      )
+      if (!original) continue
+      if (field.removed) {
+        removes.push({ namespace: field.namespace, key: field.metaKey })
+      } else if (field.value !== (original.value ?? '')) {
+        // The type stays what it is: Shopify does not change a metafield's type in place.
+        sets.push({
+          namespace: field.namespace,
+          key: field.metaKey,
+          type: original.type || field.type,
+          value: field.value,
+        })
+      }
+    }
+    if (sets.length === 0 && removes.length === 0) continue
+
+    if (!field.variantId) {
+      productSets.push(...sets)
+      productRemoves.push(...removes)
+      continue
+    }
+    let entry = variantEdits.find((candidate) => candidate.id === field.variantId)
+    if (!entry) {
+      entry = { id: field.variantId }
+      variantEdits.push(entry)
+    }
+    if (sets.length) entry.metafields = [...(entry.metafields ?? []), ...sets]
+    if (removes.length) {
+      entry.metafields_remove = [...(entry.metafields_remove ?? []), ...removes]
+    }
+  }
+  if (productSets.length) body.metafields = productSets
+  if (productRemoves.length) body.metafields_remove = productRemoves
+
   if (variantEdits.length) body.variants = variantEdits
   if (variantsRemove.length) body.variants_remove = variantsRemove
 
@@ -355,7 +515,7 @@ export function buildUpdateBody(
 
   // The description sections are one metafield (a JSON string): sent whole, only if changed.
   const sections = buildSectionsMetafield(product, draft.descriptionSections)
-  if (sections) body.metafields = [sections]
+  if (sections) body.metafields = [...(body.metafields ?? []), sections]
 
   return body
 }
@@ -366,6 +526,15 @@ export const hasChanges = (body: ProductUpdateBody) => Object.keys(body).length 
 
 /** Messages keyed by field path, e.g. `title`, `variants.2.price`, `newMedia.0.url`. */
 export type DraftErrors = Record<string, string>
+
+/** A list metafield holds a JSON array in its value, e.g. ["Plastic", "Paper"]. */
+const isJsonArray = (value: string): boolean => {
+  try {
+    return Array.isArray(JSON.parse(value))
+  } catch {
+    return false
+  }
+}
 
 const tooLong = (label: string, value: string, max: number) =>
   value.trim().length > max ? `${label} can be at most ${max} characters` : null
@@ -488,12 +657,74 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
       if (value.trim() !== '' && !isDecimal(value))
         put(at(field), `${label}: enter a number, 0 or more`)
     }
+    put(at('taxCode'), tooLong('The tax code', variant.taxCode, LIMITS.taxCode))
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))
     put(at('barcode'), tooLong('The barcode', variant.barcode, LIMITS.barcode))
   })
 
   draft.images.forEach((image, index) => {
     put(`images.${index}.alt`, tooLong('The alt text', image.alt, LIMITS.mediaAlt))
+  })
+
+  // Metafields: only a changed or new one is checked, so an odd value already in the store
+  // never blocks an unrelated change.
+  const taken = new Set<string>()
+  draft.metafields.forEach((field, index) => {
+    const at = (name: string) => `metafields.${index}.${name}`
+    if (field.removed) return
+    const original = field.isNew
+      ? null
+      : (field.variantId
+          ? product.variants.find((variant) => variant.id === field.variantId)?.metafields
+          : product.metafields
+        )?.find(
+          (candidate) =>
+            candidate.namespace === field.namespace && candidate.key === field.metaKey,
+        )
+    const changed = field.isNew || field.value !== (original?.value ?? '')
+    if (!changed) return
+
+    if (field.isNew) {
+      const name = `${field.variantId ?? ''}:${field.namespace.trim()}.${field.metaKey.trim()}`
+      put(
+        at('namespace'),
+        field.namespace.trim()
+          ? tooLong('The namespace', field.namespace, LIMITS.metafieldNamespace)
+          : 'Enter a namespace',
+      )
+      put(
+        at('metaKey'),
+        field.metaKey.trim()
+          ? (tooLong('The key', field.metaKey, LIMITS.metafieldKey) ??
+              (isManagedElsewhere(field.namespace.trim(), field.metaKey.trim())
+                ? 'This detail is edited in the Description or SEO card'
+                : taken.has(name) ||
+                    product.metafields.some(
+                      (candidate) =>
+                        candidate.namespace === field.namespace.trim() &&
+                        candidate.key === field.metaKey.trim(),
+                    )
+                  ? 'The product already has this detail'
+                  : null))
+          : 'Enter a key',
+      )
+      taken.add(name)
+      put(
+        at('type'),
+        field.type.trim()
+          ? tooLong('The type', field.type, LIMITS.metafieldType)
+          : 'Choose a type',
+      )
+    }
+    put(
+      at('value'),
+      field.value.trim()
+        ? (tooLong('The value', field.value, LIMITS.metafieldValue) ??
+            (field.type.startsWith('list.') && !isJsonArray(field.value)
+              ? 'A list needs a JSON array: values in square brackets, e.g. ["Plastic", "Paper"]'
+              : null))
+        : 'Enter a value, or remove this detail',
+    )
   })
 
   draft.descriptionSections.forEach((section, index) => {

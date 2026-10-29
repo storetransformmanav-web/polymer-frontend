@@ -116,9 +116,8 @@ export function ProductDetailsView({
     { id: 'collections', label: 'Collections', count: product?.collections.length },
     { id: 'media', label: 'Media', count: product?.images.length },
     { id: 'seo', label: 'SEO & Online' },
-    ...(metafieldCount > 0
-      ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
-      : []),
+    // Always there, even with none yet, so a first metafield can be added.
+    { id: 'metafields', label: 'Metafields', count: metafieldCount || undefined },
   ]
 
   if (details.error) {
@@ -317,7 +316,9 @@ export function ProductDetailsView({
         )}
         {product && tab === 'media' && <MediaPanel product={product} onSaved={onSaved} />}
         {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
-        {product && tab === 'metafields' && <MetafieldsPanel product={product} />}
+        {product && tab === 'metafields' && (
+          <MetafieldsPanel product={product} onSaved={onSaved} />
+        )}
       </div>
 
       {askedStatus && product && (

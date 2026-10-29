@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProductDetail } from '../../../lib/api/endpoints.ts'
 import {
   blankMedia,
+  blankMetafieldEdit,
   buildMediaItems,
   buildUpdateBody,
   draftFromProduct,
@@ -288,6 +289,38 @@ describe('buildUpdateBody', () => {
 })
 
 /** The fields `PUT /products/{id}` accepts (from the API's ProductUpdate / VariantIn). */
+/** A product with two metafields of its own (and a variant that has one). */
+function withMetafields(): ProductDetail {
+  const product = makeProduct()
+  product.metafields = [
+    {
+      namespace: 'custom',
+      key: 'material',
+      type: 'single_line_text_field',
+      value: 'Foil',
+    },
+    { namespace: 'custom', key: 'eco', type: 'boolean', value: 'true' },
+    {
+      namespace: 'apd',
+      key: 'apd',
+      type: 'json_string',
+      value: JSON.stringify({
+        sections: [{ title: 'A', content: '<p>x</p>', position: 0 }],
+      }),
+    },
+    {
+      namespace: 'global',
+      key: 'title_tag',
+      type: 'single_line_text_field',
+      value: 'Hippo',
+    },
+  ]
+  product.variants[0].metafields = [
+    { namespace: 'my_fields', key: 'unit', type: 'number_integer', value: '500' },
+  ]
+  return product
+}
+
 const API_FIELDS = new Set([
   'title',
   'description_html',
@@ -310,6 +343,7 @@ const API_FIELDS = new Set([
   'media_remove',
   'media_order',
   'metafields',
+  'metafields_remove',
 ])
 const API_VARIANT_FIELDS = new Set([
   'id',
@@ -327,11 +361,13 @@ const API_VARIANT_FIELDS = new Set([
   'weight',
   'weight_unit',
   'image_attachment_id',
+  'metafields',
+  'metafields_remove',
 ])
 
 describe('the update body only has fields the API has', () => {
   it('even when every editable field is changed at once', () => {
-    const body = edit(makeProduct(), (draft) => {
+    const body = edit(withMetafields(), (draft) => {
       draft.title = 'T'
       draft.descriptionHtml = '<p>D</p>'
       draft.vendor = 'V'
@@ -360,11 +396,23 @@ describe('the update body only has fields the API has', () => {
       variant.weight = '4'
       variant.weightUnit = 'KILOGRAMS'
       variant.imageId = IMAGE_1
+      variant.taxCode = 'P0000000'
       draft.variants[1].removed = true
+      // A product metafield changed, one added to a variant, one removed.
+      draft.metafields[0].value = 'changed'
+      draft.metafields[1].removed = true
+      draft.metafields.push({
+        ...blankMetafieldEdit(),
+        variantId: VARIANT_A,
+        metaKey: 'extra',
+        value: 'x',
+      })
     })
 
     expect(Object.keys(body).length).toBeGreaterThan(10)
     for (const key of Object.keys(body)) expect(API_FIELDS.has(key), key).toBe(true)
+    expect(body.metafields).toBeDefined()
+    expect(body.metafields_remove).toBeDefined()
     for (const variant of body.variants ?? []) {
       for (const key of Object.keys(variant)) {
         expect(API_VARIANT_FIELDS.has(key), `variants.${key}`).toBe(true)
@@ -568,5 +616,208 @@ describe('the "Add media" form', () => {
 
     expect(validateNewMedia(rows).rows).toMatch(/at most 20/)
     expect(validateNewMedia(rows.slice(0, 20))).toEqual({})
+  })
+})
+
+describe('metafields in the update body', () => {
+  it('lists the product and variant details, but not the ones with their own editors', () => {
+    const draft = draftFromProduct(withMetafields())
+
+    expect(
+      draft.metafields.map(
+        (field) => `${field.variantId ?? 'product'}:${field.namespace}.${field.metaKey}`,
+      ),
+    ).toEqual([
+      'product:custom.material',
+      'product:custom.eco',
+      `${VARIANT_A}:my_fields.unit`,
+    ])
+  })
+
+  it('is empty when no metafield was touched', () => {
+    expect(hasChanges(edit(withMetafields(), () => undefined))).toBe(false)
+  })
+
+  it('sends a changed product value with the type it already has, and nothing else', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields[0].value = 'Paper'
+      // A different type typed on an existing detail is ignored: a type can't change in place.
+      draft.metafields[0].type = 'multi_line_text_field'
+    })
+
+    expect(body).toEqual({
+      metafields: [
+        {
+          namespace: 'custom',
+          key: 'material',
+          type: 'single_line_text_field',
+          value: 'Paper',
+        },
+      ],
+    })
+  })
+
+  it('puts a variant detail in that variant, not in the product', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields[2].value = '750'
+    })
+
+    expect(body).toEqual({
+      variants: [
+        {
+          id: VARIANT_A,
+          metafields: [
+            { namespace: 'my_fields', key: 'unit', type: 'number_integer', value: '750' },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('removes details by namespace and key, for the product and for a variant', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields[1].removed = true
+      draft.metafields[2].removed = true
+    })
+
+    expect(body.metafields_remove).toEqual([{ namespace: 'custom', key: 'eco' }])
+    expect(body.variants).toEqual([
+      { id: VARIANT_A, metafields_remove: [{ namespace: 'my_fields', key: 'unit' }] },
+    ])
+  })
+
+  it('adds a new detail to the product or to a variant, trimmed', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields.push({
+        ...blankMetafieldEdit(),
+        namespace: ' custom ',
+        metaKey: ' size_note ',
+        value: 'Large',
+      })
+      draft.metafields.push({
+        ...blankMetafieldEdit(),
+        variantId: VARIANT_B,
+        type: 'number_integer',
+        metaKey: 'pack',
+        value: '12',
+      })
+    })
+
+    expect(body.metafields).toEqual([
+      {
+        namespace: 'custom',
+        key: 'size_note',
+        type: 'single_line_text_field',
+        value: 'Large',
+      },
+    ])
+    expect(body.variants).toEqual([
+      {
+        id: VARIANT_B,
+        metafields: [
+          { namespace: 'custom', key: 'pack', type: 'number_integer', value: '12' },
+        ],
+      },
+    ])
+  })
+
+  it('sends nothing for a new detail that was dropped, or for a removed variant’s details', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields.push({
+        ...blankMetafieldEdit(),
+        metaKey: 'gone',
+        value: 'x',
+        removed: true,
+      })
+      draft.metafields[2].value = '999'
+      draft.variants[0].removed = true
+    })
+
+    expect(body).toEqual({ variants_remove: [VARIANT_A] })
+  })
+
+  it('keeps the description sections metafield beside the others', () => {
+    const body = edit(withMetafields(), (draft) => {
+      draft.metafields[0].value = 'Paper'
+      draft.descriptionSections[0].title = 'Renamed'
+    })
+
+    expect(body.metafields?.map((field) => `${field.namespace}.${field.key}`)).toEqual([
+      'custom.material',
+      'apd.apd',
+    ])
+  })
+})
+
+describe('validating metafield edits', () => {
+  const problems = (change: (draft: ProductDraft) => void) => {
+    const product = withMetafields()
+    const draft = draftFromProduct(product)
+    change(draft)
+    return validateDraft(product, draft)
+  }
+
+  it('accepts an untouched product, even with an odd existing value', () => {
+    const product = withMetafields()
+    product.metafields[0].value = ''
+    expect(validateDraft(product, draftFromProduct(product))).toEqual({})
+  })
+
+  it('wants a value on a changed detail, pointing at Remove for an empty one', () => {
+    expect(problems((d) => (d.metafields[0].value = '  '))['metafields.0.value']).toMatch(
+      /Enter a value/,
+    )
+  })
+
+  it('wants a namespace, key, type and value on a new detail', () => {
+    const errors = problems((d) =>
+      d.metafields.push({ ...blankMetafieldEdit(), namespace: '', type: ' ' }),
+    )
+    expect(errors['metafields.3.namespace']).toBe('Enter a namespace')
+    expect(errors['metafields.3.metaKey']).toBe('Enter a key')
+    expect(errors['metafields.3.type']).toBe('Choose a type')
+    expect(errors['metafields.3.value']).toMatch(/Enter a value/)
+  })
+
+  it('refuses a detail the product already has, or one that has its own editor', () => {
+    const dup = problems((d) =>
+      d.metafields.push({ ...blankMetafieldEdit(), metaKey: 'material', value: 'x' }),
+    )
+    expect(dup['metafields.3.metaKey']).toMatch(/already has/)
+
+    const own = problems((d) =>
+      d.metafields.push({
+        ...blankMetafieldEdit(),
+        namespace: 'global',
+        metaKey: 'title_tag',
+        value: 'x',
+      }),
+    )
+    expect(own['metafields.3.metaKey']).toMatch(/Description or SEO/)
+  })
+
+  it('wants a JSON array for a list, and caps the length of a variant tax code', () => {
+    const errors = problems((d) => {
+      d.metafields.push({
+        ...blankMetafieldEdit(),
+        metaKey: 'tags',
+        type: 'list.single_line_text_field',
+        value: 'Plastic, Paper',
+      })
+      d.variants[0].taxCode = 'x'.repeat(LIMITS.taxCode + 1)
+    })
+    expect(errors['metafields.3.value']).toMatch(/JSON array/)
+    expect(errors['variants.0.taxCode']).toMatch(/at most 50/)
+  })
+})
+
+describe('a variant tax code', () => {
+  it('is sent only when one was typed, because the current code is not known', () => {
+    expect(hasChanges(edit(makeProduct(), () => undefined))).toBe(false)
+
+    const body = edit(makeProduct(), (draft) => {
+      draft.variants[0].taxCode = '  P0000000 '
+    })
+    expect(body).toEqual({ variants: [{ id: VARIANT_A, tax_code: 'P0000000' }] })
   })
 })

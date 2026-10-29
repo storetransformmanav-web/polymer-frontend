@@ -280,6 +280,22 @@ export function VariantsSection({ product, draft, errors, onChange }: SectionPro
                       />
                     </div>
                   )}
+                  <EditField
+                    id={`${prefix}-taxcode`}
+                    label="Tax code"
+                    optional
+                    error={at('taxCode')}
+                    hint="Leave blank to keep the current code."
+                  >
+                    <input
+                      id={`${prefix}-taxcode`}
+                      autoComplete="off"
+                      value={variant.taxCode}
+                      aria-invalid={at('taxCode') ? true : undefined}
+                      onChange={(event) => update(index, { taxCode: event.target.value })}
+                      className={FIELD_INPUT}
+                    />
+                  </EditField>
                   <div className="flex flex-wrap gap-x-6 gap-y-2.5 min-[480px]:col-span-2">
                     <CheckField
                       label="Charge tax"

@@ -177,6 +177,8 @@ function patchVariant(
     taxable: edit.taxable ?? variant.taxable,
     requires_shipping: edit.requires_shipping ?? variant.requires_shipping,
     inventory_policy: edit.inventory_policy ?? variant.inventory_policy,
+    // The variant's own metafields: set (value replaced or added) and removed.
+    metafields: patchMetafields(variant.metafields, edit),
   }
 }
 
