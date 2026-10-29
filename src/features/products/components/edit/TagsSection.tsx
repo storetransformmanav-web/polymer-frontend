@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppSelector } from '../../../../app/store/hooks.ts'
-import { matchSuggestions } from '../../utils/tagSuggestions.ts'
+import { useStoreTags } from '../../hooks/useStoreTags.ts'
+import { matchSuggestions, mergeTags } from '../../utils/tagSuggestions.ts'
 import { XIcon } from '../../../../components/ui/icons.tsx'
 import type { SectionProps } from './fields.tsx'
 
@@ -46,6 +47,8 @@ interface TagsInputProps {
    * anything is typed), so the whole set can be browsed and picked from.
    */
   suggestAll?: boolean
+  /** The box was focused — a parent that loads the suggestions lazily starts loading here. */
+  onActivate?: () => void
 }
 
 /**
@@ -72,6 +75,7 @@ export function TagsInput({
   autoFocus = false,
   suggestions = [],
   suggestAll = false,
+  onActivate,
 }: TagsInputProps) {
   const [input, setInput] = useState('')
   const [focused, setFocused] = useState(false)
@@ -229,6 +233,7 @@ export function TagsInput({
           onFocus={() => {
             setFocused(true)
             setDismissed(false)
+            onActivate?.()
           }}
           onBlur={() => {
             setFocused(false)
@@ -284,19 +289,25 @@ export function TagsInput({
  * Tags are changed as additions and removals, so a tag a colleague adds meanwhile is
  * never wiped out by this edit.
  */
-export function TagsSection({ draft, onChange }: SectionProps) {
-  // Every tag seen so far on the products loaded (the API has no list of all tags).
-  const known = useAppSelector((state) => state.products.facets.tags)
+export function TagsSection({ product, draft, onChange }: SectionProps) {
+  // Every tag the product's store has (`GET /access/tags`), plus the ones seen on the products
+  // loaded — so the list is complete, and still works when the tags call is not allowed.
+  const seen = useAppSelector((state) => state.products.facets.tags)
+  const { tags: storeTags } = useStoreTags([
+    product.shop?.key ?? product.shop?.domain ?? '',
+  ])
+  const known = useMemo(() => mergeTags(storeTags, seen), [storeTags, seen])
   return (
     <TagsInput
       suggestions={known}
+      suggestAll
       id="edit-tag-input"
       ariaLabel="Add tags"
       listLabel="Tags"
       removeLabel={(tag) => `Remove tag ${tag}`}
       tags={draft.tags}
       onChange={(tags) => onChange({ tags })}
-      hint="Start typing to pick an existing tag, or press Enter or a comma to add a new one; separate several with commas. Tags are used for search and filters."
+      hint="Click the box to see every tag in the store and pick one, or type to narrow the list. Press Enter or a comma to add a new tag; separate several with commas. Tags are used for search and filters."
     />
   )
 }

@@ -14,8 +14,12 @@ import {
 import { withAll } from '../../../components/ui/selectOptions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
+import { useShops } from '../../../hooks/useShops.ts'
+import { shopValue } from '../../../app/store/shopSlice.ts'
 import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
+import { useStoreTags } from '../hooks/useStoreTags.ts'
 import { STOCK_OPTIONS } from '../utils/filterOptions.ts'
+import { mergeTags } from '../utils/tagSuggestions.ts'
 import {
   PRODUCT_SORTS,
   type ProductSort,
@@ -88,6 +92,16 @@ export function ProductsToolbar({
   const [filtersOpen, setFiltersOpen] = useState(false)
   // The counts are only shown in the dropdown, so they are requested once the grid is open.
   const counts = useProductStatusCounts(filters, STATUS_VALUES, filtersOpen)
+  // The Tag dropdown lists every tag that is on a product, from the tags API — for the chosen
+  // store, or every store with "All shops" — merged with the tags seen so far. Asked for only
+  // once the grid is open.
+  const { shops } = useShops()
+  const tagShops = filters.shop ? [filters.shop] : shops.map(shopValue)
+  const { tags: storeTags } = useStoreTags(tagShops, {
+    enabled: filtersOpen,
+    onProducts: true,
+  })
+  const tagChoices = mergeTags(storeTags, facets.tags)
   // The status choices, each with its count ("Active (980)"). The open one can fall back
   // to the list's own total while its count loads.
   const statusOptions: SelectOption[] = STATUS_TABS.map((tab) => {
@@ -203,7 +217,7 @@ export function ProductsToolbar({
               label="Tag"
               icon={TagIcon}
               value={filters.tag}
-              options={withAll('All Tags', facets.tags, filters.tag)}
+              options={withAll('All Tags', tagChoices, filters.tag)}
               onChange={(tag) => onChange({ tag })}
             />
             <SelectField

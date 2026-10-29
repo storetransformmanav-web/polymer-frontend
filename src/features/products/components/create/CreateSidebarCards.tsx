@@ -9,7 +9,9 @@ import {
   type ProductEditStatus,
 } from '../../../../lib/api/endpoints.ts'
 import { useCollectionSearch } from '../../hooks/useCollectionSearch.ts'
+import { useStoreTags } from '../../hooks/useStoreTags.ts'
 import { collectionKey } from '../../utils/collectionSuggestions.ts'
+import { mergeTags } from '../../utils/tagSuggestions.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { statusLabel } from '../../utils/format.ts'
 import { TAG_CHIP, TagsInput } from '../edit/TagsSection.tsx'
@@ -339,10 +341,15 @@ export function CreateSidebarCard({
 }: SidebarProps) {
   // Every value seen so far on the products loaded (the API has no list of them).
   const {
-    tags: knownTags,
+    tags: seenTags,
     productTypes,
     vendors,
   } = useAppSelector((state) => state.products.facets)
+  // Every tag the chosen store has, from the tags API — asked for once the Tags box is used,
+  // and merged with the tags seen on the loaded products.
+  const [tagsWanted, setTagsWanted] = useState(false)
+  const { tags: storeTags } = useStoreTags([shop], { enabled: tagsWanted })
+  const knownTags = useMemo(() => mergeTags(storeTags, seenTags), [storeTags, seenTags])
 
   return (
     <section aria-label="Product organization" className={`${CARD} flex flex-col`}>
@@ -440,6 +447,7 @@ export function CreateSidebarCard({
             onChange={(tags) => update({ tags })}
             suggestions={knownTags}
             suggestAll
+            onActivate={() => setTagsWanted(true)}
             placeholder="Search or add tags"
             hint="Pick an existing tag from the list, or type a new one and press Enter."
           />

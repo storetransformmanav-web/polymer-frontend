@@ -1,4 +1,21 @@
 /**
+ * Several lists of tags as one: each tag once (compared ignoring case, the first spelling
+ * kept), alphabetical. The tags API's list and the tags seen on the loaded products are
+ * merged so a box never knows less than either.
+ */
+export function mergeTags(...lists: readonly (readonly string[])[]): string[] {
+  const seen = new Map<string, string>()
+  for (const list of lists) {
+    for (const tag of list) {
+      if (!seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag)
+    }
+  }
+  return [...seen.values()].sort((a, b) =>
+    a.localeCompare(b, 'en', { sensitivity: 'base' }),
+  )
+}
+
+/**
  * The values that contain `query` (any case), those starting with it first. With nothing
  * typed it lists none — or, with `all`, every value not already taken (alphabetical).
  */

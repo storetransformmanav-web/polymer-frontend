@@ -19,6 +19,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
     shops: { list: vi.fn() },
     inventory: { locations: vi.fn() },
     collections: { list: vi.fn() },
+    access: { tags: vi.fn() },
     products: {
       list: vi.fn(),
       details: vi.fn(),
@@ -982,6 +983,56 @@ describe('adding a product', () => {
           await screen.findByRole('listbox', { name: 'Matching tags' }),
         ).getAllByRole('option'),
       ).toHaveLength(1)
+    })
+
+    it('also lists every tag of the chosen store from the tags API, asked only once the Tags box is used', async () => {
+      seedKnown()
+      const storeTags = vi.mocked(api.access.tags)
+      storeTags.mockResolvedValue({
+        tags: [
+          {
+            tag: 'b2b',
+            label: 'B2B trade',
+            is_lock_tag: true,
+            products: 0,
+            locked_products: 0,
+            customers: 4,
+          },
+          {
+            tag: 'Eco',
+            label: null,
+            is_lock_tag: false,
+            products: 2,
+            locked_products: 0,
+            customers: 0,
+          },
+        ],
+        page: 1,
+        page_size: 200,
+        total: 2,
+        total_pages: 1,
+        has_next: false,
+      })
+      const { user, form } = await openForm()
+      // Nothing is asked until the box is clicked.
+      expect(storeTags).not.toHaveBeenCalled()
+
+      await user.click(within(form).getByLabelText('Add tags'))
+      const choices = await screen.findByRole('listbox', { name: 'Matching tags' })
+
+      // The API's tags and the ones seen on the loaded products, each once, A–Z.
+      await waitFor(() =>
+        expect(
+          within(choices)
+            .getAllByRole('option')
+            .map((o) => o.textContent),
+        ).toEqual(['b2b', 'Category_Food', 'Eco', 'Retail']),
+      )
+      expect(storeTags).toHaveBeenCalledWith({
+        shop: expect.any(String),
+        page: 1,
+        page_size: 200,
+      })
     })
 
     it('lists the store’s collections from the backend when the Collections box is clicked, and sends the picked ones', async () => {

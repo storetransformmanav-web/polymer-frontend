@@ -16,7 +16,12 @@ import { ProductsPage } from './ProductsPage.tsx'
 
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
-  api: { products: { list: vi.fn(), details: vi.fn() }, auth: {} },
+  api: {
+    products: { list: vi.fn(), details: vi.fn() },
+    access: { tags: vi.fn() },
+    shops: { list: vi.fn(() => Promise.resolve([])) },
+    auth: {},
+  },
 }))
 
 const TOTAL = 60
@@ -202,6 +207,72 @@ describe('ProductsPage list', () => {
     // Product 3 is out of stock: shown in the Inventory column.
     const table = screen.getByRole('table')
     expect(within(table).getByText('Out of stock')).toBeInTheDocument()
+  })
+
+  it('offers every tag that is on a product, from the tags API, once the Filters grid is open', async () => {
+    const user = userEvent.setup()
+    const tagRow = (tag: string, products: number) => ({
+      tag,
+      label: null,
+      is_lock_tag: false,
+      products,
+      locked_products: 0,
+      customers: 0,
+    })
+    vi.mocked(api.shops.list).mockResolvedValue(
+      ['polymer-uk', 'polymer-eu'].map((key, position) => ({
+        id: key,
+        key,
+        name: key,
+        domain: `${key}.myshopify.com`,
+        is_active: true,
+        position,
+        connected: true,
+        products_count: 0,
+      })),
+    )
+    vi.mocked(api.access.tags).mockImplementation(({ shop }) =>
+      Promise.resolve({
+        // "b2b" is only on customers, so it is no use as a product filter.
+        tags:
+          shop === 'polymer-uk'
+            ? [tagRow('b2b', 0), tagRow('Brand_Acme', 2)]
+            : [tagRow('EU_Only', 5)],
+        page: 1,
+        page_size: 200,
+        total: 2,
+        total_pages: 1,
+        has_next: false,
+      }),
+    )
+    renderPage()
+    await screen.findByText('Product 1')
+    // Nothing is asked while the grid is closed.
+    expect(api.access.tags).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByLabelText('Tag'))
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(expect.arrayContaining(['All Tags', 'Brand_Acme', 'EU_Only', 'modern'])),
+    )
+    expect(
+      within(screen.getByLabelText('Tag')).queryByRole('option', { name: 'b2b' }),
+    ).not.toBeInTheDocument()
+    // With "All shops" every store is asked, one call each.
+    expect(api.access.tags).toHaveBeenCalledWith({
+      shop: 'polymer-uk',
+      page: 1,
+      page_size: 200,
+    })
+    expect(api.access.tags).toHaveBeenCalledWith({
+      shop: 'polymer-eu',
+      page: 1,
+      page_size: 200,
+    })
   })
 
   it('offers no vendor filter and no vendor sort option', async () => {

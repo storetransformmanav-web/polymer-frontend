@@ -24,6 +24,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       push: vi.fn(),
       syncHistory: vi.fn(),
     },
+    access: { tags: vi.fn() },
     auth: {},
   },
 }))
@@ -117,6 +118,7 @@ const list = vi.mocked(api.products.list)
 const details = vi.mocked(api.products.details)
 const update = vi.mocked(api.products.update)
 const syncHistory = vi.mocked(api.products.syncHistory)
+const storeTags = vi.mocked(api.access.tags)
 
 function renderPage() {
   return renderWithProviders(
@@ -133,6 +135,40 @@ describe('the Tags block on the product page', () => {
     details.mockResolvedValue(product(TAGS))
     update.mockResolvedValue(WRITE_OK)
     syncHistory.mockResolvedValue([])
+    // `GET /access/tags`: every tag the store has (Brand_Acme and b2b are on no loaded product).
+    storeTags.mockResolvedValue({
+      tags: [
+        {
+          tag: 'b2b',
+          label: 'B2B trade',
+          is_lock_tag: true,
+          products: 0,
+          locked_products: 0,
+          customers: 12,
+        },
+        {
+          tag: 'Brand_Acme',
+          label: null,
+          is_lock_tag: false,
+          products: 3,
+          locked_products: 0,
+          customers: 0,
+        },
+        {
+          tag: 'Material_Plastic',
+          label: null,
+          is_lock_tag: false,
+          products: 9,
+          locked_products: 0,
+          customers: 0,
+        },
+      ],
+      page: 1,
+      page_size: 200,
+      total: 3,
+      total_pages: 1,
+      has_next: false,
+    })
   })
 
   afterEach(() => {
@@ -285,10 +321,37 @@ describe('the Tags block on the product page', () => {
         .getAllByRole('option')
         .map((option) => option.textContent)
 
-    it('lists every matching tag from the store under the box, leaving out the ones already on the product', async () => {
+    it('lists every tag the store has as soon as the box is focused, from the tags API', async () => {
       const user = await openPage()
       await startEditing(user)
-      expect(suggestions()).toBeNull()
+
+      // The tags API's tags and the ones seen on the list, A–Z; the product's own tag is left out.
+      await waitFor(() =>
+        expect(optionNames()).toEqual([
+          'b2b',
+          'Brand_Acme',
+          'Category_Food Packaging',
+          'Material_Foil',
+          'Material_Glass',
+        ]),
+      )
+      expect(storeTags).toHaveBeenCalledWith({
+        shop: 'polymer-uk',
+        page: 1,
+        page_size: 200,
+      })
+    })
+
+    it('does not ask the tags API until a product is being edited', async () => {
+      await openPage()
+
+      expect(storeTags).not.toHaveBeenCalled()
+    })
+
+    it('narrows the list to the tags containing what is typed, leaving out the ones already on the product', async () => {
+      const user = await openPage()
+      await startEditing(user)
+      await waitFor(() => expect(optionNames()).toContain('Brand_Acme'))
 
       await user.keyboard('mat')
 
@@ -314,7 +377,8 @@ describe('the Tags block on the product page', () => {
       expect(within(block()).queryByText('foil')).not.toBeInTheDocument()
       expect(tagBox()).toHaveValue('')
       expect(tagBox()).toHaveFocus()
-      expect(suggestions()).toBeNull()
+      // The box keeps the focus, so the list is back — without the tag just added.
+      expect(optionNames()).not.toContain('Material_Foil')
 
       await user.click(save())
       await confirmUpdate(user)
@@ -338,7 +402,7 @@ describe('the Tags block on the product page', () => {
       await user.keyboard('{Enter}')
 
       expect(within(block()).getByText('Material_Glass')).toBeInTheDocument()
-      expect(suggestions()).toBeNull()
+      expect(optionNames()).not.toContain('Material_Glass')
     })
 
     it('still adds what was typed on Enter when no suggestion is highlighted', async () => {
@@ -506,7 +570,8 @@ describe('the Tags block on the product page', () => {
     expect(within(block()).queryByText('Temporary')).not.toBeInTheDocument()
 
     await startEditing(user)
-    await user.keyboard('Another{Enter}{Escape}')
+    // The first Escape only puts the open suggestion list away; the second leaves the edit.
+    await user.keyboard('Another{Enter}{Escape}{Escape}')
     expect(within(block()).queryByText('Another')).not.toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()
   })
