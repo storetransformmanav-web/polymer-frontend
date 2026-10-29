@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeftIcon, PlusIcon } from '../../../components/ui/icons.tsx'
+import { IconAction } from '../../../components/ui/IconAction.tsx'
+import { ArrowLeftIcon, CheckIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import type { CustomerListItem, ProductListItem } from '../../../lib/api/endpoints.ts'
 import { usePickCustomers, usePickProducts } from '../hooks/usePickers.ts'
@@ -23,11 +24,6 @@ import {
 import { PickList, type PickRow } from './PickList.tsx'
 import { PickedChips } from './PickedChips.tsx'
 import { TagPicker } from './TagPicker.tsx'
-
-const BUTTON =
-  'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
-const PRIMARY = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-none shadow-sm`
-const SECONDARY = `${BUTTON} border-border bg-bg text-text hover:border-accent`
 
 const productRow = (product: ProductListItem): PickRow => ({
   id: product.id,
@@ -145,11 +141,10 @@ export function LockCreateView({
       }}
       className="flex flex-col gap-4"
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onBack} className={SECONDARY}>
-          <ArrowLeftIcon width={16} height={16} />
-          <span className="hidden sm:inline">Back to list</span>
-        </button>
+      {/* Stays in view while the form scrolls — under the top bar below `lg`, at the top of the
+          form's own scroll box from `lg` up; it has the page's
+          background and runs the full width of the page so nothing shows through behind it. */}
+      <div className="bg-page sticky top-16 z-[9] -mx-3 flex flex-wrap items-center gap-3 px-3 py-3 sm:-mx-6 sm:px-6 lg:top-0 lg:mx-0 lg:px-0">
         <div className="min-w-0 flex-1">
           <h2 className="text-[1.35rem] leading-tight font-bold">Add lock</h2>
           <p className="text-text-muted text-[0.82rem]">
@@ -157,9 +152,27 @@ export function LockCreateView({
             <strong className="text-text">{shopName || 'the selected store'}</strong>.
           </p>
         </div>
-        <button type="submit" className={PRIMARY}>
-          <PlusIcon width={16} height={16} />
-          Create lock
+        {/* The same controls as a product's page: icon-only ✓ / ✕ that name themselves in a
+            tooltip, then the bordered "Back to list" button. */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <IconAction
+            label="Create lock"
+            icon={CheckIcon}
+            tone="primary"
+            onClick={submit}
+          />
+          <IconAction label="Cancel" icon={XIcon} tone="danger" onClick={onBack} />
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to list"
+          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+        >
+          <ArrowLeftIcon width={16} height={16} />
+          <span className="hidden sm:inline" aria-hidden="true">
+            Back to list
+          </span>
         </button>
       </div>
 
@@ -210,82 +223,85 @@ export function LockCreateView({
             </div>
           </LockCard>
 
-          <LockCard
-            title="Keys (tags)"
-            description="A customer with one of these tags can open the locked products. Pick from the store’s tags, or type a new one."
-            error={shown.tags}
-          >
-            <TagPicker
-              shop={shop}
-              selected={draft.tags}
-              onAdd={(tags) =>
-                setDraft((current) => ({
-                  ...current,
-                  tags: [
-                    ...current.tags,
-                    ...tags.filter(
-                      (tag) =>
-                        !current.tags.some(
-                          (have) => have.toLowerCase() === tag.toLowerCase(),
-                        ),
-                    ),
-                  ],
-                }))
-              }
-              onRemove={(tag) =>
-                setDraft((current) => ({
-                  ...current,
-                  tags: current.tags.filter((have) => have !== tag),
-                }))
-              }
-            />
-            <p className="text-text-muted mt-3 text-[0.75rem]">
-              With no tag, the products are locked to signed-in customers only.
-            </p>
-          </LockCard>
-
-          <LockCard
-            title="Customers (optional)"
-            description="Give these customers the tags above so they can open the locked products straight away."
-            error={shown.customers}
-          >
-            <div className="flex flex-col gap-4">
-              <PickedChips
-                noun="customer"
-                items={draft.customers}
-                onRemove={(id) =>
+          {/* Keys and Customers share a row, half the width each, from XL up. */}
+          <div className="grid gap-4 xl:grid-cols-[repeat(2,minmax(0,1fr))]">
+            <LockCard
+              title="Keys (tags)"
+              description="A customer with one of these tags can open the locked products. Pick from the store’s tags, or type a new one."
+              error={shown.tags}
+            >
+              <TagPicker
+                shop={shop}
+                selected={draft.tags}
+                onAdd={(tags) =>
                   setDraft((current) => ({
                     ...current,
-                    customers: current.customers.filter((item) => item.id !== id),
+                    tags: [
+                      ...current.tags,
+                      ...tags.filter(
+                        (tag) =>
+                          !current.tags.some(
+                            (have) => have.toLowerCase() === tag.toLowerCase(),
+                          ),
+                      ),
+                    ],
                   }))
                 }
-                onClear={() => setDraft((current) => ({ ...current, customers: [] }))}
+                onRemove={(tag) =>
+                  setDraft((current) => ({
+                    ...current,
+                    tags: current.tags.filter((have) => have !== tag),
+                  }))
+                }
               />
-              <PickList
-                label="Customers to give the tags to"
-                noun="customer"
-                rows={customers.items.map(customerRow)}
-                selectedIds={customerIds}
-                onToggle={(row) => toggle('customers', row)}
-                onTogglePage={(rows, select) => togglePage('customers', rows, select)}
-                search={customerSearch}
-                onSearch={setCustomerSearch}
-                searchPlaceholder="Search customers by name, email or tag…"
-                total={customers.total}
-                isPending={customers.isPending}
-                isFetching={customers.isFetching}
-                isLoadingMore={customers.isLoadingMore}
-                hasMore={customers.hasMore}
-                onLoadMore={customers.loadMore}
-                error={customers.error}
-                onRetry={customers.retry}
-              />
-              <p className="text-text-muted text-[0.75rem]">
-                Up to {MAX_ITEMS} customers at a time, all linked to Shopify. A customer
-                who already has a tag is not given it twice.
+              <p className="text-text-muted mt-3 text-[0.75rem]">
+                With no tag, the products are locked to signed-in customers only.
               </p>
-            </div>
-          </LockCard>
+            </LockCard>
+
+            <LockCard
+              title="Customers (optional)"
+              description="Give these customers the tags above so they can open the locked products straight away."
+              error={shown.customers}
+            >
+              <div className="flex flex-col gap-4">
+                <PickedChips
+                  noun="customer"
+                  items={draft.customers}
+                  onRemove={(id) =>
+                    setDraft((current) => ({
+                      ...current,
+                      customers: current.customers.filter((item) => item.id !== id),
+                    }))
+                  }
+                  onClear={() => setDraft((current) => ({ ...current, customers: [] }))}
+                />
+                <PickList
+                  label="Customers to give the tags to"
+                  noun="customer"
+                  rows={customers.items.map(customerRow)}
+                  selectedIds={customerIds}
+                  onToggle={(row) => toggle('customers', row)}
+                  onTogglePage={(rows, select) => togglePage('customers', rows, select)}
+                  search={customerSearch}
+                  onSearch={setCustomerSearch}
+                  searchPlaceholder="Search customers by name, email or tag…"
+                  total={customers.total}
+                  isPending={customers.isPending}
+                  isFetching={customers.isFetching}
+                  isLoadingMore={customers.isLoadingMore}
+                  hasMore={customers.hasMore}
+                  onLoadMore={customers.loadMore}
+                  error={customers.error}
+                  onRetry={customers.retry}
+                />
+                <p className="text-text-muted text-[0.75rem]">
+                  Up to {MAX_ITEMS} customers at a time, all linked to Shopify. A customer
+                  who already has a tag is not given it twice.
+                </p>
+              </div>
+            </LockCard>
+          </div>
 
           <LockMessageCard
             options={draft.options}
@@ -298,7 +314,8 @@ export function LockCreateView({
           />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
+        {/* Settings follow the page (below the sticky header); a short window scrolls them. */}
+        <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[4.75rem] lg:max-h-[calc(100svh-12rem)] lg:overflow-y-auto">
           <LockSettingsCard
             options={draft.options}
             onChange={(patch) =>
@@ -318,16 +335,6 @@ export function LockCreateView({
             }
           />
         </div>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onBack} className={SECONDARY}>
-          Cancel
-        </button>
-        <button type="submit" className={PRIMARY}>
-          <PlusIcon width={16} height={16} />
-          Create lock
-        </button>
       </div>
 
       {confirming && (

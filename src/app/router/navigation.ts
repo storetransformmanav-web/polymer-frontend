@@ -76,7 +76,13 @@ export const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon },
-  { to: '/locks', label: 'Lock Management', icon: LockIcon, shopScoped: true },
+  {
+    to: '/locks',
+    label: 'Lock Management',
+    icon: LockIcon,
+    shopScoped: true,
+    fillHeight: true,
+  },
   { to: '/activity', label: 'Activity Management', icon: ActivityIcon },
 ]
 

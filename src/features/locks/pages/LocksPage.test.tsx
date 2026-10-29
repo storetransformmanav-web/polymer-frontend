@@ -418,69 +418,42 @@ describe('LocksPage', () => {
       return user
     }
 
-    it('opens on its own page, with its keys and settings', async () => {
-      await openLock()
+    const tab = async (user: ReturnType<typeof userEvent.setup>, name: string) =>
+      user.click(screen.getByRole('tab', { name }))
 
+    it('opens like a product page: a header, tabs, and cards that can only be read', async () => {
+      const user = await openLock()
+
+      expect(screen.getByRole('tablist', { name: 'Lock sections' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Back to list' })).toBeInTheDocument()
+      // The keys are plain chips: no add box, no pencil, no Save.
       expect(
-        within(screen.getByRole('list', { name: 'Chosen tags' })).getByText('vans'),
+        within(screen.getByRole('list', { name: 'Keys' })).getByText('vans'),
       ).toBeInTheDocument()
-      expect(screen.getByRole('switch', { name: 'Enable this lock' })).toBeChecked()
-      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+      expect(screen.queryByLabelText('Search or add a tag')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument()
+
+      // Nor on the Settings tab: the values are shown, with no switch or box to change.
+      await tab(user, 'Settings')
+      expect(screen.getByText('Hidden from navigation menus')).toBeInTheDocument()
+      expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
     })
 
-    it('saves only the setting that changed, after a confirmation', async () => {
+    it('never writes: opening a lock sends no lock or tag update', async () => {
       const user = await openLock()
+      await tab(user, 'Settings')
+      await tab(user, 'Check access')
 
-      await user.click(screen.getByLabelText(/Hide from navigation menus/))
-      await user.click(screen.getByRole('button', { name: 'Save changes' }))
       expect(lock).not.toHaveBeenCalled()
-      await user.click(await screen.findByRole('button', { name: 'Yes, update' }))
-
-      await waitFor(() =>
-        expect(lock).toHaveBeenCalledWith({
-          shop: 'polymer-uk',
-          products: ['prod-1'],
-          hide_from_nav: true,
-          tags: ['vans'],
-        }),
-      )
-      expect(await screen.findByText(WRITE_OK.message)).toBeInTheDocument()
-    })
-
-    it('removes a tag only after a confirmation', async () => {
-      const user = await openLock()
-
-      await user.click(screen.getByRole('button', { name: 'Remove tag vans' }))
       expect(updateTags).not.toHaveBeenCalled()
-      expect(await screen.findByText(/last tag/)).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Yes, remove' }))
-
-      await waitFor(() =>
-        expect(updateTags).toHaveBeenCalledWith({
-          shop: 'polymer-uk',
-          products: ['prod-1'],
-          tags_remove: ['vans'],
-        }),
-      )
-    })
-
-    it('adds a tag from the store’s tags after a confirmation', async () => {
-      const user = await openLock()
-
-      await user.click(await screen.findByLabelText('b2b'))
-      await user.click(await screen.findByRole('button', { name: 'Yes, add' }))
-
-      await waitFor(() =>
-        expect(updateTags).toHaveBeenCalledWith({
-          shop: 'polymer-uk',
-          products: ['prod-1'],
-          tags_add: ['b2b'],
-        }),
-      )
     })
 
     it('tells whether a customer would see the product', async () => {
       const user = await openLock()
+      await tab(user, 'Check access')
       check.mockResolvedValue({
         allowed: false,
         reason: 'no_matching_tag',
@@ -519,7 +492,8 @@ describe('LocksPage', () => {
       expect(locks).toHaveBeenCalledWith(
         expect.objectContaining({ shop: 'polymer-uk', search: 'locked-product-2' }),
       )
-      expect(screen.getByRole('switch', { name: 'Enable this lock' })).not.toBeChecked()
+      // A disabled lock says so in its header.
+      expect(screen.getByText('Disabled')).toBeInTheDocument()
     })
 
     it('says so when the store has no such lock', async () => {

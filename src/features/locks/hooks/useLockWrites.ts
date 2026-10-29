@@ -1,10 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
-import {
-  api,
-  type AccessLockBody,
-  type AccessTagsUpdateBody,
-} from '../../../lib/api/endpoints.ts'
+import { api, type AccessLockBody } from '../../../lib/api/endpoints.ts'
 
 /**
  * After any write the locks, the tag counts and the pickers' rows (a customer's tags changed)
@@ -30,21 +26,6 @@ export function useSaveLock() {
   return {
     save: mutation.mutateAsync,
     isSaving: mutation.isPending,
-    error: mutation.isError ? toUserMessage(mutation.error) : null,
-    clearError: mutation.reset,
-  }
-}
-
-/** `PUT /access/tags`: add and/or remove tags on products and customers. */
-export function useUpdateAccessTags() {
-  const refresh = useRefreshAfterWrite()
-  const mutation = useMutation({
-    mutationFn: (body: AccessTagsUpdateBody) => api.access.updateTags(body),
-    onSuccess: refresh,
-  })
-  return {
-    update: mutation.mutateAsync,
-    isUpdating: mutation.isPending,
     error: mutation.isError ? toUserMessage(mutation.error) : null,
     clearError: mutation.reset,
   }

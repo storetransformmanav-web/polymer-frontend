@@ -9,13 +9,11 @@ import {
   LayersIcon,
   ListChecksIcon,
   PlusIcon,
-  SearchIcon,
   SpinnerIcon,
   TrashIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
-import { ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import type {
   ProductDetail,
   ProductImage as ProductImageData,
@@ -176,6 +174,23 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const altEditor = useImageAltSave(product, onSaved)
 
+  // Collections are added and removed straight away (each after its own question), not with
+  // the card's Save, so their dialogs live here, outside the card being edited — an Escape in
+  // a dialog must never reach the card and discard its edit.
+  // The name chosen with Add, waiting for "Yes, add" (or "Yes, create" for a new one).
+  const [addingCollection, setAddingCollection] = useState<{
+    name: string
+    isNew: boolean
+  } | null>(null)
+  // The collection whose ✕ was clicked, waiting for "Remove".
+  const [removingCollection, setRemovingCollection] = useState<
+    ProductDetail['collections'][number] | null
+  >(null)
+  // What the backend said about a collection it just made.
+  const [createdCollection, setCreatedCollection] = useState<string | null>(null)
+  // Bumped when a collection went in, so the add box starts empty for the next one.
+  const [adderKey, setAdderKey] = useState(0)
+
   const description = useMemo(() => htmlToText(product?.description_html), [product])
   // The description sections the store's description app saves in the `apd` metafield.
   const sections = useMemo(() => readDescriptionSections(product), [product])
@@ -308,6 +323,11 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                 <TagsBlock>
                   <TagsView tags={product.tags} />
                 </TagsBlock>
+                {/* Collections too: shown here, added and removed while the card is edited. */}
+                <CollectionsBlock
+                  collections={product.collections}
+                  message={createdCollection}
+                />
               </div>
             }
             editor={(section) => (
@@ -323,9 +343,59 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                 <TagsBlock>
                   <TagsEditor {...section} />
                 </TagsBlock>
+                {/* The live product, not the edit's frozen copy: a collection changes at once. */}
+                <CollectionsBlock
+                  collections={product.collections}
+                  message={createdCollection}
+                  editor={
+                    <CollectionAdder
+                      key={adderKey}
+                      product={product}
+                      autoFocus={false}
+                      onChoose={(name, isNew) => setAddingCollection({ name, isNew })}
+                    />
+                  }
+                  onRemove={setRemovingCollection}
+                />
               </div>
             )}
           />
+
+          {addingCollection !== null && (
+            <AddCollectionDialog
+              key={`${addingCollection.isNew ? 'new' : 'add'}-${addingCollection.name}`}
+              product={product}
+              collectionName={addingCollection.name}
+              isNew={addingCollection.isNew}
+              onClose={() => setAddingCollection(null)}
+              onDone={(outcome) => {
+                setAddingCollection(null)
+                setAdderKey((key) => key + 1)
+                if (outcome.created) {
+                  setCreatedCollection(outcome.message)
+                  return
+                }
+                setCreatedCollection(null)
+                onSaved?.(outcome.result, product, { collections_add: [outcome.name] })
+              }}
+            />
+          )}
+
+          {removingCollection && (
+            <RemoveCollectionDialog
+              key={removingCollection.id}
+              product={product}
+              collection={removingCollection}
+              onClose={() => setRemovingCollection(null)}
+              onDone={(result) => {
+                setRemovingCollection(null)
+                setCreatedCollection(null)
+                onSaved?.(result, product, {
+                  collections_remove: [removingCollection.title],
+                })
+              }}
+            />
+          )}
 
           {sections ? (
             // The description app's sections (metafield apd) stand on their own: just the accordion.
@@ -444,6 +514,92 @@ function TagsView({ tags }: { tags: string[] }) {
     <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
       No tags yet.
     </p>
+  )
+}
+
+// --- Collections -----------------------------------------------------------------
+
+/** Shopify calls manually curated collections "custom"; the CRM shows them as "Manual". */
+function collectionTypeLabel(type: string): string {
+  return type.toLowerCase() === 'custom' ? 'Manual' : statusLabel(type)
+}
+
+/**
+ * "Collections" in the Product Specifications card, under Tags and drawn the same way: a
+ * heading and one bordered card of chips. Viewing, they are just chips; while the card is
+ * edited (`editor` and `onRemove` given) each chip gets a ✕ and the add box sits under the
+ * card. Unlike tags, a collection is added or removed at once, each after its own question,
+ * not with the card's Save — a line says so.
+ */
+function CollectionsBlock({
+  collections,
+  message,
+  editor,
+  onRemove,
+}: {
+  collections: ProductDetail['collections']
+  /** What the backend said about a collection it just made. */
+  message: string | null
+  /** The add box; given only while the card is being edited. */
+  editor?: ReactNode
+  /** The ✕ on a chip was clicked: ask before taking the product out of it. */
+  onRemove?: (collection: ProductDetail['collections'][number]) => void
+}) {
+  return (
+    <section
+      aria-labelledby="product-collections-heading"
+      className="flex flex-col gap-2.5"
+    >
+      <h3 id="product-collections-heading" className="text-[0.95rem] font-semibold">
+        Collections
+      </h3>
+      {message && <FormMessage tone="success">{message}</FormMessage>}
+      {collections.length > 0 ? (
+        <ul
+          aria-label="Collections"
+          className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5"
+        >
+          {collections.map((collection) => (
+            <li
+              key={collection.id}
+              title={
+                collection.collection_type
+                  ? `${collectionTypeLabel(collection.collection_type)} collection · ${collection.handle}`
+                  : collection.handle
+              }
+              className={`${TAG_CHIP} flex items-center gap-1 ${onRemove ? 'pr-1.5' : ''}`}
+            >
+              {collection.title}
+              {onRemove && (
+                // Always asks first (see RemoveCollectionDialog); nothing is sent until "Remove".
+                <button
+                  type="button"
+                  aria-label={`Remove from ${collection.title}`}
+                  title="Remove from this collection"
+                  onClick={() => onRemove(collection)}
+                  className="hover:text-danger inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                >
+                  <XIcon width={12} height={12} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
+          This product isn&apos;t in any collection.
+        </p>
+      )}
+      {editor && (
+        <>
+          {editor}
+          <p className="text-text-muted text-[0.76rem]">
+            Collections are added and removed straight away, after you confirm — they
+            aren&apos;t part of Save.
+          </p>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -631,189 +787,7 @@ export function InventoryPanel({ product }: { product: ProductDetail }) {
   )
 }
 
-// --- Collections / Media -------------------------------------------------------
-
-/** Shopify calls manually curated collections "custom"; the CRM shows them as "Manual". */
-function collectionTypeLabel(type: string): string {
-  return type.toLowerCase() === 'custom' ? 'Manual' : statusLabel(type)
-}
-
-/** Show a filter box once there are enough collections to need one. */
-const COLLECTION_FILTER_MIN = 6
-
-/** The collections as tiles, narrowed by the header's filter box. */
-function CollectionsView({
-  product,
-  query,
-  onRemove,
-}: {
-  product: ProductDetail
-  query: string
-  /** The ✕ on a collection was clicked: ask before taking the product out of it. */
-  onRemove: (collection: ProductDetail['collections'][number]) => void
-}) {
-  const { collections } = product
-
-  if (collections.length === 0) {
-    return <Empty icon={LayersIcon}>This product isn&apos;t in any collection.</Empty>
-  }
-
-  const needle = query.trim().toLowerCase()
-  const visible = needle
-    ? collections.filter(
-        (collection) =>
-          collection.title.toLowerCase().includes(needle) ||
-          collection.handle.toLowerCase().includes(needle),
-      )
-    : collections
-
-  return (
-    <>
-      {visible.length === 0 ? (
-        <p className="text-text-muted py-8 text-center text-[0.9rem]">
-          No collections match &ldquo;{query.trim()}&rdquo;.
-        </p>
-      ) : (
-        <ul
-          aria-label="Collections"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {visible.map((collection) => (
-            <li
-              key={collection.id}
-              className={`${CARD} hover:border-accent flex items-center gap-3.5 p-3.5 transition-colors`}
-            >
-              <span className="bg-accent-tint text-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
-                <LayersIcon width={20} height={20} />
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <p className="line-clamp-2 text-[0.92rem] leading-snug font-semibold">
-                  {collection.title}
-                </p>
-                <p className="text-text-muted mt-0.5 flex items-center gap-1.5 text-[0.76rem]">
-                  <span className="min-w-0 truncate font-mono" title={collection.handle}>
-                    {collection.handle}
-                  </span>
-                  <CopyButton
-                    value={collection.handle}
-                    label={`Copy handle ${collection.handle}`}
-                  />
-                </p>
-              </div>
-
-              {collection.collection_type && (
-                <Badge
-                  tone={
-                    collection.collection_type.toLowerCase() === 'smart'
-                      ? 'default'
-                      : 'neutral'
-                  }
-                >
-                  {collectionTypeLabel(collection.collection_type)}
-                </Badge>
-              )}
-
-              {/* Always there: removing asks first (see RemoveCollectionDialog). */}
-              <button
-                type="button"
-                aria-label={`Remove from ${collection.title}`}
-                title="Remove from this collection"
-                onClick={() => onRemove(collection)}
-                className={ROW_ACTION_DANGER}
-              >
-                <XIcon width={16} height={16} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
-}
-
-/**
- * One row above the tiles: "In 10 collections" + a badge per type on the left;
- * the filter box and "Add collection" (which opens or tucks away the add box) on the right.
- */
-function CollectionsHeader({
-  product,
-  query,
-  onQuery,
-  addOpen,
-  onAdd,
-}: {
-  product: ProductDetail
-  query: string
-  onQuery: (value: string) => void
-  /** Whether the "add a collection" box is open. */
-  addOpen: boolean
-  onAdd: () => void
-}) {
-  const { collections } = product
-
-  const counts = useMemo(() => {
-    const byType = new Map<string, number>()
-    for (const collection of collections) {
-      const label = collection.collection_type
-        ? collectionTypeLabel(collection.collection_type)
-        : 'Other'
-      byType.set(label, (byType.get(label) ?? 0) + 1)
-    }
-    return [...byType.entries()]
-  }, [collections])
-
-  const summary =
-    collections.length === 0
-      ? 'Not in any collection'
-      : `In ${collections.length} ${collections.length === 1 ? 'collection' : 'collections'}`
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <div className="mr-auto flex min-w-0 flex-wrap items-center gap-2">
-        <p className="text-[0.95rem] font-semibold">{summary}</p>
-        {counts.map(([label, count]) => (
-          <Badge key={label} tone={label === 'Smart' ? 'default' : 'neutral'}>
-            {count} {label}
-          </Badge>
-        ))}
-      </div>
-
-      {collections.length >= COLLECTION_FILTER_MIN && (
-        <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 w-full items-center gap-2 rounded-lg border px-3 focus-within:outline-2 sm:w-64">
-          <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
-          <input
-            type="search"
-            aria-label="Filter collections"
-            placeholder="Filter collections…"
-            maxLength={100}
-            value={query}
-            onChange={(event) => onQuery(event.target.value)}
-            className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
-          />
-        </div>
-      )}
-
-      <div className="flex items-center gap-1.5">
-        {/* No pencil and no Save: a collection is added with the box that "Add collection"
-            opens (Add sends it, after asking) and taken out with the ✕ on a tile. */}
-        <button
-          type="button"
-          onClick={onAdd}
-          aria-expanded={addOpen}
-          className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors ${
-            addOpen
-              ? 'border-accent text-accent bg-accent-tint'
-              : 'border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint'
-          }`}
-        >
-          <PlusIcon width={14} height={14} />
-          Add collection
-        </button>
-      </div>
-    </div>
-  )
-}
+// --- Media -------------------------------------------------------
 
 interface MediaTile {
   image: ProductImageData
@@ -1362,77 +1336,6 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
       view={<VariantsView product={product} />}
       editor={(section) => <VariantsEditor {...section} />}
     />
-  )
-}
-
-export function CollectionsPanel({ product, onSaved }: TabProps) {
-  const [query, setQuery] = useState('')
-  // The "add a collection" box stays hidden until "Add collection" is clicked, then
-  // sits on top of the list.
-  const [addOpen, setAddOpen] = useState(false)
-  // The name chosen with Add, waiting for "Yes, add" (or "Yes, create" for a new one).
-  const [adding, setAdding] = useState<{ name: string; isNew: boolean } | null>(null)
-  // What the backend said about a collection it just made.
-  const [created, setCreated] = useState<string | null>(null)
-  // The collection whose ✕ was clicked, waiting for "Remove".
-  const [removing, setRemoving] = useState<ProductDetail['collections'][number] | null>(
-    null,
-  )
-
-  return (
-    <>
-      <div className="flex flex-col gap-4">
-        <CollectionsHeader
-          product={product}
-          query={query}
-          onQuery={setQuery}
-          addOpen={addOpen}
-          onAdd={() => setAddOpen((open) => !open)}
-        />
-        {created && <FormMessage tone="success">{created}</FormMessage>}
-        {addOpen && (
-          <CollectionAdder
-            product={product}
-            onChoose={(name, isNew) => setAdding({ name, isNew })}
-          />
-        )}
-        <CollectionsView product={product} query={query} onRemove={setRemoving} />
-      </div>
-
-      {adding !== null && (
-        <AddCollectionDialog
-          key={`${adding.isNew ? 'new' : 'add'}-${adding.name}`}
-          product={product}
-          collectionName={adding.name}
-          isNew={adding.isNew}
-          onClose={() => setAdding(null)}
-          onDone={(outcome) => {
-            setAdding(null)
-            setAddOpen(false)
-            if (outcome.created) {
-              setCreated(outcome.message)
-              return
-            }
-            setCreated(null)
-            onSaved?.(outcome.result, product, { collections_add: [outcome.name] })
-          }}
-        />
-      )}
-
-      {removing && (
-        <RemoveCollectionDialog
-          key={removing.id}
-          product={product}
-          collection={removing}
-          onClose={() => setRemoving(null)}
-          onDone={(result) => {
-            setRemoving(null)
-            setCreated(null)
-            onSaved?.(result, product, { collections_remove: [removing.title] })
-          }}
-        />
-      )}
-    </>
   )
 }
 

@@ -50,10 +50,11 @@ describe('DashboardLayout', () => {
     vi.mocked(api.orders.list).mockResolvedValue({ ...emptyList, totals: null })
   })
 
-  it('marks only Orders and Products as pages that fill the window’s height', () => {
+  it('marks only Orders, Products and Lock Management as pages that fill the window’s height', () => {
     expect(NAV_ITEMS.filter((item) => item.fillHeight).map((item) => item.to)).toEqual([
       '/orders',
       '/products',
+      '/locks',
     ])
   })
 

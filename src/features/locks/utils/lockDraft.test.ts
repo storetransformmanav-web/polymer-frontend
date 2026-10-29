@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import {
   DEFAULT_OPTIONS,
   blankLockDraft,
   buildLockBody,
-  buildOptionsUpdate,
   isLockDraftDirty,
-  optionsOf,
   parseTags,
   validateLockDraft,
   type LockDraft,
@@ -14,30 +11,6 @@ import {
 } from './lockDraft.ts'
 
 const item = (id: string): PickedItem => ({ id, label: id })
-
-const LOCK: AccessLock = {
-  product_id: 'p1',
-  shopify_id: 1,
-  title: 'Bulk Storage Container',
-  handle: 'bulk-storage-container',
-  status: 'ACTIVE',
-  image_url: null,
-  product_tags: ['vans'],
-  enabled: true,
-  tags: ['vans'],
-  hide_from_lists: true,
-  hide_from_nav: false,
-  noindex: false,
-  hide_from_sitemap: false,
-  manual_locking: false,
-  message: null,
-  customers_with_access: 3,
-  sync_status: 'synced',
-  sync_error: null,
-  last_pushed_at: null,
-  updated_at: null,
-  shop: null,
-}
 
 describe('parseTags', () => {
   it('splits on commas, trims, and drops blanks and repeats (any case)', () => {
@@ -119,36 +92,6 @@ describe('buildLockBody', () => {
     expect(body).not.toHaveProperty('customers')
     expect(body).not.toHaveProperty('tags')
     expect(body).not.toHaveProperty('message')
-  })
-})
-
-describe('buildOptionsUpdate', () => {
-  it('has nothing to send when nothing changed', () => {
-    expect(buildOptionsUpdate(LOCK, optionsOf(LOCK), 'polymer-uk')).toBeNull()
-  })
-
-  it('sends only what changed, for that product, with the lock’s own tags', () => {
-    const body = buildOptionsUpdate(
-      LOCK,
-      { ...optionsOf(LOCK), enabled: false, message: ' Trade only ' },
-      'polymer-uk',
-    )
-    expect(body).toEqual({
-      shop: 'polymer-uk',
-      products: ['p1'],
-      enabled: false,
-      message: 'Trade only',
-      tags: ['vans'],
-    })
-  })
-
-  it('does not attach tags to a login-only lock', () => {
-    const body = buildOptionsUpdate(
-      { ...LOCK, tags: [] },
-      { ...optionsOf(LOCK), noindex: true },
-      'polymer-uk',
-    )
-    expect(body).not.toHaveProperty('tags')
   })
 })
 

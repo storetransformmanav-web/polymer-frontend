@@ -18,6 +18,10 @@ import { lockPath } from '../utils/format.ts'
 /** How long a "saved" confirmation stays on screen. */
 const NOTICE_MS = 10_000
 
+// The page itself does not scroll from `lg` up (`fillHeight` in navigation.ts): the table has
+// its own scrollbar, and the Add lock form and a lock's page scroll inside this box.
+const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+
 const LIST_PATH = '/locks'
 const NEW_PATH = '/locks/new'
 
@@ -86,17 +90,19 @@ export function LocksPage() {
   if (creating) {
     return (
       <>
-        <LockCreateView
-          shop={shop}
-          shopName={shopName}
-          onBack={requestClose}
-          onDirtyChange={setDirty}
-          onDone={(message) => {
-            setNotice(message)
-            setDirty(false)
-            navigate(LIST_PATH)
-          }}
-        />
+        <div className={SCROLL_VIEW}>
+          <LockCreateView
+            shop={shop}
+            shopName={shopName}
+            onBack={requestClose}
+            onDirtyChange={setDirty}
+            onDone={(message) => {
+              setNotice(message)
+              setDirty(false)
+              navigate(LIST_PATH)
+            }}
+          />
+        </div>
         {confirmingClose && (
           <ConfirmCancelDialog
             lose="what you entered for the new lock"
@@ -110,7 +116,7 @@ export function LocksPage() {
 
   if (activeHandle) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className={`flex flex-col gap-4 ${SCROLL_VIEW}`}>
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
         <LockDetailsView
           key={activeHandle}
@@ -122,14 +128,13 @@ export function LocksPage() {
           shop={shop}
           shopName={shopName}
           onBack={() => navigate(LIST_PATH)}
-          onNotice={setNotice}
         />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       <LocksToolbar
@@ -160,7 +165,7 @@ export function LocksPage() {
 
       <section
         aria-label="Locks"
-        className="border-border bg-bg relative overflow-hidden rounded-2xl border"
+        className="border-border bg-bg relative flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1"
       >
         {/* Thin activity bar: results stay on screen while a refresh runs. */}
         <div

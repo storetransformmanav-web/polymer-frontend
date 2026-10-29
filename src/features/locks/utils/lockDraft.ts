@@ -1,4 +1,4 @@
-import type { AccessLock, AccessLockBody } from '../../../lib/api/endpoints.ts'
+import type { AccessLockBody } from '../../../lib/api/endpoints.ts'
 
 /** The backend's limits for one call of `POST /access/locks`. */
 export const MAX_ITEMS = 250
@@ -59,19 +59,6 @@ export function isLockDraftDirty(draft: LockDraft): boolean {
     draft.tags.length > 0 ||
     JSON.stringify(draft.options) !== JSON.stringify(DEFAULT_OPTIONS)
   )
-}
-
-/** The options of a lock the list or the details already have. */
-export function optionsOf(lock: AccessLock): LockOptions {
-  return {
-    enabled: lock.enabled,
-    hideFromLists: lock.hide_from_lists,
-    hideFromNav: lock.hide_from_nav,
-    noindex: lock.noindex,
-    hideFromSitemap: lock.hide_from_sitemap,
-    manualLocking: lock.manual_locking,
-    message: lock.message ?? '',
-  }
 }
 
 /**
@@ -135,51 +122,5 @@ export function buildLockBody(draft: LockDraft, shop: string): AccessLockBody {
   if (draft.tags.length > 0) body.tags = draft.tags
   const message = options.message.trim()
   if (message) body.message = message
-  return body
-}
-
-/**
- * The settings of one existing lock that changed, as an update of that product only. The
- * lock's own tags travel along so the backend never takes "no tags" for a login-only lock.
- * Returns null when nothing changed.
- */
-export function buildOptionsUpdate(
-  lock: AccessLock,
-  options: LockOptions,
-  shop: string,
-): AccessLockBody | null {
-  const before = optionsOf(lock)
-  const body: AccessLockBody = { shop, products: [lock.product_id] }
-  let changed = false
-  if (options.enabled !== before.enabled) {
-    body.enabled = options.enabled
-    changed = true
-  }
-  if (options.hideFromLists !== before.hideFromLists) {
-    body.hide_from_lists = options.hideFromLists
-    changed = true
-  }
-  if (options.hideFromNav !== before.hideFromNav) {
-    body.hide_from_nav = options.hideFromNav
-    changed = true
-  }
-  if (options.noindex !== before.noindex) {
-    body.noindex = options.noindex
-    changed = true
-  }
-  if (options.hideFromSitemap !== before.hideFromSitemap) {
-    body.hide_from_sitemap = options.hideFromSitemap
-    changed = true
-  }
-  if (options.manualLocking !== before.manualLocking) {
-    body.manual_locking = options.manualLocking
-    changed = true
-  }
-  if (options.message.trim() !== before.message.trim()) {
-    body.message = options.message.trim()
-    changed = true
-  }
-  if (!changed) return null
-  if (lock.tags.length > 0) body.tags = lock.tags
   return body
 }

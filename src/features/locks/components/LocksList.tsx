@@ -220,7 +220,7 @@ export function LocksList({
   return (
     <div
       aria-busy={isPending || isStale}
-      className="max-h-[min(68svh,760px)] overflow-auto"
+      className="max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
         className={`w-full min-w-[820px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}

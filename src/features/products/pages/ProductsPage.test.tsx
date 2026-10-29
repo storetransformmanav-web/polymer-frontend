@@ -1009,8 +1009,14 @@ describe('ProductsPage details', () => {
     await user.click(screen.getByRole('tab', { name: /Inventory/ }))
     expect(screen.getByText('Park Royal warehouse')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: /Collections/ }))
-    expect(screen.getByText('best-selling-products')).toBeInTheDocument()
+    // Collections are in the Overview's Product Specifications card, not a tab of their own.
+    expect(screen.queryByRole('tab', { name: /Collections/ })).toBeNull()
+    await user.click(screen.getByRole('tab', { name: /Overview/ }))
+    expect(
+      within(screen.getByRole('list', { name: 'Collections' })).getByText(
+        'Best Selling Products',
+      ),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Media/ }))
     expect(screen.getByText('This product has no images.')).toBeInTheDocument()
@@ -1229,7 +1235,7 @@ describe('ProductsPage details', () => {
     expect(section('Description')).toHaveAttribute('aria-expanded', 'true')
   })
 
-  describe('collections tab', () => {
+  describe('collections in the Product Specifications card', () => {
     const COLLECTIONS = Array.from({ length: 10 }, (_, i) => ({
       id: `col-${i}`,
       shopify_id: 100 + i,
@@ -1238,69 +1244,43 @@ describe('ProductsPage details', () => {
       collection_type: i === 9 ? 'custom' : 'smart',
     }))
 
-    beforeEach(() => {
+    it('lists every collection as a chip under Tags, with its type and handle as hover text', async () => {
       details.mockImplementation((id) =>
         Promise.resolve({ ...makeDetail(id), collections: COLLECTIONS }),
       )
-    })
-
-    it('summarises the collections and labels custom ones as Manual', async () => {
-      const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
 
-      await user.click(screen.getByRole('tab', { name: /Collections/ }))
-      const panel = screen.getByRole('tabpanel')
+      const list = screen.getByRole('list', { name: 'Collections' })
+      expect(within(list).getAllByRole('listitem')).toHaveLength(10)
+      expect(within(list).getByText('Food Packaging').closest('li')).toHaveAttribute(
+        'title',
+        'Smart collection · food-packaging',
+      )
+      expect(within(list).getByText('Collection 9').closest('li')).toHaveAttribute(
+        'title',
+        'Manual collection · collection-9',
+      )
 
-      expect(within(panel).getByText('In 10 collections')).toBeInTheDocument()
-      expect(within(panel).getByText('9 Smart')).toBeInTheDocument()
-      expect(within(panel).getByText('1 Manual')).toBeInTheDocument()
-      expect(within(panel).getAllByRole('listitem')).toHaveLength(10)
-      expect(within(panel).getByText('food-packaging')).toBeInTheDocument()
+      // After the Tags block, in the same card.
+      const tags = screen.getByRole('heading', { name: 'Tags' })
+      const heading = screen.getByRole('heading', { name: 'Collections' })
       expect(
-        within(panel).getByRole('button', { name: 'Copy handle food-packaging' }),
-      ).toBeInTheDocument()
+        tags.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
     })
 
-    it('filters by title or handle, and says so when nothing matches', async () => {
-      const user = userEvent.setup()
-      renderPage('/products/id-7')
-      await screen.findByText('Home > Desks')
-      await user.click(screen.getByRole('tab', { name: /Collections/ }))
-      const panel = screen.getByRole('tabpanel')
-
-      await user.type(
-        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
-        'food',
-      )
-      expect(within(panel).getAllByRole('listitem')).toHaveLength(1)
-      expect(within(panel).getByText('Food Packaging')).toBeInTheDocument()
-
-      await user.clear(
-        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
-      )
-      await user.type(
-        within(panel).getByRole('searchbox', { name: 'Filter collections' }),
-        'zzz',
-      )
-      expect(within(panel).getByText(/No collections match/)).toBeInTheDocument()
-      expect(within(panel).queryAllByRole('listitem')).toHaveLength(0)
-    })
-
-    it('hides the filter for a short list', async () => {
+    it('says so when the product is in no collection', async () => {
       details.mockImplementation((id) =>
-        Promise.resolve({ ...makeDetail(id), collections: COLLECTIONS.slice(0, 2) }),
+        Promise.resolve({ ...makeDetail(id), collections: [] }),
       )
-      const user = userEvent.setup()
       renderPage('/products/id-7')
       await screen.findByText('Home > Desks')
 
-      await user.click(screen.getByRole('tab', { name: /Collections/ }))
-
-      expect(screen.getByText('In 2 collections')).toBeInTheDocument()
       expect(
-        screen.queryByRole('searchbox', { name: 'Filter collections' }),
-      ).not.toBeInTheDocument()
+        screen.getByText("This product isn't in any collection."),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Collections' })).toBeNull()
     })
   })
 

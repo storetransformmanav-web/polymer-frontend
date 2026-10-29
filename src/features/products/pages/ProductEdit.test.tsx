@@ -624,21 +624,34 @@ describe('editing a section in place', () => {
     expect(screen.getByRole('button', { name: /^Remove variant/ })).toBeInTheDocument()
   })
 
-  describe('removing a product from a collection with the ✕ on its tile', () => {
+  describe('removing a product from a collection with the ✕ on its chip', () => {
+    // Collections sit in the Product Specifications card, under Tags; the ✕ is there while
+    // the card is edited.
     const openCollections = async () => {
       const user = await openDetails()
-      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
+      await user.click(pencil('specifications'))
       return user
     }
 
-    it('shows three columns of tiles, each with a ✕ by default — no pencil needed', async () => {
-      await openCollections()
+    it('shows the collections under Tags as chips, with a ✕ only while the card is edited', async () => {
+      const user = await openDetails()
 
-      const list = screen.getByRole('list', { name: 'Collections' })
-      expect(list.className).toContain('lg:grid-cols-3')
+      // Viewing: a "Collections" heading and chips, no tab, no ✕.
+      expect(screen.queryByRole('tab', { name: /^Collections/ })).toBeNull()
+      expect(screen.getByRole('heading', { name: 'Collections' })).toBeInTheDocument()
+      const viewing = screen.getByRole('list', { name: 'Collections' })
+      expect(within(viewing).getByText('Best Sellers')).toBeInTheDocument()
       expect(
-        within(list).getByRole('button', { name: 'Remove from Best Sellers' }),
+        screen.queryByRole('button', { name: 'Remove from Best Sellers' }),
+      ).toBeNull()
+      expect(screen.queryByLabelText('Add to a collection')).toBeNull()
+
+      await user.click(pencil('specifications'))
+      const editing = screen.getByRole('list', { name: 'Collections' })
+      expect(
+        within(editing).getByRole('button', { name: 'Remove from Best Sellers' }),
       ).toBeInTheDocument()
+      expect(screen.getByLabelText('Add to a collection')).toBeInTheDocument()
     })
 
     it('asks first, and sends nothing when Cancel is pressed', async () => {
@@ -752,8 +765,7 @@ describe('editing a section in place', () => {
       const user = userEvent.setup()
       renderPage('/products/id-1')
       await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
-      await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+      await user.click(pencil('specifications'))
       return user
     }
     const box = () => screen.getByRole('combobox', { name: 'Add to a collection' })
@@ -768,8 +780,8 @@ describe('editing a section in place', () => {
 
     it('shows nothing and asks for nothing by default — the search only starts once something is typed', async () => {
       const user = await openAdd()
-      // "Add collection" puts the cursor in the box, but with nothing typed there is no list.
-      expect(box()).toHaveFocus()
+      // With nothing typed there is no list (and the box doesn't steal the focus from the fields).
+      expect(box()).not.toHaveFocus()
       expect(list()).toBeNull()
       await user.click(box())
       expect(list()).toBeNull()
@@ -968,11 +980,11 @@ describe('editing a section in place', () => {
       expect(update).toHaveBeenCalledTimes(1)
       // Still just the one search: the chosen name needed no second look-up.
       expect(search).toHaveBeenCalledTimes(1)
-      // Done: the dialog and the box are put away.
+      // Done: the dialog is put away and the box is empty, ready for the next one.
       await waitFor(() =>
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
       )
-      expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
+      expect(box()).toHaveValue('')
     })
 
     it('moves with the arrow keys and fills the box with the highlighted one on Enter; Escape closes only the list', async () => {
@@ -1024,8 +1036,8 @@ describe('editing a section in place', () => {
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
       )
 
-      // The box was put away; open it again and use the Add button.
-      await user.click(screen.getByRole('button', { name: 'Add collection' }))
+      // The box is empty again; use the Add button this time.
+      expect(box()).toHaveValue('')
       await user.type(box(), 'Range 12')
       await user.click(screen.getByRole('button', { name: 'Add' }))
       await confirmAdd(user, 'Range 12')
@@ -1090,7 +1102,7 @@ describe('editing a section in place', () => {
         ),
       ).toBeVisible()
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-      expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
+      expect(box()).toHaveValue('')
     })
 
     it('keeps the question open with the backend’s message when making the collection fails', async () => {
@@ -1271,46 +1283,40 @@ describe('editing a section in place', () => {
     })
   })
 
-  it('has no Edit pencil and no Save on the collections tab: the summary and Add collection only', async () => {
+  it('has no Collections tab and no Save of its own: collections go in with the specifications card', async () => {
     const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Collections/ }))
 
-    expect(screen.getByText('In 1 collection')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /^Collections/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Edit collections' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Add collection' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add collection' })).toBeNull()
 
-    // Add collection opens the box — there is nothing to save or discard.
-    await user.click(screen.getByRole('button', { name: 'Add collection' }))
+    // The box appears with the card's pencil — and says collections are not part of Save.
+    await user.click(pencil('specifications'))
     expect(screen.getByLabelText('Add to a collection')).toBeInTheDocument()
+    expect(screen.getByText(/aren.t part of Save/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save collections' })).toBeNull()
-    expect(
-      screen.queryByRole('button', { name: 'Discard collections changes' }),
-    ).toBeNull()
   })
 
-  it('keeps the box on top of the list, and tucks it away when Add collection is clicked again', async () => {
+  it('puts the add box under the collection chips, and away again when the edit is discarded', async () => {
     const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-    await user.click(screen.getByRole('button', { name: 'Add collection' }))
+    await user.click(pencil('specifications'))
 
     const box = screen.getByLabelText('Add to a collection')
-    expect(box).toHaveFocus()
     expect(box).toHaveAttribute('placeholder', 'Type a collection name')
 
-    // It sits on top of the list of collections.
+    // Under the chips.
     const list = screen.getByRole('list', { name: 'Collections' })
     expect(
-      box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+      list.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: 'Add collection' }))
+    await user.click(discardButton('specifications'))
     expect(screen.queryByLabelText('Add to a collection')).not.toBeInTheDocument()
   })
 
-  it('adds a collection from the tab: type its name, Add, "Yes, add" — and it shows in the list', async () => {
+  it('adds a collection: type its name, Add, "Yes, add" — and its chip shows at once', async () => {
     const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Collections/ }))
-    await user.click(screen.getByRole('button', { name: 'Add collection' }))
+    await user.click(pencil('specifications'))
 
     vi.mocked(api.collections.list).mockResolvedValue({
       items: [

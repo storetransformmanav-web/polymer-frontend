@@ -23,7 +23,6 @@ import {
   statusTone,
 } from '../utils/format.ts'
 import {
-  CollectionsPanel,
   InventoryPanel,
   MediaPanel,
   MetafieldsPanel,
@@ -34,8 +33,7 @@ import {
 import { ProductImage } from './ProductImage.tsx'
 import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
-type TabId =
-  'overview' | 'variants' | 'inventory' | 'collections' | 'media' | 'seo' | 'metafields'
+type TabId = 'overview' | 'variants' | 'inventory' | 'media' | 'seo' | 'metafields'
 
 interface ProductDetailsViewProps {
   id: string
@@ -113,7 +111,6 @@ export function ProductDetailsView({
     { id: 'overview', label: 'Overview' },
     { id: 'variants', label: 'Variants', count: product?.variants.length },
     { id: 'inventory', label: 'Inventory', count: inventoryLevels },
-    { id: 'collections', label: 'Collections', count: product?.collections.length },
     { id: 'media', label: 'Media', count: product?.images.length },
     { id: 'seo', label: 'SEO & Online' },
     // Always there, even with none yet, so a first metafield can be added.
@@ -311,9 +308,6 @@ export function ProductDetailsView({
           <VariantsPanel product={product} onSaved={onSaved} />
         )}
         {product && tab === 'inventory' && <InventoryPanel product={product} />}
-        {product && tab === 'collections' && (
-          <CollectionsPanel product={product} onSaved={onSaved} />
-        )}
         {product && tab === 'media' && <MediaPanel product={product} onSaved={onSaved} />}
         {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
         {product && tab === 'metafields' && (

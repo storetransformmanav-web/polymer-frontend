@@ -30,15 +30,18 @@ const LIST_ROOM = 340
 export function CollectionAdder({
   product,
   onChoose,
+  autoFocus = true,
 }: {
   product: ProductDetail
   /** A name was added: ask, then add the product to it (or make it, when `isNew`). */
   onChoose: (collectionName: string, isNew: boolean) => void
+  /** Put the cursor in the box when it appears (off where it sits among other fields). */
+  autoFocus?: boolean
 }) {
   const addInput = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    addInput.current?.focus()
-  }, [])
+    if (autoFocus) addInput.current?.focus()
+  }, [autoFocus])
   const [input, setInput] = useState('')
   /** The name chosen from the dropdown (so Add needs no second search for it). */
   const [checking, setChecking] = useState(false)
