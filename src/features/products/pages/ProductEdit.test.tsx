@@ -28,6 +28,9 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       list: vi.fn(),
       create: vi.fn(),
     },
+    inventory: {
+      locations: vi.fn(),
+    },
     auth: {},
   },
 }))
@@ -196,6 +199,7 @@ describe('editing a product', () => {
     details.mockResolvedValue(DETAIL)
     update.mockResolvedValue(WRITE_OK)
     syncHistory.mockResolvedValue([])
+    vi.mocked(api.inventory.locations).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -406,6 +410,47 @@ describe('editing a section in place', () => {
     expect(await screen.findByText(/Saved “Hippo Carrier Bag”/)).toBeInTheDocument()
   })
 
+  it('offers to redirect the old address only once the handle is changed, and sends the choice', async () => {
+    const user = await openDetails()
+    await user.click(pencil('specifications'))
+    const redirect = () =>
+      screen.queryByRole('checkbox', { name: 'Redirect the old address to the new one' })
+    expect(redirect()).toBeNull()
+
+    const handle = screen.getByLabelText('Handle')
+    await user.clear(handle)
+    await user.type(handle, 'hippo-carrier-bag')
+    // On to begin with.
+    expect(redirect()).toBeChecked()
+    await user.click(redirect()!)
+    await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { handle: 'hippo-carrier-bag', redirect_new_handle: false },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('sends the category by name', async () => {
+    const user = await openDetails()
+    await user.click(pencil('specifications'))
+    await user.type(screen.getByLabelText(/^Category/), 'Food Container Covers')
+    await user.click(saveButton('specifications'))
+    await confirmUpdate(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { category: 'Food Container Covers' },
+        'polymer-uk',
+      ),
+    )
+  })
+
   describe('asking "are you sure?" before a save', () => {
     async function startEditingVendor() {
       const user = await openDetails()
@@ -609,19 +654,263 @@ describe('editing a section in place', () => {
     )
   })
 
-  it('has no way to add a variant — the update API cannot manage options', async () => {
-    const user = await openDetails()
-    await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-    expect(
-      screen.queryByRole('button', { name: /add (a )?variant/i }),
-    ).not.toBeInTheDocument()
+  describe('everything the update API takes can be edited on the Variants tab', () => {
+    const LOCATION = 60465184951
+    /** A product with a Size option, one variant with stock at one location and a picture. */
+    const withOptions = () =>
+      details.mockResolvedValue({
+        ...DETAIL,
+        has_only_default_variant: false,
+        options: [{ name: 'Size', position: 1, values: ['M'] }],
+        variants: [
+          {
+            ...DETAIL.variants[0],
+            selected_options: [{ name: 'Size', value: 'M' }],
+            image_url: 'https://cdn.example.com/1.jpg',
+            inventory_levels: [
+              { location_shopify_id: LOCATION, location_name: 'Unit 9', available: 5 },
+            ],
+          },
+        ],
+      })
+    const editVariants = async () => {
+      const user = await openDetails()
+      await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+      await user.click(pencil('variants'))
+      return user
+    }
 
-    await user.click(pencil('variants'))
-    expect(
-      screen.queryByRole('button', { name: /add (a )?variant/i }),
-    ).not.toBeInTheDocument()
-    // Existing variants can still be removed.
-    expect(screen.getByRole('button', { name: /^Remove variant/ })).toBeInTheDocument()
+    it('sets the stock at a location, sending only the locations that changed', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      // Drawn like Add product's Inventory card: a Location / Quantity table with a dropdown.
+      expect(screen.getByLabelText('Stock location 1')).toHaveValue(String(LOCATION))
+      expect(screen.getByLabelText('Stock quantity 1')).toHaveValue('5')
+      await user.clear(screen.getByLabelText('Stock quantity 1'))
+      await user.type(screen.getByLabelText('Stock quantity 1'), '12')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              { id: VARIANT, stock: [{ location_id: LOCATION, available: 12 }] },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('puts stock at any of the store’s locations, chosen from the dropdown', async () => {
+      vi.mocked(api.inventory.locations).mockResolvedValue([
+        { id: LOCATION, name: 'Unit 9', variants: 1 },
+        { id: 70137741495, name: 'Shop floor', variants: 1 },
+      ])
+      withOptions()
+      const user = await editVariants()
+
+      // The store's own list is in the dropdown (not only the locations the variant has).
+      await user.click(screen.getByRole('button', { name: 'Add location' }))
+      const location = await screen.findByLabelText('Stock location 2')
+      await waitFor(() =>
+        expect(
+          within(location).getByRole('option', { name: 'Shop floor' }),
+        ).toBeInTheDocument(),
+      )
+      await user.selectOptions(location, 'Shop floor')
+      await user.type(screen.getByLabelText('Stock quantity 2'), '25')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              { id: VARIANT, stock: [{ location_id: 70137741495, available: 25 }] },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('moves a row to another location, and refuses the same location twice', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.click(screen.getByRole('button', { name: 'Add location' }))
+      await user.selectOptions(screen.getByLabelText('Stock location 2'), 'Unit 9')
+      await user.type(screen.getByLabelText('Stock quantity 2'), '1')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      expect(
+        await screen.findByText('This location is already listed'),
+      ).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('refuses a stock quantity that is not a whole number', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.clear(screen.getByLabelText('Stock quantity 1'))
+      await user.type(screen.getByLabelText('Stock quantity 1'), '2.5')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      expect(
+        await screen.findByText('Enter a whole number, 0 or more'),
+      ).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('takes the picture off a variant with "No image"', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.selectOptions(screen.getByLabelText('Image'), 'No image')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { variants: [{ id: VARIANT, remove_image: true }] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('renames an option and one of its values', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      const name = screen.getByLabelText(/^Option name/)
+      await user.clear(name)
+      await user.type(name, 'Pack Size')
+      const value = screen.getByLabelText('Value “M” of Size')
+      await user.clear(value)
+      await user.type(value, 'Medium')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            options_update: [
+              {
+                name: 'Size',
+                new_name: 'Pack Size',
+                values_rename: [{ from: 'M', to: 'Medium' }],
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('adds an option and a variant that uses it, in one save', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.click(screen.getByRole('button', { name: 'Add option' }))
+      await user.type(screen.getByLabelText('New option name'), 'Colour')
+      await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+
+      const created = within(screen.getByRole('list', { name: 'New variants' }))
+      await user.type(created.getByLabelText('Size'), 'L')
+      await user.type(created.getByLabelText('Colour'), 'Clear')
+      await user.type(created.getByLabelText(/^Price/), '39.99')
+      await user.type(created.getByLabelText(/^SKU/), 'HSC-L')
+      await user.click(created.getByRole('button', { name: 'Add location' }))
+      await user.selectOptions(created.getByLabelText('Stock location 1'), 'Unit 9')
+      await user.type(created.getByLabelText('Stock quantity 1'), '40')
+      await user.type(
+        created.getByLabelText(/^Image address/),
+        'https://cdn.example.com/new.jpg',
+      )
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            options_add: [{ name: 'Colour', values: ['Clear'] }],
+            variants: [
+              {
+                option_values: ['L', 'Clear'],
+                price: '39.99',
+                taxable: true,
+                inventory_policy: 'DENY',
+                tracked: true,
+                requires_shipping: true,
+                sku: 'HSC-L',
+                stock: [{ location_id: LOCATION, available: 40 }],
+                image_url: 'https://cdn.example.com/new.jpg',
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('needs a price and a value for every option before a new variant is sent', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      expect(await screen.findByText('Choose a Size')).toBeInTheDocument()
+      expect(screen.getByText('Enter a price')).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('does not make a second variant with the values one already has', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      const created = within(screen.getByRole('list', { name: 'New variants' }))
+      await user.type(created.getByLabelText('Size'), 'm')
+      await user.type(created.getByLabelText(/^Price/), '9.99')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      expect(
+        await screen.findByText('A variant with these values already exists'),
+      ).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('asks for an option first when the product has only its default variant', async () => {
+      const user = await editVariants()
+
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+      expect(
+        await screen.findByText(/Add an option first \(for example Size\)/),
+      ).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      // Options are added here too.
+      expect(screen.getByRole('button', { name: 'Add option' })).toBeInTheDocument()
+      // Removing the row again leaves nothing to send.
+      await user.click(screen.getByRole('button', { name: 'Remove new variant 1' }))
+      expect(saveButton('variants')).toBeDisabled()
+    })
   })
 
   describe('removing a product from a collection with the ✕ on its chip', () => {

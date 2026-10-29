@@ -9,6 +9,10 @@ import {
 } from '../../../../lib/api/endpoints.ts'
 import { formatPrice } from '../../../../lib/format.ts'
 import { LIMITS, type VariantDraft } from '../../utils/editDraft.ts'
+import { useProductStockLocations } from '../../hooks/useProductStockLocations.ts'
+import { NewVariantsEditor } from './NewVariantsEditor.tsx'
+import { StockFields } from './StockFields.tsx'
+import { VariantOptionsEditor } from './VariantOptionsEditor.tsx'
 import {
   CheckField,
   EditField,
@@ -17,6 +21,9 @@ import {
   TEXT_BUTTON,
   type SectionProps,
 } from './fields.tsx'
+
+/** The Image dropdown's choice for "take the picture off this variant". */
+const NO_IMAGE = 'none'
 
 const POLICY_OPTIONS = [
   { value: 'DENY', label: 'Stop selling when out of stock' },
@@ -29,13 +36,23 @@ const UNIT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
 }))
 
 /**
- * Every variant of the product as a collapsible card: price, SKU, stock policy
- * and so on. Variants can be edited or removed (deleted in the store on save).
- * There is deliberately no "add a variant" here: the update API has no way to
- * manage a product's options, and sending a lone new variant made the backend
- * drop the others.
+ * The Variants editor. On top, the product's **options** (rename an option or its values, add an
+ * option); then every variant of the product as a collapsible card — price, SKU, stock policy,
+ * the **stock at each location**, its picture (another one, or none) and so on, which can be
+ * edited or removed (deleted in the store on save); and last, **Add variant** for new ones.
  */
-export function VariantsSection({ product, draft, errors, onChange }: SectionProps) {
+export function VariantsSection(props: SectionProps) {
+  return (
+    <div className="flex flex-col gap-4">
+      <VariantOptionsEditor {...props} />
+      <ExistingVariants {...props} />
+      <NewVariantsEditor {...props} />
+    </div>
+  )
+}
+
+function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
+  const locations = useProductStockLocations(product)
   // A product with a single variant opens it straight away; otherwise they start collapsed.
   const [open, setOpen] = useState<Set<string>>(
     () => new Set(draft.variants.length === 1 ? [draft.variants[0].key] : []),
@@ -59,12 +76,14 @@ export function VariantsSection({ product, draft, errors, onChange }: SectionPro
   // Removing marks the variant for deletion; it is only deleted in the store on Save.
   const remove = (index: number) => update(index, { removed: true })
 
-  const imageOptions = [
+  const imageOptions = (hasImage: boolean) => [
     { value: '', label: 'Keep the current image' },
     ...draft.images.map((image, index) => ({
       value: image.id,
       label: `Image ${index + 1}${image.alt ? ` — ${image.alt}` : ''}`,
     })),
+    // Taking the picture off only makes sense for a variant that shows one.
+    ...(hasImage ? [{ value: NO_IMAGE, label: 'No image' }] : []),
   ]
 
   return (
@@ -269,17 +288,37 @@ export function VariantsSection({ product, draft, errors, onChange }: SectionPro
                       }
                     />
                   </div>
-                  {imageOptions.length > 1 && (
+                  {imageOptions(variant.hasImage).length > 1 && (
                     <div className="min-[480px]:col-span-2">
                       <SelectField
                         id={`${prefix}-image`}
                         label="Image"
-                        value={variant.imageId}
-                        options={imageOptions}
-                        onChange={(imageId) => update(index, { imageId })}
+                        value={variant.removeImage ? NO_IMAGE : variant.imageId}
+                        options={imageOptions(variant.hasImage)}
+                        onChange={(choice) =>
+                          update(
+                            index,
+                            choice === NO_IMAGE
+                              ? { removeImage: true, imageId: '' }
+                              : { removeImage: false, imageId: choice },
+                          )
+                        }
                       />
                     </div>
                   )}
+                  <fieldset className="m-0 min-w-0 border-0 p-0 min-[480px]:col-span-2">
+                    <legend className="text-text mb-1.5 p-0 text-[0.82rem] font-semibold">
+                      Stock
+                    </legend>
+                    <StockFields
+                      rows={variant.stock}
+                      onChange={(stock) => update(index, { stock })}
+                      locations={locations}
+                      errors={errors}
+                      prefix={`variants.${index}.stock`}
+                      label={`Stock of ${variant.title}`}
+                    />
+                  </fieldset>
                   <EditField
                     id={`${prefix}-taxcode`}
                     label="Tax code"

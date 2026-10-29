@@ -154,16 +154,71 @@ export function patchListItem(
   }
 }
 
+/** The option names and values of a variant after `options_update` renamed some of them. */
+function patchSelectedOptions(
+  selected: ProductVariant['selected_options'],
+  body: ProductUpdateBody,
+): ProductVariant['selected_options'] {
+  if (!selected || !body.options_update?.length) return selected
+  return selected.map((chosen) => {
+    const update = body.options_update?.find(
+      (candidate) => candidate.name === chosen.name,
+    )
+    if (!update) return chosen
+    const renamed = update.values_rename?.find((pair) => pair.from === chosen.value)
+    return { name: update.new_name ?? chosen.name, value: renamed?.to ?? chosen.value }
+  })
+}
+
+/** A stock edit: the level at each location is set, and one is added where there was none. */
+function patchLevels(
+  levels: ProductVariant['inventory_levels'],
+  stock: NonNullable<ProductUpdateBody['variants']>[number]['stock'],
+): ProductVariant['inventory_levels'] {
+  const rows = stock ?? []
+  const known = new Set(levels.map((level) => level.location_shopify_id))
+  return [
+    ...levels.map((level) => {
+      const set = rows.find((row) => row.location_id === level.location_shopify_id)
+      return set ? { ...level, available: set.available } : level
+    }),
+    ...rows
+      .filter((row) => !known.has(row.location_id))
+      .map((row) => ({
+        location_shopify_id: row.location_id,
+        location_name: null,
+        available: row.available,
+      })),
+  ]
+}
+
 function patchVariant(
   variant: ProductVariant,
   body: ProductUpdateBody,
+  images: ProductDetail['images'],
 ): ProductVariant | null {
   if (body.variants_remove?.includes(variant.id)) return null
   const edit = body.variants?.find((candidate) => candidate.id === variant.id)
-  if (!edit) return variant
+  const selected_options = patchSelectedOptions(variant.selected_options, body)
+  if (!edit)
+    return selected_options === variant.selected_options
+      ? variant
+      : { ...variant, selected_options }
+
+  // A picked picture is one of the product's images; "no image" takes it off.
+  const picked = edit.image_attachment_id
+    ? images.find((image) => image.id === edit.image_attachment_id)
+    : undefined
+  const image_url = edit.remove_image ? null : (picked?.url ?? variant.image_url)
 
   return {
     ...variant,
+    selected_options,
+    image_url,
+    // Only a stock edit touches the levels.
+    inventory_levels: edit.stock
+      ? patchLevels(variant.inventory_levels, edit.stock)
+      : variant.inventory_levels,
     price: edit.price !== undefined ? (text(edit.price) ?? variant.price) : variant.price,
     compare_at_price:
       edit.compare_at_price !== undefined
@@ -233,9 +288,37 @@ export function patchDetail(
     collections: product.collections.filter(
       (collection) => !collectionsRemoved.has(collection.title.trim().toLowerCase()),
     ),
+    options: patchOptions(product.options, body),
     variants: product.variants
-      .map((variant) => patchVariant(variant, body))
+      .map((variant) => patchVariant(variant, body, images))
       .filter((variant): variant is ProductVariant => variant !== null),
     images,
   }
+}
+
+/** The product's options after renames and additions (the new ones go last). */
+function patchOptions(
+  options: ProductDetail['options'],
+  body: ProductUpdateBody,
+): ProductDetail['options'] {
+  if (!body.options_update?.length && !body.options_add?.length) return options
+  const renamed = options.map((option) => {
+    const update = body.options_update?.find(
+      (candidate) => candidate.name === option.name,
+    )
+    if (!update) return option
+    return {
+      ...option,
+      name: update.new_name ?? option.name,
+      values: option.values.map(
+        (value) => update.values_rename?.find((pair) => pair.from === value)?.to ?? value,
+      ),
+    }
+  })
+  const added = (body.options_add ?? []).map((option, index) => ({
+    name: option.name,
+    position: renamed.length + index + 1,
+    values: option.values,
+  }))
+  return [...renamed, ...added]
 }

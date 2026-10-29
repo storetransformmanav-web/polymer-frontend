@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductDetail } from '../../../lib/api/endpoints.ts'
 import {
+  blankAddedOption,
   blankMedia,
+  blankNewVariant,
+  blankStockRow,
   blankMetafieldEdit,
   buildMediaItems,
   buildUpdateBody,
@@ -128,6 +131,40 @@ describe('buildUpdateBody', () => {
       vendor: 'Packaging By Polymer',
       status: 'DRAFT',
     })
+  })
+
+  it('sends the category by name, and only when one was typed', () => {
+    expect(edit(makeProduct(), () => undefined)).toEqual({})
+    expect(
+      edit(makeProduct(), (draft) => {
+        draft.category = '  Food Container Covers '
+      }),
+    ).toEqual({ category: 'Food Container Covers' })
+  })
+
+  it('asks for the old address to redirect when the handle changes, unless that is switched off', () => {
+    // Nothing about redirecting without a new handle.
+    expect(edit(makeProduct(), () => undefined)).not.toHaveProperty('redirect_new_handle')
+
+    expect(
+      edit(makeProduct(), (draft) => {
+        draft.handle = 'hinged-salad-container-500ml'
+      }),
+    ).toEqual({ handle: 'hinged-salad-container-500ml', redirect_new_handle: true })
+
+    expect(
+      edit(makeProduct(), (draft) => {
+        draft.handle = 'hinged-salad-container-500ml'
+        draft.redirectHandle = false
+      }),
+    ).toEqual({ handle: 'hinged-salad-container-500ml', redirect_new_handle: false })
+
+    // Changing the box without changing the handle sends nothing.
+    expect(
+      edit(makeProduct(), (draft) => {
+        draft.redirectHandle = false
+      }),
+    ).toEqual({})
   })
 
   it('can clear a text field, and never offers "unlisted" as a status to save', () => {
@@ -333,9 +370,13 @@ const API_FIELDS = new Set([
   'tags_remove',
   'seo',
   'template_suffix',
-  'category_gid',
+  'redirect_new_handle',
+  'category',
   'collections_add',
   'collections_remove',
+  'collections_create',
+  'options_update',
+  'options_add',
   'variants',
   'variants_remove',
   'media_add',
@@ -360,6 +401,9 @@ const API_VARIANT_FIELDS = new Set([
   'cost',
   'weight',
   'weight_unit',
+  'stock',
+  'image_url',
+  'remove_image',
   'image_attachment_id',
   'metafields',
   'metafields_remove',
@@ -375,7 +419,7 @@ describe('the update body only has fields the API has', () => {
       draft.status = 'ARCHIVED'
       draft.handle = 'h'
       draft.templateSuffix = 'suffix'
-      draft.categoryGid = 'gid://shopify/TaxonomyCategory/aa-1'
+      draft.category = 'Food Container Covers'
       draft.tags = ['new']
       draft.seoTitle = 'S'
       draft.seoDescription = 'SD'
@@ -419,6 +463,224 @@ describe('the update body only has fields the API has', () => {
       }
     }
     expect(Object.keys(body.variants?.[0] ?? {}).length).toBeGreaterThan(10)
+  })
+})
+
+describe('stock, pictures, options and new variants in the update body', () => {
+  const LOCATION = 60465184951
+  const withStock = () => {
+    const product = makeProduct()
+    product.variants[0] = makeVariant(VARIANT_A, {
+      image_url: 'https://cdn.example.com/1.jpg',
+      inventory_levels: [
+        { location_shopify_id: LOCATION, location_name: 'Unit 9', available: 5 },
+        { location_shopify_id: 2, location_name: 'Shop', available: 0 },
+      ],
+    })
+    return product
+  }
+
+  it('sends only the locations whose quantity was changed', () => {
+    const body = edit(withStock(), (draft) => {
+      draft.variants[0].stock[0].available = '12'
+    })
+    expect(body).toEqual({
+      variants: [{ id: VARIANT_A, stock: [{ location_id: LOCATION, available: 12 }] }],
+    })
+    // Retyping the same number, or leaving a box blank, changes nothing.
+    expect(
+      edit(withStock(), (draft) => {
+        draft.variants[0].stock[0].available = ' 5 '
+        draft.variants[0].stock[1].available = ''
+      }),
+    ).toEqual({})
+  })
+
+  it('sends a location the variant had no stock at, or a row moved to another location', () => {
+    const body = edit(withStock(), (draft) => {
+      // The first row is moved to another location (same quantity); a third row is added.
+      draft.variants[0].stock[0].locationId = '99'
+      draft.variants[0].stock.push({
+        ...blankStockRow(),
+        locationId: '123',
+        available: '7',
+      })
+    })
+    expect(body.variants?.[0].stock).toEqual([
+      { location_id: 99, available: 5 },
+      { location_id: 123, available: 7 },
+    ])
+    // A new row with no quantity yet sends nothing.
+    expect(
+      edit(withStock(), (draft) => {
+        draft.variants[0].stock.push({ ...blankStockRow(), locationId: '123' })
+      }),
+    ).toEqual({})
+  })
+
+  it('takes a variant picture off with remove_image, only when it has one', () => {
+    expect(
+      edit(withStock(), (draft) => {
+        draft.variants[0].removeImage = true
+      }),
+    ).toEqual({ variants: [{ id: VARIANT_A, remove_image: true }] })
+    // The second variant shows no picture, so there is nothing to take off.
+    expect(
+      edit(withStock(), (draft) => {
+        draft.variants[1].removeImage = true
+      }),
+    ).toEqual({})
+  })
+
+  it('renames an option and its values, naming the option as it is now', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.options[0].newName = ' Pack Size '
+      draft.options[0].values[1].to = '50 pcs'
+    })
+    expect(body).toEqual({
+      options_update: [
+        {
+          name: 'Size',
+          new_name: 'Pack Size',
+          values_rename: [{ from: 'M', to: '50 pcs' }],
+        },
+      ],
+    })
+    expect(edit(makeProduct(), () => undefined)).toEqual({})
+  })
+
+  it('adds an option, and a variant that has a value for every option', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.addedOptions = [{ ...blankAddedOption(), name: 'Colour', values: ['Clear'] }]
+      draft.newVariants = [
+        {
+          ...blankNewVariant('KILOGRAMS'),
+          optionValues: ['L', ' Clear '],
+          price: '39.99',
+          weight: '4.5',
+          sku: 'X-L',
+          stock: [
+            {
+              ...blankStockRow(),
+              locationId: '60465184951',
+              available: '40',
+            },
+          ],
+          imageUrl: ' https://cdn.example.com/n.jpg ',
+        },
+      ]
+    })
+    expect(body.options_add).toEqual([{ name: 'Colour', values: ['Clear'] }])
+    expect(body.variants).toEqual([
+      {
+        option_values: ['L', 'Clear'],
+        price: '39.99',
+        taxable: true,
+        inventory_policy: 'DENY',
+        tracked: true,
+        requires_shipping: true,
+        sku: 'X-L',
+        weight: '4.5',
+        weight_unit: 'KILOGRAMS',
+        stock: [{ location_id: 60465184951, available: 40 }],
+        image_url: 'https://cdn.example.com/n.jpg',
+      },
+    ])
+  })
+
+  it('leaves out an added option that has no name or no values yet', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.addedOptions = [blankAddedOption(), { ...blankAddedOption(), name: 'Colour' }]
+    })
+    expect(body).toEqual({})
+  })
+})
+
+describe('validating options, stock and new variants', () => {
+  const problems = (change: (draft: ProductDraft) => void) => {
+    const product = makeProduct()
+    const draft = draftFromProduct(product)
+    change(draft)
+    return validateDraft(product, draft)
+  }
+
+  it('wants a whole-number quantity', () => {
+    const errors = problems((draft) => {
+      draft.variants[0].stock = [
+        { ...blankStockRow(), locationId: '1', available: '2.5' },
+        { ...blankStockRow(), available: '4' },
+        { ...blankStockRow(), locationId: '1', available: '3' },
+      ]
+    })
+    expect(errors['variants.0.stock.0.quantity']).toBe('Enter a whole number, 0 or more')
+    // A quantity needs a location, and a location is listed once.
+    expect(errors['variants.0.stock.1.location']).toBe('Choose a location')
+    expect(errors['variants.0.stock.2.location']).toBe('This location is already listed')
+  })
+
+  it('does not let an option or a value be blanked or repeated', () => {
+    const errors = problems((draft) => {
+      draft.options[0].newName = ' '
+      draft.options[0].values[1].to = 's'
+    })
+    expect(errors['options.0.name']).toBe('Enter a name')
+    expect(errors['options.0.values.1']).toBe('This value is already in the list')
+    expect(
+      problems((draft) => {
+        draft.options[0].values[0].to = ''
+      })['options.0.values.0'],
+    ).toBe('Enter a value')
+  })
+
+  it('checks a new option: a name, a value, no clash, at most three', () => {
+    expect(
+      problems((draft) => {
+        draft.addedOptions = [{ ...blankAddedOption(), name: 'size', values: ['x'] }]
+      })['addedOptions.0.name'],
+    ).toBe('The product already has an option with this name')
+    expect(
+      problems((draft) => {
+        draft.addedOptions = [{ ...blankAddedOption(), name: 'Colour' }]
+      })['addedOptions.0.values'],
+    ).toBe('Add at least one value')
+    expect(
+      problems((draft) => {
+        draft.addedOptions = ['A', 'B', 'C'].map((name) => ({
+          ...blankAddedOption(),
+          name,
+          values: ['1'],
+        }))
+      }).addedOptions,
+    ).toMatch(/at most 3 options/)
+  })
+
+  it('checks a new variant: values, price, picture, stock, and repeats', () => {
+    const errors = problems((draft) => {
+      draft.newVariants = [
+        blankNewVariant(),
+        {
+          ...blankNewVariant(),
+          optionValues: ['S'],
+          price: '5',
+          imageUrl: 'http://x.example/a.jpg',
+          stock: [{ ...blankStockRow(), available: '3' }],
+        },
+      ]
+    })
+    expect(errors['newVariants.0.optionValues.0']).toBe('Choose a Size')
+    expect(errors['newVariants.0.price']).toBe('Enter a price')
+    expect(errors['newVariants.1.imageUrl']).toBe('Use a public https:// address')
+    expect(errors['newVariants.1.stock.0.location']).toBe('Choose a location')
+  })
+
+  it('wants an option before a variant can be added', () => {
+    const product = makeProduct()
+    product.options = []
+    const draft = draftFromProduct(product)
+    draft.newVariants = [{ ...blankNewVariant(), price: '5' }]
+    expect(validateDraft(product, draft)['newVariants.0.options']).toMatch(
+      /Add an option first/,
+    )
   })
 })
 

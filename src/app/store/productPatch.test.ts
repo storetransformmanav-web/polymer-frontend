@@ -49,6 +49,83 @@ const detail = {
   ],
 } as unknown as ProductDetail
 
+describe('patchDetail — stock, pictures and options', () => {
+  const stocked = {
+    ...detail,
+    options: [{ name: 'Size', position: 1, values: ['S', 'M'] }],
+    images: [
+      { id: 'i1', url: 'https://cdn.example.com/1.jpg', alt_text: null },
+      { id: 'i2', url: 'https://cdn.example.com/2.jpg', alt_text: 'two' },
+    ],
+    variants: [
+      {
+        id: 'v1',
+        price: '10.00',
+        image_url: 'https://cdn.example.com/1.jpg',
+        selected_options: [{ name: 'Size', value: 'S' }],
+        inventory_levels: [
+          { location_shopify_id: 7, location_name: 'Unit 9', available: 5 },
+          { location_shopify_id: 8, location_name: 'Shop', available: 1 },
+        ],
+      },
+    ],
+  } as unknown as ProductDetail
+
+  it('puts a changed quantity into that location only', () => {
+    const next = patchDetail(stocked, {
+      variants: [{ id: 'v1', stock: [{ location_id: 7, available: 12 }] }],
+    })
+    expect(next.variants[0].inventory_levels.map((level) => level.available)).toEqual([
+      12, 1,
+    ])
+  })
+
+  it('adds a level for a location the variant had none at', () => {
+    const next = patchDetail(stocked, {
+      variants: [{ id: 'v1', stock: [{ location_id: 99, available: 3 }] }],
+    })
+    expect(
+      next.variants[0].inventory_levels.map((level) => [
+        level.location_shopify_id,
+        level.available,
+      ]),
+    ).toEqual([
+      [7, 5],
+      [8, 1],
+      [99, 3],
+    ])
+  })
+
+  it('moves a variant to another picture, or takes it off', () => {
+    expect(
+      patchDetail(stocked, { variants: [{ id: 'v1', image_attachment_id: 'i2' }] })
+        .variants[0].image_url,
+    ).toBe('https://cdn.example.com/2.jpg')
+    expect(
+      patchDetail(stocked, { variants: [{ id: 'v1', remove_image: true }] }).variants[0]
+        .image_url,
+    ).toBeNull()
+  })
+
+  it('renames an option and its values on the product and on its variants', () => {
+    const next = patchDetail(stocked, {
+      options_update: [
+        { name: 'Size', new_name: 'Pack', values_rename: [{ from: 'S', to: 'Small' }] },
+      ],
+    })
+    expect(next.options[0]).toMatchObject({ name: 'Pack', values: ['Small', 'M'] })
+    expect(next.variants[0].selected_options).toEqual([{ name: 'Pack', value: 'Small' }])
+  })
+
+  it('appends an added option', () => {
+    const next = patchDetail(stocked, {
+      options_add: [{ name: 'Colour', values: ['Clear'] }],
+    })
+    expect(next.options.map((option) => option.name)).toEqual(['Size', 'Colour'])
+    expect(next.options[1].position).toBe(2)
+  })
+})
+
 describe('patchTags', () => {
   it('replaces, adds and removes', () => {
     expect(patchTags(['a', 'b'], { tags: ['x'] })).toEqual(['x'])

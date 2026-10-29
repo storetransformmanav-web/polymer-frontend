@@ -96,12 +96,12 @@ const SPEC_ERRORS = [
   'productType',
   'handle',
   'templateSuffix',
-  'categoryGid',
+  'category',
 ] as const
 const NO_ERRORS = [] as const
 const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
 const SECTIONS_ERRORS = ['descriptionSections'] as const
-const VARIANT_ERRORS = ['variants'] as const
+const VARIANT_ERRORS = ['variants', 'options', 'addedOptions', 'newVariants'] as const
 const MEDIA_ERRORS = ['images'] as const
 const METAFIELD_ERRORS = ['metafields'] as const
 

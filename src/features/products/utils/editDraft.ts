@@ -9,6 +9,7 @@ import {
   type ProductMediaInput,
   type ProductMetafieldInput,
   type ProductMetafieldRemoval,
+  type ProductOptionUpdate,
   type ProductUpdateBody,
   type ProductVariant,
   type ProductVariantInput,
@@ -59,7 +60,64 @@ export interface VariantDraft {
   weightUnit: WeightUnit
   /** The product image (attachment id) to show for this variant; '' = leave as is. */
   imageId: string
+  /** The variant shows a picture now (so "No image" is a change worth offering). */
+  hasImage: boolean
+  /** Take the picture off this variant (the product keeps it). */
+  removeImage: boolean
+  /** Its stock at each location the store has recorded for it. */
+  stock: StockRowDraft[]
   removed: boolean
+}
+
+/**
+ * One row of a variant's stock table: a location (chosen from a dropdown) and a quantity. A row
+ * is sent only when its location or its quantity differs from what the form opened with.
+ */
+export interface StockRowDraft {
+  key: string
+  /** The Shopify location number being chosen ('' = none yet). */
+  locationId: string
+  /** The quantity being typed. */
+  available: string
+  /** The location this row had when the form opened ('' for a row added here). */
+  originalLocationId: string
+  /** The quantity it had then ('' for a row added here). */
+  original: string
+}
+
+/** An option of the product (Size…): rename it, or any of its values. */
+export interface OptionDraft {
+  key: string
+  /** The current name (what the API is told to look for). */
+  name: string
+  /** The name being typed. */
+  newName: string
+  values: { from: string; to: string }[]
+}
+
+/** A new option (Colour → Clear, Black) to add to the product. */
+export interface AddedOptionDraft {
+  key: string
+  name: string
+  values: string[]
+}
+
+/** A variant to add: no id yet, one value per option, in option order. */
+export interface NewVariantDraft {
+  key: string
+  /** One value per option — the product's options, then the ones added in this edit. */
+  optionValues: string[]
+  price: string
+  compareAtPrice: string
+  sku: string
+  barcode: string
+  cost: string
+  weight: string
+  weightUnit: WeightUnit
+  /** Opening stock, a quantity per location. */
+  stock: StockRowDraft[]
+  /** A public https address of a picture for it ('' = none). */
+  imageUrl: string
 }
 
 /**
@@ -120,8 +178,11 @@ export interface ProductDraft {
   productType: string
   status: string
   handle: string
+  /** With a changed handle: make the old address redirect to the new one. */
+  redirectHandle: boolean
   templateSuffix: string
-  categoryGid: string
+  /** The category's name; blank keeps the current one. */
+  category: string
   tags: string[]
   seoTitle: string
   seoDescription: string
@@ -129,6 +190,12 @@ export interface ProductDraft {
   /** Names of the collections to put the product in (the API takes names). */
   addedCollections: string[]
   variants: VariantDraft[]
+  /** The product's options, to rename (empty for a product with just a default variant). */
+  options: OptionDraft[]
+  /** Options to add to the product. */
+  addedOptions: AddedOptionDraft[]
+  /** Variants to add. */
+  newVariants: NewVariantDraft[]
   /** Existing images in their current order (reordering changes this order). */
   images: ImageDraft[]
   /** The description sections (metafield apd), in order; [] when the product has none. */
@@ -145,7 +212,7 @@ export const LIMITS = {
   collectionName: 255,
   handle: 255,
   templateSuffix: 100,
-  categoryGid: 120,
+  category: 120,
   seoTitle: 70,
   seoDescription: 320,
   sku: 255,
@@ -159,6 +226,11 @@ export const LIMITS = {
   mediaAlt: 512,
   /** Media the API attaches in one call (`POST /media`). */
   newMedia: 20,
+  optionName: 255,
+  optionValue: 255,
+  /** A product has at most this many options, and this many variants. */
+  options: 3,
+  variants: 100,
 } as const
 
 let keyCounter = 0
@@ -209,7 +281,79 @@ export function draftFromVariant(
     weight: text(variant.weight),
     weightUnit: asWeightUnit(variant.weight_unit),
     imageId: variantImageId(variant, images),
+    hasImage: Boolean(variant.image_url),
+    removeImage: false,
+    stock: variant.inventory_levels.map((level) => ({
+      key: `${variant.id}-stock-${level.location_shopify_id}`,
+      locationId: String(level.location_shopify_id),
+      available: text(level.available),
+      originalLocationId: String(level.location_shopify_id),
+      original: text(level.available),
+    })),
     removed: false,
+  }
+}
+
+/** The product's options as editable rows (a default-variant product has none worth renaming). */
+export function draftOptions(product: ProductDetail): OptionDraft[] {
+  if (product.has_only_default_variant) return []
+  return product.options.map((option) => ({
+    key: `option-${option.name}`,
+    name: option.name,
+    newName: option.name,
+    values: option.values.map((value) => ({ from: value, to: value })),
+  }))
+}
+
+/** A stock row for a location that has none yet. */
+export function blankStockRow(): StockRowDraft {
+  return {
+    key: newKey('new-stock'),
+    locationId: '',
+    available: '',
+    originalLocationId: '',
+    original: '',
+  }
+}
+
+/** The rows that carry stock to send: a location, a quantity, and a change (or a new row). */
+function stockToSend(rows: StockRowDraft[], onlyChanged: boolean) {
+  const sent = new Map<number, { location_id: number; available: number }>()
+  for (const row of rows) {
+    const available = row.available.trim()
+    if (row.locationId === '' || available === '') continue
+    if (
+      onlyChanged &&
+      row.locationId === row.originalLocationId &&
+      available === row.original.trim()
+    ) {
+      continue
+    }
+    sent.set(Number(row.locationId), {
+      location_id: Number(row.locationId),
+      available: Number(available),
+    })
+  }
+  return [...sent.values()]
+}
+
+export function blankAddedOption(): AddedOptionDraft {
+  return { key: newKey('new-option'), name: '', values: [] }
+}
+
+export function blankNewVariant(weightUnit: WeightUnit = 'GRAMS'): NewVariantDraft {
+  return {
+    key: newKey('new-variant'),
+    optionValues: [],
+    price: '',
+    compareAtPrice: '',
+    sku: '',
+    barcode: '',
+    cost: '',
+    weight: '',
+    weightUnit,
+    stock: [],
+    imageUrl: '',
   }
 }
 
@@ -270,8 +414,9 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
     productType: product.product_type ?? '',
     status: (product.status ?? '').toUpperCase(),
     handle: product.handle,
+    redirectHandle: true,
     templateSuffix: product.template_suffix ?? '',
-    categoryGid: '',
+    category: '',
     tags: [...product.tags],
     seoTitle: product.seo?.title ?? '',
     seoDescription: product.seo?.description ?? '',
@@ -280,6 +425,9 @@ export function draftFromProduct(product: ProductDetail): ProductDraft {
     variants: product.variants.map((variant) =>
       draftFromVariant(variant, product.images),
     ),
+    options: draftOptions(product),
+    addedOptions: [],
+    newVariants: [],
     images: product.images.map((image) => ({
       id: image.id,
       url: image.url,
@@ -349,12 +497,36 @@ function variantChanges(
   if (draft.requiresShipping !== base.requiresShipping) {
     set('requires_shipping', draft.requiresShipping)
   }
-  // Only a different picture is sent (the current one is preselected in the form).
-  if (draft.imageId && draft.imageId !== base.imageId) {
+  // "No image" takes the picture off the variant; otherwise only a different picture is sent
+  // (the current one is preselected in the form).
+  if (draft.removeImage) {
+    if (base.hasImage) set('remove_image', true)
+  } else if (draft.imageId && draft.imageId !== base.imageId) {
     set('image_attachment_id', draft.imageId)
   }
+  // Only the locations whose quantity (or location) was changed; a blank box leaves the stock alone.
+  const stock = stockToSend(draft.stock, true)
+  if (stock.length) set('stock', stock)
 
   return changed ? edit : null
+}
+
+/** The options the product ends up with: its own, then the ones added in this edit. */
+export function optionCount(draft: ProductDraft): number {
+  return draft.options.length + draft.addedOptions.filter((o) => o.name.trim()).length
+}
+
+/** What each option's values can be picked from for a new variant (renamed values included). */
+export function optionChoices(draft: ProductDraft): { name: string; values: string[] }[] {
+  return [
+    ...draft.options.map((option) => ({
+      name: option.newName.trim() || option.name,
+      values: option.values.map((value) => value.to.trim()).filter(Boolean),
+    })),
+    ...draft.addedOptions
+      .filter((option) => option.name.trim())
+      .map((option) => ({ name: option.name.trim(), values: option.values })),
+  ]
 }
 
 /**
@@ -375,12 +547,16 @@ export function buildUpdateBody(
   if (draft.productType.trim() !== (product.product_type ?? '')) {
     body.product_type = draft.productType.trim()
   }
-  if (draft.handle.trim() !== product.handle) body.handle = draft.handle.trim()
+  if (draft.handle.trim() !== product.handle) {
+    body.handle = draft.handle.trim()
+    // The old web address keeps working (a redirect) unless that was switched off.
+    body.redirect_new_handle = draft.redirectHandle
+  }
   if (draft.templateSuffix.trim() !== (product.template_suffix ?? '')) {
     body.template_suffix = draft.templateSuffix.trim()
   }
-  // The current taxonomy id isn't known to the form, so only a typed one is sent.
-  if (draft.categoryGid.trim()) body.category_gid = draft.categoryGid.trim()
+  // The current category isn't known to the form, so only a typed one is sent.
+  if (draft.category.trim()) body.category = draft.category.trim()
 
   const status = draft.status.toUpperCase()
   if (
@@ -496,6 +672,57 @@ export function buildUpdateBody(
   if (productSets.length) body.metafields = productSets
   if (productRemoves.length) body.metafields_remove = productRemoves
 
+  // Options: a rename names the option as it is now; a value rename says from → to.
+  const optionsUpdate: ProductOptionUpdate[] = []
+  for (const option of draft.options) {
+    const renames = option.values.flatMap((value) =>
+      value.to.trim() !== '' && value.to.trim() !== value.from
+        ? [{ from: value.from, to: value.to.trim() }]
+        : [],
+    )
+    const newName = option.newName.trim()
+    if (renames.length === 0 && (newName === '' || newName === option.name)) continue
+    optionsUpdate.push({
+      name: option.name,
+      ...(newName !== '' && newName !== option.name ? { new_name: newName } : {}),
+      ...(renames.length ? { values_rename: renames } : {}),
+    })
+  }
+  if (optionsUpdate.length) body.options_update = optionsUpdate
+  const optionsAdd = draft.addedOptions
+    .filter((option) => option.name.trim() !== '' && option.values.length > 0)
+    .map((option) => ({ name: option.name.trim(), values: option.values }))
+  if (optionsAdd.length) body.options_add = optionsAdd
+
+  // New variants copy tax, shipping and stock-tracking settings from the first one that stays.
+  const sibling = draft.variants.find((variant) => !variant.removed)
+  const total = optionCount(draft)
+  for (const created of draft.newVariants) {
+    const input: ProductVariantInput = {
+      option_values: created.optionValues.slice(0, total).map((value) => value.trim()),
+      price: created.price.trim(),
+    }
+    if (sibling) {
+      input.taxable = sibling.taxable
+      input.inventory_policy = sibling.inventoryPolicy
+      input.tracked = sibling.tracked
+      input.requires_shipping = sibling.requiresShipping
+    }
+    if (created.compareAtPrice.trim())
+      input.compare_at_price = created.compareAtPrice.trim()
+    if (created.sku.trim()) input.sku = created.sku.trim()
+    if (created.barcode.trim()) input.barcode = created.barcode.trim()
+    if (created.cost.trim()) input.cost = created.cost.trim()
+    if (created.weight.trim()) {
+      input.weight = created.weight.trim()
+      input.weight_unit = created.weightUnit
+    }
+    const stock = stockToSend(created.stock, false)
+    if (stock.length) input.stock = stock
+    if (created.imageUrl.trim()) input.image_url = created.imageUrl.trim()
+    variantEdits.push(input)
+  }
+
   if (variantEdits.length) body.variants = variantEdits
   if (variantsRemove.length) body.variants_remove = variantsRemove
 
@@ -523,6 +750,9 @@ export function buildUpdateBody(
 export const hasChanges = (body: ProductUpdateBody) => Object.keys(body).length > 0
 
 // --- Validation --------------------------------------------------------------------
+
+/** A whole number, 0 or more. */
+const WHOLE = /^\d+$/
 
 /** Messages keyed by field path, e.g. `title`, `variants.2.price`, `newMedia.0.url`. */
 export type DraftErrors = Record<string, string>
@@ -598,6 +828,184 @@ export function validateNewMedia(rows: NewMediaDraft[]): DraftErrors {
   return errors
 }
 
+/**
+ * Checks a stock table: a quantity is a whole number and needs a location, and a location is
+ * listed once. Keys: `<prefix>.<row>.location` and `<prefix>.<row>.quantity`.
+ */
+function validateStockRows(rows: StockRowDraft[], prefix: string, errors: DraftErrors) {
+  const seen = new Set<string>()
+  rows.forEach((row, index) => {
+    const quantity = row.available.trim()
+    const put = (field: string, message: string) => {
+      if (!errors[`${prefix}.${index}.${field}`]) {
+        errors[`${prefix}.${index}.${field}`] = message
+      }
+    }
+    if (quantity !== '' && !WHOLE.test(quantity)) {
+      put('quantity', 'Enter a whole number, 0 or more')
+    }
+    if (quantity !== '' && row.locationId === '') put('location', 'Choose a location')
+    if (row.locationId !== '') {
+      if (seen.has(row.locationId)) put('location', 'This location is already listed')
+      seen.add(row.locationId)
+    }
+  })
+}
+
+/**
+ * Checks the product's options (renames, added ones) and the variants being added. Keys:
+ * `options.<i>.name`, `options.<i>.values.<j>`, `addedOptions.<i>.name` / `.values`,
+ * `newVariants.<i>.<field>` and `newVariants` for the list as a whole.
+ */
+function validateOptionsAndNewVariants(
+  product: ProductDetail,
+  draft: ProductDraft,
+  errors: DraftErrors,
+) {
+  const put = (key: string, message: string | null) => {
+    if (message && !errors[key]) errors[key] = message
+  }
+  const lower = (value: string) => value.trim().toLowerCase()
+
+  const names = new Set<string>()
+  draft.options.forEach((option, index) => {
+    const name = option.newName.trim()
+    put(
+      `options.${index}.name`,
+      name === ''
+        ? 'Enter a name'
+        : (tooLong('The option name', name, LIMITS.optionName) ??
+            (names.has(lower(name)) ? 'Two options have the same name' : null)),
+    )
+    names.add(lower(name))
+    const seen = new Set<string>()
+    option.values.forEach((value, valueIndex) => {
+      const to = value.to.trim()
+      put(
+        `options.${index}.values.${valueIndex}`,
+        to === ''
+          ? 'Enter a value'
+          : (tooLong('The value', to, LIMITS.optionValue) ??
+              (seen.has(lower(to)) ? 'This value is already in the list' : null)),
+      )
+      seen.add(lower(to))
+    })
+  })
+
+  draft.addedOptions.forEach((option, index) => {
+    const name = option.name.trim()
+    if (name === '' && option.values.length === 0) return
+    put(
+      `addedOptions.${index}.name`,
+      name === ''
+        ? 'Enter a name'
+        : (tooLong('The option name', name, LIMITS.optionName) ??
+            (names.has(lower(name))
+              ? 'The product already has an option with this name'
+              : null)),
+    )
+    names.add(lower(name))
+    if (option.values.length === 0) {
+      put(`addedOptions.${index}.values`, 'Add at least one value')
+    } else if (option.values.some((value) => value.length > LIMITS.optionValue)) {
+      put(
+        `addedOptions.${index}.values`,
+        `A value can be at most ${LIMITS.optionValue} characters`,
+      )
+    }
+  })
+  if (optionCount(draft) > LIMITS.options) {
+    errors.addedOptions = `A product can have at most ${LIMITS.options} options`
+  }
+
+  if (draft.newVariants.length === 0) return
+  const kept = draft.variants.filter((variant) => !variant.removed).length
+  if (kept + draft.newVariants.length > LIMITS.variants) {
+    errors.newVariants = `A product can have at most ${LIMITS.variants} variants`
+  }
+
+  // The values of the variants already there, as they will read after any renames — only
+  // comparable when no option is being added (they would have no value for it).
+  const choices = optionChoices(draft)
+  const addingOptions = draft.addedOptions.some((option) => option.name.trim() !== '')
+  const taken = new Set<string>()
+  if (!addingOptions) {
+    for (const variant of product.variants) {
+      if (draft.variants.find((candidate) => candidate.id === variant.id)?.removed)
+        continue
+      taken.add(
+        JSON.stringify(
+          draft.options.map((option) => {
+            const value =
+              variant.selected_options?.find((chosen) => chosen.name === option.name)
+                ?.value ?? ''
+            return lower(option.values.find((pair) => pair.from === value)?.to ?? value)
+          }),
+        ),
+      )
+    }
+  }
+
+  draft.newVariants.forEach((created, index) => {
+    const at = (field: string) => `newVariants.${index}.${field}`
+    if (choices.length === 0) {
+      put(
+        at('options'),
+        'Add an option first (for example Size), then give this variant a value for it',
+      )
+    }
+    choices.forEach((choice, position) => {
+      put(
+        at(`optionValues.${position}`),
+        (created.optionValues[position] ?? '').trim() === ''
+          ? `Choose a ${choice.name || 'value'}`
+          : tooLong('The value', created.optionValues[position], LIMITS.optionValue),
+      )
+    })
+    if (choices.length > 0 && !addingOptions) {
+      const values = choices.map((_, position) =>
+        lower(created.optionValues[position] ?? ''),
+      )
+      const combo = JSON.stringify(values)
+      if (values.some(Boolean) && taken.has(combo)) {
+        put(at('options'), 'A variant with these values already exists')
+      }
+      taken.add(combo)
+    }
+    put(
+      at('price'),
+      created.price.trim() === ''
+        ? 'Enter a price'
+        : isDecimal(created.price)
+          ? null
+          : 'Enter a number, 0 or more',
+    )
+    for (const [field, label, value] of [
+      ['compareAtPrice', 'Compare-at price', created.compareAtPrice],
+      ['cost', 'Cost', created.cost],
+      ['weight', 'Weight', created.weight],
+    ] as const) {
+      if (value.trim() !== '' && !isDecimal(value)) {
+        put(at(field), `${label}: enter a number, 0 or more`)
+      }
+    }
+    put(at('sku'), tooLong('The SKU', created.sku, LIMITS.sku))
+    put(at('barcode'), tooLong('The barcode', created.barcode, LIMITS.barcode))
+    const url = created.imageUrl.trim()
+    if (url !== '') {
+      put(
+        at('imageUrl'),
+        !/^https:\/\//i.test(url)
+          ? 'Use a public https:// address'
+          : url.length > LIMITS.mediaUrl
+            ? `The address can be at most ${LIMITS.mediaUrl} characters`
+            : null,
+      )
+    }
+    validateStockRows(created.stock, at('stock'), errors)
+  })
+}
+
 /** Checks a draft against the API's limits. An empty result means it can be sent. */
 export function validateDraft(product: ProductDetail, draft: ProductDraft): DraftErrors {
   const errors: DraftErrors = {}
@@ -614,7 +1022,7 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     'templateSuffix',
     tooLong('The template suffix', draft.templateSuffix, LIMITS.templateSuffix),
   )
-  put('categoryGid', tooLong('The category ID', draft.categoryGid, LIMITS.categoryGid))
+  put('category', tooLong('The category', draft.category, LIMITS.category))
   put('seoTitle', tooLong('The SEO title', draft.seoTitle, LIMITS.seoTitle))
   put(
     'seoDescription',
@@ -660,7 +1068,10 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     put(at('taxCode'), tooLong('The tax code', variant.taxCode, LIMITS.taxCode))
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))
     put(at('barcode'), tooLong('The barcode', variant.barcode, LIMITS.barcode))
+    validateStockRows(variant.stock, `variants.${index}.stock`, errors)
   })
+
+  validateOptionsAndNewVariants(product, draft, errors)
 
   draft.images.forEach((image, index) => {
     put(`images.${index}.alt`, tooLong('The alt text', image.alt, LIMITS.mediaAlt))

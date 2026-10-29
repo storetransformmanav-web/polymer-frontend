@@ -308,7 +308,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     'templateSuffix',
     tooLong('The template suffix', draft.templateSuffix, LIMITS.templateSuffix),
   )
-  put('categoryGid', tooLong('The category ID', draft.categoryGid, LIMITS.categoryGid))
+  put('categoryGid', tooLong('The category ID', draft.categoryGid, LIMITS.category))
   put('seoTitle', tooLong('The SEO title', draft.seoTitle, LIMITS.seoTitle))
   put(
     'seoDescription',

@@ -1043,7 +1043,7 @@ export interface ProductCreateVariantInput {
   weight?: string
   weight_unit?: WeightUnit
   /** Opening stock per Shopify location. */
-  stock?: { location_id: number; available: number }[]
+  stock?: ProductVariantStock[]
   /** Must also be listed in `media`; shown for this variant (max 2000 characters). */
   image_url?: string
 }
@@ -1178,6 +1178,19 @@ export type InventoryPolicy = (typeof INVENTORY_POLICIES)[number]
 export type WeightUnit = (typeof WEIGHT_UNITS)[number]
 export type MediaType = (typeof MEDIA_TYPES)[number]
 
+/** An option to rename (`name` is the current one) and/or whose values to rename. */
+export interface ProductOptionUpdate {
+  name: string
+  new_name?: string
+  values_rename?: { from: string; to: string }[]
+}
+
+/** Stock of one variant at one Shopify location. */
+export interface ProductVariantStock {
+  location_id: number
+  available: number
+}
+
 /** Update an existing variant (give `id`) or create one (no id, give `option_values`). */
 export interface ProductVariantInput {
   /** CRM variant id to update; omit to create a new variant. */
@@ -1198,8 +1211,14 @@ export interface ProductVariantInput {
   cost?: string | number | null
   weight?: string | number | null
   weight_unit?: WeightUnit
+  /** Stock to set per Shopify location. */
+  stock?: ProductVariantStock[]
   /** Product image (CRM attachment id) to show for this variant. */
   image_attachment_id?: string | null
+  /** New variant: a public https picture address for it (max 2000 characters). */
+  image_url?: string
+  /** Take the picture off this variant (the product keeps it). */
+  remove_image?: boolean
   /** Variant metafields to set / delete. */
   metafields?: ProductMetafieldInput[]
   metafields_remove?: ProductMetafieldRemoval[]
@@ -1311,18 +1330,24 @@ export interface ProductUpdateBody {
   product_type?: string
   status?: ProductEditStatus
   handle?: string
+  /** With a new `handle`: also make the old web address redirect to the new one. */
+  redirect_new_handle?: boolean
   /** Replace the whole tag list. */
   tags?: string[]
   tags_add?: string[]
   tags_remove?: string[]
   seo?: { title?: string; description?: string }
   template_suffix?: string
-  /** Shopify taxonomy id, gid://shopify/TaxonomyCategory/… */
-  category_gid?: string
+  /** The category, by name (e.g. "Food Container Covers"). */
+  category?: string
   /** Names of the collections to put the product in (e.g. "Food Packaging"). */
   collections_add?: string[]
   /** Names of the collections to take the product out of (e.g. "Hot Food Packaging"). */
   collections_remove?: string[]
+  /** Whether a name in `collections_add` the store lacks is made (false: it is refused). */
+  collections_create?: boolean
+  /** Rename an option and/or some of its values (`{ from, to }`). */
+  options_update?: ProductOptionUpdate[]
   /** New product options (Size → Small, Large). */
   options_add?: { name: string; values: string[] }[]
   variants?: ProductVariantInput[]

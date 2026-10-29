@@ -826,6 +826,65 @@ describe('a complete product, as in the shared example request', () => {
   })
 })
 
+describe('media and variant pictures, as in the new shared create request', () => {
+  const IMG_50 = 'https://cdn.shopify.com/s/files/1/0000/0000/files/hsc500-50.jpg'
+  const IMG_250 = 'https://cdn.shopify.com/s/files/1/0000/0000/files/hsc500-250.jpg'
+
+  it('sends each variant’s image_url and lists the same pictures once in media, with their alt text', () => {
+    const draft = withOptions(
+      valid({
+        title: 'Hinged Salad Container 500ml',
+        locationId: '60465184951',
+        media: [
+          { ...blankMedia(), url: IMG_50, alt: 'Pack of 50' },
+          { ...blankMedia(), url: IMG_250, alt: 'Pack of 250' },
+        ],
+      }),
+      [{ name: 'Pack size', values: ['50', '250'] }],
+    )
+    Object.assign(draft.variants[0], {
+      price: '9.99',
+      sku: 'HSC500-50',
+      stock: '120',
+      imageUrl: IMG_50,
+    })
+    Object.assign(draft.variants[1], {
+      price: '39.99',
+      sku: 'HSC500-250',
+      stock: '40',
+      imageUrl: IMG_250,
+    })
+
+    expect(validateCreateDraft(draft)).toEqual({})
+    const body = buildCreateBody(draft)
+
+    expect(body.options).toEqual([{ name: 'Pack size', values: ['50', '250'] }])
+    expect(body.variants.map((variant) => variant.image_url)).toEqual([IMG_50, IMG_250])
+    expect(body.variants.map((variant) => variant.stock)).toEqual([
+      [{ location_id: 60465184951, available: 120 }],
+      [{ location_id: 60465184951, available: 40 }],
+    ])
+    // The pictures the variants point at are already in `media`, so they are not added twice.
+    expect(body.media).toEqual([
+      { url: IMG_50, alt: 'Pack of 50', media_type: 'IMAGE' },
+      { url: IMG_250, alt: 'Pack of 250', media_type: 'IMAGE' },
+    ])
+  })
+
+  it('adds a variant picture that is not in the media list, after the product’s own pictures', () => {
+    const draft = withOptions(
+      valid({ media: [{ ...blankMedia(), url: IMG_50, alt: 'Pack of 50' }] }),
+      [{ name: 'Pack size', values: ['50', '250'] }],
+    )
+    draft.variants[1].imageUrl = IMG_250
+
+    expect(buildCreateBody(draft).media).toEqual([
+      { url: IMG_50, alt: 'Pack of 50', media_type: 'IMAGE' },
+      { url: IMG_250, media_type: 'IMAGE' },
+    ])
+  })
+})
+
 describe('isCreateDirty', () => {
   it('is false for a fresh form, true as soon as anything is entered', () => {
     expect(isCreateDirty(blankCreateDraft('polymer-uk'))).toBe(false)
