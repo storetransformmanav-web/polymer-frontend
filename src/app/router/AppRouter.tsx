@@ -6,6 +6,7 @@ import { CustomersPage } from '../../features/customers/index.ts'
 import { DashboardPage } from '../../features/dashboard/index.ts'
 import { InventoryPage } from '../../features/inventory/index.ts'
 import { LoginPage } from '../../features/auth/index.ts'
+import { LocksPage } from '../../features/locks/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
 import { UsersPage } from '../../features/users/index.ts'
@@ -42,6 +43,8 @@ const router = createBrowserRouter([
           { path: 'inventory', element: <InventoryPage /> },
           // `*` lets UsersPage also serve /users/new (the Add user form).
           { path: 'users/*', element: <UsersPage /> },
+          // `*` lets LocksPage also serve /locks/new (Add lock) and /locks/:handle (one lock).
+          { path: 'locks/*', element: <LocksPage /> },
           { path: 'activity', element: <ActivityPage /> },
         ],
       },

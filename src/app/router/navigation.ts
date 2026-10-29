@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   DashboardIcon,
   InventoryIcon,
+  LockIcon,
   OrdersIcon,
   ProductsIcon,
   StoreIcon,
@@ -75,6 +76,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon },
+  { to: '/locks', label: 'Lock Management', icon: LockIcon, shopScoped: true },
   { to: '/activity', label: 'Activity Management', icon: ActivityIcon },
 ]
 

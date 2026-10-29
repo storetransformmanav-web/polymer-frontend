@@ -60,6 +60,16 @@ export const ENDPOINTS = {
     /** `GET` the stock list — also names the stores' stock locations. */
     list: '/inventory',
   },
+  access: {
+    /** `GET` the locked products (paged); `POST` locks products / gives customers the tags / sets the options. */
+    locks: '/access/locks',
+    /** `GET` every tag on products and customers; `POST` adds a lock tag; `PUT` adds / removes tags. */
+    tags: '/access/tags',
+    /** `GET` would this customer see this product? */
+    check: '/access/check',
+    /** `POST` once per store: the metafield definition, and a push of every pending lock. */
+    setup: '/access/setup',
+  },
   collections: {
     /** `GET` one page of collections (search, type, sort, order, shop, page). */
     list: '/collections',
@@ -1478,6 +1488,197 @@ export interface CollectionListParams {
   page_size?: number
 }
 
+// --- Access locks (/access/*) ---------------------------------------------------
+// A "lock" hides a product from everyone except customers carrying one of its tags.
+
+export const LOCK_SYNC_STATUSES = ['pending', 'synced', 'error'] as const
+export const LOCK_SORTS = ['updated_at', 'title', 'sync_status'] as const
+export type LockSyncStatus = (typeof LOCK_SYNC_STATUSES)[number]
+export type LockSort = (typeof LOCK_SORTS)[number]
+
+const accessLockSchema = z.object({
+  product_id: z.string(),
+  shopify_id: z.number().nullish(),
+  title: z.string(),
+  handle: z.string().nullish(),
+  status: z.string().nullish(),
+  image_url: z.string().nullish(),
+  /** Every tag the product carries (lock tags or not). */
+  product_tags: z.array(z.string()).default([]),
+  enabled: z.boolean().default(true),
+  /** The lock's own tags: a customer with one of them can see the product. */
+  tags: z.array(z.string()).default([]),
+  hide_from_lists: z.boolean().default(false),
+  hide_from_nav: z.boolean().default(false),
+  noindex: z.boolean().default(false),
+  hide_from_sitemap: z.boolean().default(false),
+  manual_locking: z.boolean().default(false),
+  message: z.string().nullish(),
+  customers_with_access: z.number().nullish(),
+  /** `pending`, `synced` or `error` — whether the lock reached the store. */
+  sync_status: z.string().nullish(),
+  sync_error: z.string().nullish(),
+  last_pushed_at: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  shop: shopRefSchema.nullish(),
+})
+
+const accessLockListResponseSchema = z.object({
+  message: z.string().nullish(),
+  locks: z.array(accessLockSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+export type AccessLock = z.infer<typeof accessLockSchema>
+export type AccessLockListResponse = z.infer<typeof accessLockListResponseSchema>
+
+/** Query parameters of `GET /access/locks`. `shop` is required by the backend. */
+export interface AccessLockListParams {
+  shop: string
+  /** Matches the product's title or handle. */
+  search?: string
+  tag?: string
+  enabled?: boolean
+  sync_status?: LockSyncStatus
+  sort?: LockSort
+  page?: number
+  /** 1–100. */
+  page_size?: number
+}
+
+/**
+ * The body of `POST /access/locks` — one call that locks products, gives customers the tags
+ * and sets the options. Products are CRM ids, Shopify ids or handles; customers are CRM ids,
+ * Shopify ids or emails (max 250 of each, 20 tags). Customers always need tags; products sent
+ * without tags get a login-only lock. An option is only applied when it is sent.
+ */
+export interface AccessLockBody {
+  shop: string
+  products?: string[]
+  /** Adds every product in these collections. */
+  collections?: string[]
+  customers?: string[]
+  tags?: string[]
+  enabled?: boolean
+  hide_from_lists?: boolean
+  hide_from_nav?: boolean
+  noindex?: boolean
+  hide_from_sitemap?: boolean
+  manual_locking?: boolean
+  /** The "access denied" message shown to a customer without access. */
+  message?: string
+}
+
+const updatedUnchangedSchema = z.object({
+  updated: z.array(z.string()).default([]),
+  unchanged: z.array(z.string()).default([]),
+})
+
+/** What a lock/tag write did — read leniently: every count may be missing. */
+const accessWriteResponseSchema = z.object({
+  message: z.string().nullish(),
+  result: z
+    .object({
+      products: updatedUnchangedSchema.nullish(),
+      customers: updatedUnchangedSchema.nullish(),
+      created_locks: z.number().nullish(),
+      removed_locks: z.number().nullish(),
+      new_tags: z.array(z.string()).nullish(),
+      queued: z.number().nullish(),
+    })
+    .nullish(),
+})
+
+export type AccessWriteResult = {
+  /** What the backend says it did, e.g. "Products: 2 updated, 1 unchanged. …". */
+  message: string
+  createdLocks: number
+  removedLocks: number
+  queued: number
+}
+
+const accessTagSchema = z.object({
+  tag: z.string(),
+  label: z.string().nullish(),
+  /** True for a tag that locks products (a "key"). */
+  is_lock_tag: z.boolean().default(false),
+  products: z.number().default(0),
+  locked_products: z.number().default(0),
+  customers: z.number().default(0),
+})
+
+const accessTagListResponseSchema = z.object({
+  message: z.string().nullish(),
+  tags: z.array(accessTagSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+export type AccessTag = z.infer<typeof accessTagSchema>
+export type AccessTagListResponse = z.infer<typeof accessTagListResponseSchema>
+
+/** Query parameters of `GET /access/tags` (lock tags come first). */
+export interface AccessTagListParams {
+  shop: string
+  /** Contains-match. */
+  search?: string
+  lock_only?: boolean
+  page?: number
+  /** 1–200. */
+  page_size?: number
+}
+
+/** The body of `PUT /access/tags`: add and/or remove tags on products and customers. */
+export interface AccessTagsUpdateBody {
+  shop: string
+  products?: string[]
+  customers?: string[]
+  tags_add?: string[]
+  tags_remove?: string[]
+}
+
+const accessCheckResponseSchema = z.object({
+  message: z.string().nullish(),
+  check: z.object({
+    allowed: z.boolean(),
+    /** `not_locked`, `tag_match`, `login_only`, `no_matching_tag` or `lock_disabled`. */
+    reason: z.string(),
+    matched_tags: z.array(z.string()).default([]),
+    customer_tags: z.array(z.string()).default([]),
+  }),
+})
+
+export type AccessCheck = z.infer<typeof accessCheckResponseSchema>['check'] & {
+  message: string
+}
+
+const accessSetupResponseSchema = z.object({
+  message: z.string().nullish(),
+  result: z
+    .object({
+      definition: z.string().nullish(),
+      queued: z.number().nullish(),
+    })
+    .nullish(),
+})
+
+function toAccessWriteResult(data: unknown): AccessWriteResult {
+  const parsed = accessWriteResponseSchema.parse(data)
+  return {
+    message: parsed.message ?? 'Saved.',
+    createdLocks: parsed.result?.created_locks ?? 0,
+    removedLocks: parsed.result?.removed_locks ?? 0,
+    queued: parsed.result?.queued ?? 0,
+  }
+}
+
 export type Shop = z.infer<typeof shopSchema>
 export type AuthUser = z.infer<typeof authUserSchema>
 export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>
@@ -1536,6 +1737,56 @@ export const api = {
         params: { include_raw: includeRaw },
       })
       return customerDetailResponseSchema.parse(data).customer
+    },
+  },
+
+  access: {
+    /** One page of the locked products of a store. */
+    async locks(params: AccessLockListParams): Promise<AccessLockListResponse> {
+      const data = await apiClient.get(ENDPOINTS.access.locks, { params })
+      return accessLockListResponseSchema.parse(data)
+    },
+
+    /** Locks products, gives customers the tags and sets the options, in one call. Never retried. */
+    async lock(body: AccessLockBody): Promise<AccessWriteResult> {
+      const data = await apiClient.post(ENDPOINTS.access.locks, body)
+      return toAccessWriteResult(data)
+    },
+
+    /** One page of the tags on products and customers (lock tags first). */
+    async tags(params: AccessTagListParams): Promise<AccessTagListResponse> {
+      const data = await apiClient.get(ENDPOINTS.access.tags, { params })
+      return accessTagListResponseSchema.parse(data)
+    },
+
+    /** Adds a lock tag in advance, with a label (an existing one gets its label updated). Never retried. */
+    async createTag(body: { shop: string; tag: string; label?: string }): Promise<void> {
+      await apiClient.post(ENDPOINTS.access.tags, body)
+    },
+
+    /** Adds and/or removes tags on products and customers. Never retried. */
+    async updateTags(body: AccessTagsUpdateBody): Promise<AccessWriteResult> {
+      const data = await apiClient.put(ENDPOINTS.access.tags, body)
+      return toAccessWriteResult(data)
+    },
+
+    /** Would this customer (CRM id, Shopify id or email) see this product (id, Shopify id or handle)? */
+    async check(params: {
+      shop: string
+      customer: string
+      product: string
+    }): Promise<AccessCheck> {
+      const data = await apiClient.get(ENDPOINTS.access.check, { params })
+      const parsed = accessCheckResponseSchema.parse(data)
+      return { ...parsed.check, message: parsed.message ?? '' }
+    },
+
+    /** Once per store: creates the metafield definition and pushes every pending or failed lock. */
+    async setup(shop: string): Promise<string> {
+      const data = await apiClient.post(ENDPOINTS.access.setup, undefined, {
+        params: { shop },
+      })
+      return accessSetupResponseSchema.parse(data).message ?? 'The store is set up.'
     },
   },
 
