@@ -329,6 +329,8 @@ describe('editing metafields and the variant tax code on the product page', () =
       const user = await openTab(/^Variants/)
       await user.click(screen.getByRole('button', { name: 'Edit variants' }))
 
+      // The tax code is in the Price card's extra options (closed to begin with).
+      await user.click(screen.getByRole('button', { name: 'Show more options' }))
       await user.type(screen.getByLabelText(/^Tax code/), 'P0000000')
       await user.click(screen.getByRole('button', { name: 'Save variants' }))
       await confirmUpdate(user)

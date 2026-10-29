@@ -1698,3 +1698,303 @@ describe('editing a section in place', () => {
     expect(screen.queryByRole('status', { name: /loading/i })).not.toBeInTheDocument()
   })
 })
+
+describe('the Variants editor is laid out in sections, like Add product', () => {
+  const LOCATION = 60465184951
+
+  beforeEach(() => {
+    list.mockResolvedValue(LIST)
+    update.mockResolvedValue(WRITE_OK)
+    syncHistory.mockResolvedValue([])
+    // 5 available, 3 committed and 10 on hand: so 2 are unavailable.
+    details.mockResolvedValue({
+      ...DETAIL,
+      variants: [
+        {
+          ...DETAIL.variants[0],
+          cost: '10.00',
+          inventory_levels: [
+            {
+              location_shopify_id: LOCATION,
+              location_name: 'Unit 9',
+              available: 5,
+              committed: 3,
+              on_hand: 10,
+            },
+          ],
+        },
+      ],
+    } as unknown as ProductDetail)
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  async function editVariants() {
+    const user = userEvent.setup()
+    renderPage('/products/id-1')
+    await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+    await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+    await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+    return user
+  }
+  const save = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+    await confirmUpdate(user)
+  }
+
+  it('has a Price, an Inventory and a Shipping card for the variant', async () => {
+    await editVariants()
+
+    expect(screen.getByRole('region', { name: 'Pricing of M' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Inventory of M' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Shipping of M' })).toBeInTheDocument()
+    // The price is in a box with the store's currency in front of it.
+    expect(
+      within(screen.getByRole('region', { name: 'Pricing of M' })).getByText('£'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the price extras behind pills and a chevron, and a pill opens its own field', async () => {
+    const user = await editVariants()
+    const pricing = within(screen.getByRole('region', { name: 'Pricing of M' }))
+    expect(pricing.queryByLabelText('Compare-at price')).not.toBeInTheDocument()
+
+    await user.click(pricing.getByRole('button', { name: /^Compare-at/ }))
+    await user.type(screen.getByLabelText('Compare-at price'), '30')
+    await save(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: VARIANT, compare_at_price: '30' }] },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('works out the profit and margin from the cost, like Add product', async () => {
+    const user = await editVariants()
+    await user.click(screen.getByRole('button', { name: 'Show more options' }))
+
+    // 25.85 price, 10.00 cost.
+    expect(screen.getByText(/Profit £15\.85 · Margin 61\.3%/)).toBeInTheDocument()
+  })
+
+  it('shows the store’s stock figures, and On hand follows the quantity typed', async () => {
+    const user = await editVariants()
+    const row = within(
+      screen.getByRole('list', { name: 'Stock of M' }).children[0] as HTMLElement,
+    )
+
+    // Unavailable 2 · Committed 3 · Available 5 (editable) · On hand 10.
+    expect(row.getByText('2')).toBeInTheDocument()
+    expect(row.getByText('3')).toBeInTheDocument()
+    expect(row.getByText('10')).toBeInTheDocument()
+    expect(screen.getByLabelText('Stock quantity 1')).toHaveValue('5')
+
+    await user.clear(screen.getByLabelText('Stock quantity 1'))
+    await user.type(screen.getByLabelText('Stock quantity 1'), '12')
+
+    // 12 available + 3 committed + 2 unavailable.
+    expect(row.getByText('17')).toBeInTheDocument()
+  })
+
+  it('turns stock tracking off with the Inventory tracked switch, and hides the table', async () => {
+    const user = await editVariants()
+
+    await user.click(screen.getByRole('switch', { name: 'Inventory tracked' }))
+
+    expect(screen.getByText(/Stock is not tracked for this variant/)).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Stock of M' })).not.toBeInTheDocument()
+    await save(user)
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: VARIANT, tracked: false }] },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('sets SKU, barcode and "Continue selling when out of stock" under More details', async () => {
+    const user = await editVariants()
+    const inventory = within(screen.getByRole('region', { name: 'Inventory of M' }))
+
+    await user.clear(inventory.getByLabelText(/^SKU/))
+    await user.type(inventory.getByLabelText(/^SKU/), 'SC05')
+    await user.type(inventory.getByLabelText(/^Barcode/), '5000')
+    await user.click(
+      inventory.getByRole('checkbox', { name: /Continue selling when out of stock/ }),
+    )
+    await save(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        {
+          variants: [
+            { id: VARIANT, sku: 'SC05', barcode: '5000', inventory_policy: 'CONTINUE' },
+          ],
+        },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('has a Physical product switch, and the weight only while it is on', async () => {
+    const user = await editVariants()
+    const shipping = within(screen.getByRole('region', { name: 'Shipping of M' }))
+    expect(shipping.getByLabelText(/^Weight \(optional\)/)).toHaveValue('100')
+
+    await user.click(shipping.getByRole('switch', { name: 'Physical product' }))
+
+    expect(shipping.queryByLabelText(/^Weight \(optional\)/)).not.toBeInTheDocument()
+    await save(user)
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: VARIANT, requires_shipping: false }] },
+        'polymer-uk',
+      ),
+    )
+  })
+})
+
+describe('the Inventory tab is editable too', () => {
+  const LOCATION = 60465184951
+
+  const withLevels = (levels: unknown[]) =>
+    details.mockResolvedValue({
+      ...DETAIL,
+      variants: [{ ...DETAIL.variants[0], inventory_levels: levels }],
+    } as unknown as ProductDetail)
+
+  beforeEach(() => {
+    list.mockResolvedValue(LIST)
+    update.mockResolvedValue(WRITE_OK)
+    syncHistory.mockResolvedValue([])
+    withLevels([
+      {
+        location_shopify_id: LOCATION,
+        location_name: 'Unit 9',
+        available: 5,
+        committed: 3,
+        on_hand: 10,
+      },
+    ])
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  async function editInventory() {
+    const user = userEvent.setup()
+    renderPage('/products/id-1')
+    await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+    await user.click(screen.getByRole('tab', { name: /^Inventory/ }))
+    return user
+  }
+  const save = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }))
+    await confirmUpdate(user)
+  }
+
+  it('shows the store’s figures until the pencil is pressed', async () => {
+    await editInventory()
+
+    expect(screen.getByRole('columnheader', { name: 'Committed' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Stock quantity 1')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit inventory' })).toBeInTheDocument()
+    expect(screen.getByText('1 location')).toBeInTheDocument()
+  })
+
+  it('turns into the Inventory card of each variant, with Save off until something changes', async () => {
+    const user = await editInventory()
+    await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+
+    expect(screen.getByRole('region', { name: 'Inventory of M' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Inventory tracked' })).toBeChecked()
+    expect(screen.getByLabelText('Stock quantity 1')).toHaveValue('5')
+    expect(screen.getByRole('button', { name: 'Save inventory' })).toBeDisabled()
+  })
+
+  it('saves a changed quantity as that variant’s stock, after asking', async () => {
+    const user = await editInventory()
+    await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+
+    await user.clear(screen.getByLabelText('Stock quantity 1'))
+    await user.type(screen.getByLabelText('Stock quantity 1'), '12')
+    await user.click(screen.getByRole('button', { name: 'Save inventory' }))
+    expect(update).not.toHaveBeenCalled()
+    await confirmUpdate(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        {
+          variants: [{ id: VARIANT, stock: [{ location_id: LOCATION, available: 12 }] }],
+        },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('also edits SKU, barcode and continue selling from here', async () => {
+    const user = await editInventory()
+    await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+
+    await user.clear(screen.getByLabelText(/^SKU/))
+    await user.type(screen.getByLabelText(/^SKU/), 'SC05')
+    await user.click(
+      screen.getByRole('checkbox', { name: /Continue selling when out of stock/ }),
+    )
+    await save(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: VARIANT, sku: 'SC05', inventory_policy: 'CONTINUE' }] },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('Discard throws the changes away without asking the server', async () => {
+    const user = await editInventory()
+    await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+    await user.type(screen.getByLabelText('Stock quantity 1'), '9')
+
+    await user.click(screen.getByRole('button', { name: 'Discard inventory changes' }))
+
+    expect(screen.queryByLabelText('Stock quantity 1')).not.toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('lets a variant with no stock recorded get its first location', async () => {
+    withLevels([])
+    vi.mocked(api.inventory.locations).mockResolvedValue([
+      { id: LOCATION, name: 'Unit 9', variants: 1 },
+    ])
+    const user = await editInventory()
+    expect(
+      screen.getByText('No inventory levels are tracked for this product.'),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+    await user.click(screen.getByRole('button', { name: 'Add location' }))
+    await user.selectOptions(await screen.findByLabelText('Stock location 1'), 'Unit 9')
+    await user.type(screen.getByLabelText('Stock quantity 1'), '8')
+    await save(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants: [{ id: VARIANT, stock: [{ location_id: LOCATION, available: 8 }] }] },
+        'polymer-uk',
+      ),
+    )
+  })
+})

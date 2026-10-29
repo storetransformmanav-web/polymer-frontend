@@ -307,7 +307,9 @@ export function ProductDetailsView({
         {product && tab === 'variants' && (
           <VariantsPanel product={product} onSaved={onSaved} />
         )}
-        {product && tab === 'inventory' && <InventoryPanel product={product} />}
+        {product && tab === 'inventory' && (
+          <InventoryPanel product={product} onSaved={onSaved} />
+        )}
         {product && tab === 'media' && <MediaPanel product={product} onSaved={onSaved} />}
         {product && tab === 'seo' && <SeoPanel product={product} onSaved={onSaved} />}
         {product && tab === 'metafields' && (

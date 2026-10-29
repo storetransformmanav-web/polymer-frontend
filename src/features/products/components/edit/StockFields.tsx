@@ -1,5 +1,6 @@
 import { PlusIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
+import type { ProductVariant } from '../../../../lib/api/endpoints.ts'
 import type { StockLocationChoice } from '../../hooks/useProductStockLocations.ts'
 import {
   blankStockRow,
@@ -13,10 +14,48 @@ const STOCK_GRID =
   'grid grid-cols-[minmax(0,1fr)_7rem_2rem] gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_2rem]'
 
 /**
+ * With the store's figures beside it (the Inventory card of a variant): Location · Unavailable ·
+ * Committed · Available · On hand · remove. The three read-only figures are hidden on phones.
+ */
+const LEVEL_GRID =
+  'grid grid-cols-[minmax(0,1fr)_6rem_2rem] gap-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_6.5rem_4.5rem_2rem]'
+
+type Levels = ProductVariant['inventory_levels']
+
+const FIGURE = 'hidden text-right text-[0.85rem] tabular-nums sm:block'
+const count = (value: number) => value.toLocaleString('en-GB')
+
+/**
+ * What the store says about one location, plus what "On hand" becomes with the quantity typed:
+ * on hand = available + committed + unavailable, and unavailable is what is left of the store's
+ * own on-hand figure after the available and committed units.
+ */
+function figures(row: StockRowDraft, levels: Levels) {
+  const level =
+    row.originalLocationId === ''
+      ? undefined
+      : levels.find((item) => String(item.location_shopify_id) === row.originalLocationId)
+  const committed = level?.committed ?? 0
+  const unavailable =
+    level && level.on_hand != null && level.available != null
+      ? Math.max(0, level.on_hand - level.available - committed)
+      : 0
+  const typed = row.available.trim() === '' ? null : Number(row.available)
+  const available = typed !== null && Number.isInteger(typed) ? typed : null
+  const onHand =
+    available !== null ? available + committed + unavailable : (level?.on_hand ?? null)
+  return { committed, unavailable, onHand }
+}
+
+/**
  * A variant's stock as a Location / Quantity table, drawn like the Inventory card of Add product:
  * each row is a dropdown of the store's locations and a quantity. Rows can be added for more
  * locations; a row added here can be removed again. With no known location the dropdown is the
  * plain Shopify location number box, so stock can still be set.
+ *
+ * Given `levels` (the variant's stock as the store reports it) it also shows, for every location,
+ * the Unavailable, Committed and On hand figures beside the Available quantity that is edited —
+ * like the store admin's Inventory card.
  */
 export function StockFields({
   rows,
@@ -25,6 +64,7 @@ export function StockFields({
   errors,
   prefix,
   label,
+  levels,
 }: {
   rows: StockRowDraft[]
   onChange: (rows: StockRowDraft[]) => void
@@ -34,18 +74,24 @@ export function StockFields({
   prefix: string
   /** What the table is about, for assistive technology ("Stock of Medium"). */
   label: string
+  /** The store's own figures for this variant: switches the extra read-only columns on. */
+  levels?: Levels
 }) {
   const patch = (index: number, change: Partial<StockRowDraft>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...change } : row)))
+  const grid = levels ? LEVEL_GRID : STOCK_GRID
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="border-border overflow-hidden rounded-xl border">
         <div
-          className={`${STOCK_GRID} bg-surface text-text-muted px-3 py-2 text-[0.76rem] font-semibold`}
+          className={`${grid} bg-surface text-text-muted items-center px-3 py-2 text-[0.76rem] font-semibold`}
         >
-          <span>Location</span>
-          <span className="text-right">Quantity</span>
+          <span>{levels ? 'Locations' : 'Location'}</span>
+          {levels && <span className="hidden text-right sm:block">Unavailable</span>}
+          {levels && <span className="hidden text-right sm:block">Committed</span>}
+          <span className="text-right">{levels ? 'Available' : 'Quantity'}</span>
+          {levels && <span className="hidden text-right sm:block">On hand</span>}
           <span />
         </div>
         {rows.length === 0 ? (
@@ -58,10 +104,11 @@ export function StockFields({
               const location = errors[`${prefix}.${index}.location`]
               const quantity = errors[`${prefix}.${index}.quantity`]
               const added = row.originalLocationId === ''
+              const shown = levels ? figures(row, levels) : null
               return (
                 <li
                   key={row.key}
-                  className={`${STOCK_GRID} border-border items-start border-t p-3 first:border-t-0`}
+                  className={`${grid} border-border items-start border-t p-3 first:border-t-0`}
                 >
                   <div className="flex min-w-0 flex-col gap-1">
                     {locations.length > 0 ? (
@@ -109,6 +156,12 @@ export function StockFields({
                       </p>
                     )}
                   </div>
+                  {shown && (
+                    <span className={`${FIGURE} pt-2.5`}>{count(shown.unavailable)}</span>
+                  )}
+                  {shown && (
+                    <span className={`${FIGURE} pt-2.5`}>{count(shown.committed)}</span>
+                  )}
                   <div className="flex min-w-0 flex-col gap-1">
                     <label htmlFor={`${prefix}-${row.key}-quantity`} className="sr-only">
                       {`Stock quantity ${index + 1}`}
@@ -131,6 +184,11 @@ export function StockFields({
                       </p>
                     )}
                   </div>
+                  {shown && (
+                    <span className={`${FIGURE} pt-2.5`}>
+                      {shown.onHand === null ? '—' : count(shown.onHand)}
+                    </span>
+                  )}
                   {added ? (
                     <button
                       type="button"

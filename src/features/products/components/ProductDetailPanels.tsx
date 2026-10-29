@@ -69,6 +69,7 @@ import {
   EditableTab,
   SectionEditControls,
 } from './edit/EditableSection.tsx'
+import { InventorySection as InventoryEditor } from './edit/InventorySection.tsx'
 import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { MetafieldsSection as MetafieldsEditor } from './edit/MetafieldsSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
@@ -723,7 +724,7 @@ function VariantsView({ product }: { product: ProductDetail }) {
 
 // --- Inventory ---------------------------------------------------------------
 
-export function InventoryPanel({ product }: { product: ProductDetail }) {
+function InventoryView({ product }: { product: ProductDetail }) {
   const withLevels = product.variants.filter(
     (variant) => variant.inventory_levels.length > 0,
   )
@@ -784,6 +785,51 @@ export function InventoryPanel({ product }: { product: ProductDetail }) {
         </section>
       ))}
     </div>
+  )
+}
+
+/** "N locations" and the pencil (or Save / Discard) in one row above the stock tables. */
+function InventoryHeader({
+  product,
+  edit,
+}: {
+  product: ProductDetail
+  edit: SectionEdit
+}) {
+  const locations = product.variants.reduce(
+    (sum, variant) => sum + variant.inventory_levels.length,
+    0,
+  )
+  return (
+    <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2">
+      <p className="text-[0.95rem] font-semibold">
+        {edit.editing
+          ? 'Editing inventory'
+          : `${locations} ${locations === 1 ? 'location' : 'locations'}`}
+      </p>
+      <div className="ml-auto flex items-center gap-1.5">
+        <SectionEditControls edit={edit} what="inventory" />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The Inventory tab: the store's stock figures per variant and location, and a pencil that turns
+ * the tab into the Inventory cards of the Variants editor (tracked, the Available quantity per
+ * location, SKU, barcode, continue selling). It sends the same `variants` update.
+ */
+export function InventoryPanel({ product, onSaved }: TabProps) {
+  return (
+    <EditableTab
+      product={product}
+      what="inventory"
+      errorPrefixes={VARIANT_ERRORS}
+      onSaved={onSaved}
+      header={(edit) => <InventoryHeader product={product} edit={edit} />}
+      view={<InventoryView product={product} />}
+      editor={(section) => <InventoryEditor {...section} />}
+    />
   )
 }
 
