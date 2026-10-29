@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAppSelector } from '../../../app/store/hooks.ts'
 import { ProductsIcon } from '../../../components/ui/icons.tsx'
 import { safeUrl } from '../utils/format.ts'
 
@@ -6,6 +7,30 @@ interface ProductImageProps {
   src: string | null
   alt: string
   size?: 'sm' | 'thumb' | 'lg' | 'xl'
+  /**
+   * The product this picture stands for. While the store has no picture for it yet but the user
+   * has just chosen one from their computer, that file's own in-memory preview is shown instead
+   * — so a new product has its picture the moment it exists, not once the upload and the store
+   * have finished.
+   */
+  productId?: string
+}
+
+/**
+ * The first picture the user chose from their computer for this product that is still on its
+ * way to the store (an object URL this app made itself — never an address from the API).
+ */
+function useChosenPicture(productId: string | undefined): string | null {
+  return useAppSelector((state) => {
+    if (!productId) return null
+    const item = state.products.localMedia[productId]?.items.find(
+      (candidate) =>
+        candidate.mediaType === 'IMAGE' &&
+        candidate.status !== 'failed' &&
+        candidate.previewUrl.startsWith('blob:'),
+    )
+    return item?.previewUrl ?? null
+  })
 }
 
 const SIZES = {
@@ -26,10 +51,12 @@ const SIZES = {
  * link, and the request sends no referrer (the image host doesn't need to
  * know which CRM page it was shown on).
  */
-export function ProductImage({ src, alt, size = 'sm' }: ProductImageProps) {
+export function ProductImage({ src, alt, size = 'sm', productId }: ProductImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const { box, icon, fit } = SIZES[size]
-  const safeSrc = safeUrl(src)
+  // The store's own picture when there is one, else the file just chosen.
+  const chosen = useChosenPicture(productId)
+  const safeSrc = safeUrl(src) ?? chosen
 
   if (!safeSrc || failedSrc === safeSrc) {
     return (

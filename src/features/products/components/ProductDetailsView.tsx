@@ -153,7 +153,7 @@ export function ProductDetailsView({
     <article className="border-border bg-bg overflow-hidden rounded-2xl border">
       <header className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="flex items-start gap-4">
-          <ProductImage src={imageUrl} alt="" />
+          <ProductImage src={imageUrl} alt="" productId={id} />
           <div className="min-w-0 flex-1">
             {/* Name, then stock and price right beside it (they wrap below on narrow screens). */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">

@@ -228,6 +228,31 @@ describe('images added when a product is created, and added later from the Media
     expect(screen.queryByText('No images')).not.toBeInTheDocument()
   })
 
+  it('shows a picture chosen on the form on the new product’s row at once, before the store has it', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderPage()
+    await screen.findByLabelText('Select Hippo Bag')
+    await user.click(screen.getByRole('button', { name: 'Add product' }))
+    const form = await screen.findByRole('region', { name: 'Add product' })
+    await user.type(within(form).getByLabelText('Title'), 'Sushi Tray')
+    await user.type(within(form).getByLabelText('Price'), '9.99')
+    await user.upload(
+      within(form).getByLabelText('Choose files from your computer'),
+      new File(['pixels'], 'photo.png', { type: 'image/png' }),
+    )
+    // The store's list will have the new product, still without a picture of its own.
+    list.mockResolvedValue(page([row('new-id', 'Sushi Tray'), EXISTING]))
+    await user.click(within(form).getAllByRole('button', { name: 'Create product' })[0])
+    await screen.findByText(/Created “Sushi Tray”/)
+
+    // The list has no image for the product yet (the store hasn't got the file): the row
+    // shows the chosen file itself, not the empty placeholder.
+    const newRow = await screen.findByRole('button', { name: 'View Sushi Tray' })
+    expect(
+      newRow.closest('tr, li, div')?.querySelector('img') ?? newRow.querySelector('img'),
+    ).toHaveAttribute('src', 'blob:photo.png')
+  })
+
   /** Adds "c.png" from the computer in the Media tab's Add media dialog. */
   async function addUpload(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: 'Add media' }))

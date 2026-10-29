@@ -223,7 +223,7 @@ export function ProductsList({
                       : 'border-border bg-bg'
                   }`}
                 >
-                  <ProductImage src={product.image_url} alt="" />
+                  <ProductImage src={product.image_url} alt="" productId={product.id} />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="line-clamp-2 text-[0.88rem] font-semibold">
                       <Highlight text={product.title} />
@@ -351,7 +351,11 @@ export function ProductsList({
                       onFocus={() => onPrefetch(product.id)}
                       className="focus-visible:outline-accent block cursor-zoom-in rounded-md border-none bg-transparent p-0 transition-transform duration-150 hover:scale-110 focus-visible:outline-2"
                     >
-                      <ProductImage src={product.image_url} alt="" />
+                      <ProductImage
+                        src={product.image_url}
+                        alt=""
+                        productId={product.id}
+                      />
                     </button>
                   </td>
                   <td className={TD}>

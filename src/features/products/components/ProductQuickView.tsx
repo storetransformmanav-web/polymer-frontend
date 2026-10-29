@@ -86,7 +86,12 @@ export function ProductQuickView({
         </header>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
-          <ProductImage src={product.image_url} alt={product.title} size="xl" />
+          <ProductImage
+            src={product.image_url}
+            alt={product.title}
+            size="xl"
+            productId={product.id}
+          />
 
           <div className="flex flex-col gap-2">
             <h3 className="text-lg leading-snug font-semibold">{product.title}</h3>
