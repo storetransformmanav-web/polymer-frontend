@@ -73,15 +73,24 @@ export function Chip({
   value?: string
   onClick: () => void
 }) {
+  const valueColor =
+    value === 'Yes'
+      ? 'bg-accent-tint text-accent border border-accent/30'
+      : value === 'No'
+        ? 'bg-surface text-text-muted border border-border'
+        : 'bg-surface text-text'
+
   return (
     <button
       type="button"
       onClick={onClick}
       className="border-border bg-bg text-text hover:border-accent hover:text-accent focus-visible:outline-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-medium transition-colors focus-visible:outline-2"
     >
-      {children}
+      <span className="inline-flex items-center leading-none">{children}</span>
       {value !== undefined && (
-        <span className="bg-surface rounded-md px-1.5 py-px text-[0.74rem] font-semibold">
+        <span
+          className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[0.74rem] leading-none font-semibold ${valueColor}`}
+        >
           {value}
         </span>
       )}

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   api,
   type ProductDetail,
@@ -1295,8 +1295,12 @@ describe('ProductsPage details', () => {
       media_type: 'IMAGE',
       mime_type: 'image/jpeg',
     }))
-    // The lightbox loads on demand, so the first open needs a little longer.
-    const LOAD = { timeout: 8000 }
+    // The lightbox loads on demand (React.lazy), so the first open needs a little longer — on a
+    // slow machine a lot longer. It is loaded once, before the tests, so none of them waits on it.
+    const LOAD = { timeout: 20_000 }
+    beforeAll(async () => {
+      await import('../components/ProductLightboxView.tsx')
+    }, 60_000)
     const closeButton = () => screen.findByRole('button', { name: 'Close' }, LOAD)
     const currentSlide = () => document.querySelector('.yarl__slide_current img')
 

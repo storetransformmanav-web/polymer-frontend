@@ -109,7 +109,9 @@ export interface CreateDraft {
   seoTitle: string
   seoDescription: string
   templateSuffix: string
-  categoryGid: string
+  /** The category's name (e.g. "Food Container Covers"), or a taxonomy GID. */
+  category: string
+  categoryGid?: string
   giftCard: boolean
   options: CreateOptionDraft[]
   variants: CreateVariantDraft[]
@@ -176,6 +178,7 @@ export function blankCreateDraft(shop: string): CreateDraft {
     seoTitle: '',
     seoDescription: '',
     templateSuffix: '',
+    category: '',
     categoryGid: '',
     giftCard: false,
     options: [],
@@ -251,7 +254,8 @@ export function isCreateDirty(draft: CreateDraft): boolean {
       draft.seoTitle,
       draft.seoDescription,
       draft.templateSuffix,
-      draft.categoryGid,
+      draft.category,
+      draft.categoryGid ?? '',
       draft.taxCode,
     ].some((value) => value.trim() !== '') ||
     draft.tags.length > 0 ||
@@ -308,7 +312,12 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     'templateSuffix',
     tooLong('The template suffix', draft.templateSuffix, LIMITS.templateSuffix),
   )
-  put('categoryGid', tooLong('The category ID', draft.categoryGid, LIMITS.category))
+  const category = (draft.category || draft.categoryGid || '').trim()
+  const categoryError = tooLong('The category', category, LIMITS.category)
+  if (categoryError) {
+    errors.category = categoryError
+    errors.categoryGid = categoryError
+  }
   put('seoTitle', tooLong('The SEO title', draft.seoTitle, LIMITS.seoTitle))
   put(
     'seoDescription',
@@ -542,7 +551,16 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
     }
   }
   if (trimmed(draft.templateSuffix)) body.template_suffix = trimmed(draft.templateSuffix)
-  if (trimmed(draft.categoryGid)) body.category_gid = trimmed(draft.categoryGid)
+  if (trimmed(draft.category)) {
+    if (trimmed(draft.category).startsWith('gid://shopify/TaxonomyCategory/')) {
+      body.category_gid = trimmed(draft.category)
+    } else {
+      body.category = trimmed(draft.category)
+    }
+  }
+  if (draft.categoryGid && trimmed(draft.categoryGid)) {
+    body.category_gid = trimmed(draft.categoryGid)
+  }
 
   const options = usableOptions(draft.options).map((option) => ({
     name: trimmed(option.name),

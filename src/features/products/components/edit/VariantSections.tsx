@@ -89,9 +89,14 @@ export function VariantPriceCard({
             >
               Compare-at
             </Chip>
-            <Chip value={variant.taxable ? 'Yes' : 'No'} onClick={() => openAt(null)}>
-              Charge tax
-            </Chip>
+            {!opened && (
+              <Chip
+                value={variant.taxable ? 'Yes' : 'No'}
+                onClick={() => openAt(`${prefix}-taxable`)}
+              >
+                Charge tax
+              </Chip>
+            )}
             <Chip
               value={variant.cost.trim() || undefined}
               onClick={() => openAt(`${prefix}-cost`)}
@@ -153,6 +158,7 @@ export function VariantPriceCard({
           </EditField>
         </div>
         <CheckField
+          id={`${prefix}-taxable`}
           label="Charge tax"
           hint="Tax is added at checkout using your store's tax settings."
           checked={variant.taxable}

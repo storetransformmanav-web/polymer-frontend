@@ -1063,6 +1063,8 @@ export interface ProductCreateBody {
   tags?: string[]
   seo?: { title?: string; description?: string }
   template_suffix?: string
+  /** The category, by name (e.g. "Food Container Covers"). */
+  category?: string
   /** gid://shopify/TaxonomyCategory/… */
   category_gid?: string
   gift_card?: boolean

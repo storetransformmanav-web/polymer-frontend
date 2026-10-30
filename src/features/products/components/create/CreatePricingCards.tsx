@@ -105,9 +105,14 @@ export function CreatePriceCard(props: CreateSectionProps & { currency: string |
                 Compare-at
               </Chip>
             )}
-            <Chip value={draft.taxable ? 'Yes' : 'No'} onClick={() => openAt(null)}>
-              Charge tax
-            </Chip>
+            {!opened && (
+              <Chip
+                value={draft.taxable ? 'Yes' : 'No'}
+                onClick={() => openAt('create-taxable')}
+              >
+                Charge tax
+              </Chip>
+            )}
             {single && (
               <Chip
                 value={variant.cost.trim() || undefined}
@@ -174,6 +179,7 @@ export function CreatePriceCard(props: CreateSectionProps & { currency: string |
           </EditField>
         </div>
         <CheckField
+          id="create-taxable"
           label="Charge tax on this product"
           hint="Tax is added at checkout using your store's tax settings. This applies to every variant."
           checked={draft.taxable}

@@ -75,17 +75,16 @@ export function CreateBasicsCard({
       <EditField
         id="create-category"
         label="Product category"
-        error={errors.categoryGid}
-        hint="Optional. Helps the store with tax rates, search and filters. Paste the category's Shopify ID, which starts with gid://shopify/TaxonomyCategory/."
+        error={errors.category || errors.categoryGid}
       >
         <input
           id="create-category"
           autoComplete="off"
           spellCheck={false}
-          value={draft.categoryGid}
-          placeholder="gid://shopify/TaxonomyCategory/…"
-          aria-invalid={errors.categoryGid ? true : undefined}
-          onChange={(event) => update({ categoryGid: event.target.value })}
+          value={draft.category || draft.categoryGid || ''}
+          placeholder="e.g. Food Container Covers"
+          aria-invalid={errors.category || errors.categoryGid ? true : undefined}
+          onChange={(event) => update({ category: event.target.value })}
           className={FIELD_INPUT}
         />
       </EditField>

@@ -3,12 +3,10 @@ import { Badge } from '../../../../components/ui/Badge.tsx'
 import { ChevronDownIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import { type VariantDraft } from '../../utils/editDraft.ts'
-import { useProductStockLocations } from '../../hooks/useProductStockLocations.ts'
 import { NewVariantsEditor } from './NewVariantsEditor.tsx'
 import { VariantOptionsEditor } from './VariantOptionsEditor.tsx'
 import {
   VariantImageCard,
-  VariantInventoryCard,
   VariantPriceCard,
   VariantShippingCard,
 } from './VariantSections.tsx'
@@ -34,7 +32,6 @@ export function VariantsSection(props: SectionProps) {
 }
 
 function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
-  const locations = useProductStockLocations(product)
   // A product with a single variant opens it straight away; otherwise they start collapsed.
   const [open, setOpen] = useState<Set<string>>(
     () => new Set(draft.variants.length === 1 ? [draft.variants[0].key] : []),
@@ -147,22 +144,13 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
                   id={bodyId}
                   className="border-border bg-surface/40 flex flex-col gap-5 border-t p-4"
                 >
-                  {/* The same sections as Add product: Price, Inventory, Shipping. */}
+                  {/* The same sections as Add product: Price, Shipping, Image. */}
                   <VariantPriceCard
                     product={product}
                     variant={variant}
                     index={index}
                     errors={errors}
                     prefix={prefix}
-                    update={(patch) => update(index, patch)}
-                  />
-                  <VariantInventoryCard
-                    product={product}
-                    variant={variant}
-                    index={index}
-                    errors={errors}
-                    prefix={prefix}
-                    locations={locations}
                     update={(patch) => update(index, patch)}
                   />
                   <VariantShippingCard

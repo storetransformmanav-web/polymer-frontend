@@ -404,6 +404,20 @@ describe('adding a product', () => {
     })
   })
 
+  it('sends the product category by name', async () => {
+    const { user, form } = await openForm()
+    await fillBasics(user, form)
+    await user.click(within(form).getByLabelText('Product category'))
+    await user.paste('Food Container Covers')
+    await user.click(submit(form))
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0][0]).toMatchObject({
+      category: 'Food Container Covers',
+    })
+    expect(create.mock.calls[0][0].category_gid).toBeUndefined()
+  })
+
   it('lets another store be chosen', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
@@ -1225,12 +1239,13 @@ describe('adding a product', () => {
         expect(within(form).getByLabelText('Cost per item')).toHaveFocus(),
       )
 
-      // The Charge tax pill opens it too.
+      // The Charge tax pill opens it too, and hides while the section is open.
       await user.click(chevron())
       await user.click(within(form).getByRole('button', { name: /^Charge tax/ }))
       expect(
         within(form).getByRole('checkbox', { name: 'Charge tax on this product' }),
       ).toBeChecked()
+      expect(within(form).queryByRole('button', { name: /^Charge tax/ })).toBeNull()
     })
 
     it('shows what was typed in the pills, and keeps More details as its own section', async () => {
@@ -1243,6 +1258,10 @@ describe('adding a product', () => {
       expect(
         within(form).getByRole('button', { name: /^Compare-ats*12$/ }),
       ).toBeInTheDocument()
+      // While open, the Charge tax pill is hidden.
+      expect(within(form).queryByRole('button', { name: /^Charge tax/ })).toBeNull()
+      // Closing the options shows the Charge tax pill again.
+      await user.click(within(form).getByRole('button', { name: 'Hide more options' }))
       expect(
         within(form).getByRole('button', { name: /^Charge taxs*No$/ }),
       ).toBeInTheDocument()

@@ -35,5 +35,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     css: true,
+    // Every test file runs in its own worker (jsdom + the whole app), so on a slower or busier
+    // machine — a laptop on battery, a Mac running the editor and a browser alongside — the
+    // 5 s default is too tight: first renders and the lazily loaded editors/lightbox then fail
+    // with a timeout although nothing is wrong. Generous limits cost nothing when it is fast.
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 })

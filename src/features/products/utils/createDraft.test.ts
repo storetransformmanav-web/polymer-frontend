@@ -354,6 +354,14 @@ describe('buildCreateBody', () => {
     expect(body.variants[1].stock).toBeUndefined()
   })
 
+  it('sends the category by name, and trims it', () => {
+    const draft = valid({ category: '  Food Container Covers  ' })
+    const body = buildCreateBody(draft)
+
+    expect(body.category).toBe('Food Container Covers')
+    expect(body.category_gid).toBeUndefined()
+  })
+
   it('leaves out stock when no location was chosen, and empty optional fields', () => {
     const draft = valid()
     draft.variants[0].stock = '5'
@@ -582,6 +590,7 @@ describe('the create body only has fields the API has', () => {
     'tags',
     'seo',
     'template_suffix',
+    'category',
     'category_gid',
     'gift_card',
     'options',
@@ -620,6 +629,7 @@ describe('the create body only has fields the API has', () => {
         seoTitle: 's',
         seoDescription: 'd',
         templateSuffix: 't',
+        category: 'Food Container Covers',
         categoryGid: 'gid://shopify/TaxonomyCategory/aa',
         giftCard: true,
         taxCode: 'TC',

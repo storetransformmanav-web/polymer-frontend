@@ -128,11 +128,13 @@ export function EditField({
 
 /** A small checkbox with its label. */
 export function CheckField({
+  id,
   label,
   checked,
   onChange,
   hint,
 }: {
+  id?: string
   label: string
   checked: boolean
   onChange: (checked: boolean) => void
@@ -141,8 +143,12 @@ export function CheckField({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="flex cursor-pointer items-center gap-2 text-[0.86rem] font-medium">
+      <label
+        htmlFor={id}
+        className="flex cursor-pointer items-center gap-2 text-[0.86rem] font-medium"
+      >
         <input
+          id={id}
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}

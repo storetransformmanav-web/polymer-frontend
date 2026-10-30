@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { PlusIcon } from '../../../components/ui/icons.tsx'
+import { XIcon } from '../../../components/ui/icons.tsx'
 import type { ProductDetail } from '../../../lib/api/endpoints.ts'
 import { useCollectionSearch } from '../hooks/useCollectionSearch.ts'
 import {
@@ -9,55 +9,53 @@ import {
   collectionKey,
   offerFoundCollections,
 } from '../utils/collectionSuggestions.ts'
-import { FIELD_INPUT } from './edit/fields.tsx'
+import { statusLabel } from '../utils/format.ts'
+import { TAG_CHIP } from './edit/TagsSection.tsx'
 
 /** Room the dropdown wants below the box before it opens above it instead (px). */
 const LIST_ROOM = 340
 
+function collectionTypeLabel(type: string): string {
+  return type.toLowerCase() === 'custom' ? 'Manual' : statusLabel(type)
+}
+
 /**
- * The "Add to a collection" box of the Collections tab. Type part of a collection's name and
- * the store's collections are searched on the backend (`GET /collections?search=`, for the
- * product's own store); the dropdown stays closed — and asks for nothing — until something is
- * typed, then shows the matches, ten at most — a suggestion list. Choosing one (click, or
- * ↑/↓ + Enter) fills the box with its name. **Add** (or Enter) takes the name in the box and
- * hands it to `onChoose` with `isNew`: false for a collection the store has (chosen, listed,
- * or found by an exact-name look-up — it is then added with `PUT /products/{id}`), true for a
- * name it doesn't have (a new collection is made with `POST /collections`, this product in
- * it). If the look-up itself fails nothing is known, so the name goes the safe way (the
- * `PUT`, which the backend refuses for an unknown name) rather than risk making a second
- * collection. Nothing here sends anything: the caller asks first.
+ * The unified collections editor, matching the tags input design: existing collections appear
+ * as removable chips inside the card, followed by an inline search input. Typing searches
+ * existing manual collections on the backend (`GET /collections?search=`); picking a match
+ * asks confirmation and adds the product to it. New collections cannot be created here.
  */
 export function CollectionAdder({
   product,
   onChoose,
-  autoFocus = true,
+  onRemove,
+  autoFocus = false,
 }: {
   product: ProductDetail
-  /** A name was added: ask, then add the product to it (or make it, when `isNew`). */
+  /** A collection was chosen from search: ask confirmation then add. */
   onChoose: (collectionName: string, isNew: boolean) => void
-  /** Put the cursor in the box when it appears (off where it sits among other fields). */
+  /** The ✕ on an existing collection chip was clicked: ask confirmation then remove. */
+  onRemove: (collection: ProductDetail['collections'][number]) => void
   autoFocus?: boolean
 }) {
   const addInput = useRef<HTMLInputElement>(null)
+  const card = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (autoFocus) addInput.current?.focus()
   }, [autoFocus])
-  const [input, setInput] = useState('')
-  /** The name chosen from the dropdown (so Add needs no second search for it). */
-  const [checking, setChecking] = useState(false)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [inputError, setInputError] = useState<string | null>(null)
-  const chosen = selected !== null && input === selected
 
-  // The dropdown under the box: the backend's matches for what is typed, ten at most — and
-  // nothing at all (no request either) until something is typed, or once a choice is made.
+  const [input, setInput] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [inputError, setInputError] = useState<string | null>(null)
+
   const {
     found,
     total: foundTotal,
     loading,
     failed,
     lookup,
-  } = useCollectionSearch(chosen ? '' : input, product.shop?.key)
+  } = useCollectionSearch(input, product.shop?.key)
+
   const listId = useId()
   const [focused, setFocused] = useState(false)
   const [active, setActive] = useState(-1)
@@ -69,13 +67,10 @@ export function CollectionAdder({
     () => offerFoundCollections(found, foundTotal, skip, COLLECTION_LIST_LIMIT),
     [found, foundTotal, skip],
   )
-  const typed = input.trim() !== '' && !chosen
+  const typed = input.trim() !== ''
   const panelOpen = focused && typed
   const listOpen = panelOpen && shown.length > 0
 
-  // The dropdown is drawn on top of the page (a portal), so no ancestor can clip it, and it
-  // follows its box as the page scrolls or the window is resized.
-  const row = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState<{
     left: number
@@ -84,10 +79,11 @@ export function CollectionAdder({
     bottom?: number
     visible: boolean
   } | null>(null)
+
   useEffect(() => {
     if (!panelOpen) return undefined
     function measure() {
-      const rect = row.current?.getBoundingClientRect()
+      const rect = card.current?.getBoundingClientRect()
       if (!rect) return
       const below = window.innerHeight - rect.bottom
       const upward = below < LIST_ROOM && rect.top > below
@@ -115,44 +111,34 @@ export function CollectionAdder({
     }
   }, [panelOpen, input, shown.length])
 
-  /** A collection chosen from the list: its name goes into the box, ready for Add. */
   function select(collection: { title: string }) {
     const name = collection.title.trim()
-    setInput(name)
-    setSelected(name)
+    setInput('')
     setInputError(null)
     setActive(-1)
-    addInput.current?.focus()
+    setFocused(false)
+    onChoose(name, false)
   }
 
-  /**
-   * Hands the name in the box to the confirmation. A name the store has (any case) is sent
-   * with its own spelling; one it doesn't have is a new collection to make.
-   */
   async function add() {
     const text = input.trim()
     if (!text || checking) return
     if (product.collections.some((c) => collectionKey(c.title) === collectionKey(text))) {
       return setInputError('The product is already in that collection')
     }
-    // Chosen from the list: the store has it, with this spelling.
-    if (selected !== null && collectionKey(selected) === collectionKey(text)) {
-      return onChoose(selected, false)
-    }
     setChecking(true)
     try {
-      // Asked now (cached, so no wait for the typing pause) whether the store has it.
       const answer = await lookup(text)
       const named = answer.items.find(
         (collection) => collectionKey(collection.title) === collectionKey(text),
       )
-      if (named) onChoose(named.title.trim(), false)
-      // Not in a page that was cut short: it may be further on, so don't make a second one.
-      else if (answer.total > answer.items.length) onChoose(text, false)
-      else onChoose(text, true)
+      if (named) {
+        select(named)
+      } else {
+        setInputError(`No collection matches “${text}”.`)
+      }
     } catch {
-      // Can't tell whether it exists: the update (not a create) is the safe thing to try.
-      onChoose(text, false)
+      setInputError('Could not search the collections. Try again in a moment.')
     } finally {
       setChecking(false)
     }
@@ -160,20 +146,50 @@ export function CollectionAdder({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor="edit-collection-id"
-        className="text-text text-[0.82rem] font-semibold"
+      <div
+        ref={card}
+        onClick={() => addInput.current?.focus()}
+        className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex cursor-text flex-wrap items-center gap-1.5 rounded-xl border p-2.5 transition-colors focus-within:outline-2"
       >
-        Add to a collection
-      </label>
-      <div ref={row} className="flex gap-2">
+        {product.collections.length > 0 && (
+          <ul aria-label="Collections" className="contents">
+            {product.collections.map((collection) => (
+              <li
+                key={collection.id}
+                title={
+                  collection.collection_type
+                    ? `${collectionTypeLabel(collection.collection_type)} collection · ${collection.handle}`
+                    : collection.handle
+                }
+                className={`${TAG_CHIP} flex items-center gap-1 pr-1.5`}
+              >
+                {collection.title}
+                <button
+                  type="button"
+                  aria-label={`Remove from ${collection.title}`}
+                  title="Remove from this collection"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onRemove(collection)
+                  }}
+                  className="hover:text-danger inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                >
+                  <XIcon width={12} height={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <input
           id="edit-collection-id"
           ref={addInput}
+          aria-label="Add to a collection"
           autoComplete="off"
           spellCheck={false}
           value={input}
-          placeholder="Type a collection name"
+          placeholder={
+            product.collections.length > 0 ? 'Add another' : 'Search collections…'
+          }
           role="combobox"
           aria-expanded={panelOpen}
           aria-controls={listOpen ? listId : undefined}
@@ -182,8 +198,10 @@ export function CollectionAdder({
             listOpen && active >= 0 ? `${listId}-${active}` : undefined
           }
           aria-invalid={inputError ? true : undefined}
-          onFocus={() => setFocused(true)}
-          // Clicking the box again (or ↓) brings the list back after Escape.
+          onFocus={() => {
+            setFocused(true)
+            setActive(-1)
+          }}
           onClick={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onChange={(event) => {
@@ -202,7 +220,6 @@ export function CollectionAdder({
               event.preventDefault()
               setActive((index) => (index <= 0 ? shown.length - 1 : index - 1))
             } else if (listOpen && event.key === 'Escape') {
-              // Only the list closes.
               event.preventDefault()
               event.stopPropagation()
               setFocused(false)
@@ -211,29 +228,28 @@ export function CollectionAdder({
               event.preventDefault()
               if (listOpen && active >= 0) select(shown[active])
               else void add()
+            } else if (
+              event.key === 'Backspace' &&
+              input === '' &&
+              product.collections.length > 0
+            ) {
+              onRemove(product.collections[product.collections.length - 1])
             }
           }}
-          className={FIELD_INPUT}
+          className="text-text placeholder:text-text-muted/70 min-w-32 flex-1 border-none bg-transparent px-1 py-1 text-[0.85rem] outline-none"
         />
-        <button
-          type="button"
-          onClick={() => void add()}
-          disabled={!input.trim() || checking}
-          className="border-border bg-bg text-text hover:border-accent inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
-        >
-          <PlusIcon width={14} height={14} />
-          Add
-        </button>
       </div>
-      <p className="text-text-muted text-[0.76rem]">
-        Pick a collection from the list, or type a new name and press Add to create it.
-        Smart collections aren&apos;t listed — their products come from rules.
-      </p>
+
       {inputError && (
         <p role="alert" className="text-danger text-[0.78rem]">
           {inputError}
         </p>
       )}
+
+      <p className="text-text-muted text-[0.76rem]">
+        Collections are added and removed straight away, after you confirm — they
+        aren&apos;t part of Save.
+      </p>
 
       {panelOpen &&
         place?.visible &&
@@ -255,7 +271,6 @@ export function CollectionAdder({
                   id={`${listId}-${index}`}
                   role="option"
                   aria-selected={index === active}
-                  // Keep the focus in the box: leaving it would close the list before the click.
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => select(collection)}
@@ -294,7 +309,7 @@ export function CollectionAdder({
                   ? 'Searching collections…'
                   : failed
                     ? 'Could not search the collections. Try again in a moment.'
-                    : `No collection matches “${input.trim()}”. Press Add to create it as a new collection.`}
+                    : `No collection matches “${input.trim()}”.`}
               </p>
             )}
             {shown.length > 0 && (total > COLLECTION_LIST_LIMIT || loading) && (

@@ -8,13 +8,7 @@ import 'yet-another-react-lightbox/styles.css'
 import 'yet-another-react-lightbox/plugins/counter.css'
 import 'yet-another-react-lightbox/plugins/thumbnails.css'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import {
-  CheckIcon,
-  InfoIcon,
-  PencilIcon,
-  SpinnerIcon,
-  XIcon,
-} from '../../../components/ui/icons.tsx'
+import { CheckIcon, InfoIcon, SpinnerIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { LIMITS } from '../utils/editDraft.ts'
 import type { AltTextEditor, LightboxSlide } from '../utils/slides.ts'
 
@@ -81,17 +75,7 @@ function AltTextField({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[0.78rem] font-semibold text-white/90">Alt text</span>
-        {draft === null ? (
-          <button
-            type="button"
-            onClick={begin}
-            aria-label="Edit alt text"
-            title="Edit alt text"
-            className={SMALL_BUTTON}
-          >
-            <PencilIcon width={14} height={14} />
-          </button>
-        ) : (
+        {draft !== null && (
           <span className="flex gap-1.5">
             <button
               type="button"
@@ -122,11 +106,17 @@ function AltTextField({
       </div>
 
       {draft === null ? (
-        <p className={`${VALUE_BOX} m-0`}>
+        <button
+          type="button"
+          onClick={begin}
+          aria-label="Edit alt text"
+          title="Click to edit alt text"
+          className={`${VALUE_BOX} focus-visible:border-accent focus-visible:outline-accent m-0 w-full cursor-pointer text-left transition-colors hover:border-white/40 hover:bg-white/15 focus-visible:outline-2`}
+        >
           {altText.trim() || (
             <span className="font-normal text-white/60 italic">No alt text</span>
           )}
-        </p>
+        </button>
       ) : (
         <>
           <textarea

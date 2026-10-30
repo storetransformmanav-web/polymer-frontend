@@ -11,7 +11,6 @@ import {
   PlusIcon,
   SpinnerIcon,
   TrashIcon,
-  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import type {
@@ -354,9 +353,9 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                       product={product}
                       autoFocus={false}
                       onChoose={(name, isNew) => setAddingCollection({ name, isNew })}
+                      onRemove={setRemovingCollection}
                     />
                   }
-                  onRemove={setRemovingCollection}
                 />
               </div>
             )}
@@ -536,15 +535,12 @@ function CollectionsBlock({
   collections,
   message,
   editor,
-  onRemove,
 }: {
   collections: ProductDetail['collections']
   /** What the backend said about a collection it just made. */
   message: string | null
-  /** The add box; given only while the card is being edited. */
+  /** The unified collection editor; given only while the card is being edited. */
   editor?: ReactNode
-  /** The ✕ on a chip was clicked: ask before taking the product out of it. */
-  onRemove?: (collection: ProductDetail['collections'][number]) => void
 }) {
   return (
     <section
@@ -555,7 +551,9 @@ function CollectionsBlock({
         Collections
       </h3>
       {message && <FormMessage tone="success">{message}</FormMessage>}
-      {collections.length > 0 ? (
+      {editor ? (
+        editor
+      ) : collections.length > 0 ? (
         <ul
           aria-label="Collections"
           className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5"
@@ -568,21 +566,9 @@ function CollectionsBlock({
                   ? `${collectionTypeLabel(collection.collection_type)} collection · ${collection.handle}`
                   : collection.handle
               }
-              className={`${TAG_CHIP} flex items-center gap-1 ${onRemove ? 'pr-1.5' : ''}`}
+              className={`${TAG_CHIP} flex items-center gap-1`}
             >
               {collection.title}
-              {onRemove && (
-                // Always asks first (see RemoveCollectionDialog); nothing is sent until "Remove".
-                <button
-                  type="button"
-                  aria-label={`Remove from ${collection.title}`}
-                  title="Remove from this collection"
-                  onClick={() => onRemove(collection)}
-                  className="hover:text-danger inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
-                >
-                  <XIcon width={12} height={12} />
-                </button>
-              )}
             </li>
           ))}
         </ul>
@@ -590,15 +576,6 @@ function CollectionsBlock({
         <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
           This product isn&apos;t in any collection.
         </p>
-      )}
-      {editor && (
-        <>
-          {editor}
-          <p className="text-text-muted text-[0.76rem]">
-            Collections are added and removed straight away, after you confirm — they
-            aren&apos;t part of Save.
-          </p>
-        </>
       )}
     </section>
   )
