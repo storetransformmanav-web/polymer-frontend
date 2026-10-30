@@ -71,7 +71,24 @@ export function usePendingMediaSync(product: ProductDetail | null) {
           queued.items.length,
         )
       : null
-    if (order) void save({ id, body: { media_order: order }, shop: product?.shop?.key })
+    // Variants whose picture was added by address: point each at the file that arrived for it
+    // (the arrived files sit after the product's older images, in the order they were sent).
+    const images = product?.images ?? []
+    const links = (queued?.variantLinks ?? []).flatMap((link) => {
+      const position = queued?.items.findIndex((item) => item.url === link.url) ?? -1
+      const image = position >= 0 ? images[(queued?.baseline ?? 0) + position] : undefined
+      return image ? [{ id: link.variantId, image_attachment_id: image.id }] : []
+    })
+    if (order || links.length > 0) {
+      void save({
+        id,
+        body: {
+          ...(order ? { media_order: order } : {}),
+          ...(links.length > 0 ? { variants: links } : {}),
+        },
+        shop: product?.shop?.key,
+      })
+    }
     dispatch(mediaSettled(id))
     // The list was read when the files were sent, before the store had them, so its
     // row still shows no (or the old) image: read it again now that they are here.

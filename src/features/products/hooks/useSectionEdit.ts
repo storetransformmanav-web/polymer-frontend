@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useAppDispatch } from '../../../app/store/hooks.ts'
+import { mediaQueued } from '../../../app/store/productsSlice.ts'
 import type {
   ProductDetail,
   ProductUpdateBody,
@@ -9,6 +11,7 @@ import {
   draftFromProduct,
   hasChanges,
   validateDraft,
+  variantImageLinks,
   type DraftErrors,
   type ProductDraft,
 } from '../utils/editDraft.ts'
@@ -49,6 +52,7 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
   // Save was pressed and the changes are valid: waiting for "Yes, update".
   const [confirming, setConfirming] = useState(false)
   const { save, isSaving, error, clearError } = useSaveProduct()
+  const dispatch = useAppDispatch()
 
   const body = useMemo<ProductUpdateBody>(
     () => (session ? buildUpdateBody(session.baseline, session.draft) : {}),
@@ -111,6 +115,20 @@ export function useSectionEdit(product: ProductDetail, options: SectionEditOptio
       shop: session.baseline.shop?.key,
     })
     if (result) {
+      // Pictures typed by address for variants were added to the product's media in this save:
+      // wait for the store to download them, then point each variant at its picture.
+      const pictures = variantImageLinks(session.draft)
+      if (pictures.items.length > 0) {
+        dispatch(
+          mediaQueued({
+            id: session.baseline.id,
+            items: pictures.items,
+            baseline: session.baseline.images.length,
+            startedAt: Date.now(),
+            variantLinks: pictures.links,
+          }),
+        )
+      }
       setSession(null)
       setShowErrors(false)
       onSaved?.(result, session.baseline, body)

@@ -31,6 +31,19 @@ npm run dev
 
 The dev server runs at http://localhost:5173.
 
+### Sharing your local app with other people
+
+```bash
+npm run dev:share        # the dev server, reachable from other devices
+npm run preview:share    # the same for the production build (after `npm run build`)
+```
+
+`dev:share` makes Vite listen on every network interface (`--host`) and prints a **Network** address such as `http://192.168.0.55:5173/`. Anyone **on the same Wi-Fi / network** can open it (on Windows, allow Node.js through the firewall when it asks, and find the address with `ipconfig` → _IPv4 Address_). The `/api` calls still go through your machine's proxy, so the backend's CORS rules are no problem for them.
+
+To share outside your network, run a tunnel next to it, e.g. `npx ngrok http 5173` or `cloudflared tunnel --url http://localhost:5173`, and send the https address it prints. `ngrok`, Cloudflare (`trycloudflare.com`) and localtunnel host names are already allowed in `vite.config.ts`; for any other host name add it to `sharedHosts` there.
+
+Things to know: it is your **development** server — it stops when you close the terminal or your computer sleeps, and whoever opens it reaches the real backend through your proxy, so share it only with people you trust. **Google sign-in only works on addresses listed as authorised origins** for your Google client ID (add the shared address there, or have people sign in with the emailed code).
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` (git-ignored) and fill in real values. Only variables prefixed with `VITE_` are exposed to client code — see [`src/config/env.ts`](src/config/env.ts), which is the single place env vars are read from (declare new ones on `ImportMetaEnv` in [`src/vite-env.d.ts`](src/vite-env.d.ts) too, so they're typed). Never read `import.meta.env` directly elsewhere.
@@ -41,17 +54,19 @@ Copy `.env.example` to `.env.local` (git-ignored) and fill in real values. Only 
 
 ## Commands
 
-| Command                | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `npm run dev`          | Start the dev server with HMR            |
-| `npm run build`        | Typecheck (`tsc -b`), then build `dist/` |
-| `npm run typecheck`    | Typecheck only, no build output          |
-| `npm run preview`      | Serve the production build locally       |
-| `npm run lint`         | Lint the source with Oxlint              |
-| `npm run format`       | Format the codebase with Prettier        |
-| `npm run format:check` | Check formatting without writing         |
-| `npm test`             | Run the test suite once                  |
-| `npm run test:watch`   | Run tests in watch mode                  |
+| Command                 | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `npm run dev`           | Start the dev server with HMR             |
+| `npm run dev:share`     | The dev server, reachable by other people |
+| `npm run build`         | Typecheck (`tsc -b`), then build `dist/`  |
+| `npm run typecheck`     | Typecheck only, no build output           |
+| `npm run preview`       | Serve the production build locally        |
+| `npm run preview:share` | The production build, reachable by others |
+| `npm run lint`          | Lint the source with Oxlint               |
+| `npm run format`        | Format the codebase with Prettier         |
+| `npm run format:check`  | Check formatting without writing          |
+| `npm test`              | Run the test suite once                   |
+| `npm run test:watch`    | Run tests in watch mode                   |
 
 ## State management
 

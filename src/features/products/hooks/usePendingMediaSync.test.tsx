@@ -131,4 +131,32 @@ describe('files the store is still processing, after a page refresh', () => {
     )
     expect(update).toHaveBeenCalledTimes(1)
   })
+  it('points a variant at the picture that arrived for its web address', async () => {
+    const view = renderWithProviders(<Probe item={product(['a'])} />)
+    view.store.dispatch(
+      mediaQueued({
+        id: 'p1',
+        items: WAITING,
+        baseline: 1,
+        startedAt: Date.now(),
+        variantLinks: [{ variantId: 'variant-1', url: WAITING[0].url }],
+      }),
+    )
+
+    // Nothing is sent while the file has not arrived.
+    expect(update).not.toHaveBeenCalled()
+    view.rerender(<Probe item={product(['a', 'c'])} />)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'p1',
+        { variants: [{ id: 'variant-1', image_attachment_id: 'c' }] },
+        'polymer-uk',
+      ),
+    )
+    expect(update).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(view.store.getState().products.pendingMedia.p1).toBeUndefined(),
+    )
+  })
 })

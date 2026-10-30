@@ -221,6 +221,11 @@ export interface PendingMedia {
   leading?: boolean
   /** How many of the product's first images are already files that were moved to the front. */
   placed?: number
+  /**
+   * Variants waiting for a picture that was added by address: once the file has arrived the
+   * variant is pointed at it (the update API can't take an address for an existing variant).
+   */
+  variantLinks?: { variantId: string; url: string }[]
 }
 
 export interface LocalMediaItem {
@@ -649,18 +654,32 @@ const productsSlice = createSlice({
         startedAt: number
         leading?: boolean
         placed?: number
+        variantLinks?: { variantId: string; url: string }[]
       }>,
     ) {
-      const { id, items, baseline, startedAt, leading, placed } = action.payload
+      const { id, items, baseline, startedAt, leading, placed, variantLinks } =
+        action.payload
       const existing = state.pendingMedia[id]
       // More added while some are still waiting: they wait together, from the older baseline.
       state.pendingMedia[id] = existing
-        ? { ...existing, items: [...existing.items, ...items] }
+        ? {
+            ...existing,
+            items: [...existing.items, ...items],
+            ...(variantLinks?.length || existing.variantLinks?.length
+              ? {
+                  variantLinks: [
+                    ...(existing.variantLinks ?? []),
+                    ...(variantLinks ?? []),
+                  ],
+                }
+              : {}),
+          }
         : {
             items,
             baseline,
             startedAt,
             ...(leading ? { leading, placed: placed ?? 0 } : {}),
+            ...(variantLinks?.length ? { variantLinks } : {}),
           }
     },
     /** Files were chosen for a product: show them at once, from their local previews. */

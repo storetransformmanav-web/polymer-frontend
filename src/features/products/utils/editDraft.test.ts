@@ -14,6 +14,7 @@ import {
   validateDraft,
   type ProductDraft,
   validateNewMedia,
+  variantImageLinks,
 } from './editDraft.ts'
 
 const VARIANT_A = '11111111-1111-4111-8111-111111111111'
@@ -1081,5 +1082,59 @@ describe('a variant tax code', () => {
       draft.variants[0].taxCode = '  P0000000 '
     })
     expect(body).toEqual({ variants: [{ id: VARIANT_A, tax_code: 'P0000000' }] })
+  })
+})
+
+describe('a variant picture added by web address', () => {
+  const ADDRESS = 'https://example.com/black.jpg'
+
+  it('is added to the product media in the same update, not as a variant field', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.variants[0].imageUrl = `  ${ADDRESS} `
+    })
+
+    expect(body).toEqual({ media_add: [{ url: ADDRESS, media_type: 'IMAGE' }] })
+  })
+
+  it('adds an address used by two variants once, and remembers which variants it is for', () => {
+    const draft = draftFromProduct(makeProduct())
+    draft.variants[0].imageUrl = ADDRESS
+    draft.variants[1].imageUrl = ADDRESS
+
+    expect(buildUpdateBody(makeProduct(), draft).media_add).toEqual([
+      { url: ADDRESS, media_type: 'IMAGE' },
+    ])
+    expect(variantImageLinks(draft).links).toEqual([
+      { variantId: VARIANT_A, url: ADDRESS },
+      { variantId: VARIANT_B, url: ADDRESS },
+    ])
+  })
+
+  it('wins over a picture chosen from the list, and ignores a removed variant', () => {
+    const body = edit(makeProduct(), (draft) => {
+      draft.variants[0].imageId = IMAGE_2
+      draft.variants[0].imageUrl = ADDRESS
+      draft.variants[1].imageUrl = 'https://example.com/gone.jpg'
+      draft.variants[1].removed = true
+    })
+
+    expect(body.variants).toBeUndefined()
+    expect(body.media_add).toEqual([{ url: ADDRESS, media_type: 'IMAGE' }])
+    expect(body.variants_remove).toEqual([VARIANT_B])
+  })
+
+  it('needs a public https address of at most 2000 characters', () => {
+    const problems = (url: string) => {
+      const product = makeProduct()
+      const draft = draftFromProduct(product)
+      draft.variants[0].imageUrl = url
+      return validateDraft(product, draft)['variants.0.imageUrl']
+    }
+
+    expect(problems('http://example.com/a.jpg')).toBe('Use a public https:// address')
+    expect(problems('not a link')).toBe('Use a public https:// address')
+    expect(problems(`https://example.com/${'a'.repeat(2000)}`)).toMatch(/at most 2000/)
+    expect(problems(ADDRESS)).toBeUndefined()
+    expect(problems('   ')).toBeUndefined()
   })
 })

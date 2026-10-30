@@ -173,22 +173,31 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
                     prefix={prefix}
                     update={(patch) => update(index, patch)}
                   />
-                  {imageOptions(variant.hasImage).length > 1 && (
-                    <VariantImageCard
-                      variant={variant}
-                      prefix={prefix}
-                      options={imageOptions(variant.hasImage)}
-                      value={variant.removeImage ? NO_IMAGE : variant.imageId}
-                      onChange={(choice) =>
-                        update(
-                          index,
-                          choice === NO_IMAGE
-                            ? { removeImage: true, imageId: '' }
-                            : { removeImage: false, imageId: choice },
-                        )
-                      }
-                    />
-                  )}
+                  <VariantImageCard
+                    variant={variant}
+                    index={index}
+                    errors={errors}
+                    prefix={prefix}
+                    options={imageOptions(variant.hasImage)}
+                    value={variant.removeImage ? NO_IMAGE : variant.imageId}
+                    onChange={(choice) =>
+                      update(
+                        index,
+                        choice === NO_IMAGE
+                          ? { removeImage: true, imageId: '', imageUrl: '' }
+                          : { removeImage: false, imageId: choice, imageUrl: '' },
+                      )
+                    }
+                    onAddress={(imageUrl) =>
+                      update(
+                        index,
+                        // An address replaces whatever picture was chosen from the list.
+                        imageUrl.trim()
+                          ? { imageUrl, imageId: '', removeImage: false }
+                          : { imageUrl },
+                      )
+                    }
+                  />
                 </div>
               )}
             </li>

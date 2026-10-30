@@ -64,6 +64,13 @@ export interface VariantDraft {
   hasImage: boolean
   /** Take the picture off this variant (the product keeps it). */
   removeImage: boolean
+  /**
+   * A public https address of a picture to show for this variant ('' = none). The update API
+   * can only point a variant at one of the product's pictures, so the address is added to the
+   * product's media in the same save and the variant is linked to it once the store has
+   * downloaded it (see `variantImageLinks`).
+   */
+  imageUrl: string
   /** Its stock at each location the store has recorded for it. */
   stock: StockRowDraft[]
   removed: boolean
@@ -283,6 +290,7 @@ export function draftFromVariant(
     imageId: variantImageId(variant, images),
     hasImage: Boolean(variant.image_url),
     removeImage: false,
+    imageUrl: '',
     stock: variant.inventory_levels.map((level) => ({
       key: `${variant.id}-stock-${level.location_shopify_id}`,
       locationId: String(level.location_shopify_id),
@@ -499,7 +507,9 @@ function variantChanges(
   }
   // "No image" takes the picture off the variant; otherwise only a different picture is sent
   // (the current one is preselected in the form).
-  if (draft.removeImage) {
+  if (draft.imageUrl.trim() !== '') {
+    // A picture by address goes in as new media (`media_add`) and is linked afterwards.
+  } else if (draft.removeImage) {
     if (base.hasImage) set('remove_image', true)
   } else if (draft.imageId && draft.imageId !== base.imageId) {
     set('image_attachment_id', draft.imageId)
@@ -726,6 +736,10 @@ export function buildUpdateBody(
   if (variantEdits.length) body.variants = variantEdits
   if (variantsRemove.length) body.variants_remove = variantsRemove
 
+  // A variant's picture by web address: the picture joins the product's media in this same save.
+  const pictures = variantImageLinks(draft)
+  if (pictures.items.length) body.media_add = pictures.items
+
   const mediaUpdate = draft.images.flatMap((image) => {
     const original = product.images.find((candidate) => candidate.id === image.id)
     return original && image.alt.trim() !== (original.alt_text ?? '')
@@ -745,6 +759,29 @@ export function buildUpdateBody(
   if (sections) body.metafields = [...(body.metafields ?? []), sections]
 
   return body
+}
+
+/**
+ * The pictures typed by address for existing variants. `items` are the files to add to the
+ * product (each address once, in the order typed); `links` say which variant each address is
+ * for, so the variant can be pointed at the picture when the store has it.
+ */
+export function variantImageLinks(draft: ProductDraft): {
+  items: ProductMediaInput[]
+  links: { variantId: string; url: string }[]
+} {
+  const links: { variantId: string; url: string }[] = []
+  const seen = new Set<string>()
+  const items: ProductMediaInput[] = []
+  for (const variant of draft.variants) {
+    const url = variant.imageUrl.trim()
+    if (variant.removed || url === '') continue
+    links.push({ variantId: variant.id, url })
+    if (seen.has(url)) continue
+    seen.add(url)
+    items.push({ url, media_type: 'IMAGE' })
+  }
+  return { items, links }
 }
 
 export const hasChanges = (body: ProductUpdateBody) => Object.keys(body).length > 0
@@ -1064,6 +1101,17 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     ] as const) {
       if (value.trim() !== '' && !isDecimal(value))
         put(at(field), `${label}: enter a number, 0 or more`)
+    }
+    const address = variant.imageUrl.trim()
+    if (address !== '') {
+      put(
+        at('imageUrl'),
+        !/^https:\/\//i.test(address)
+          ? 'Use a public https:// address'
+          : address.length > LIMITS.mediaUrl
+            ? `The address can be at most ${LIMITS.mediaUrl} characters`
+            : null,
+      )
     }
     put(at('taxCode'), tooLong('The tax code', variant.taxCode, LIMITS.taxCode))
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))

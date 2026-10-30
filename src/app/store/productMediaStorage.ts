@@ -35,6 +35,10 @@ const storedSchema = z.object({
         startedAt: z.number(),
         leading: z.boolean().optional(),
         placed: z.number().int().min(0).optional(),
+        variantLinks: z
+          .array(z.object({ variantId: z.string(), url: z.string() }))
+          .max(100)
+          .optional(),
       }),
     )
     .default({}),

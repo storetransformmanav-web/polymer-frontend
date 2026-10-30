@@ -320,30 +320,68 @@ export function VariantShippingCard({
   )
 }
 
-/** Which of the product's pictures this variant shows (another one, or none). */
+/**
+ * Which picture this variant shows: another of the product's pictures (or none), **or a new one
+ * by web address**. The address is added to the product's pictures in the same save, and the
+ * variant is pointed at it as soon as the store has downloaded it (the update API can only point a
+ * variant at a picture the product already has). Choosing a picture clears the address and
+ * typing an address clears the choice, so only one of them is ever sent.
+ */
 export function VariantImageCard({
   variant,
+  index,
+  errors,
   prefix,
   options,
   value,
   onChange,
+  onAddress,
 }: {
   variant: VariantDraft
+  index: number
+  errors: DraftErrors
   prefix: string
   options: SelectOption[]
   value: string
   onChange: (choice: string) => void
+  onAddress: (url: string) => void
 }) {
+  const error = errors[`variants.${index}.imageUrl`]
   return (
     <CreateCard title="Image" regionLabel={`Picture of ${variant.title}`}>
-      <SelectField
-        hideLabel
-        id={`${prefix}-image`}
-        label="Image"
-        value={value}
-        options={options}
-        onChange={onChange}
-      />
+      {options.length > 1 && (
+        <SelectField
+          id={`${prefix}-image`}
+          label="Image"
+          value={variant.imageUrl.trim() ? '' : value}
+          options={options}
+          onChange={onChange}
+        />
+      )}
+      <EditField
+        id={`${prefix}-image-url`}
+        label="Or add a picture by web address"
+        optional
+        error={error}
+        hint="A public https:// link to a picture. It is added to the product's pictures, and this variant shows it as soon as the store has downloaded it."
+        counter={
+          variant.imageUrl.trim().length > LIMITS.mediaUrl * 0.8
+            ? { value: variant.imageUrl.trim().length, max: LIMITS.mediaUrl }
+            : undefined
+        }
+      >
+        <input
+          id={`${prefix}-image-url`}
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          placeholder="https://"
+          value={variant.imageUrl}
+          aria-invalid={error ? true : undefined}
+          onChange={(event) => onAddress(event.target.value)}
+          className={FIELD_INPUT}
+        />
+      </EditField>
     </CreateCard>
   )
 }

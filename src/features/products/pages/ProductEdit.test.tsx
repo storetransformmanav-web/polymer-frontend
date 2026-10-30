@@ -1998,3 +1998,73 @@ describe('the Inventory tab is editable too', () => {
     )
   })
 })
+
+describe('a variant picture by web address, in the Variants editor', () => {
+  const ADDRESS = 'https://example.com/black.jpg'
+
+  beforeEach(() => {
+    list.mockResolvedValue(LIST)
+    details.mockResolvedValue(DETAIL)
+    update.mockResolvedValue(WRITE_OK)
+    syncHistory.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  async function editVariants() {
+    const user = userEvent.setup()
+    const view = renderPage('/products/id-1')
+    await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+    await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+    await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+    return { user, view }
+  }
+
+  it('adds the address to the product’s pictures and waits for the store to link it', async () => {
+    const { user, view } = await editVariants()
+
+    await user.type(screen.getByLabelText(/^Or add a picture by web address/), ADDRESS)
+    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+    await confirmUpdate(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { media_add: [{ url: ADDRESS, media_type: 'IMAGE' }] },
+        'polymer-uk',
+      ),
+    )
+    // The variant is linked to it once the file has arrived (see usePendingMediaSync).
+    await waitFor(() =>
+      expect(view.store.getState().products.pendingMedia['id-1']).toMatchObject({
+        items: [{ url: ADDRESS, media_type: 'IMAGE' }],
+        variantLinks: [{ variantId: VARIANT, url: ADDRESS }],
+      }),
+    )
+  })
+
+  it('refuses an address that is not https, and sends nothing', async () => {
+    const { user } = await editVariants()
+
+    await user.type(
+      screen.getByLabelText(/^Or add a picture by web address/),
+      'http://example.com/a.jpg',
+    )
+    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+
+    expect(await screen.findByText('Use a public https:// address')).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('choosing a picture from the list clears the typed address', async () => {
+    const { user } = await editVariants()
+    const box = screen.getByLabelText(/^Or add a picture by web address/)
+    await user.type(box, ADDRESS)
+
+    await user.selectOptions(screen.getByLabelText('Image'), IMAGE_2)
+
+    expect(box).toHaveValue('')
+  })
+})
