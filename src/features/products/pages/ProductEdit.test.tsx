@@ -817,6 +817,51 @@ describe('editing a section in place', () => {
       )
     })
 
+    it('adds a value to an existing option: Add value opens a new variant with it', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      await user.type(screen.getByLabelText('New value for Size'), 'm')
+      await user.click(screen.getByRole('button', { name: 'Add value to Size' }))
+      expect(screen.getByRole('alert')).toHaveTextContent('already has that value')
+
+      const box = screen.getByLabelText('New value for Size')
+      await user.clear(box)
+      await user.type(box, 'Large{Enter}')
+
+      const created = within(screen.getByRole('list', { name: 'New variants' }))
+      expect(created.getByLabelText('Size')).toHaveValue('Large')
+      // It sits beside Small/Medium in the option's own boxes, and renaming it renames the variant.
+      const values = within(screen.getByRole('list', { name: 'Size values' }))
+      expect(values.getByLabelText('New value of Size')).toHaveValue('Large')
+      expect(box).toHaveValue('')
+      // Straight to the price, which the new variant needs.
+      expect(created.getByLabelText(/^Price/)).toHaveFocus()
+
+      await user.type(created.getByLabelText(/^Price/), '29.99')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              {
+                option_values: ['Large'],
+                price: '29.99',
+                taxable: true,
+                inventory_policy: 'DENY',
+                tracked: true,
+                requires_shipping: true,
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
     it('adds an option and a variant that uses it, in one save', async () => {
       withOptions()
       const user = await editVariants()

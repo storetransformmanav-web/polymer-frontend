@@ -1,5 +1,12 @@
+import { useState } from 'react'
 import { PlusIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
-import { blankAddedOption, LIMITS, optionCount } from '../../utils/editDraft.ts'
+import {
+  blankAddedOption,
+  blankNewVariant,
+  LIMITS,
+  optionChoices,
+  optionCount,
+} from '../../utils/editDraft.ts'
 import {
   EditField,
   FIELD_INPUT,
@@ -11,12 +18,45 @@ import { TagsInput } from './TagsSection.tsx'
 
 /**
  * The product's options (Size, Colour…) in the Variants editor: rename an option or any of its
- * values (`options_update`), and add a new option with its values (`options_add`). A new option
- * only gives the variants that are added in the same edit a value to choose; the variants already
- * there are not changed by it.
+ * values (`options_update`), add a value to an option, and add a new option with its values
+ * (`options_add`). The API has no call for a bare value — the store only has a value once a
+ * variant uses it — so **Add value** opens a new variant (below) with that value filled in for
+ * you to price. A new option only gives the variants that are added in the same edit a value to
+ * choose; the variants already there are not changed by it.
  */
 export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) {
   const full = optionCount(draft) >= LIMITS.options
+  const choices = optionChoices(draft)
+  const firstUnit =
+    draft.variants.find((variant) => !variant.removed)?.weightUnit ?? 'GRAMS'
+  // The new variants opened by "Add value", and which option each one's value belongs to — their
+  // values are listed with the option's own, in the same boxes.
+  const [valueOf, setValueOf] = useState<Record<string, number>>({})
+
+  /** Opens a new variant for `value` of the option at `position`; says why when it can't. */
+  const addValue = (position: number, value: string): string | null => {
+    const text = value.trim()
+    if (!text) return 'Type the new value first.'
+    if (text.length > LIMITS.optionValue) {
+      return `A value can have at most ${LIMITS.optionValue} characters.`
+    }
+    const same = (other: string) => other.trim().toLowerCase() === text.toLowerCase()
+    if (choices[position].values.some(same)) return 'This option already has that value.'
+    if (draft.newVariants.some((created) => same(created.optionValues[position] ?? ''))) {
+      return 'That value is already being added below.'
+    }
+    const created = blankNewVariant(firstUnit)
+    const optionValues = choices.map(() => '')
+    optionValues[position] = text
+    onChange({ newVariants: [...draft.newVariants, { ...created, optionValues }] })
+    setValueOf((current) => ({ ...current, [created.key]: position }))
+    // The new variant needs a price: take the person straight to it.
+    setTimeout(
+      () => document.getElementById(`new-variant-${created.key}-price`)?.focus(),
+      0,
+    )
+    return null
+  }
 
   const renameOption = (index: number, newName: string) =>
     onChange({
@@ -37,6 +77,16 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
           : option,
       ),
     })
+  const renameNewValue = (key: string, position: number, to: string) =>
+    onChange({
+      newVariants: draft.newVariants.map((created) => {
+        if (created.key !== key) return created
+        const optionValues = [...created.optionValues]
+        while (optionValues.length <= position) optionValues.push('')
+        optionValues[position] = to
+        return { ...created, optionValues }
+      }),
+    })
   const patchAdded = (index: number, patch: { name?: string; values?: string[] }) =>
     onChange({
       addedOptions: draft.addedOptions.map((option, i) =>
@@ -52,8 +102,8 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
       <div>
         <h3 className="text-[0.95rem] font-semibold">Options</h3>
         <p className="text-text-muted text-[0.78rem]">
-          Rename an option or one of its values, or add an option. Variants are added
-          below.
+          Rename an option or one of its values, add a value to an option, or add a whole
+          new option. A new value comes with a new variant, which you price below.
         </p>
       </div>
 
@@ -101,7 +151,27 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
                 </li>
               )
             })}
+            {draft.newVariants
+              .filter((created) => valueOf[created.key] === index)
+              .map((created) => (
+                <li key={created.key} className="flex flex-col gap-1">
+                  <input
+                    aria-label={`New value of ${option.name}`}
+                    autoComplete="off"
+                    value={created.optionValues[index] ?? ''}
+                    maxLength={LIMITS.optionValue}
+                    onChange={(event) =>
+                      renameNewValue(created.key, index, event.target.value)
+                    }
+                    className={FIELD_INPUT}
+                  />
+                </li>
+              ))}
           </ul>
+          <AddValue
+            option={option.newName.trim() || option.name}
+            onAdd={(value) => addValue(index, value)}
+          />
         </div>
       ))}
 
@@ -184,5 +254,63 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
         )}
       </div>
     </section>
+  )
+}
+
+/** The "add a value" box under an option's values. */
+function AddValue({
+  option,
+  onAdd,
+}: {
+  option: string
+  onAdd: (value: string) => string | null
+}) {
+  const [text, setText] = useState('')
+  const [problem, setProblem] = useState<string | null>(null)
+  const submit = () => {
+    const message = onAdd(text)
+    setProblem(message)
+    if (!message) setText('')
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          aria-label={`New value for ${option}`}
+          autoComplete="off"
+          value={text}
+          maxLength={LIMITS.optionValue}
+          placeholder={`Add a value to ${option}, e.g. Large`}
+          aria-invalid={problem ? true : undefined}
+          onChange={(event) => {
+            setText(event.target.value)
+            setProblem(null)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            // Enter adds the value; it must not save the section.
+            event.preventDefault()
+            event.stopPropagation()
+            submit()
+          }}
+          className={`${FIELD_INPUT} min-w-0 flex-1`}
+        />
+        <button
+          type="button"
+          aria-label={`Add value to ${option}`}
+          onClick={submit}
+          className={TEXT_BUTTON}
+        >
+          <PlusIcon width={14} height={14} />
+          Add value
+        </button>
+      </div>
+      {problem && (
+        <p role="alert" className="text-danger text-[0.78rem]">
+          {problem}
+        </p>
+      )}
+    </div>
   )
 }

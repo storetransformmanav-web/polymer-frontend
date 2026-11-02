@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { Badge } from '../../../../components/ui/Badge.tsx'
 import { useProductStockLocations } from '../../hooks/useProductStockLocations.ts'
 import { PlusIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
@@ -63,9 +64,13 @@ export function NewVariantsEditor({ product, draft, errors, onChange }: SectionP
                 className="border-border-strong flex flex-col gap-4 rounded-xl border border-dashed p-4"
               >
                 <div className="flex items-center gap-2">
-                  <p className="min-w-0 flex-1 text-[0.9rem] font-semibold">
-                    New variant {index + 1}
+                  <p className="min-w-0 flex-1 truncate text-[0.9rem] font-semibold">
+                    {created.optionValues
+                      .map((value) => value.trim())
+                      .filter(Boolean)
+                      .join(' / ') || `New variant ${index + 1}`}
                   </p>
+                  <Badge tone="success">New</Badge>
                   <button
                     type="button"
                     aria-label={`Remove new variant ${index + 1}`}
