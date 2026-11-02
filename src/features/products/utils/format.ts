@@ -80,6 +80,18 @@ export function svgImageWarning(address: string): string | null {
   }.`
 }
 
+/** The public store the SEO card's "Open preview" link points at. */
+const STOREFRONT_ORIGIN = 'https://polymeruk.com'
+
+/**
+ * The product's page on the public store — `https://polymeruk.com/products/<handle>` — or null
+ * when it has no handle. The handle (the product's URL name) is the only part taken from the data.
+ */
+export function storefrontProductUrl(handle: string | null | undefined): string | null {
+  const name = (handle ?? '').trim()
+  return name ? `${STOREFRONT_ORIGIN}/products/${encodeURIComponent(name)}` : null
+}
+
 /**
  * The address of a product's page in the Shopify admin —
  * `https://admin.shopify.com/store/<store>/products/<shopify id>` — or null when it

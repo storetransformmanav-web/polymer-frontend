@@ -15,7 +15,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem, ProductSort } from '../../../lib/api/endpoints.ts'
 import {
   formatPriceRange,
-  shopifyAdminProductUrl,
+  storefrontProductUrl,
   statusLabel,
   statusTone,
 } from '../utils/format.ts'
@@ -99,20 +99,20 @@ const MESSAGE_BUTTON =
  * the page only passes data in.
  */
 /**
- * Opens the product's page in the Shopify admin (a new tab). Sits right beside the copy icon
- * after the name: the same 20px box and 15px icon, so the two line up. Nothing is drawn when
- * the store's address isn't known (no guessed link).
+ * Opens the product's page on the public store — `https://polymeruk.com/products/<handle>` — in
+ * a new tab. Sits right beside the copy icon after the name: the same 20px box and 15px icon, so
+ * the two line up. Nothing is drawn when the product has no handle (no guessed link).
  */
 function ShopifyLink({ product }: { product: ProductListItem }) {
-  const href = shopifyAdminProductUrl(product.shop, product.shopify_id)
+  const href = storefrontProductUrl(product.handle)
   if (!href) return null
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Open ${product.title} in Shopify`}
-      title="Open in Shopify"
+      aria-label={`Open ${product.title} on the store`}
+      title="Open on the store"
       className="text-text-muted hover:text-text focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 items-center justify-center leading-none transition-colors focus-visible:outline-2"
     >
       <ExternalLinkIcon width={15} height={15} />

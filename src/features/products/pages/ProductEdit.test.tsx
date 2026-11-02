@@ -580,6 +580,23 @@ describe('editing a section in place', () => {
     expect(update).toHaveBeenCalledTimes(2)
   })
 
+  it('links the SEO card to the product in the Shopify admin and on the public store', async () => {
+    const user = await openDetails()
+    await user.click(screen.getByRole('tab', { name: /^SEO & Online/ }))
+
+    const live = screen.getByRole('link', { name: 'Open live page' })
+    expect(live).toHaveAttribute(
+      'href',
+      'https://admin.shopify.com/store/polymer-uk-ltd/products/1',
+    )
+    expect(live).toHaveAttribute('target', '_blank')
+    expect(live).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.getByRole('link', { name: 'Open preview' })).toHaveAttribute(
+      'href',
+      'https://polymeruk.com/products/hippo-bag',
+    )
+  })
+
   it('edits two sections at once without one touching the other', async () => {
     const user = await openDetails()
     await user.click(pencil('specifications'))
@@ -770,6 +787,40 @@ describe('editing a section in place', () => {
       expect(update).not.toHaveBeenCalled()
     })
 
+    it('previews the picture the variant will show: the one chosen, or the address typed', async () => {
+      withOptions()
+      const user = await editVariants()
+      const card = within(screen.getByRole('region', { name: /^Picture of/ }))
+
+      // To begin with: the picture it shows now.
+      expect(card.getByRole('img', { name: /^Preview of/ })).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/1.jpg',
+      )
+
+      // Choosing another of the product's pictures changes the preview at once.
+      await user.selectOptions(screen.getByLabelText('Image'), IMAGE_2)
+      expect(card.getByRole('img', { name: /^Preview of/ })).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/2.jpg',
+      )
+
+      // So does a web address, once it is a complete link.
+      await user.type(
+        card.getByLabelText(/^Or add a picture by web address/),
+        'https://cdn.example.com/new.png',
+      )
+      expect(card.getByRole('img', { name: /^Preview of/ })).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/new.png',
+      )
+
+      // "No image" shows nothing.
+      await user.selectOptions(screen.getByLabelText('Image'), 'No image')
+      expect(card.queryByRole('img', { name: /^Preview of/ })).not.toBeInTheDocument()
+      expect(card.getByText('No image', { selector: 'figcaption' })).toBeInTheDocument()
+    })
+
     it('takes the picture off a variant with "No image"', async () => {
       withOptions()
       const user = await editVariants()
@@ -790,8 +841,9 @@ describe('editing a section in place', () => {
     it('renames an option and one of its values', async () => {
       withOptions()
       const user = await editVariants()
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
 
-      const name = screen.getByLabelText(/^Option name/)
+      const name = screen.getByLabelText(/^Variant name/)
       await user.clear(name)
       await user.type(name, 'Pack Size')
       const value = screen.getByLabelText('Value “M” of Size')
@@ -820,6 +872,7 @@ describe('editing a section in place', () => {
     it('adds a value to an existing option: Add value opens a new variant with it', async () => {
       withOptions()
       const user = await editVariants()
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
 
       await user.type(screen.getByLabelText('New value for Size'), 'm')
       await user.click(screen.getByRole('button', { name: 'Add value to Size' }))
@@ -862,17 +915,119 @@ describe('editing a section in place', () => {
       )
     })
 
+    it('shows each option as an accordion card, closed to begin with', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      const card = screen.getByRole('button', { name: 'Option Size' })
+      expect(card).toHaveAttribute('aria-expanded', 'false')
+      // Closed: its name and a chip per value, no fields.
+      expect(card).toHaveTextContent('M')
+      expect(screen.queryByLabelText(/^Variant name/)).not.toBeInTheDocument()
+
+      await user.click(card)
+      expect(card).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByLabelText(/^Variant name/)).toBeInTheDocument()
+
+      // A value added while it is open shows with the others, and Done closes the card again.
+      await user.type(screen.getByLabelText('New value for Size'), 'Large{Enter}')
+      await user.click(screen.getByRole('button', { name: 'Done' }))
+      expect(card).toHaveAttribute('aria-expanded', 'false')
+      expect(card).toHaveTextContent('Large')
+
+      // Removing the new value with its bin takes the variant it opened away too.
+      await user.click(card)
+      await user.click(screen.getByRole('button', { name: 'Remove new value Large' }))
+      expect(screen.queryByRole('list', { name: 'New variants' })).not.toBeInTheDocument()
+    })
+
+    it('is split into Variants, Current variants and New variants cards, closed to begin with', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      expect(screen.getByRole('button', { name: /^Variants/ })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      )
+      expect(screen.getByRole('button', { name: /^Current variants/ })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      )
+      expect(
+        screen.queryByRole('button', { name: /^New variants/ }),
+      ).not.toBeInTheDocument()
+
+      // A new variant (from a new value) opens its own card so it is never hidden.
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
+      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      expect(screen.getByRole('button', { name: /^New variants/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      expect(screen.getByText(/Will be added when you save/)).toBeInTheDocument()
+      expect(screen.getByText('+ XL')).toBeInTheDocument()
+    })
+
+    it('has no Add variant button beside the heading, and no example hint under the add row', async () => {
+      withOptions()
+      const user = await editVariants()
+
+      // The only "Add variant" is the row inside the Variants card (the old pill is gone).
+      await user.click(screen.getByRole('button', { name: /^Variants/ }))
+      expect(screen.getAllByRole('button', { name: 'Add variant' })).toHaveLength(1)
+      expect(screen.queryByText('Add another option')).not.toBeInTheDocument()
+      expect(screen.queryByText(/for example Material or Style/)).not.toBeInTheDocument()
+    })
+
+    it('Add variant adds a new option: its card opens with the name box focused', async () => {
+      withOptions()
+      const user = await editVariants()
+      expect(screen.queryByText(/Will be added when you save/)).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /^Variants/ }))
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+
+      const name = screen.getByLabelText('New variant name')
+      await waitFor(() => expect(name).toHaveFocus())
+      expect(screen.getByRole('button', { name: /^Variants/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      const card = screen.getByRole('button', { name: 'Option New option' })
+      expect(card).toHaveAttribute('aria-expanded', 'true')
+      expect(card).toHaveTextContent('New')
+
+      await user.type(name, 'Colour')
+      expect(screen.getByText('+ Colour (new option)')).toBeInTheDocument()
+      await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
+
+      // Done folds it to its name and values, a click opens it again.
+      await user.click(screen.getByRole('button', { name: 'Done' }))
+      const folded = screen.getByRole('button', { name: 'Option Colour' })
+      expect(folded).toHaveAttribute('aria-expanded', 'false')
+      expect(folded).toHaveTextContent('Clear')
+      await user.click(folded)
+      expect(screen.getByLabelText('New variant name')).toHaveValue('Colour')
+
+      // Delete takes the draft option away again.
+      await user.click(screen.getByRole('button', { name: 'Remove new option Colour' }))
+      expect(screen.queryByText(/Will be added when you save/)).not.toBeInTheDocument()
+    })
+
     it('adds an option and a variant that uses it, in one save', async () => {
       withOptions()
       const user = await editVariants()
 
-      await user.click(screen.getByRole('button', { name: 'Add option' }))
-      await user.type(screen.getByLabelText('New option name'), 'Colour')
-      await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
+      await user.click(screen.getByRole('button', { name: /^Variants/ }))
       await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      await user.type(screen.getByLabelText('New variant name'), 'Colour')
+      await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
+      // A variant for the new size, with a colour, is made from the size's Add value.
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
+      await user.type(screen.getByLabelText('New value for Size'), 'L{Enter}')
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
-      await user.type(created.getByLabelText('Size'), 'L')
+      expect(created.getByLabelText('Size')).toHaveValue('L')
       await user.type(created.getByLabelText('Colour'), 'Clear')
       await user.type(created.getByLabelText(/^Price/), '39.99')
       await user.type(created.getByLabelText(/^SKU/), 'HSC-L')
@@ -910,16 +1065,17 @@ describe('editing a section in place', () => {
       )
     })
 
-    it('needs a price and a value for every option before a new variant is sent', async () => {
+    it('needs a price before a new variant is sent', async () => {
       withOptions()
       const user = await editVariants()
 
-      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
+      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      // The price box is where the person is taken; leave it empty.
       await user.click(saveButton('variants'))
       await confirmUpdate(user)
 
-      expect(await screen.findByText('Choose a Size')).toBeInTheDocument()
-      expect(screen.getByText('Enter a price')).toBeInTheDocument()
+      expect(await screen.findByText('Enter a price')).toBeInTheDocument()
       expect(update).not.toHaveBeenCalled()
     })
 
@@ -927,9 +1083,13 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      await user.click(screen.getByRole('button', { name: 'Option Size' }))
+      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      // Renaming the new value to one the product already has is refused on save.
+      const value = screen.getByLabelText('New value of Size')
+      await user.clear(value)
+      await user.type(value, 'm')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
-      await user.type(created.getByLabelText('Size'), 'm')
       await user.type(created.getByLabelText(/^Price/), '9.99')
       await user.click(saveButton('variants'))
       await confirmUpdate(user)
@@ -940,21 +1100,21 @@ describe('editing a section in place', () => {
       expect(update).not.toHaveBeenCalled()
     })
 
-    it('asks for an option first when the product has only its default variant', async () => {
+    it('adds the first option when the product has only its default variant', async () => {
       const user = await editVariants()
 
+      // No option yet: Add variant (in the Variants card) makes one, open and focused.
+      await user.click(screen.getByRole('button', { name: /^Variants/ }))
       await user.click(screen.getByRole('button', { name: 'Add variant' }))
-      await user.click(saveButton('variants'))
-      await confirmUpdate(user)
-      expect(
-        await screen.findByText(/Add an option first \(for example Size\)/),
-      ).toBeInTheDocument()
-      expect(update).not.toHaveBeenCalled()
-      // Options are added here too.
-      expect(screen.getByRole('button', { name: 'Add option' })).toBeInTheDocument()
-      // Removing the row again leaves nothing to send.
-      await user.click(screen.getByRole('button', { name: 'Remove new variant 1' }))
+      const name = screen.getByLabelText('New variant name')
+      await waitFor(() => expect(name).toHaveFocus())
+      // Nothing named yet, so there is nothing to send.
       expect(saveButton('variants')).toBeDisabled()
+
+      // Once it is named and has a value, it is a change to send.
+      await user.type(name, 'Size')
+      await user.type(screen.getByLabelText('Values of Size'), 'Small{Enter}')
+      expect(saveButton('variants')).toBeEnabled()
     })
   })
 

@@ -1,8 +1,20 @@
 import { useState } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
-import { ChevronDownIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
+import { DetailSection } from '../../../../components/ui/DetailSection.tsx'
+import {
+  BoxesIcon,
+  ChevronDownIcon,
+  LayersIcon,
+  SlidersIcon,
+  TrashIcon,
+} from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
-import { type VariantDraft } from '../../utils/editDraft.ts'
+import {
+  optionCount,
+  variantPreviewUrl,
+  type VariantDraft,
+} from '../../utils/editDraft.ts'
+import { ProductImage } from '../ProductImage.tsx'
 import { NewVariantsEditor } from './NewVariantsEditor.tsx'
 import { VariantOptionsEditor } from './VariantOptionsEditor.tsx'
 import {
@@ -16,17 +28,88 @@ import { ICON_BUTTON, TEXT_BUTTON, type SectionProps } from './fields.tsx'
 const NO_IMAGE = 'none'
 
 /**
- * The Variants editor. On top, the product's **options** (rename an option or its values, add an
- * option); then every variant of the product as a collapsible card — price, SKU, stock policy,
+ * The Variants editor. On top, the product's **options** in a card called Variants (rename an option
+ * or its values, **Add variant** to add an option); then every variant of the product as a collapsible card — price, SKU, stock policy,
  * the **stock at each location**, its picture (another one, or none) and so on, which can be
- * edited or removed (deleted in the store on save); and last, **Add variant** for new ones.
+ * edited or removed (deleted in the store on save); and, once a value has been added, the new variants.
  */
 export function VariantsSection(props: SectionProps) {
+  const { draft } = props
+  const coming = [
+    ...draft.addedOptions
+      .filter((option) => option.name.trim())
+      .map((option) => `${option.name.trim()} (new option)`),
+    ...draft.newVariants.map(
+      (created, index) =>
+        created.optionValues
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .join(' / ') || `New variant ${index + 1}`,
+    ),
+  ]
+  // A problem inside a closed card opens it, so it is never hidden.
+  const problemIn = (...prefixes: string[]) =>
+    Object.keys(props.errors).some((key) => prefixes.some((p) => key.startsWith(p)))
   return (
     <div className="flex flex-col gap-4">
-      <VariantOptionsEditor {...props} />
-      <ExistingVariants {...props} />
-      <NewVariantsEditor {...props} />
+      <div className="flex min-w-0 flex-col">
+        <h3 className="text-[1.05rem] font-semibold">Variants</h3>
+        <p className="text-text-muted text-[0.8rem]">
+          Options and their values, and the variants they make. Nothing is sent until you
+          save.
+        </p>
+      </div>
+
+      {coming.length > 0 && (
+        <div className="border-accent/50 bg-accent-tint/30 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+          <span className="text-[0.8rem] font-semibold">
+            Will be added when you save:
+          </span>
+          {coming.map((label, index) => (
+            <Badge key={`${label}-${index}`} tone="success">
+              + {label}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Three separate cards, all closed to begin with. */}
+      <DetailSection
+        title="Variants"
+        icon={SlidersIcon}
+        count={optionCount(draft)}
+        actions={<Summary>{optionNames(draft)}</Summary>}
+        defaultOpen={false}
+        forceOpen={problemIn('options', 'addedOptions')}
+        flush
+      >
+        <VariantOptionsEditor {...props} />
+      </DetailSection>
+
+      <DetailSection
+        title="Current variants"
+        icon={LayersIcon}
+        count={draft.variants.length}
+        actions={<Summary>{variantSummary(draft, props.product.currency)}</Summary>}
+        defaultOpen={false}
+        forceOpen={problemIn('variants')}
+      >
+        <ExistingVariants {...props} />
+      </DetailSection>
+
+      {draft.newVariants.length > 0 && (
+        // Opens whenever one is added or removed (the key), so a new variant is never hidden.
+        <DetailSection
+          key={`new-variants-${draft.newVariants.length}`}
+          title="New variants · added when you save"
+          icon={BoxesIcon}
+          count={draft.newVariants.length}
+          defaultOpen={false}
+          forceOpen
+        >
+          <NewVariantsEditor {...props} />
+        </DetailSection>
+      )}
     </div>
   )
 }
@@ -103,18 +186,42 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
                     height={16}
                     className={`text-text-muted shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                   />
-                  <span
-                    className={`truncate text-[0.9rem] font-semibold ${variant.removed ? 'line-through' : ''}`}
-                  >
-                    {variant.title}
+                  <span className="border-border h-10 w-10 shrink-0 overflow-hidden border">
+                    <ProductImage
+                      src={variantPreviewUrl(
+                        variant,
+                        draft.images,
+                        product.variants.find((original) => original.id === variant.id)
+                          ?.image_url,
+                      )}
+                      alt=""
+                      size="thumb"
+                    />
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span
+                      className={`truncate text-[0.9rem] font-semibold ${variant.removed ? 'line-through' : ''}`}
+                    >
+                      {variant.title}
+                    </span>
+                    {variant.sku.trim() && (
+                      <span className="text-text-muted truncate text-[0.76rem]">
+                        {variant.sku.trim()}
+                      </span>
+                    )}
                   </span>
                 </button>
                 {!variant.removed && (
-                  <span className="text-text-muted shrink-0 text-[0.82rem]">
-                    {variant.price.trim()
-                      ? formatPrice(variant.price, product.currency)
-                      : ''}
-                  </span>
+                  <>
+                    <span className="text-text w-24 shrink-0 text-right text-[0.85rem] font-medium">
+                      {variant.price.trim()
+                        ? formatPrice(variant.price, product.currency)
+                        : ''}
+                    </span>
+                    <span className="text-text-muted hidden w-24 shrink-0 text-right text-[0.82rem] min-[480px]:inline">
+                      {availableOf(variant)}
+                    </span>
+                  </>
                 )}
                 {variant.removed ? (
                   <>
@@ -142,7 +249,7 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
               {isOpen && (
                 <div
                   id={bodyId}
-                  className="border-border bg-surface/40 flex flex-col gap-5 border-t p-4"
+                  className="border-border bg-surface/40 grid grid-cols-1 items-start gap-5 border-t p-4 lg:grid-cols-2"
                 >
                   {/* The same sections as Add product: Price, Shipping, Image. */}
                   <VariantPriceCard
@@ -162,6 +269,12 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
                     update={(patch) => update(index, patch)}
                   />
                   <VariantImageCard
+                    previewSrc={variantPreviewUrl(
+                      variant,
+                      draft.images,
+                      product.variants.find((original) => original.id === variant.id)
+                        ?.image_url,
+                    )}
                     variant={variant}
                     index={index}
                     errors={errors}
@@ -194,4 +307,62 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
       </ul>
     </div>
   )
+}
+
+/** "25 available" from the quantities typed for the variant, or nothing when it has no stock rows. */
+function availableOf(variant: VariantDraft): string {
+  if (!variant.tracked || variant.stock.length === 0) return ''
+  const total = variant.stock.reduce((sum, row) => {
+    const amount = Number(row.available)
+    return row.available.trim() !== '' && Number.isFinite(amount) ? sum + amount : sum
+  }, 0)
+  return `${total} available`
+}
+
+/** A quiet line in a closed card's header: what is inside, so it need not be opened to know. */
+function Summary({ children }: { children: string }) {
+  if (!children) return null
+  return (
+    <span className="text-text-muted mr-1 hidden max-w-[22rem] truncate text-[0.8rem] sm:inline">
+      {children}
+    </span>
+  )
+}
+
+/** "Size · Color": the product's options, as they will be named. */
+function optionNames(draft: SectionProps['draft']): string {
+  return [
+    ...draft.options.map((option) => option.newName.trim() || option.name),
+    ...draft.addedOptions.map((option) => option.name.trim()).filter(Boolean),
+  ].join(' · ')
+}
+
+/** "£50.00 – £62.00 · 75 available": the price range and the stock of the variants that stay. */
+function variantSummary(draft: SectionProps['draft'], currency?: string | null): string {
+  const kept = draft.variants.filter((variant) => !variant.removed)
+  const prices = kept
+    .map((variant) => Number(variant.price))
+    .filter((price) => Number.isFinite(price) && price >= 0)
+  const low = Math.min(...prices)
+  const high = Math.max(...prices)
+  const range =
+    prices.length === 0
+      ? ''
+      : low === high
+        ? formatPrice(String(low), currency)
+        : `${formatPrice(String(low), currency)} – ${formatPrice(String(high), currency)}`
+  const stock = kept.reduce((sum, variant) => {
+    if (!variant.tracked) return sum
+    return (
+      sum +
+      variant.stock.reduce((inner, row) => {
+        const amount = Number(row.available)
+        return row.available.trim() !== '' && Number.isFinite(amount)
+          ? inner + amount
+          : inner
+      }, 0)
+    )
+  }, 0)
+  const hasStock = kept.some((variant) => variant.tracked && variant.stock.length > 0)
+  return [range, hasStock ? `${stock} available` : ''].filter(Boolean).join(' · ')
 }

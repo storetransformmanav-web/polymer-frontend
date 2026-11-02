@@ -28,7 +28,14 @@ import {
   readDescriptionSections,
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
-import { htmlToText, safeUrl, statusLabel, svgImageWarning } from '../utils/format.ts'
+import {
+  htmlToText,
+  safeUrl,
+  shopifyAdminProductUrl,
+  statusLabel,
+  storefrontProductUrl,
+  svgImageWarning,
+} from '../utils/format.ts'
 import { classifySync, readableSyncError } from '../utils/sync.ts'
 import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
@@ -1097,10 +1104,12 @@ export function SeoPanel({
           <Field label="SEO description">{product.seo?.description}</Field>
           <Field label="Template suffix">{product.template_suffix}</Field>
           <Field label="Online store">
-            <ExternalLink href={product.online_store_url}>Open live page</ExternalLink>
+            <ExternalLink href={shopifyAdminProductUrl(product.shop, product.shopify_id)}>
+              Open live page
+            </ExternalLink>
           </Field>
           <Field label="Preview">
-            <ExternalLink href={product.online_store_preview_url}>
+            <ExternalLink href={storefrontProductUrl(product.handle)}>
               Open preview
             </ExternalLink>
           </Field>

@@ -14,6 +14,8 @@ interface DetailSectionProps {
   forceOpen?: boolean
   /** Controls shown in the card's header, to the right of the title. */
   actions?: ReactNode
+  /** Drops the body's padding, for content that draws its own edge-to-edge cells. */
+  flush?: boolean
   children: ReactNode
 }
 
@@ -25,6 +27,7 @@ export function DetailSection({
   defaultOpen = true,
   forceOpen = false,
   actions,
+  flush = false,
   children,
 }: DetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
@@ -85,7 +88,9 @@ export function DetailSection({
         }`}
       >
         <div className="overflow-hidden">
-          <div className="border-border-strong border-t p-5">{children}</div>
+          <div className={`border-border-strong border-t ${flush ? '' : 'p-5'}`}>
+            {children}
+          </div>
         </div>
       </div>
     </section>

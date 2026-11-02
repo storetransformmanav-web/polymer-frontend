@@ -15,6 +15,7 @@ import {
   type ProductDraft,
   validateNewMedia,
   variantImageLinks,
+  variantPreviewUrl,
 } from './editDraft.ts'
 
 const VARIANT_A = '11111111-1111-4111-8111-111111111111'
@@ -1136,5 +1137,48 @@ describe('a variant picture added by web address', () => {
     expect(problems(`https://example.com/${'a'.repeat(2000)}`)).toMatch(/at most 2000/)
     expect(problems(ADDRESS)).toBeUndefined()
     expect(problems('   ')).toBeUndefined()
+  })
+})
+
+describe('variantPreviewUrl', () => {
+  const images = [
+    { id: 'i1', url: 'https://cdn.example.com/1.jpg', alt: '' },
+    { id: 'i2', url: 'https://cdn.example.com/2.jpg', alt: '' },
+  ]
+  const saved = 'https://cdn.example.com/1.jpg'
+  const pick = (patch: { removeImage?: boolean; imageUrl?: string; imageId?: string }) =>
+    variantPreviewUrl(
+      { removeImage: false, imageUrl: '', imageId: '', ...patch },
+      images,
+      saved,
+    )
+
+  it('shows the picture it has now when nothing is changed', () => {
+    expect(pick({})).toBe(saved)
+    expect(
+      variantPreviewUrl({ removeImage: false, imageUrl: '', imageId: '' }, images, null),
+    ).toBeNull()
+  })
+
+  it('shows the product picture that was chosen from the list', () => {
+    expect(pick({ imageId: 'i2' })).toBe('https://cdn.example.com/2.jpg')
+    expect(pick({ imageId: 'gone' })).toBe(saved)
+  })
+
+  it('shows a complete https address as soon as it is typed, and ignores half-typed text', () => {
+    expect(pick({ imageUrl: ' https://cdn.example.com/new.png ' })).toBe(
+      'https://cdn.example.com/new.png',
+    )
+    expect(pick({ imageUrl: 'https://c' })).toBe(saved)
+    expect(pick({ imageUrl: 'http://cdn.example.com/a.png' })).toBe(saved)
+    expect(pick({ imageUrl: 'javascript:alert(1)' })).toBe(saved)
+    // The typed address wins over a choice from the list.
+    expect(pick({ imageId: 'i2', imageUrl: 'https://cdn.example.com/new.png' })).toBe(
+      'https://cdn.example.com/new.png',
+    )
+  })
+
+  it('shows nothing for "No image"', () => {
+    expect(pick({ removeImage: true, imageId: 'i2' })).toBeNull()
   })
 })

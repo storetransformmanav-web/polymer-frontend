@@ -866,26 +866,12 @@ describe('ProductsPage details', () => {
       currency: 'GBP',
     }
 
-    it('links each product to its page in the Shopify admin, in a new tab', async () => {
-      list.mockImplementation((params) => {
-        const response = respond(params)
-        return Promise.resolve({
-          ...response,
-          items: response.items.map((item) => ({
-            ...item,
-            shopify_id: 15393751269761 + Number(item.id.replace('id-', '')),
-            shop,
-          })),
-        })
-      })
+    it('links each product to its page on the public store, in a new tab', async () => {
       renderPage()
       await screen.findByText('Product 1')
 
-      const link = screen.getByRole('link', { name: 'Open Product 1 in Shopify' })
-      expect(link).toHaveAttribute(
-        'href',
-        'https://admin.shopify.com/store/polymer-uk-ltd/products/15393751269762',
-      )
+      const link = screen.getByRole('link', { name: 'Open Product 1 on the store' })
+      expect(link).toHaveAttribute('href', 'https://polymeruk.com/products/handle-1')
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
       // No Shopify column: the icon sits in the Product cell, right after the copy icon.
@@ -901,14 +887,11 @@ describe('ProductsPage details', () => {
       expect(copy).toHaveClass('h-5', 'w-5')
       // Each row links to its own product.
       expect(
-        screen.getByRole('link', { name: 'Open Product 2 in Shopify' }),
-      ).toHaveAttribute(
-        'href',
-        'https://admin.shopify.com/store/polymer-uk-ltd/products/15393751269763',
-      )
+        screen.getByRole('link', { name: 'Open Product 2 on the store' }),
+      ).toHaveAttribute('href', 'https://polymeruk.com/products/handle-2')
     })
 
-    it('does not open the product in the CRM when the Shopify link is used', async () => {
+    it('does not open the product in the CRM when the store link is used', async () => {
       list.mockImplementation((params) => {
         const response = respond(params)
         return Promise.resolve({
@@ -919,7 +902,7 @@ describe('ProductsPage details', () => {
       const user = userEvent.setup()
       renderPage()
       await screen.findByText('Product 1')
-      const link = screen.getByRole('link', { name: 'Open Product 1 in Shopify' })
+      const link = screen.getByRole('link', { name: 'Open Product 1 on the store' })
       // Stop the browser from really navigating in the test.
       link.addEventListener('click', (event) => event.preventDefault())
 
@@ -928,11 +911,18 @@ describe('ProductsPage details', () => {
       expect(screen.queryByRole('heading', { level: 1, name: 'Product 1' })).toBeNull()
     })
 
-    it('shows no link (and no stray dash) when the store address is not known', async () => {
-      renderPage() // the fixture rows carry no store
+    it('shows no link (and no stray dash) when the product has no handle', async () => {
+      list.mockImplementation((params) => {
+        const response = respond(params)
+        return Promise.resolve({
+          ...response,
+          items: response.items.map((item) => ({ ...item, handle: '' })),
+        })
+      })
+      renderPage()
       await screen.findByText('Product 1')
 
-      expect(screen.queryByRole('link', { name: /in Shopify/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /on the store/ })).not.toBeInTheDocument()
     })
   })
 

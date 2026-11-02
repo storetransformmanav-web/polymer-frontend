@@ -168,3 +168,9 @@ export const ICON_BUTTON =
 /** A quiet text button ("Undo", "Add…"). */
 export const TEXT_BUTTON =
   'text-accent hover:text-accent-hover inline-flex cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 text-[0.82rem] font-semibold transition-colors'
+
+/** The pink **Delete** pill and the dark **Done** pill of an option block (Add product's too). */
+export const DELETE_PILL =
+  'bg-danger-bg text-danger hover:border-danger inline-flex h-8 cursor-pointer items-center rounded-full border border-transparent px-3.5 text-[0.8rem] font-semibold transition-colors'
+export const DONE_PILL =
+  'bg-text text-bg inline-flex h-8 cursor-pointer items-center rounded-full border-none px-4 text-[0.8rem] font-semibold transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40'

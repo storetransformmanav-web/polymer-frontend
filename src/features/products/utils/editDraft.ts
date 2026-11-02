@@ -267,6 +267,34 @@ export function variantImageId(variant: ProductVariant, images: ProductImage[]):
   return images.find((image) => sameFile(image.url, url))?.id ?? ''
 }
 
+/**
+ * The address of the picture a variant will show once the edit is saved, so the editor can
+ * preview it at once: nothing when "No image" is chosen; else a web address that has been typed
+ * (a complete https link — half-typed text is ignored, so nothing is requested while typing);
+ * else the product picture chosen from the list; else the picture it shows now (`savedUrl`).
+ */
+export function variantPreviewUrl(
+  variant: Pick<VariantDraft, 'removeImage' | 'imageUrl' | 'imageId'>,
+  images: ImageDraft[],
+  savedUrl: string | null | undefined,
+): string | null {
+  if (variant.removeImage) return null
+  const typed = variant.imageUrl.trim()
+  if (typed) {
+    try {
+      const address = new URL(typed)
+      if (address.protocol === 'https:' && address.hostname.includes('.')) return typed
+    } catch {
+      // Not a complete address yet: fall through to the chosen / current picture.
+    }
+  }
+  if (variant.imageId) {
+    const chosen = images.find((image) => image.id === variant.imageId)
+    if (chosen) return chosen.url
+  }
+  return savedUrl ?? null
+}
+
 export function draftFromVariant(
   variant: ProductVariant,
   images: ProductImage[] = [],

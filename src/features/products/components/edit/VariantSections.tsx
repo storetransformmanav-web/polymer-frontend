@@ -12,6 +12,7 @@ import type { StockLocationChoice } from '../../hooks/useProductStockLocations.t
 import { LIMITS, type DraftErrors, type VariantDraft } from '../../utils/editDraft.ts'
 import { formatMoney, formatPercent, profitAndMargin } from '../../utils/margin.ts'
 import { CardFooter, CardSection, Chip, CreateCard } from '../create/CreateCard.tsx'
+import { ProductImage } from '../ProductImage.tsx'
 import { StockFields } from './StockFields.tsx'
 import { CheckField, EditField, FIELD_INPUT, MoneyInput } from './fields.tsx'
 
@@ -342,6 +343,7 @@ export function VariantImageCard({
   value,
   onChange,
   onAddress,
+  previewSrc,
 }: {
   variant: VariantDraft
   index: number
@@ -351,43 +353,66 @@ export function VariantImageCard({
   value: string
   onChange: (choice: string) => void
   onAddress: (url: string) => void
+  /** The picture the variant will show after saving (`variantPreviewUrl`); null = none. */
+  previewSrc: string | null
 }) {
   const error = errors[`variants.${index}.imageUrl`]
   return (
     <CreateCard title="Image" regionLabel={`Picture of ${variant.title}`}>
-      {options.length > 1 && (
-        <SelectField
-          id={`${prefix}-image`}
-          label="Image"
-          value={variant.imageUrl.trim() ? '' : value}
-          options={options}
-          onChange={onChange}
-        />
-      )}
-      <EditField
-        id={`${prefix}-image-url`}
-        label="Or add a picture by web address"
-        optional
-        error={error}
-        hint="A public https:// link to a picture. It is added to the product's pictures, and this variant shows it as soon as the store has downloaded it."
-        counter={
-          variant.imageUrl.trim().length > LIMITS.mediaUrl * 0.8
-            ? { value: variant.imageUrl.trim().length, max: LIMITS.mediaUrl }
-            : undefined
-        }
-      >
-        <input
-          id={`${prefix}-image-url`}
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          placeholder="https://"
-          value={variant.imageUrl}
-          aria-invalid={error ? true : undefined}
-          onChange={(event) => onAddress(event.target.value)}
-          className={FIELD_INPUT}
-        />
-      </EditField>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        {/* What the variant will show once saved: follows the choice and the typed address. */}
+        <figure className="m-0 flex shrink-0 flex-col items-start gap-1.5">
+          <div className="border-border h-28 w-28 overflow-hidden border">
+            <ProductImage
+              src={previewSrc}
+              alt={
+                previewSrc
+                  ? `Preview of ${variant.title}`
+                  : `No picture for ${variant.title}`
+              }
+              size="thumb"
+            />
+          </div>
+          <figcaption className="text-text-muted text-[0.72rem]">
+            {variant.removeImage ? 'No image' : 'Preview'}
+          </figcaption>
+        </figure>
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          {options.length > 1 && (
+            <SelectField
+              id={`${prefix}-image`}
+              label="Image"
+              value={variant.imageUrl.trim() ? '' : value}
+              options={options}
+              onChange={onChange}
+            />
+          )}
+          <EditField
+            id={`${prefix}-image-url`}
+            label="Or add a picture by web address"
+            optional
+            error={error}
+            hint="A public https:// link to a picture. It is added to the product's pictures, and this variant shows it as soon as the store has downloaded it."
+            counter={
+              variant.imageUrl.trim().length > LIMITS.mediaUrl * 0.8
+                ? { value: variant.imageUrl.trim().length, max: LIMITS.mediaUrl }
+                : undefined
+            }
+          >
+            <input
+              id={`${prefix}-image-url`}
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              placeholder="https://"
+              value={variant.imageUrl}
+              aria-invalid={error ? true : undefined}
+              onChange={(event) => onAddress(event.target.value)}
+              className={FIELD_INPUT}
+            />
+          </EditField>
+        </div>
+      </div>
     </CreateCard>
   )
 }

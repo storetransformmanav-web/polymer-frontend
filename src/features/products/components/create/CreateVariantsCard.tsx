@@ -8,7 +8,7 @@ import {
 } from '../../utils/createDraft.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { TAG_CHIP, TagsInput } from '../edit/TagsSection.tsx'
-import { EditField, FIELD_INPUT } from '../edit/fields.tsx'
+import { DELETE_PILL, DONE_PILL, EditField, FIELD_INPUT } from '../edit/fields.tsx'
 import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 import { isSingleVariant } from './CreatePricingCards.tsx'
 
@@ -148,7 +148,7 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
                       onClick={() =>
                         update({ options: draft.options.filter((_, i) => i !== index) })
                       }
-                      className="bg-danger-bg text-danger hover:border-danger inline-flex h-8 cursor-pointer items-center rounded-full border border-transparent px-3.5 text-[0.8rem] font-semibold transition-colors"
+                      className={DELETE_PILL}
                     >
                       Delete
                     </button>
@@ -156,7 +156,7 @@ export function CreateVariantsCard({ draft, errors, update }: CreateSectionProps
                       type="button"
                       onClick={() => fold(option.key, true)}
                       disabled={!usable}
-                      className="bg-text text-bg inline-flex h-8 cursor-pointer items-center rounded-full border-none px-4 text-[0.8rem] font-semibold transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+                      className={DONE_PILL}
                     >
                       Done
                     </button>
