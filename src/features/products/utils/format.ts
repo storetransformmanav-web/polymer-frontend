@@ -80,7 +80,7 @@ export function svgImageWarning(address: string): string | null {
   }.`
 }
 
-/** The public store the SEO card's "Open preview" link points at. */
+/** The public store the SEO card's "Open public store" link points at. */
 const STOREFRONT_ORIGIN = 'https://polymeruk.com'
 
 /**

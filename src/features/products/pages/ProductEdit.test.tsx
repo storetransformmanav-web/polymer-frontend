@@ -591,7 +591,7 @@ describe('editing a section in place', () => {
     )
     expect(live).toHaveAttribute('target', '_blank')
     expect(live).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(screen.getByRole('link', { name: 'Open preview' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open public store' })).toHaveAttribute(
       'href',
       'https://polymeruk.com/products/hippo-bag',
     )

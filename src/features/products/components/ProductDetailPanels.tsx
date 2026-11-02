@@ -3,6 +3,7 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   BoxesIcon,
+  ChevronDownIcon,
   CheckCircleIcon,
   ExternalLinkIcon,
   ImageIcon,
@@ -596,6 +597,200 @@ function weightLabel(variant: ProductVariant): string {
   return `${weight} ${(variant.weight_unit ?? '').toLowerCase()}`.trim()
 }
 
+/**
+ * The variants grouped by the value of the product's first option — "Small" holds Small / Red and
+ * Small / Black — or null when there is nothing to group by: fewer than two options, or a variant
+ * that doesn't say its value. Groups come in the order their value first appears.
+ */
+function groupByFirstOption(
+  product: ProductDetail,
+): { name: string; variants: ProductVariant[] }[] | null {
+  const options = product.has_only_default_variant
+    ? []
+    : [...product.options].sort((a, b) => a.position - b.position)
+  if (options.length < 2) return null
+  const first = options[0].name
+  const groups = new Map<string, ProductVariant[]>()
+  for (const variant of product.variants) {
+    const value = variant.selected_options?.find((chosen) => chosen.name === first)?.value
+    if (!value) return null
+    groups.set(value, [...(groups.get(value) ?? []), variant])
+  }
+  return [...groups].map(([name, variants]) => ({ name, variants }))
+}
+
+/** One variant as a table row: its picture, name, SKU and details, price (compare-at struck through) and stock. */
+function VariantRow({
+  product,
+  variant,
+  label,
+  nested = false,
+}: {
+  product: ProductDetail
+  variant: ProductVariant
+  /** What to call it instead of its full title (the part a group does not already say). */
+  label?: string
+  /** Shown inside an open group: indented and a shade lighter. */
+  nested?: boolean
+}) {
+  const currency = variant.currency ?? product.currency
+  const weight = weightLabel(variant)
+  const details = [
+    variant.barcode ? `Barcode ${variant.barcode}` : '',
+    weight !== '—' ? weight : '',
+  ].filter(Boolean)
+  const stock = variant.inventory_quantity
+  const name = label ?? variant.title ?? '—'
+  return (
+    <tr
+      className={`border-border hover:bg-accent-tint/60 border-b align-middle transition-colors last:border-b-0 ${
+        nested ? 'bg-surface' : ''
+      }`}
+    >
+      <td className={`${TD} py-3 ${nested ? 'pl-12' : ''}`}>
+        <div className="flex items-center gap-4">
+          {/* A tall picture tile, as in the store's own admin. */}
+          <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
+            <ProductImage
+              src={variant.image_url ?? null}
+              alt={variant.title ?? ''}
+              size="thumb"
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="block truncate font-semibold" title={variant.title ?? ''}>
+              {name}
+            </span>
+            {variant.sku && (
+              <span className="text-text-muted flex items-center gap-1.5 font-mono text-[0.8rem]">
+                <span className="truncate" title={variant.sku}>
+                  {variant.sku}
+                </span>
+                <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
+              </span>
+            )}
+            {details.length > 0 && (
+              <span className="text-text-muted truncate text-[0.75rem]">
+                {details.join(' · ')}
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className={TD}>
+        <span className="flex flex-col">
+          <span className="font-semibold">{formatPrice(variant.price, currency)}</span>
+          {variant.compare_at_price && (
+            <span className="text-text-muted text-[0.78rem] line-through">
+              {formatPrice(variant.compare_at_price, currency)}
+            </span>
+          )}
+        </span>
+      </td>
+      <td className={TD}>
+        <span className="flex items-center gap-2">
+          <span
+            className={(stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'}
+          >
+            {num(stock)}
+          </span>
+          {variant.available_for_sale === false && (
+            <Badge tone="neutral">Unavailable</Badge>
+          )}
+        </span>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * A group of variants (all the "Small" ones) as an accordion row: its first picture, its name,
+ * how many variants it holds, their price range and total stock. Closed to begin with; opening it
+ * lists the variants under it, named by the values the group does not already say ("Red").
+ */
+function VariantGroupRows({
+  product,
+  name,
+  variants,
+}: {
+  product: ProductDetail
+  name: string
+  variants: ProductVariant[]
+}) {
+  const [open, setOpen] = useState(false)
+  const currency = variants[0].currency ?? product.currency
+  const prices = variants
+    .map((variant) => Number(variant.price))
+    .filter((price) => Number.isFinite(price))
+  const low = Math.min(...prices)
+  const high = Math.max(...prices)
+  const range =
+    prices.length === 0
+      ? '—'
+      : low === high
+        ? formatPrice(String(low), currency)
+        : `${formatPrice(String(low), currency)} – ${formatPrice(String(high), currency)}`
+  const stock = variants.reduce(
+    (sum, variant) => sum + (variant.inventory_quantity ?? 0),
+    0,
+  )
+  const picture = variants.find((variant) => variant.image_url)?.image_url ?? null
+  const count = `${variants.length} ${variants.length === 1 ? 'variant' : 'variants'}`
+  // What a variant is called inside the group: its other option values ("Red"), else its title.
+  const labelOf = (variant: ProductVariant) => {
+    const rest = (variant.selected_options ?? [])
+      .slice(1)
+      .map((chosen) => chosen.value)
+      .join(' / ')
+    return rest || variant.title || '—'
+  }
+
+  return (
+    <>
+      <tr className="border-border hover:bg-accent-tint/60 border-b align-middle transition-colors">
+        <td className={`${TD} py-3`}>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={`${name}, ${count}`}
+            onClick={() => setOpen((value) => !value)}
+            className="flex w-full cursor-pointer items-center gap-4 border-none bg-transparent p-0 text-left"
+          >
+            <ChevronDownIcon
+              width={16}
+              height={16}
+              className={`text-text-muted shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            />
+            <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
+              <ProductImage src={picture} alt="" size="thumb" />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="block truncate font-semibold">{name}</span>
+              <span className="text-text-muted text-[0.75rem]">{count}</span>
+            </div>
+          </button>
+        </td>
+        <td className={`${TD} font-semibold`}>{range}</td>
+        <td className={TD}>
+          <span className={stock <= 0 ? 'text-danger font-semibold' : 'font-medium'}>
+            {num(stock)}
+          </span>
+        </td>
+      </tr>
+      {open &&
+        variants.map((variant) => (
+          <VariantRow
+            key={variant.id}
+            product={product}
+            variant={variant}
+            label={labelOf(variant)}
+            nested
+          />
+        ))}
+    </>
+  )
+}
+
 function VariantsView({ product }: { product: ProductDetail }) {
   if (product.variants.length === 0) {
     return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
@@ -605,6 +800,8 @@ function VariantsView({ product }: { product: ProductDetail }) {
   const total =
     product.total_inventory ??
     product.variants.reduce((sum, variant) => sum + (variant.inventory_quantity ?? 0), 0)
+  // With two or more options the variants are grouped under the first one (Small, Medium…).
+  const groups = groupByFirstOption(product)
 
   return (
     <div className={`${CARD} overflow-hidden`}>
@@ -618,84 +815,18 @@ function VariantsView({ product }: { product: ProductDetail }) {
             </tr>
           </thead>
           <tbody>
-            {product.variants.map((variant) => {
-              const currency = variant.currency ?? product.currency
-              const weight = weightLabel(variant)
-              const details = [
-                variant.barcode ? `Barcode ${variant.barcode}` : '',
-                weight !== '—' ? weight : '',
-              ].filter(Boolean)
-              const stock = variant.inventory_quantity
-              return (
-                <tr
-                  key={variant.id}
-                  className="border-border hover:bg-accent-tint/60 border-b align-middle transition-colors last:border-b-0"
-                >
-                  <td className={`${TD} py-3`}>
-                    <div className="flex items-center gap-4">
-                      {/* A tall picture tile, as in the store's own admin. */}
-                      <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
-                        <ProductImage
-                          src={variant.image_url ?? null}
-                          alt={variant.title ?? ''}
-                          size="thumb"
-                        />
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span
-                          className="block truncate font-semibold"
-                          title={variant.title ?? ''}
-                        >
-                          {variant.title ?? '—'}
-                        </span>
-                        {variant.sku && (
-                          <span className="text-text-muted flex items-center gap-1.5 font-mono text-[0.8rem]">
-                            <span className="truncate" title={variant.sku}>
-                              {variant.sku}
-                            </span>
-                            <CopyButton
-                              value={variant.sku}
-                              label={`Copy ${variant.sku}`}
-                            />
-                          </span>
-                        )}
-                        {details.length > 0 && (
-                          <span className="text-text-muted truncate text-[0.75rem]">
-                            {details.join(' · ')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className={TD}>
-                    <span className="flex flex-col">
-                      <span className="font-semibold">
-                        {formatPrice(variant.price, currency)}
-                      </span>
-                      {variant.compare_at_price && (
-                        <span className="text-text-muted text-[0.78rem] line-through">
-                          {formatPrice(variant.compare_at_price, currency)}
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className={TD}>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={
-                          (stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'
-                        }
-                      >
-                        {num(stock)}
-                      </span>
-                      {variant.available_for_sale === false && (
-                        <Badge tone="neutral">Unavailable</Badge>
-                      )}
-                    </span>
-                  </td>
-                </tr>
-              )
-            })}
+            {groups
+              ? groups.map((group) => (
+                  <VariantGroupRows
+                    key={group.name}
+                    product={product}
+                    name={group.name}
+                    variants={group.variants}
+                  />
+                ))
+              : product.variants.map((variant) => (
+                  <VariantRow key={variant.id} product={product} variant={variant} />
+                ))}
           </tbody>
         </table>
       </div>
@@ -1108,9 +1239,9 @@ export function SeoPanel({
               Open live page
             </ExternalLink>
           </Field>
-          <Field label="Preview">
+          <Field label="Public store">
             <ExternalLink href={storefrontProductUrl(product.handle)}>
-              Open preview
+              Open public store
             </ExternalLink>
           </Field>
         </FieldGrid>
