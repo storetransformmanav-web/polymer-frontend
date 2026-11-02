@@ -1160,6 +1160,70 @@ describe('adding a product', () => {
       })
     })
 
+    it('sends the packed size, country of origin and HS code of a shipped product', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+
+      // The package is the store's default and cannot be changed (the API has no field for it).
+      expect(within(form).getByLabelText('Package when shipped alone')).toBeDisabled()
+      await user.type(within(form).getByLabelText('Length'), '22')
+      await user.type(within(form).getByLabelText('Width'), '13.7')
+      await user.type(within(form).getByLabelText('Height'), '4.2')
+      await user.selectOptions(within(form).getByLabelText('Size unit'), 'in')
+      await user.selectOptions(
+        within(form).getByLabelText('Country/Region of origin'),
+        'United Kingdom',
+      )
+      await user.type(
+        within(form).getByLabelText('Harmonized System (HS) code'),
+        '392310',
+      )
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      expect(create.mock.calls[0][0].variants[0]).toMatchObject({
+        requires_shipping: true,
+        packed_dimensions: { length: 22, width: 13.7, height: 4.2, unit: 'INCHES' },
+        country_code_of_origin: 'GB',
+        harmonized_system_code: '392310',
+      })
+    })
+
+    it('sends no packed size when none was typed, and refuses a half-filled one', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+
+      await user.type(within(form).getByLabelText('Length'), '22')
+      await user.click(submit(form))
+      expect(
+        await within(form).findByText(/Enter all three sizes \(L, W and H\)/),
+      ).toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+
+      await user.clear(within(form).getByLabelText('Length'))
+      await user.type(within(form).getByLabelText('Harmonized System (HS) code'), '123')
+      await user.click(submit(form))
+      expect(await within(form).findByText(/6 to 13 digits/)).toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+
+      await user.clear(within(form).getByLabelText('Harmonized System (HS) code'))
+      await user.click(submit(form))
+      await waitFor(() => expect(create).toHaveBeenCalled())
+      const sent = create.mock.calls[0][0].variants[0]
+      expect(sent).not.toHaveProperty('packed_dimensions')
+      expect(sent).not.toHaveProperty('country_code_of_origin')
+      expect(sent).not.toHaveProperty('harmonized_system_code')
+    })
+
+    it('shows no packed size, country or HS code when the product is not shipped', async () => {
+      const { user, form } = await openForm()
+      await user.click(within(form).getByRole('switch', { name: 'Physical product' }))
+
+      expect(within(form).queryByLabelText('Length')).toBeNull()
+      expect(within(form).queryByLabelText('Country/Region of origin')).toBeNull()
+      expect(within(form).queryByLabelText('Harmonized System (HS) code')).toBeNull()
+    })
+
     it('has the compare-at price, cost per item and the continue-selling box in view, and sends them', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
@@ -1266,7 +1330,8 @@ describe('adding a product', () => {
         within(form).getByRole('button', { name: /^Charge taxs*No$/ }),
       ).toBeInTheDocument()
 
-      const details = within(form).getByRole('button', { name: 'More details' })
+      // Inventory's "More details" comes first; the Shipping card has one of its own after it.
+      const [details] = within(form).getAllByRole('button', { name: 'More details' })
       expect(details).toHaveAttribute('aria-expanded', 'true')
       await user.click(details)
       expect(within(form).queryByLabelText('SKU (Stock Keeping Unit)')).toBeNull()

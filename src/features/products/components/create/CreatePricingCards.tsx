@@ -1,16 +1,13 @@
 import { useState } from 'react'
 import { Switch } from '../../../../components/ui/Switch.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
-import {
-  WEIGHT_UNITS,
-  type StockLocation,
-  type WeightUnit,
-} from '../../../../lib/api/endpoints.ts'
+import { type StockLocation } from '../../../../lib/api/endpoints.ts'
 import { currencySymbol } from '../../../../lib/format.ts'
 import { CREATE_LIMITS, type CreateVariantDraft } from '../../utils/createDraft.ts'
 import { LIMITS } from '../../utils/editDraft.ts'
 import { formatMoney, formatPercent, profitAndMargin } from '../../utils/margin.ts'
 import { CheckField, EditField, FIELD_INPUT, MoneyInput } from '../edit/fields.tsx'
+import { ShippingFields } from '../edit/ShippingFields.tsx'
 import {
   CardFooter,
   CardSection,
@@ -18,11 +15,6 @@ import {
   CreateCard,
   type CreateSectionProps,
 } from './CreateCard.tsx'
-
-const WEIGHT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
-  value: unit,
-  label: unit.charAt(0) + unit.slice(1).toLowerCase(),
-}))
 
 /** A product without options has exactly one variant, edited as plain fields. */
 export const isSingleVariant = (variants: CreateVariantDraft[]) =>
@@ -386,8 +378,9 @@ export function CreateInventoryCard(
 
 /**
  * **Shipping** — the "Physical product" switch (does it need shipping?) and, while it is on,
- * the weight and its unit. With options the weight is a column of the variants table, so
- * only the unit is chosen here.
+ * the package, the packed size, the weight and its unit, the country of origin and the HS code
+ * (`ShippingFields`). With options the weight is a column of the variants table, so only the
+ * unit is chosen here; the size, country and code are the same for every variant.
  */
 export function CreateShippingCard(props: CreateSectionProps) {
   const { draft, errors, update } = props
@@ -406,37 +399,28 @@ export function CreateShippingCard(props: CreateSectionProps) {
       }
     >
       {draft.requiresShipping ? (
-        <div className="grid grid-cols-1 items-end gap-3 min-[520px]:grid-cols-[minmax(0,1fr)_9rem]">
-          {single ? (
-            <EditField
-              id="create-weight"
-              label="Weight"
-              error={errors['variants.0.weight']}
-            >
-              <input
-                id="create-weight"
-                inputMode="decimal"
-                autoComplete="off"
-                value={draft.variants[0].weight}
-                placeholder="0.0"
-                aria-invalid={errors['variants.0.weight'] ? true : undefined}
-                onChange={(event) => setVariant({ weight: event.target.value })}
-                className={FIELD_INPUT}
-              />
-            </EditField>
-          ) : (
-            <p className="text-text-muted text-[0.85rem]">
-              Each variant&apos;s weight is in the Variants table below.
-            </p>
-          )}
-          <SelectField
-            id="create-weight-unit"
-            label="Weight unit"
-            value={draft.weightUnit}
-            options={WEIGHT_OPTIONS}
-            onChange={(weightUnit) => update({ weightUnit: weightUnit as WeightUnit })}
-          />
-        </div>
+        <ShippingFields
+          idPrefix="create"
+          shipping={draft.shipping}
+          onShipping={(patch) => update({ shipping: { ...draft.shipping, ...patch } })}
+          problems={{
+            dimensions: errors['shipping.dimensions'],
+            countryCode: errors['shipping.countryCode'],
+            hsCode: errors['shipping.hsCode'],
+          }}
+          weight={
+            single
+              ? {
+                  value: draft.variants[0].weight,
+                  onChange: (weight) => setVariant({ weight }),
+                  error: errors['variants.0.weight'],
+                }
+              : null
+          }
+          weightNote="Each variant's weight is in the Variants table below."
+          weightUnit={draft.weightUnit}
+          onWeightUnit={(weightUnit) => update({ weightUnit })}
+        />
       ) : (
         <p className="text-text-muted text-[0.85rem]">
           This product doesn&apos;t need shipping (for example a digital product or a

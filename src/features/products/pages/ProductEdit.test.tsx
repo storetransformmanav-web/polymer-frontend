@@ -869,6 +869,124 @@ describe('editing a section in place', () => {
       )
     })
 
+    it('sets the packed size, country of origin and HS code of a variant', async () => {
+      const user = await editVariants()
+
+      // No size is set yet: the boxes are empty (they show the 0.0 hint).
+      expect(screen.getByLabelText('Length')).toHaveValue('')
+      expect(screen.getByLabelText('Package when shipped alone')).toBeDisabled()
+      await user.type(screen.getByLabelText('Length'), '22')
+      await user.type(screen.getByLabelText('Width'), '13.7')
+      await user.type(screen.getByLabelText('Height'), '4.2')
+      await user.selectOptions(screen.getByLabelText('Size unit'), 'in')
+      await user.selectOptions(
+        screen.getByLabelText('Country/Region of origin'),
+        'United Kingdom',
+      )
+      await user.type(screen.getByLabelText('Harmonized System (HS) code'), '392310')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              {
+                id: VARIANT,
+                packed_dimensions: {
+                  length: 22,
+                  width: 13.7,
+                  height: 4.2,
+                  unit: 'INCHES',
+                },
+                country_code_of_origin: 'GB',
+                harmonized_system_code: '392310',
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('shows what the variant has, and clears it with 0 × 0 × 0 and null', async () => {
+      details.mockResolvedValue({
+        ...DETAIL,
+        variants: [
+          {
+            ...DETAIL.variants[0],
+            packed_dimensions: {
+              length: 22,
+              width: 13.7,
+              height: 4.2,
+              unit: 'CENTIMETERS',
+            },
+            country_code_of_origin: 'GB',
+            harmonized_system_code: '392310',
+          },
+        ],
+      })
+      const user = await editVariants()
+
+      expect(screen.getByLabelText('Length')).toHaveValue('22')
+      expect(screen.getByLabelText('Width')).toHaveValue('13.7')
+      expect(screen.getByLabelText('Height')).toHaveValue('4.2')
+      expect(screen.getByLabelText('Size unit')).toHaveValue('CENTIMETERS')
+      expect(screen.getByLabelText('Country/Region of origin')).toHaveValue('GB')
+      expect(screen.getByLabelText('Harmonized System (HS) code')).toHaveValue('392310')
+      // Untouched: nothing to save.
+      expect(saveButton('variants')).toBeDisabled()
+
+      await user.clear(screen.getByLabelText('Length'))
+      await user.clear(screen.getByLabelText('Width'))
+      await user.clear(screen.getByLabelText('Height'))
+      await user.selectOptions(
+        screen.getByLabelText('Country/Region of origin'),
+        'Select',
+      )
+      await user.clear(screen.getByLabelText('Harmonized System (HS) code'))
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              {
+                id: VARIANT,
+                packed_dimensions: {
+                  length: 0,
+                  width: 0,
+                  height: 0,
+                  unit: 'CENTIMETERS',
+                },
+                country_code_of_origin: null,
+                harmonized_system_code: null,
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('refuses a half-filled packed size and a short HS code before anything is sent', async () => {
+      const user = await editVariants()
+
+      await user.type(screen.getByLabelText('Length'), '22')
+      await user.type(screen.getByLabelText('Harmonized System (HS) code'), '123')
+      await user.click(saveButton('variants'))
+      await confirmUpdate(user)
+
+      expect(
+        await screen.findByText(/Enter all three sizes \(L, W and H\)/),
+      ).toBeInTheDocument()
+      expect(screen.getByText(/6 to 13 digits/)).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
     it('adds a value to an existing option: Add value opens a new variant with it', async () => {
       withOptions()
       const user = await editVariants()
@@ -2132,11 +2250,14 @@ describe('the Variants editor is laid out in sections, like Add product', () => 
   it('has a Physical product switch, and the weight only while it is on', async () => {
     const user = await editVariants()
     const shipping = within(screen.getByRole('region', { name: 'Shipping of M' }))
-    expect(shipping.getByLabelText(/^Weight \(optional\)/)).toHaveValue('100')
+    expect(shipping.getByLabelText('Weight')).toHaveValue('100')
 
     await user.click(shipping.getByRole('switch', { name: 'Physical product' }))
 
-    expect(shipping.queryByLabelText(/^Weight \(optional\)/)).not.toBeInTheDocument()
+    expect(shipping.queryByLabelText('Weight')).not.toBeInTheDocument()
+    // The size, country and HS code go with it.
+    expect(shipping.queryByLabelText('Length')).not.toBeInTheDocument()
+    expect(shipping.queryByLabelText('Country/Region of origin')).not.toBeInTheDocument()
     await save(user)
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(

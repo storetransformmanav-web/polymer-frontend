@@ -26,6 +26,13 @@ import {
   SECTION_TITLE_MAX,
   type SectionDraft,
 } from './descriptionSections.ts'
+import {
+  shippingChanges,
+  shippingCreateFields,
+  shippingDetailsFromVariant,
+  validateShippingDetails,
+  type ShippingDetailsDraft,
+} from './shipping.ts'
 
 /**
  * The edit form's working copy of a product, and the two pure steps around it:
@@ -58,6 +65,8 @@ export interface VariantDraft {
   cost: string
   weight: string
   weightUnit: WeightUnit
+  /** Its packed size, country of origin and HS code (the weight and unit are above). */
+  shipping: ShippingDetailsDraft
   /** The product image (attachment id) to show for this variant; '' = leave as is. */
   imageId: string
   /** The variant shows a picture now (so "No image" is a change worth offering). */
@@ -315,6 +324,7 @@ export function draftFromVariant(
     cost: text(variant.cost),
     weight: text(variant.weight),
     weightUnit: asWeightUnit(variant.weight_unit),
+    shipping: shippingDetailsFromVariant(variant),
     imageId: variantImageId(variant, images),
     hasImage: Boolean(variant.image_url),
     removeImage: false,
@@ -521,6 +531,15 @@ function variantChanges(
     set('weight', draft.weight.trim() === '' ? null : draft.weight.trim())
   }
   if (draft.weightUnit !== base.weightUnit) set('weight_unit', draft.weightUnit)
+  // The packed size, country of origin and HS code: only what changed.
+  const shipping = shippingChanges(draft.shipping, base.shipping)
+  if (shipping.packed_dimensions) set('packed_dimensions', shipping.packed_dimensions)
+  if (shipping.country_code_of_origin !== undefined) {
+    set('country_code_of_origin', shipping.country_code_of_origin)
+  }
+  if (shipping.harmonized_system_code !== undefined) {
+    set('harmonized_system_code', shipping.harmonized_system_code)
+  }
   if (draft.sku.trim() !== base.sku) set('sku', draft.sku.trim())
   if (draft.barcode.trim() !== base.barcode) set('barcode', draft.barcode.trim())
   if (draft.taxable !== base.taxable) set('taxable', draft.taxable)
@@ -745,6 +764,7 @@ export function buildUpdateBody(
       input.inventory_policy = sibling.inventoryPolicy
       input.tracked = sibling.tracked
       input.requires_shipping = sibling.requiresShipping
+      Object.assign(input, shippingCreateFields(sibling.shipping))
     }
     if (created.compareAtPrice.trim())
       input.compare_at_price = created.compareAtPrice.trim()
@@ -1145,6 +1165,13 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
     put(at('sku'), tooLong('The SKU', variant.sku, LIMITS.sku))
     put(at('barcode'), tooLong('The barcode', variant.barcode, LIMITS.barcode))
     validateStockRows(variant.stock, `variants.${index}.stock`, errors)
+    // Shipping details only count while the variant is shipped.
+    if (variant.requiresShipping) {
+      const shipping = validateShippingDetails(variant.shipping)
+      put(at('dimensions'), shipping.dimensions ?? null)
+      put(at('countryCode'), shipping.countryCode ?? null)
+      put(at('hsCode'), shipping.hsCode ?? null)
+    }
   })
 
   validateOptionsAndNewVariants(product, draft, errors)

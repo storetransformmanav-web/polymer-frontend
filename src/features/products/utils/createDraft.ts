@@ -9,6 +9,12 @@ import type {
   WeightUnit,
 } from '../../../lib/api/endpoints.ts'
 import {
+  blankShippingDetails,
+  shippingCreateFields,
+  validateShippingDetails,
+  type ShippingDetailsDraft,
+} from './shipping.ts'
+import {
   buildMediaItems,
   LIMITS,
   newKey,
@@ -124,6 +130,8 @@ export interface CreateDraft {
   inventoryPolicy: InventoryPolicy
   /** The unit every variant's weight is in. */
   weightUnit: WeightUnit
+  /** The packed size, country of origin and HS code — the same for every variant. */
+  shipping: ShippingDetailsDraft
   /** Shopify location the opening stock goes to ('' = no stock given). */
   locationId: string
   media: NewMediaDraft[]
@@ -189,6 +197,7 @@ export function blankCreateDraft(shop: string): CreateDraft {
     tracked: true,
     inventoryPolicy: 'DENY',
     weightUnit: 'KILOGRAMS',
+    shipping: blankShippingDetails(),
     locationId: '',
     media: [],
     collections: [],
@@ -351,6 +360,13 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     errors.variants = 'A product needs at least one variant'
 
   put('taxCode', tooLong('The tax code', draft.taxCode, CREATE_LIMITS.taxCode))
+  // The packed size, country and HS code only count for a product that is shipped.
+  if (draft.requiresShipping) {
+    const shipping = validateShippingDetails(draft.shipping)
+    put('shipping.dimensions', shipping.dimensions ?? null)
+    put('shipping.countryCode', shipping.countryCode ?? null)
+    put('shipping.hsCode', shipping.hsCode ?? null)
+  }
 
   // Variants
   draft.variants.forEach((variant, index) => {
@@ -513,6 +529,8 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
         tracked: draft.tracked,
         requires_shipping: draft.requiresShipping,
       }
+      if (draft.requiresShipping)
+        Object.assign(input, shippingCreateFields(draft.shipping))
       if (trimmed(draft.taxCode)) input.tax_code = trimmed(draft.taxCode)
       if (variant.optionValues.length > 0) input.option_values = variant.optionValues
       if (trimmed(variant.compareAtPrice))

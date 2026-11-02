@@ -1,25 +1,16 @@
 import { useState } from 'react'
 import { Switch } from '../../../../components/ui/Switch.tsx'
 import { SelectField, type SelectOption } from '../../../../components/ui/SelectField.tsx'
-import {
-  WEIGHT_UNITS,
-  type ProductDetail,
-  type ProductVariant,
-  type WeightUnit,
-} from '../../../../lib/api/endpoints.ts'
+import { type ProductDetail, type ProductVariant } from '../../../../lib/api/endpoints.ts'
 import { currencySymbol } from '../../../../lib/format.ts'
 import type { StockLocationChoice } from '../../hooks/useProductStockLocations.ts'
 import { LIMITS, type DraftErrors, type VariantDraft } from '../../utils/editDraft.ts'
 import { formatMoney, formatPercent, profitAndMargin } from '../../utils/margin.ts'
 import { CardFooter, CardSection, Chip, CreateCard } from '../create/CreateCard.tsx'
 import { ProductImage } from '../ProductImage.tsx'
+import { ShippingFields } from './ShippingFields.tsx'
 import { StockFields } from './StockFields.tsx'
 import { CheckField, EditField, FIELD_INPUT, MoneyInput } from './fields.tsx'
-
-const WEIGHT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
-  value: unit,
-  label: unit.charAt(0) + unit.slice(1).toLowerCase(),
-}))
 
 interface VariantSectionProps {
   product: ProductDetail
@@ -272,7 +263,7 @@ export function VariantInventoryCard({
 
 /**
  * **Shipping** of one variant, like Add product's: the "Physical product" switch (does it need
- * shipping?) and, while it is on, the weight and its unit.
+ * shipping?) and, while it is on, the package, packed size, weight, country of origin and HS code.
  */
 export function VariantShippingCard({
   variant,
@@ -296,27 +287,23 @@ export function VariantShippingCard({
       }
     >
       {variant.requiresShipping ? (
-        <div className="grid grid-cols-1 items-end gap-3 min-[520px]:grid-cols-[minmax(0,1fr)_9rem]">
-          <EditField id={`${prefix}-weight`} label="Weight" optional error={at('weight')}>
-            <input
-              id={`${prefix}-weight`}
-              inputMode="decimal"
-              autoComplete="off"
-              value={variant.weight}
-              placeholder="0.0"
-              aria-invalid={at('weight') ? true : undefined}
-              onChange={(event) => update({ weight: event.target.value })}
-              className={FIELD_INPUT}
-            />
-          </EditField>
-          <SelectField
-            id={`${prefix}-unit`}
-            label="Weight unit"
-            value={variant.weightUnit}
-            options={WEIGHT_OPTIONS}
-            onChange={(unit) => update({ weightUnit: unit as WeightUnit })}
-          />
-        </div>
+        <ShippingFields
+          idPrefix={prefix}
+          shipping={variant.shipping}
+          onShipping={(patch) => update({ shipping: { ...variant.shipping, ...patch } })}
+          problems={{
+            dimensions: at('dimensions'),
+            countryCode: at('countryCode'),
+            hsCode: at('hsCode'),
+          }}
+          weight={{
+            value: variant.weight,
+            onChange: (weight) => update({ weight }),
+            error: at('weight'),
+          }}
+          weightUnit={variant.weightUnit}
+          onWeightUnit={(weightUnit) => update({ weightUnit })}
+        />
       ) : (
         <p className="text-text-muted text-[0.85rem]">
           This variant doesn&apos;t need shipping (for example a digital product or a

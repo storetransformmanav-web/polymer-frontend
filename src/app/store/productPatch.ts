@@ -227,6 +227,20 @@ function patchVariant(
     cost: edit.cost !== undefined ? text(edit.cost) : variant.cost,
     weight: edit.weight !== undefined ? text(edit.weight) : variant.weight,
     weight_unit: edit.weight_unit ?? variant.weight_unit,
+    // A packed size of 0 × 0 × 0 is how the API clears it.
+    packed_dimensions: edit.packed_dimensions
+      ? edit.packed_dimensions.length > 0
+        ? { ...edit.packed_dimensions }
+        : null
+      : variant.packed_dimensions,
+    country_code_of_origin:
+      edit.country_code_of_origin !== undefined
+        ? edit.country_code_of_origin
+        : variant.country_code_of_origin,
+    harmonized_system_code:
+      edit.harmonized_system_code !== undefined
+        ? edit.harmonized_system_code
+        : variant.harmonized_system_code,
     sku: edit.sku ?? variant.sku,
     barcode: edit.barcode ?? variant.barcode,
     taxable: edit.taxable ?? variant.taxable,

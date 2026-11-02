@@ -37,6 +37,8 @@ import {
   storefrontProductUrl,
   svgImageWarning,
 } from '../utils/format.ts'
+import { countryName } from '../utils/countries.ts'
+import { packedSizeLabel } from '../utils/shipping.ts'
 import { classifySync, readableSyncError } from '../utils/sync.ts'
 import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
@@ -636,9 +638,13 @@ function VariantRow({
 }) {
   const currency = variant.currency ?? product.currency
   const weight = weightLabel(variant)
+  const country = (variant.country_code_of_origin ?? '').trim().toUpperCase()
   const details = [
     variant.barcode ? `Barcode ${variant.barcode}` : '',
     weight !== '—' ? weight : '',
+    packedSizeLabel(variant.packed_dimensions),
+    country ? `Origin ${countryName(country)}` : '',
+    variant.harmonized_system_code ? `HS ${variant.harmonized_system_code}` : '',
   ].filter(Boolean)
   const stock = variant.inventory_quantity
   const name = label ?? variant.title ?? '—'

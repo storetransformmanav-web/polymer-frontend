@@ -910,6 +910,17 @@ const productVariantSchema = z.object({
   weight: z.string().nullish(),
   weight_unit: z.string().nullish(),
   requires_shipping: z.boolean().nullish(),
+  // The packed size (null when none is set), the country it comes from and its customs code.
+  packed_dimensions: z
+    .object({
+      length: z.union([z.number(), z.string()]).nullish(),
+      width: z.union([z.number(), z.string()]).nullish(),
+      height: z.union([z.number(), z.string()]).nullish(),
+      unit: z.string().nullish(),
+    })
+    .nullish(),
+  country_code_of_origin: z.string().nullish(),
+  harmonized_system_code: z.string().nullish(),
   inventory_policy: z.string().nullish(),
   inventory_management: z.string().nullish(),
   inventory_quantity: z.number().nullish(),
@@ -1042,6 +1053,12 @@ export interface ProductCreateVariantInput {
   cost?: string
   weight?: string
   weight_unit?: WeightUnit
+  /** The packed size: all three above 0. */
+  packed_dimensions?: PackedDimensionsInput
+  /** Two letters, e.g. "GB". */
+  country_code_of_origin?: string
+  /** 6 to 13 digits, e.g. "392310". */
+  harmonized_system_code?: string
   /** Opening stock per Shopify location. */
   stock?: ProductVariantStock[]
   /** Must also be listed in `media`; shown for this variant (max 2000 characters). */
@@ -1178,6 +1195,17 @@ export const MEDIA_TYPES = ['IMAGE', 'VIDEO', 'EXTERNAL_VIDEO', 'MODEL_3D'] as c
 export type ProductEditStatus = (typeof PRODUCT_EDIT_STATUSES)[number]
 export type InventoryPolicy = (typeof INVENTORY_POLICIES)[number]
 export type WeightUnit = (typeof WEIGHT_UNITS)[number]
+/** Units of a packed size: cm and in. */
+export const DIMENSION_UNITS = ['CENTIMETERS', 'INCHES'] as const
+export type DimensionUnit = (typeof DIMENSION_UNITS)[number]
+
+/** A variant's packed size, as the API takes it (numbers). */
+export interface PackedDimensionsInput {
+  length: number
+  width: number
+  height: number
+  unit: DimensionUnit
+}
 export type MediaType = (typeof MEDIA_TYPES)[number]
 
 /** An option to rename (`name` is the current one) and/or whose values to rename. */
@@ -1213,6 +1241,12 @@ export interface ProductVariantInput {
   cost?: string | number | null
   weight?: string | number | null
   weight_unit?: WeightUnit
+  /** The packed size: all three above 0, or all 0 to clear it. */
+  packed_dimensions?: PackedDimensionsInput
+  /** Two letters, e.g. "GB"; null clears it. */
+  country_code_of_origin?: string | null
+  /** 6 to 13 digits, e.g. "392310"; null clears it. */
+  harmonized_system_code?: string | null
   /** Stock to set per Shopify location. */
   stock?: ProductVariantStock[]
   /** Product image (CRM attachment id) to show for this variant. */
