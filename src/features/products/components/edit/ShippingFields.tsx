@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronDownIcon, InfoIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
 import {
   DIMENSION_UNITS,
@@ -8,7 +9,6 @@ import {
 } from '../../../../lib/api/endpoints.ts'
 import { countryName, countryOptions } from '../../utils/countries.ts'
 import type { ShippingDetailsDraft, ShippingProblems } from '../../utils/shipping.ts'
-import { CardSection } from '../create/CreateCard.tsx'
 import { EditField, FIELD_INPUT } from './fields.tsx'
 
 const WEIGHT_UNIT_LABELS: Record<WeightUnit, string> = {
@@ -101,6 +101,39 @@ function SizeBox({
   )
 }
 
+/** A small ⓘ after a label; hovering it (or focusing it) explains the field. */
+function InfoHint({ children }: { children: string }) {
+  return (
+    <span
+      title={children}
+      className="text-text-muted ml-1.5 inline-flex cursor-help align-middle"
+    >
+      <InfoIcon width={14} height={14} />
+    </span>
+  )
+}
+
+/** A grey pill of the closed "More details": the field's name, and its value once it has one. */
+function DetailPill({
+  label,
+  value,
+  onClick,
+}: {
+  label: string
+  value: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-accent-tint/60 text-text hover:bg-accent-tint focus-visible:outline-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border-none px-3 text-[0.82rem] font-medium transition-colors focus-visible:outline-2"
+    >
+      {label} {value && <span className="text-text-muted font-normal">· {value}</span>}
+    </button>
+  )
+}
+
 function Problem({ children }: { children?: string | null }) {
   return children ? (
     <p role="alert" className="text-danger text-[0.78rem]">
@@ -141,8 +174,9 @@ export function ShippingFields({
   weightUnit: WeightUnit
   onWeightUnit: (unit: WeightUnit) => void
 }) {
-  // More details starts open, and a problem in it keeps it open.
-  const [detailsOpen, setDetailsOpen] = useState(true)
+  // More details starts closed (its pills say what is inside); a problem in it opens it.
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const open = detailsOpen || Boolean(problems.countryCode || problems.hsCode)
   const countries = useMemo(() => {
     const options = countryOptions()
     // A code the list doesn't have (kept from the store) is still shown rather than lost.
@@ -247,40 +281,94 @@ export function ShippingFields({
         </Row>
       </div>
 
-      <CardSection
-        title="More details"
-        open={detailsOpen || Boolean(problems.countryCode || problems.hsCode)}
-        onToggle={() => setDetailsOpen((open) => !open)}
-        last
-      >
-        <div className="flex flex-col gap-1.5">
-          <SelectField
-            id={`${idPrefix}-country`}
-            label="Country/Region of origin"
-            value={shipping.countryCode}
-            options={countries}
-            onChange={(countryCode) => onShipping({ countryCode })}
-          />
-          <Problem>{problems.countryCode}</Problem>
-        </div>
-        <EditField
-          id={`${idPrefix}-hs-code`}
-          label="Harmonized System (HS) code"
-          hint="6 to 13 digits, for example 392310."
-          error={problems.hsCode}
-        >
-          <input
-            id={`${idPrefix}-hs-code`}
-            inputMode="numeric"
-            autoComplete="off"
-            value={shipping.hsCode}
-            placeholder="Enter a 6-digit code"
-            aria-invalid={problems.hsCode ? true : undefined}
-            onChange={(event) => onShipping({ hsCode: event.target.value })}
-            className={FIELD_INPUT}
-          />
-        </EditField>
-      </CardSection>
+      {/* The foot of the card, edge to edge: pills while closed, a "More details" header open. */}
+      <div className="border-border -mx-4 -mb-4 border-t sm:-mx-5 sm:-mb-5">
+        {open ? (
+          <button
+            type="button"
+            aria-expanded="true"
+            onClick={() => setDetailsOpen(false)}
+            className="hover:bg-accent-tint/40 flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3.5 text-left text-[0.88rem] font-semibold transition-colors sm:px-5"
+          >
+            More details
+            <ChevronDownIcon
+              width={16}
+              height={16}
+              className="text-text-muted shrink-0 rotate-180"
+            />
+          </button>
+        ) : (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <DetailPill
+                label="Country of origin"
+                value={shipping.countryCode ? countryName(shipping.countryCode) : ''}
+                onClick={() => setDetailsOpen(true)}
+              />
+              <DetailPill
+                label="HS Code"
+                value={shipping.hsCode}
+                onClick={() => setDetailsOpen(true)}
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="More details"
+              aria-expanded="false"
+              onClick={() => setDetailsOpen(true)}
+              className="text-text-muted hover:text-text inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
+            >
+              <ChevronDownIcon width={16} height={16} />
+            </button>
+          </div>
+        )}
+        {open && (
+          <div className="flex flex-col gap-4 px-4 pb-5 sm:px-5">
+            <div className="flex flex-col gap-1.5">
+              <SelectField
+                id={`${idPrefix}-country`}
+                label={
+                  <>
+                    Country/Region of origin
+                    <InfoHint>
+                      Where the product was made or produced. Customs use it to work out
+                      duties and taxes.
+                    </InfoHint>
+                  </>
+                }
+                value={shipping.countryCode}
+                options={countries}
+                onChange={(countryCode) => onShipping({ countryCode })}
+              />
+              <Problem>{problems.countryCode}</Problem>
+            </div>
+            <EditField
+              id={`${idPrefix}-hs-code`}
+              label={
+                <>
+                  Harmonized System (HS) code
+                  <InfoHint>
+                    The code customs use to classify the product, 6 to 13 digits.
+                  </InfoHint>
+                </>
+              }
+              hint="6 to 13 digits, for example 392310."
+              error={problems.hsCode}
+            >
+              <input
+                id={`${idPrefix}-hs-code`}
+                inputMode="numeric"
+                autoComplete="off"
+                value={shipping.hsCode}
+                placeholder="Enter a 6-digit code"
+                aria-invalid={problems.hsCode ? true : undefined}
+                onChange={(event) => onShipping({ hsCode: event.target.value })}
+                className={FIELD_INPUT}
+              />
+            </EditField>
+          </div>
+        )}
+      </div>
     </>
   )
 }

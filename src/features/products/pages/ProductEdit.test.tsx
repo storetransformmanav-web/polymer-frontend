@@ -872,6 +872,12 @@ describe('editing a section in place', () => {
     it('sets the packed size, country of origin and HS code of a variant', async () => {
       const user = await editVariants()
 
+      // More details is closed to begin with, its pills say what is inside; a pill opens it.
+      expect(screen.queryByLabelText('Country/Region of origin')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'HS Code' })).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Country of origin' }))
+      expect(screen.getByLabelText('Country/Region of origin')).toBeInTheDocument()
+
       // No size is set yet: the boxes are empty (they show the 0.0 hint).
       expect(screen.getByLabelText('Length')).toHaveValue('')
       expect(screen.getByLabelText('Package when shipped alone')).toBeDisabled()
@@ -933,6 +939,12 @@ describe('editing a section in place', () => {
       expect(screen.getByLabelText('Width')).toHaveValue('13.7')
       expect(screen.getByLabelText('Height')).toHaveValue('4.2')
       expect(screen.getByLabelText('Size unit')).toHaveValue('CENTIMETERS')
+      // Closed, the pills carry the values, so nothing needs opening to see them.
+      expect(
+        screen.getByRole('button', { name: 'Country of origin · United Kingdom' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'HS Code · 392310' })).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'More details' }))
       expect(screen.getByLabelText('Country/Region of origin')).toHaveValue('GB')
       expect(screen.getByLabelText('Harmonized System (HS) code')).toHaveValue('392310')
       // Untouched: nothing to save.
@@ -976,6 +988,7 @@ describe('editing a section in place', () => {
       const user = await editVariants()
 
       await user.type(screen.getByLabelText('Length'), '22')
+      await user.click(screen.getByRole('button', { name: 'HS Code' }))
       await user.type(screen.getByLabelText('Harmonized System (HS) code'), '123')
       await user.click(saveButton('variants'))
       await confirmUpdate(user)

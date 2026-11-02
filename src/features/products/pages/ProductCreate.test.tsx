@@ -1160,6 +1160,15 @@ describe('adding a product', () => {
       })
     })
 
+    /** Add product has two "More details" (Inventory, then Shipping): this opens Shipping's. */
+    const openShippingDetails = async (
+      user: ReturnType<typeof userEvent.setup>,
+      form: HTMLElement,
+    ) => {
+      const buttons = within(form).getAllByRole('button', { name: 'More details' })
+      await user.click(buttons[buttons.length - 1])
+    }
+
     it('sends the packed size, country of origin and HS code of a shipped product', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
@@ -1170,6 +1179,12 @@ describe('adding a product', () => {
       await user.type(within(form).getByLabelText('Width'), '13.7')
       await user.type(within(form).getByLabelText('Height'), '4.2')
       await user.selectOptions(within(form).getByLabelText('Size unit'), 'in')
+      // More details is closed to begin with: its pills name what is inside.
+      expect(
+        within(form).getByRole('button', { name: 'Country of origin' }),
+      ).toBeVisible()
+      expect(within(form).queryByLabelText('Country/Region of origin')).toBeNull()
+      await openShippingDetails(user, form)
       await user.selectOptions(
         within(form).getByLabelText('Country/Region of origin'),
         'United Kingdom',
@@ -1193,6 +1208,7 @@ describe('adding a product', () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
 
+      await openShippingDetails(user, form)
       await user.type(within(form).getByLabelText('Length'), '22')
       await user.click(submit(form))
       expect(

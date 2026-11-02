@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { ChevronDownIcon, type IconProps } from './icons.tsx'
 
 /**
@@ -31,7 +31,7 @@ export interface SelectOption {
 
 export interface SelectFieldProps {
   id: string
-  label: string
+  label: ReactNode
   value: string
   options: SelectOption[]
   onChange: (value: string) => void

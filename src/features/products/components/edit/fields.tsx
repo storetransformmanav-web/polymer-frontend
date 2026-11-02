@@ -76,7 +76,7 @@ export function MoneyInput({
 
 interface EditFieldProps {
   id: string
-  label: string
+  label: ReactNode
   /** The problem with this field, if any. */
   error?: string | null
   hint?: string
