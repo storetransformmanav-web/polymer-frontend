@@ -1,4 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { ChevronDownIcon, InfoIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
 import {
@@ -9,6 +17,7 @@ import {
 } from '../../../../lib/api/endpoints.ts'
 import { countryName, countryOptions } from '../../utils/countries.ts'
 import type { ShippingDetailsDraft, ShippingProblems } from '../../utils/shipping.ts'
+import { Chip } from '../create/CreateCard.tsx'
 import { EditField, FIELD_INPUT } from './fields.tsx'
 
 const WEIGHT_UNIT_LABELS: Record<WeightUnit, string> = {
@@ -113,26 +122,44 @@ function InfoHint({ children }: { children: string }) {
   )
 }
 
-/** A grey pill of the closed "More details": the field's name, and its value once it has one. */
-function DetailPill({
-  label,
+/**
+ * The country dropdown. It has about 250 options, so it is kept from redrawing on every key typed
+ * in another field: it only redraws when its own value changes (`onPick` is stable).
+ */
+const CountrySelect = memo(function CountrySelect({
+  id,
   value,
-  onClick,
+  onPick,
 }: {
-  label: string
+  id: string
   value: string
-  onClick: () => void
+  onPick: (code: string) => void
 }) {
+  const options = useMemo(() => {
+    const all = countryOptions()
+    // A code the list doesn't have (kept from the store) is still shown rather than lost.
+    return value && !all.some((option) => option.value === value)
+      ? [...all, { value, label: countryName(value) }]
+      : all
+  }, [value])
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="bg-accent-tint/60 text-text hover:bg-accent-tint focus-visible:outline-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border-none px-3 text-[0.82rem] font-medium transition-colors focus-visible:outline-2"
-    >
-      {label} {value && <span className="text-text-muted font-normal">· {value}</span>}
-    </button>
+    <SelectField
+      id={id}
+      label={
+        <>
+          Country/Region of origin
+          <InfoHint>
+            Where the product was made or produced. Customs use it to work out duties and
+            taxes.
+          </InfoHint>
+        </>
+      }
+      value={value}
+      options={options}
+      onChange={onPick}
+    />
   )
-}
+})
 
 function Problem({ children }: { children?: string | null }) {
   return children ? (
@@ -177,16 +204,15 @@ export function ShippingFields({
   // More details starts closed (its pills say what is inside); a problem in it opens it.
   const [detailsOpen, setDetailsOpen] = useState(false)
   const open = detailsOpen || Boolean(problems.countryCode || problems.hsCode)
-  const countries = useMemo(() => {
-    const options = countryOptions()
-    // A code the list doesn't have (kept from the store) is still shown rather than lost.
-    return shipping.countryCode && !options.some((o) => o.value === shipping.countryCode)
-      ? [
-          ...options,
-          { value: shipping.countryCode, label: countryName(shipping.countryCode) },
-        ]
-      : options
-  }, [shipping.countryCode])
+  // The latest `onShipping`, so the memoised country dropdown never reports to an old render.
+  const reportShipping = useRef(onShipping)
+  useEffect(() => {
+    reportShipping.current = onShipping
+  })
+  const pickCountry = useCallback(
+    (countryCode: string) => reportShipping.current({ countryCode }),
+    [],
+  )
   const dimensionsInvalid = Boolean(problems.dimensions)
 
   return (
@@ -300,16 +326,21 @@ export function ShippingFields({
         ) : (
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
             <div className="flex flex-wrap items-center gap-2">
-              <DetailPill
-                label="Country of origin"
-                value={shipping.countryCode ? countryName(shipping.countryCode) : ''}
+              {/* The same pills as the Price card's: a value shows in a small tag once set. */}
+              <Chip
+                value={
+                  shipping.countryCode ? countryName(shipping.countryCode) : undefined
+                }
                 onClick={() => setDetailsOpen(true)}
-              />
-              <DetailPill
-                label="HS Code"
-                value={shipping.hsCode}
+              >
+                Country of origin
+              </Chip>
+              <Chip
+                value={shipping.hsCode || undefined}
                 onClick={() => setDetailsOpen(true)}
-              />
+              >
+                HS Code
+              </Chip>
             </div>
             <button
               type="button"
@@ -325,20 +356,10 @@ export function ShippingFields({
         {open && (
           <div className="flex flex-col gap-4 px-4 pb-5 sm:px-5">
             <div className="flex flex-col gap-1.5">
-              <SelectField
+              <CountrySelect
                 id={`${idPrefix}-country`}
-                label={
-                  <>
-                    Country/Region of origin
-                    <InfoHint>
-                      Where the product was made or produced. Customs use it to work out
-                      duties and taxes.
-                    </InfoHint>
-                  </>
-                }
                 value={shipping.countryCode}
-                options={countries}
-                onChange={(countryCode) => onShipping({ countryCode })}
+                onPick={pickCountry}
               />
               <Problem>{problems.countryCode}</Problem>
             </div>

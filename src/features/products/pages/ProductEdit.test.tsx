@@ -941,9 +941,11 @@ describe('editing a section in place', () => {
       expect(screen.getByLabelText('Size unit')).toHaveValue('CENTIMETERS')
       // Closed, the pills carry the values, so nothing needs opening to see them.
       expect(
-        screen.getByRole('button', { name: 'Country of origin · United Kingdom' }),
+        screen.getByRole('button', { name: /^Country of origin\s*United Kingdom$/ }),
       ).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'HS Code · 392310' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: /^HS Code\s*392310$/ }),
+      ).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'More details' }))
       expect(screen.getByLabelText('Country/Region of origin')).toHaveValue('GB')
       expect(screen.getByLabelText('Harmonized System (HS) code')).toHaveValue('392310')

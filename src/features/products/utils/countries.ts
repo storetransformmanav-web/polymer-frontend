@@ -19,26 +19,28 @@ const CODES = (
   'VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW'
 ).split(' ')
 
+// Built once, on first use: making the names and sorting about 250 of them is the slow part, and
+// the dropdown is opened (and its card redrawn) many times, so it must not be redone each time.
+let names: Intl.DisplayNames | null = null
+let options: { value: string; label: string }[] | null = null
+
 /** The country's name in English ("GB" → "United Kingdom"); the code itself when it has none. */
 export function countryName(code: string): string {
   try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code
+    names ??= new Intl.DisplayNames(['en'], { type: 'region' })
+    return names.of(code) ?? code
   } catch {
     return code
   }
 }
 
-/** Every country as a dropdown choice, by name, with an empty "Select" first. */
+/** Every country as a dropdown choice, by name, with an empty "Select" first (the same list each time). */
 export function countryOptions(): { value: string; label: string }[] {
-  const names = new Intl.DisplayNames(['en'], { type: 'region' })
-  const options = CODES.map((code) => {
-    let label = code
-    try {
-      label = names.of(code) ?? code
-    } catch {
-      // A code the browser doesn't know keeps its letters.
-    }
-    return { value: code, label }
-  }).sort((a, b) => a.label.localeCompare(b.label))
-  return [{ value: '', label: 'Select' }, ...options]
+  if (options) return options
+  const collator = new Intl.Collator('en')
+  const countries = CODES.map((code) => ({ value: code, label: countryName(code) })).sort(
+    (a, b) => collator.compare(a.label, b.label),
+  )
+  options = [{ value: '', label: 'Select' }, ...countries]
+  return options
 }
