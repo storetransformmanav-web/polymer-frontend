@@ -1,17 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
-import {
-  ChevronDownIcon,
-  PlusCircleIcon,
-  TrashIcon,
-} from '../../../../components/ui/icons.tsx'
-import {
-  blankAddedOption,
-  blankNewVariant,
-  LIMITS,
-  optionChoices,
-  optionCount,
-} from '../../utils/editDraft.ts'
+import { ChevronDownIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
+import { blankNewVariant, LIMITS, optionChoices } from '../../utils/editDraft.ts'
 import {
   DELETE_PILL,
   DONE_PILL,
@@ -22,7 +12,7 @@ import {
   TEXT_BUTTON,
   type SectionProps,
 } from './fields.tsx'
-import { TAG_CHIP, TagsInput } from './TagsSection.tsx'
+import { TagsInput } from './TagsSection.tsx'
 
 /** The grid's columns from `lg` up, and the line on a cell's right edge (none on a row's last cell). */
 const COLUMNS = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3' } as const
@@ -36,7 +26,7 @@ const EDGE = {
  * The product's options (Size, Colour…) in the Variants editor: each option is its own card, an
  * **accordion** — closed to begin with, showing its name and a chip per value; opening it shows
  * its name, its values (one box each, then "Add another value") and a dark **Done** that closes
- * it again. A new option (from **Add variant** in the Variants card) starts open,
+ * it again. A new option (from **Add variant** in the Current variants card) starts open,
  * with a pink **Delete** while it is only a draft. Rename an option or any value
  * (`options_update`); add a new option with its values (`options_add`). The API has no call for a
  * bare value — the store only has a value once a variant uses it — so **Add value** opens a new
@@ -45,7 +35,6 @@ const EDGE = {
  * changed by it.
  */
 export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) {
-  const full = optionCount(draft) >= LIMITS.options
   // Three cells to a row at most; fewer options make wider cells instead of an empty column.
   const cols = Math.min(
     Math.max(draft.options.length + draft.addedOptions.length, 1),
@@ -133,7 +122,7 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
     })
 
   return (
-    <section aria-label="Options" className={`grid grid-cols-1 ${COLUMNS[cols]}`}>
+    <section aria-label="Options" className={`-mb-px grid grid-cols-1 ${COLUMNS[cols]}`}>
       {draft.options.map((option, index) => {
         const name = option.newName.trim() || option.name
         const pending = draft.newVariants.filter(
@@ -157,6 +146,13 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
             values={values}
             open={isOpen}
             onToggle={() => flip(option.key)}
+            onAddValue={() => {
+              if (!isOpen) flip(option.key)
+              setTimeout(
+                () => document.getElementById(`new-value-${option.key}`)?.focus(),
+                0,
+              )
+            }}
           >
             <div className="flex flex-col gap-3">
               <EditField
@@ -224,7 +220,11 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
                     </li>
                   ))}
                 </ul>
-                <AddValue name={name} onAdd={(value) => addValue(index, value)} />
+                <AddValue
+                  id={`new-value-${option.key}`}
+                  name={name}
+                  onAdd={(value) => addValue(index, value)}
+                />
               </div>
               <div className="flex justify-end">
                 <button
@@ -320,43 +320,19 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
       {errors.addedOptions && (
         <p
           role="alert"
-          className="text-danger border-border-strong col-span-full border-b px-4 py-2.5 text-[0.82rem] font-medium"
+          className="text-danger border-border-strong col-span-full border-b px-5 py-2.5 text-[0.82rem] font-medium"
         >
           {errors.addedOptions}
         </p>
       )}
-
-      <div className="col-span-full flex flex-wrap items-center gap-x-3">
-        <button
-          type="button"
-          disabled={full}
-          onClick={() => {
-            const index = draft.addedOptions.length
-            onChange({ addedOptions: [...draft.addedOptions, blankAddedOption()] })
-            // The new option's card opens with the cursor in its name box.
-            setTimeout(
-              () => document.getElementById(`added-option-${index}-name`)?.focus(),
-              0,
-            )
-          }}
-          className="bg-surface/60 hover:bg-accent-tint/50 text-text flex w-full cursor-pointer items-center justify-center gap-2.5 border-none px-4 py-3.5 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
-        >
-          <PlusCircleIcon width={18} height={18} className="text-accent" />
-          Add variant
-        </button>
-        {full && (
-          <span className="text-text-muted px-4 pb-2 text-[0.76rem]">
-            A product can have at most {LIMITS.options} options.
-          </span>
-        )}
-      </div>
     </section>
   )
 }
 
 /**
- * One option as an accordion card: a header that is the toggle (a chevron, the name, and while it
- * is closed a chip per value) over a body that holds the fields.
+ * One option as a column of the Variant options card: its name (the toggle, with a chevron), a
+ * pill per value and an **Add value** pill; opening it shows the fields below. A card the person
+ * can fold away again.
  */
 function OptionCard({
   id,
@@ -366,6 +342,7 @@ function OptionCard({
   isNew = false,
   open,
   onToggle,
+  onAddValue,
   children,
 }: {
   id: string
@@ -375,13 +352,15 @@ function OptionCard({
   isNew?: boolean
   open: boolean
   onToggle: () => void
+  /** Opens the card and goes to its "new value" box (not offered for a draft option). */
+  onAddValue?: () => void
   children: ReactNode
 }) {
   const bodyId = `option-card-${id}`
   const shown = values.filter(Boolean)
   return (
     <div
-      className={`border-border-strong min-w-0 border-b ${edge} ${
+      className={`border-border-strong flex min-w-0 flex-col gap-3.5 border-b p-5 ${edge} ${
         isNew ? 'bg-accent-tint/20' : 'bg-bg'
       }`}
     >
@@ -391,34 +370,43 @@ function OptionCard({
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={onToggle}
-        className="hover:bg-accent-tint/60 flex w-full cursor-pointer items-start gap-2.5 rounded-xl border-none bg-transparent px-4 py-3 text-left transition-colors"
+        className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
       >
         <ChevronDownIcon
           width={16}
           height={16}
-          className={`text-text-muted mt-0.5 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`text-text-muted shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
-        <span className="flex min-w-0 flex-1 flex-col gap-2">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-[0.9rem] font-semibold">{name}</span>
-            {isNew && <Badge tone="success">New</Badge>}
-            <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
-              {shown.length}
-            </span>
-          </span>
-          {!open && shown.length > 0 && (
-            <span className="flex flex-wrap gap-1.5">
-              {shown.map((value) => (
-                <span key={value} className={TAG_CHIP}>
-                  {value}
-                </span>
-              ))}
-            </span>
-          )}
+        <span className="min-w-0 truncate text-[0.95rem] font-semibold">{name}</span>
+        {isNew && <Badge tone="success">New</Badge>}
+        <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
+          {shown.length}
         </span>
       </button>
+      {!open && (shown.length > 0 || onAddValue) && (
+        <div className="flex flex-wrap gap-2">
+          {shown.map((value) => (
+            <span
+              key={value}
+              className="border-border-strong bg-bg inline-flex h-9 items-center rounded-full border px-4 text-[0.85rem] font-medium"
+            >
+              {value}
+            </span>
+          ))}
+          {onAddValue && (
+            <button
+              type="button"
+              aria-label={`Add a value to ${name}`}
+              onClick={onAddValue}
+              className="border-border-strong bg-bg hover:bg-accent-tint/60 inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[0.85rem] font-medium transition-colors"
+            >
+              Add value
+            </button>
+          )}
+        </div>
+      )}
       {open && (
-        <div id={bodyId} className="border-border-strong border-t p-4">
+        <div id={bodyId} className="border-border-strong border-t pt-4">
           {children}
         </div>
       )}
@@ -428,9 +416,11 @@ function OptionCard({
 
 /** The "Add another value" box under an option's values (a new value opens a new variant). */
 function AddValue({
+  id,
   name,
   onAdd,
 }: {
+  id: string
   name: string
   onAdd: (value: string) => string | null
 }) {
@@ -446,6 +436,7 @@ function AddValue({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <input
+          id={id}
           aria-label={`New value for ${name}`}
           autoComplete="off"
           value={text}

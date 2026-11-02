@@ -5,11 +5,14 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   LayersIcon,
+  PlusIcon,
   SlidersIcon,
   TrashIcon,
 } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import {
+  blankAddedOption,
+  LIMITS,
   optionCount,
   variantPreviewUrl,
   type VariantDraft,
@@ -34,7 +37,21 @@ const NO_IMAGE = 'none'
  * edited or removed (deleted in the store on save); and, once a value has been added, the new variants.
  */
 export function VariantsSection(props: SectionProps) {
-  const { draft } = props
+  const { draft, onChange } = props
+  // Asks the Variant options card to open (it opens when this turns true) for a moment.
+  const [openOptions, setOpenOptions] = useState(false)
+  const full = optionCount(draft) >= LIMITS.options
+  // Add variant adds a new variant name (Size, Colour…) with its values, in a card of its own.
+  const addVariant = () => {
+    const index = draft.addedOptions.length
+    onChange({ addedOptions: [...draft.addedOptions, blankAddedOption()] })
+    setOpenOptions(true)
+    setTimeout(() => {
+      setOpenOptions(false)
+      // The new card opens with the cursor in its name box.
+      document.getElementById(`added-option-${index}-name`)?.focus()
+    }, 0)
+  }
   const coming = [
     ...draft.addedOptions
       .filter((option) => option.name.trim())
@@ -52,14 +69,6 @@ export function VariantsSection(props: SectionProps) {
     Object.keys(props.errors).some((key) => prefixes.some((p) => key.startsWith(p)))
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex min-w-0 flex-col">
-        <h3 className="text-[1.05rem] font-semibold">Variants</h3>
-        <p className="text-text-muted text-[0.8rem]">
-          Options and their values, and the variants they make. Nothing is sent until you
-          save.
-        </p>
-      </div>
-
       {coming.length > 0 && (
         <div className="border-accent/50 bg-accent-tint/30 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
           <span className="text-[0.8rem] font-semibold">
@@ -73,14 +82,12 @@ export function VariantsSection(props: SectionProps) {
         </div>
       )}
 
-      {/* Three separate cards, all closed to begin with. */}
+      {/* The variant options (Size, Colour…) in columns, then the variants themselves. */}
       <DetailSection
-        title="Variants"
+        title="Variant options"
         icon={SlidersIcon}
         count={optionCount(draft)}
-        actions={<Summary>{optionNames(draft)}</Summary>}
-        defaultOpen={false}
-        forceOpen={problemIn('options', 'addedOptions')}
+        forceOpen={openOptions || problemIn('options', 'addedOptions')}
         flush
       >
         <VariantOptionsEditor {...props} />
@@ -90,9 +97,25 @@ export function VariantsSection(props: SectionProps) {
         title="Current variants"
         icon={LayersIcon}
         count={draft.variants.length}
-        actions={<Summary>{variantSummary(draft, props.product.currency)}</Summary>}
-        defaultOpen={false}
+        actions={
+          <>
+            <Summary>{variantSummary(draft.variants, props.product.currency)}</Summary>
+            <button
+              type="button"
+              onClick={addVariant}
+              disabled={full}
+              title={
+                full ? `A product can have at most ${LIMITS.options} options.` : undefined
+              }
+              className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-none px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+            >
+              <PlusIcon width={14} height={14} />
+              Add variant
+            </button>
+          </>
+        }
         forceOpen={problemIn('variants')}
+        flush
       >
         <ExistingVariants {...props} />
       </DetailSection>
@@ -138,6 +161,18 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
   // Removing marks the variant for deletion; it is only deleted in the store on Save.
   const remove = (index: number) => update(index, { removed: true })
 
+  // With two or more options the variants are grouped under the first one (Small, Medium…), like
+  // the Variants tab's own list: a group is an accordion row, closed to begin with.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set())
+  const toggleGroup = (name: string) =>
+    setOpenGroups((current) => {
+      const next = new Set(current)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  const groups = groupByFirstOption(product, draft.variants)
+
   const imageOptions = (hasImage: boolean) => [
     { value: '', label: 'Keep the current image' },
     ...draft.images.map((image, index) => ({
@@ -148,163 +183,287 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
     ...(hasImage ? [{ value: NO_IMAGE, label: 'No image' }] : []),
   ]
 
+  /** One variant's row (and, opened, its cards); `label` is what a group leaves to say ("Red"). */
+  const renderVariant = (variant: VariantDraft, index: number, label?: string) => {
+    const isOpen = open.has(variant.key) && !variant.removed
+    const hasError = Object.keys(errors).some((key) =>
+      key.startsWith(`variants.${index}.`),
+    )
+    const bodyId = `variant-body-${variant.key}`
+    const prefix = `variant-${variant.key}`
+
+    return (
+      <li
+        key={variant.key}
+        className={`border-b last:border-b-0 ${
+          hasError ? 'border-danger' : 'border-border-strong'
+        } ${variant.removed ? 'opacity-60' : ''} ${isOpen ? 'bg-accent-tint/30' : ''}`}
+      >
+        <div
+          className={`hover:bg-accent-tint/60 flex min-h-16 items-center gap-3 py-2 pr-5 transition-colors ${
+            label === undefined ? 'pl-5' : 'pl-12'
+          }`}
+        >
+          <button
+            type="button"
+            aria-expanded={isOpen}
+            aria-controls={bodyId}
+            disabled={variant.removed}
+            onClick={() => toggleOpen(variant.key)}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-none bg-transparent p-1 text-left disabled:cursor-default"
+          >
+            <ChevronDownIcon
+              width={16}
+              height={16}
+              className={`text-text-muted shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            />
+            <span className="border-border h-11 w-11 shrink-0 overflow-hidden border">
+              <ProductImage
+                src={variantPreviewUrl(
+                  variant,
+                  draft.images,
+                  product.variants.find((original) => original.id === variant.id)
+                    ?.image_url,
+                )}
+                alt=""
+                size="thumb"
+              />
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span
+                className={`truncate text-[0.9rem] font-semibold ${variant.removed ? 'line-through' : ''}`}
+              >
+                {label ?? variant.title}
+              </span>
+              {variant.sku.trim() && (
+                <span className="text-text-muted truncate text-[0.76rem]">
+                  {variant.sku.trim()}
+                </span>
+              )}
+            </span>
+          </button>
+          {!variant.removed && (
+            <>
+              <span className="text-text w-28 shrink-0 text-right text-[0.9rem] font-semibold">
+                {variant.price.trim() ? formatPrice(variant.price, product.currency) : ''}
+              </span>
+              <span className="text-text-muted hidden w-32 shrink-0 text-right text-[0.82rem] min-[480px]:inline">
+                {availableOf(variant)}
+              </span>
+            </>
+          )}
+          {variant.removed ? (
+            <>
+              <Badge tone="danger">Will be deleted</Badge>
+              <button
+                type="button"
+                className={TEXT_BUTTON}
+                onClick={() => update(index, { removed: false })}
+              >
+                Undo
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Remove variant ${variant.title}`}
+              onClick={() => remove(index)}
+              className={`${ICON_BUTTON} hover:text-danger`}
+            >
+              <TrashIcon width={16} height={16} />
+            </button>
+          )}
+        </div>
+
+        {isOpen && (
+          <div
+            id={bodyId}
+            className="border-border-strong bg-bg grid grid-cols-1 items-start gap-6 border-t p-5 lg:grid-cols-2"
+          >
+            {/* Price and shipping on the left, the picture on the right (stacked on a phone). */}
+            <div className="flex flex-col gap-5">
+              <VariantPriceCard
+                product={product}
+                variant={variant}
+                index={index}
+                errors={errors}
+                prefix={prefix}
+                update={(patch) => update(index, patch)}
+              />
+              <VariantShippingCard
+                product={product}
+                variant={variant}
+                index={index}
+                errors={errors}
+                prefix={prefix}
+                update={(patch) => update(index, patch)}
+              />
+            </div>
+            <VariantImageCard
+              previewSrc={variantPreviewUrl(
+                variant,
+                draft.images,
+                product.variants.find((original) => original.id === variant.id)
+                  ?.image_url,
+              )}
+              variant={variant}
+              index={index}
+              errors={errors}
+              prefix={prefix}
+              options={imageOptions(variant.hasImage)}
+              value={variant.removeImage ? NO_IMAGE : variant.imageId}
+              onChange={(choice) =>
+                update(
+                  index,
+                  choice === NO_IMAGE
+                    ? { removeImage: true, imageId: '', imageUrl: '' }
+                    : { removeImage: false, imageId: choice, imageUrl: '' },
+                )
+              }
+              onAddress={(imageUrl) =>
+                update(
+                  index,
+                  // An address replaces whatever picture was chosen from the list.
+                  imageUrl.trim()
+                    ? { imageUrl, imageId: '', removeImage: false }
+                    : { imageUrl },
+                )
+              }
+            />
+          </div>
+        )}
+      </li>
+    )
+  }
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col">
       {errors.variants && (
-        <p role="alert" className="text-danger text-[0.82rem] font-medium">
+        <p role="alert" className="text-danger px-5 py-3 text-[0.82rem] font-medium">
           {errors.variants}
         </p>
       )}
 
-      <ul aria-label="Variants" className="flex flex-col gap-2.5">
-        {draft.variants.map((variant, index) => {
-          const isOpen = open.has(variant.key) && !variant.removed
-          const hasError = Object.keys(errors).some((key) =>
-            key.startsWith(`variants.${index}.`),
-          )
-          const bodyId = `variant-body-${variant.key}`
-          const prefix = `variant-${variant.key}`
-
-          return (
-            <li
-              key={variant.key}
-              className={`rounded-xl border ${
-                hasError ? 'border-danger' : 'border-border'
-              } ${variant.removed ? 'opacity-60' : ''}`}
-            >
-              <div className="flex items-center gap-2 px-3 py-2">
-                <button
-                  type="button"
-                  aria-expanded={isOpen}
-                  aria-controls={bodyId}
-                  disabled={variant.removed}
-                  onClick={() => toggleOpen(variant.key)}
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-none bg-transparent p-1 text-left disabled:cursor-default"
+      <ul aria-label="Variants" className="flex flex-col">
+        {groups
+          ? groups.map((group) => {
+              const members = group.indexes.map((index) => draft.variants[index])
+              const hasError = group.indexes.some((index) =>
+                Object.keys(errors).some((key) => key.startsWith(`variants.${index}.`)),
+              )
+              // A problem inside a group opens it, so it is never hidden.
+              const isOpen = openGroups.has(group.name) || hasError
+              return (
+                <li
+                  key={group.name}
+                  className="border-border-strong border-b last:border-b-0"
                 >
-                  <ChevronDownIcon
-                    width={16}
-                    height={16}
-                    className={`text-text-muted shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                  />
-                  <span className="border-border h-10 w-10 shrink-0 overflow-hidden border">
-                    <ProductImage
-                      src={variantPreviewUrl(
-                        variant,
-                        draft.images,
-                        product.variants.find((original) => original.id === variant.id)
-                          ?.image_url,
-                      )}
-                      alt=""
-                      size="thumb"
-                    />
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span
-                      className={`truncate text-[0.9rem] font-semibold ${variant.removed ? 'line-through' : ''}`}
-                    >
-                      {variant.title}
-                    </span>
-                    {variant.sku.trim() && (
-                      <span className="text-text-muted truncate text-[0.76rem]">
-                        {variant.sku.trim()}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                {!variant.removed && (
-                  <>
-                    <span className="text-text w-24 shrink-0 text-right text-[0.85rem] font-medium">
-                      {variant.price.trim()
-                        ? formatPrice(variant.price, product.currency)
-                        : ''}
-                    </span>
-                    <span className="text-text-muted hidden w-24 shrink-0 text-right text-[0.82rem] min-[480px]:inline">
-                      {availableOf(variant)}
-                    </span>
-                  </>
-                )}
-                {variant.removed ? (
-                  <>
-                    <Badge tone="danger">Will be deleted</Badge>
-                    <button
-                      type="button"
-                      className={TEXT_BUTTON}
-                      onClick={() => update(index, { removed: false })}
-                    >
-                      Undo
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label={`Remove variant ${variant.title}`}
-                    onClick={() => remove(index)}
-                    className={`${ICON_BUTTON} hover:text-danger`}
-                  >
-                    <TrashIcon width={16} height={16} />
-                  </button>
-                )}
-              </div>
-
-              {isOpen && (
-                <div
-                  id={bodyId}
-                  className="border-border bg-surface/40 grid grid-cols-1 items-start gap-5 border-t p-4 lg:grid-cols-2"
-                >
-                  {/* The same sections as Add product: Price, Shipping, Image. */}
-                  <VariantPriceCard
-                    product={product}
-                    variant={variant}
-                    index={index}
-                    errors={errors}
-                    prefix={prefix}
-                    update={(patch) => update(index, patch)}
-                  />
-                  <VariantShippingCard
-                    product={product}
-                    variant={variant}
-                    index={index}
-                    errors={errors}
-                    prefix={prefix}
-                    update={(patch) => update(index, patch)}
-                  />
-                  <VariantImageCard
-                    previewSrc={variantPreviewUrl(
-                      variant,
+                  <GroupRow
+                    name={group.name}
+                    variants={members}
+                    open={isOpen}
+                    currency={product.currency}
+                    picture={variantPreviewUrl(
+                      members[0],
                       draft.images,
-                      product.variants.find((original) => original.id === variant.id)
+                      product.variants.find((original) => original.id === members[0].id)
                         ?.image_url,
                     )}
-                    variant={variant}
-                    index={index}
-                    errors={errors}
-                    prefix={prefix}
-                    options={imageOptions(variant.hasImage)}
-                    value={variant.removeImage ? NO_IMAGE : variant.imageId}
-                    onChange={(choice) =>
-                      update(
-                        index,
-                        choice === NO_IMAGE
-                          ? { removeImage: true, imageId: '', imageUrl: '' }
-                          : { removeImage: false, imageId: choice, imageUrl: '' },
-                      )
-                    }
-                    onAddress={(imageUrl) =>
-                      update(
-                        index,
-                        // An address replaces whatever picture was chosen from the list.
-                        imageUrl.trim()
-                          ? { imageUrl, imageId: '', removeImage: false }
-                          : { imageUrl },
-                      )
-                    }
+                    onToggle={() => toggleGroup(group.name)}
                   />
-                </div>
-              )}
-            </li>
-          )
-        })}
+                  {isOpen && (
+                    <ul aria-label={`${group.name} variants`} className="flex flex-col">
+                      {group.indexes.map((index) =>
+                        renderVariant(draft.variants[index], index, group.labels[index]),
+                      )}
+                    </ul>
+                  )}
+                </li>
+              )
+            })
+          : draft.variants.map((variant, index) => renderVariant(variant, index))}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * The variants grouped by the value of the product's first option — "Small" holds Small / Red and
+ * Small / Black — as the indexes into the draft's variants plus what each is called inside the
+ * group (its other values, "Red"). Null when there is nothing to group by: fewer than two options
+ * (or only the default variant), or a variant that does not say its value.
+ */
+function groupByFirstOption(
+  product: SectionProps['product'],
+  variants: VariantDraft[],
+): { name: string; indexes: number[]; labels: Record<number, string> }[] | null {
+  const options = product.has_only_default_variant
+    ? []
+    : [...product.options].sort((a, b) => a.position - b.position)
+  if (options.length < 2) return null
+  const first = options[0].name
+  const groups = new Map<string, { indexes: number[]; labels: Record<number, string> }>()
+  for (const [index, variant] of variants.entries()) {
+    const chosen = product.variants.find(
+      (original) => original.id === variant.id,
+    )?.selected_options
+    const value = chosen?.find((entry) => entry.name === first)?.value
+    if (!chosen || !value) return null
+    const group = groups.get(value) ?? { indexes: [], labels: {} }
+    group.indexes.push(index)
+    group.labels[index] =
+      chosen
+        .filter((entry) => entry.name !== first)
+        .map((entry) => entry.value)
+        .join(' / ') || variant.title
+    groups.set(value, group)
+  }
+  return [...groups].map(([name, group]) => ({ name, ...group }))
+}
+
+/** A group's accordion row: its picture, its name and variant count, price range and total stock. */
+function GroupRow({
+  name,
+  variants,
+  open,
+  currency,
+  picture,
+  onToggle,
+}: {
+  name: string
+  variants: VariantDraft[]
+  open: boolean
+  currency?: string | null
+  picture: string | null
+  onToggle: () => void
+}) {
+  const kept = variants.filter((variant) => !variant.removed)
+  const count = `${kept.length} ${kept.length === 1 ? 'variant' : 'variants'}`
+  return (
+    <div className="hover:bg-accent-tint/60 flex min-h-16 items-center gap-3 px-5 py-2 transition-colors">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${name}, ${count}`}
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-none bg-transparent p-1 text-left"
+      >
+        <ChevronDownIcon
+          width={16}
+          height={16}
+          className={`text-text-muted shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+        <span className="border-border h-11 w-11 shrink-0 overflow-hidden border">
+          <ProductImage src={picture} alt="" size="thumb" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-[0.9rem] font-semibold">{name}</span>
+          <span className="text-text-muted text-[0.76rem]">{count}</span>
+        </span>
+      </button>
+      <span className="text-text hidden min-w-0 truncate text-right text-[0.9rem] font-semibold sm:inline">
+        {variantSummary(kept, currency)}
+      </span>
     </div>
   )
 }
@@ -329,17 +488,9 @@ function Summary({ children }: { children: string }) {
   )
 }
 
-/** "Size · Color": the product's options, as they will be named. */
-function optionNames(draft: SectionProps['draft']): string {
-  return [
-    ...draft.options.map((option) => option.newName.trim() || option.name),
-    ...draft.addedOptions.map((option) => option.name.trim()).filter(Boolean),
-  ].join(' · ')
-}
-
 /** "£50.00 – £62.00 · 75 available": the price range and the stock of the variants that stay. */
-function variantSummary(draft: SectionProps['draft'], currency?: string | null): string {
-  const kept = draft.variants.filter((variant) => !variant.removed)
+function variantSummary(variants: VariantDraft[], currency?: string | null): string {
+  const kept = variants.filter((variant) => !variant.removed)
   const prices = kept
     .map((variant) => Number(variant.price))
     .filter((price) => Number.isFinite(price) && price >= 0)
