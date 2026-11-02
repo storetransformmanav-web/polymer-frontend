@@ -5,14 +5,11 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   LayersIcon,
-  PlusIcon,
   SlidersIcon,
   TrashIcon,
 } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import {
-  blankAddedOption,
-  LIMITS,
   optionCount,
   variantPreviewUrl,
   type VariantDraft,
@@ -37,20 +34,15 @@ const NO_IMAGE = 'none'
  * edited or removed (deleted in the store on save); and, once a value has been added, the new variants.
  */
 export function VariantsSection(props: SectionProps) {
-  const { draft, onChange } = props
-  // Asks the Variant options card to open (it opens when this turns true) for a moment.
+  const { draft } = props
+  // **Add variant** (beside Save, in the tab's header) adds a new option; the Variant options
+  // card opens for it when that happens (the "adjust state while rendering" pattern).
+  const added = draft.addedOptions.length
+  const [seenAdded, setSeenAdded] = useState(added)
   const [openOptions, setOpenOptions] = useState(false)
-  const full = optionCount(draft) >= LIMITS.options
-  // Add variant adds a new variant name (Size, Colour…) with its values, in a card of its own.
-  const addVariant = () => {
-    const index = draft.addedOptions.length
-    onChange({ addedOptions: [...draft.addedOptions, blankAddedOption()] })
-    setOpenOptions(true)
-    setTimeout(() => {
-      setOpenOptions(false)
-      // The new card opens with the cursor in its name box.
-      document.getElementById(`added-option-${index}-name`)?.focus()
-    }, 0)
+  if (added !== seenAdded) {
+    setSeenAdded(added)
+    setOpenOptions(added > seenAdded)
   }
   const coming = [
     ...draft.addedOptions
@@ -98,21 +90,7 @@ export function VariantsSection(props: SectionProps) {
         icon={LayersIcon}
         count={draft.variants.length}
         actions={
-          <>
-            <Summary>{variantSummary(draft.variants, props.product.currency)}</Summary>
-            <button
-              type="button"
-              onClick={addVariant}
-              disabled={full}
-              title={
-                full ? `A product can have at most ${LIMITS.options} options.` : undefined
-              }
-              className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-none px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
-            >
-              <PlusIcon width={14} height={14} />
-              Add variant
-            </button>
-          </>
+          <Summary>{variantSummary(draft.variants, props.product.currency)}</Summary>
         }
         forceOpen={problemIn('variants')}
         flush
@@ -363,12 +341,19 @@ function ExistingVariants({ product, draft, errors, onChange }: SectionProps) {
                     variants={members}
                     open={isOpen}
                     currency={product.currency}
-                    picture={variantPreviewUrl(
-                      members[0],
-                      draft.images,
-                      product.variants.find((original) => original.id === members[0].id)
-                        ?.image_url,
-                    )}
+                    // A group of several variants has no picture of its own (not the first
+                    // one's); a group of one shows that variant's.
+                    picture={
+                      members.length > 1
+                        ? null
+                        : variantPreviewUrl(
+                            members[0],
+                            draft.images,
+                            product.variants.find(
+                              (original) => original.id === members[0].id,
+                            )?.image_url,
+                          )
+                    }
                     onToggle={() => toggleGroup(group.name)}
                   />
                   {isOpen && (

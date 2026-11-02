@@ -972,15 +972,20 @@ describe('editing a section in place', () => {
       expect(screen.getByText('+ XL')).toBeInTheDocument()
     })
 
-    it('has Add variant in the Current variants header, and no other Add variant button', async () => {
+    it('has Add variant in the top bar, to the left of Save, and none in Current variants', async () => {
       withOptions()
       await editVariants()
 
+      const add = screen.getByRole('button', { name: 'Add variant' })
       expect(screen.getAllByRole('button', { name: 'Add variant' })).toHaveLength(1)
       const current = screen.getByRole('button', { name: /^Current variants/ })
-      expect(current.closest('section')).toContainElement(
-        screen.getByRole('button', { name: 'Add variant' }),
-      )
+      expect(current.closest('section')).not.toContainElement(add)
+      // Same bar as the ✓ Save / ✕ Discard icons, and before them.
+      const save = saveButton('variants')
+      expect(add.parentElement).toContainElement(save)
+      expect(
+        add.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
       expect(screen.queryByText('Add another option')).not.toBeInTheDocument()
       expect(screen.queryByText(/for example Material or Style/)).not.toBeInTheDocument()
     })

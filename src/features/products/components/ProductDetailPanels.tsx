@@ -70,6 +70,7 @@ import {
 } from './edit/BasicsSection.tsx'
 import { AddCollectionDialog } from './AddCollectionDialog.tsx'
 import { CollectionAdder } from './CollectionAdder.tsx'
+import { AddVariantButton } from './edit/AddVariantButton.tsx'
 import { DescriptionSectionsSection as DescriptionSectionsEditor } from './edit/DescriptionSectionsSection.tsx'
 import {
   EditableCard,
@@ -1482,6 +1483,9 @@ function VariantsHeader({
         </>
       )}
       <div className="ml-auto flex items-center gap-1.5">
+        {edit.editing && edit.draft && (
+          <AddVariantButton draft={edit.draft} onChange={edit.change} />
+        )}
         <SectionEditControls edit={edit} what="variants" />
       </div>
     </div>
