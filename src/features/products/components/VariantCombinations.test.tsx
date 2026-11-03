@@ -112,7 +112,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('the Variants tab', () => {
-  it('shows each option with its values, and no pencil to edit them', () => {
+  it('shows each option plainly — its name and a pill per value — with no card and no pencil', () => {
     renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
     const options = within(screen.getByRole('region', { name: 'Variant options' }))
@@ -201,24 +201,22 @@ describe('the Variants tab', () => {
     )
   })
 
-  it('Edit opens that variant alone in a panel, and sends only its changes', async () => {
+  it('Edit opens the same spreadsheet as Bulk edit, with just that variant, and sends only its changes', async () => {
     const user = userEvent.setup()
     renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
     await user.click(table().getByRole('button', { name: 'Edit Small / Black' }))
-    const panel = within(
-      screen.getByRole('complementary', { name: 'Edit variant Small / Black' }),
-    )
-    expect(panel.getByRole('tab', { name: 'General' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(panel.getByRole('button', { name: 'Update variant' })).toBeDisabled()
+    const bulk = within(screen.getByRole('region', { name: 'Bulk edit variants' }))
+    expect(bulk.getByText('Editing 1 variant')).toBeInTheDocument()
+    // One row only, and so no "All variants" row.
+    expect(bulk.queryByLabelText('Price for Small / Red')).toBeNull()
+    expect(bulk.queryByLabelText('Price for all variants')).toBeNull()
+    expect(bulk.getByRole('button', { name: 'Save the variants' })).toBeDisabled()
 
-    const price = panel.getByLabelText(/^Price \(/)
+    const price = bulk.getByLabelText('Price for Small / Black')
     await user.clear(price)
     await user.type(price, '180')
-    await user.click(panel.getByRole('button', { name: 'Update variant' }))
+    await user.click(bulk.getByRole('button', { name: 'Save the variants' }))
     await confirmUpdate(user)
 
     await waitFor(() =>
@@ -229,23 +227,21 @@ describe('the Variants tab', () => {
       ),
     )
     await waitFor(() =>
-      expect(screen.queryByRole('complementary', { name: /^Edit variant/ })).toBeNull(),
+      expect(screen.queryByRole('region', { name: 'Bulk edit variants' })).toBeNull(),
     )
   })
 
-  it('Cancel in the panel closes it, asking first when something was changed', async () => {
+  it('Cancel in the editor asks first when something was changed', async () => {
     const user = userEvent.setup()
     renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
     await user.click(table().getByRole('button', { name: 'Edit Small / Red' }))
-    const panel = within(
-      screen.getByRole('complementary', { name: 'Edit variant Small / Red' }),
-    )
-    await user.type(panel.getByLabelText(/^Price \(/), '9')
-    await user.click(panel.getByRole('button', { name: 'Cancel' }))
+    const bulk = within(screen.getByRole('region', { name: 'Bulk edit variants' }))
+    await user.type(bulk.getByLabelText('Price for Small / Red'), '9')
+    await user.click(bulk.getByRole('button', { name: 'Cancel bulk editing' }))
     await user.click(screen.getByRole('button', { name: 'Yes, cancel' }))
 
-    expect(screen.queryByRole('complementary', { name: /^Edit variant/ })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Bulk edit variants' })).toBeNull()
     expect(update).not.toHaveBeenCalled()
   })
 

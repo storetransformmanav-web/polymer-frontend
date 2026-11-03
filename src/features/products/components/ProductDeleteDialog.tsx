@@ -1,29 +1,19 @@
-import { useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
-import { SpinnerIcon } from '../../../components/ui/icons.tsx'
+import { SpinnerIcon, TrashIcon } from '../../../components/ui/icons.tsx'
 import type {
   ProductDeleteMode,
   ProductListItem,
   ProductWriteResult,
 } from '../../../lib/api/endpoints.ts'
 import { useDeleteProduct } from '../hooks/useDeleteProduct.ts'
+import { ProductImage } from './ProductImage.tsx'
 
 const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 
-const CHOICES: { mode: ProductDeleteMode; label: string; hint: string }[] = [
-  {
-    mode: 'archive',
-    label: 'Archive (recommended)',
-    hint: 'Removed from your store, but kept here as Archived. Set it back to Active to bring it back.',
-  },
-  {
-    mode: 'delete',
-    label: 'Delete permanently',
-    hint: 'Deleted from Shopify for good. This can\u2019t be undone.',
-  },
-]
+/** The only thing this window does: delete the product for good (`mode=delete`). */
+const MODE: ProductDeleteMode = 'delete'
 
 interface ProductDeleteDialogProps {
   product: ProductListItem
@@ -33,9 +23,11 @@ interface ProductDeleteDialogProps {
 }
 
 /**
- * "Delete this product?" — the confirmation behind a row's trash button, with the API's two
- * modes: **archive** (the default, reversible) or **delete** (permanent in Shopify). Cancel is
- * focused (the safe choice); nothing is sent until the red button is clicked.
+ * "Delete “Hippo Bag”?" — the confirmation behind a row's trash button, laid out like the update
+ * question (`ConfirmUpdateDialog`): a round icon and the product's name, "Are you sure you want to
+ * delete this product?", a line saying it is also deleted in Shopify and can't be undone, then a
+ * card with the product being deleted. There is one choice — **Yes, delete** (red), sent as
+ * `mode=delete`; Cancel is focused (the safe choice) and nothing is sent until the red button.
  */
 export function ProductDeleteDialog({
   product,
@@ -43,19 +35,25 @@ export function ProductDeleteDialog({
   onDone,
 }: ProductDeleteDialogProps) {
   const { remove, isDeleting, error } = useDeleteProduct()
-  const [mode, setMode] = useState<ProductDeleteMode>('archive')
-  const permanent = mode === 'delete'
 
   async function confirm() {
-    const result = await remove({ id: product.id, shop: product.shop?.key, mode })
-    if (result) onDone(result, mode)
+    const result = await remove({ id: product.id, shop: product.shop?.key, mode: MODE })
+    if (result) onDone(result, MODE)
   }
 
   return (
     <Dialog
-      title={`Delete \u201c${product.title}\u201d?`}
+      title={`Delete “${product.title}”?`}
       onClose={onClose}
       closeDisabled={isDeleting}
+      icon={
+        <span
+          aria-hidden="true"
+          className="bg-danger-bg text-danger flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+        >
+          <TrashIcon width={18} height={18} />
+        </span>
+      }
       footer={
         <>
           <button
@@ -71,49 +69,37 @@ export function ProductDeleteDialog({
             type="button"
             disabled={isDeleting}
             onClick={() => void confirm()}
-            className={`${BUTTON} border-transparent hover:opacity-90 ${
-              permanent ? 'bg-danger text-bg' : 'bg-accent text-accent-contrast'
-            }`}
+            className={`${BUTTON} bg-danger text-bg border-transparent hover:opacity-90`}
           >
             {isDeleting && (
               <SpinnerIcon width={14} height={14} className="animate-spin" />
             )}
-            {permanent ? 'Delete permanently' : 'Archive product'}
+            {isDeleting ? 'Deleting…' : 'Yes, delete'}
           </button>
         </>
       }
     >
-      <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
-        <legend className="sr-only">What to do with this product</legend>
-        {CHOICES.map((choice) => (
-          <label
-            key={choice.mode}
-            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-              mode === choice.mode
-                ? choice.mode === 'delete'
-                  ? 'border-danger bg-danger-bg'
-                  : 'border-accent bg-accent-tint/40'
-                : 'border-border hover:border-accent'
-            }`}
-          >
-            <input
-              type="radio"
-              name="delete-mode"
-              value={choice.mode}
-              checked={mode === choice.mode}
-              disabled={isDeleting}
-              onChange={() => setMode(choice.mode)}
-              className="accent-accent mt-1 h-4 w-4 shrink-0 cursor-pointer"
-            />
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-text text-[0.9rem] font-semibold">
-                {choice.label}
-              </span>
-              <span className="text-text-muted text-[0.8rem]">{choice.hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <div className="flex flex-col gap-0.5">
+        <p className="text-text m-0 text-[0.95rem] font-semibold">
+          Are you sure you want to delete this product?
+        </p>
+        <p className="m-0">
+          It will also be deleted in Shopify. This can&rsquo;t be undone.
+        </p>
+      </div>
+      <div className="border-border-strong border-l-danger bg-danger-bg/40 flex min-w-0 items-center gap-3 border border-l-4 p-3">
+        <span className="border-border h-10 w-10 shrink-0 overflow-hidden border">
+          <ProductImage src={product.image_url ?? null} alt="" size="thumb" />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-text text-[0.9rem] font-semibold break-words">
+            {product.title}
+          </span>
+          {product.shop?.name && (
+            <span className="text-text-muted text-[0.78rem]">{product.shop.name}</span>
+          )}
+        </span>
+      </div>
       {error && <FormMessage tone="error">{error}</FormMessage>}
     </Dialog>
   )

@@ -12,7 +12,6 @@ import type { ProductDetail, ProductVariant } from '../../../lib/api/endpoints.t
 import type { SavedHandler } from '../hooks/useSectionEdit.ts'
 import { productStock, variantStock } from '../utils/stock.ts'
 import { VariantBulkEdit } from './edit/VariantBulkEdit.tsx'
-import { VariantEditPanel } from './edit/VariantEditPanel.tsx'
 import { StockCell, VariantFieldCell } from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
 
@@ -28,8 +27,8 @@ const TOOL_BUTTON =
 const num = (value: number) => value.toLocaleString('en-GB')
 
 /**
- * The product's options as the store admin shows them: one box per option (Size · 3) with a pill
- * per value. Read-only — **Edit variants** at the top of the tab changes them.
+ * The product's options, plainly: for each one a tag with its name (Size) and a pill per value.
+ * No card, no table. Read-only — **Edit variants** at the top of the tab changes them.
  */
 export function VariantOptionsCard({ product }: { product: ProductDetail }) {
   const options = product.has_only_default_variant
@@ -37,40 +36,24 @@ export function VariantOptionsCard({ product }: { product: ProductDetail }) {
     : [...product.options].sort((a, b) => a.position - b.position)
   if (options.length === 0) return null
   return (
-    <section aria-label="Variant options" className={`${CARD} flex flex-col gap-3 p-4`}>
-      <h3 className="text-[0.95rem] font-semibold">Variant options</h3>
-      <div
-        className={`grid grid-cols-1 gap-3 ${options.length > 1 ? 'md:grid-cols-2' : ''} ${
-          options.length > 2 ? 'xl:grid-cols-3' : ''
-        }`}
-      >
-        {options.map((option) => (
-          <div
-            key={option.name}
-            className="border-border flex flex-col gap-2 rounded-lg border px-3 py-2.5"
-          >
-            <p className="flex items-center gap-2 text-[0.85rem] font-semibold">
-              {option.name}
-              <span className="bg-accent-tint text-text-muted rounded-full px-2 text-[0.72rem]">
-                {option.values.length}
-              </span>
-            </p>
-            <ul
-              aria-label={`Values of ${option.name}`}
-              className="flex flex-wrap gap-1.5"
-            >
-              {option.values.map((value) => (
-                <li
-                  key={value}
-                  className="border-border-strong bg-bg rounded-full border px-3 py-0.5 text-[0.8rem] font-medium"
-                >
-                  {value}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+    <section aria-label="Variant options" className="flex flex-col gap-3 px-1">
+      {options.map((option) => (
+        <div key={option.name} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="bg-accent-tint border-border-strong rounded-md border px-2.5 py-0.5 text-[0.82rem] font-semibold">
+            {option.name}
+          </span>
+          <ul aria-label={`Values of ${option.name}`} className="flex flex-wrap gap-1.5">
+            {option.values.map((value) => (
+              <li
+                key={value}
+                className="border-border-strong bg-bg rounded-full border px-3 py-0.5 text-[0.8rem] font-medium"
+              >
+                {value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   )
 }
@@ -81,9 +64,9 @@ export function VariantOptionsCard({ product }: { product: ProductDetail }) {
  * picture and name, SKU, price, compare-at price, cost, inventory, an In stock / Out of stock pill
  * and an **Edit** button. **Every value is changed by double-clicking it** (no pencils): SKU,
  * price, compare-at, cost and — for a variant kept at one location — the inventory; each asks
- * "Are you sure?" and sends just that field. **Edit** opens that variant alone in a panel beside
- * the table; **Bulk edit** turns the ticked variants (or all shown) into a spreadsheet like the
- * products' bulk editor.
+ * "Are you sure?" and sends just that field. **Edit** and **Bulk edit** both open the same
+ * spreadsheet as the products' bulk editor — **Edit** with that one variant, **Bulk edit** with the
+ * ticked variants (or all shown).
  */
 export function VariantCombinations({
   product,
@@ -95,7 +78,6 @@ export function VariantCombinations({
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
-  const [editing, setEditing] = useState<string | null>(null)
   const [bulk, setBulk] = useState<string[] | null>(null)
 
   if (product.variants.length === 0) {
@@ -137,11 +119,7 @@ export function VariantCombinations({
   }
 
   return (
-    <div
-      className={`grid grid-cols-1 items-start gap-4 ${
-        editing ? '2xl:grid-cols-[minmax(0,1fr)_30rem]' : ''
-      }`}
-    >
+    <div className="grid grid-cols-1 items-start gap-4">
       <section
         aria-label="Variant combinations"
         className={`${CARD} flex min-w-0 flex-col overflow-hidden`}
@@ -183,10 +161,9 @@ export function VariantCombinations({
             type="button"
             className={TOOL_BUTTON}
             disabled={shown.length === 0}
-            onClick={() => {
-              setEditing(null)
+            onClick={() =>
               setBulk((ticked.length > 0 ? ticked : shown).map((variant) => variant.id))
-            }}
+            }
           >
             Bulk edit{ticked.length > 0 ? ` (${ticked.length})` : ''}
           </button>
@@ -235,9 +212,8 @@ export function VariantCombinations({
                     product={product}
                     variant={variant}
                     ticked={selected.has(variant.id)}
-                    open={editing === variant.id}
                     onTick={() => toggle(variant.id)}
-                    onEdit={() => setEditing(variant.id)}
+                    onEdit={() => setBulk([variant.id])}
                     onSaved={onSaved}
                   />
                 ))
@@ -252,16 +228,6 @@ export function VariantCombinations({
           </span>
         </p>
       </section>
-
-      {editing && (
-        <VariantEditPanel
-          key={editing}
-          product={product}
-          variantId={editing}
-          onSaved={onSaved}
-          onClose={() => setEditing(null)}
-        />
-      )}
     </div>
   )
 }
@@ -270,7 +236,6 @@ function CombinationRow({
   product,
   variant,
   ticked,
-  open,
   onTick,
   onEdit,
   onSaved,
@@ -278,7 +243,6 @@ function CombinationRow({
   product: ProductDetail
   variant: ProductVariant
   ticked: boolean
-  open: boolean
   onTick: () => void
   onEdit: () => void
   onSaved?: SavedHandler
@@ -292,7 +256,7 @@ function CombinationRow({
   return (
     <tr
       className={`border-border hover:bg-accent-tint/60 transition-colors ${
-        ticked || open ? 'bg-accent-tint/40' : ''
+        ticked ? 'bg-accent-tint/40' : ''
       }`}
     >
       <td className={TD}>

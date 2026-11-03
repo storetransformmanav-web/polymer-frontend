@@ -918,14 +918,19 @@ describe('editing a section in place', () => {
     it('renames an option and one of its values', async () => {
       withOptions()
       const user = await editVariants()
-      await user.click(screen.getByRole('button', { name: 'Option Size' }))
 
       const name = screen.getByLabelText(/^Variant name/)
       await user.clear(name)
       await user.type(name, 'Pack Size')
+      // Click the value and it becomes a box.
+      await user.click(
+        within(screen.getByRole('region', { name: 'Options' })).getByRole('button', {
+          name: 'M',
+        }),
+      )
       const value = screen.getByLabelText('Value “M” of Size')
       await user.clear(value)
-      await user.type(value, 'Medium')
+      await user.type(value, 'Medium{Enter}')
       await user.click(saveButton('variants'))
       await confirmUpdate(user)
 
@@ -1082,7 +1087,6 @@ describe('editing a section in place', () => {
     it('a new variant picks each option from a dropdown of the values it has', async () => {
       withOptions()
       const user = await editVariants()
-      await user.click(screen.getByRole('button', { name: 'Add a value to Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
@@ -1103,7 +1107,6 @@ describe('editing a section in place', () => {
     it('adds a value to an existing option: Add value opens a new variant with it', async () => {
       withOptions()
       const user = await editVariants()
-      await user.click(screen.getByRole('button', { name: 'Option Size' }))
 
       await user.type(screen.getByLabelText('New value for Size'), 'm')
       await user.click(screen.getByRole('button', { name: 'Add value to Size' }))
@@ -1115,9 +1118,12 @@ describe('editing a section in place', () => {
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       expect(created.getByLabelText('Size')).toHaveValue('Large')
-      // It sits beside Small/Medium in the option's own boxes, and renaming it renames the variant.
-      const values = within(screen.getByRole('list', { name: 'Size values' }))
-      expect(values.getByLabelText('New value of Size')).toHaveValue('Large')
+      // It sits beside the option's other values as a pill (with its own ✕).
+      const options = within(screen.getByRole('region', { name: 'Options' }))
+      expect(options.getByText('Large')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Remove new value Large' }),
+      ).toBeInTheDocument()
       expect(box).toHaveValue('')
       // Straight to the price, which the new variant needs.
       expect(created.getByLabelText(/^Price/)).toHaveFocus()
@@ -1146,44 +1152,47 @@ describe('editing a section in place', () => {
       )
     })
 
-    it('shows each option as a column with a pill per value, and opens for editing', async () => {
+    it('shows each option plainly: its name, a box for it, a pill per value and a box for the next one', async () => {
       withOptions()
       const user = await editVariants()
 
       const options = within(screen.getByRole('region', { name: 'Options' }))
-      const card = options.getByRole('button', { name: 'Option Size' })
-      expect(card).toHaveAttribute('aria-expanded', 'false')
-      // Closed: a pill per value (and an Add value pill), no fields.
+      // No card to open: the name box, the pills and the add box are all there.
+      expect(options.getByLabelText(/^Variant name/)).toHaveValue('Size')
       expect(options.getByText('M')).toBeInTheDocument()
-      expect(screen.queryByLabelText(/^Variant name/)).not.toBeInTheDocument()
+      const box = options.getByLabelText('New value for Size')
+      expect(box).toHaveAttribute('placeholder', 'Add a size here')
+      expect(options.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
 
-      // The Add value pill opens the card with the cursor in its new-value box.
-      await user.click(options.getByRole('button', { name: 'Add a value to Size' }))
-      expect(card).toHaveAttribute('aria-expanded', 'true')
-      const box = screen.getByLabelText('New value for Size')
-      expect(box).toHaveFocus()
-      expect(screen.getByLabelText(/^Variant name/)).toBeInTheDocument()
-
-      // A value added while it is open shows with the others, and Done closes the card again.
+      // Enter adds the value as a pill, and the box stays for the next one.
       await user.type(box, 'Large{Enter}')
-      await user.click(screen.getByRole('button', { name: 'Done' }))
-      expect(card).toHaveAttribute('aria-expanded', 'false')
       expect(options.getByText('Large')).toBeInTheDocument()
+      expect(box).toHaveValue('')
 
-      // Removing the new value with its bin takes the variant it opened away too.
-      await user.click(card)
+      // Clicking a value turns it into a box: Enter renames it, Escape keeps the old name.
+      await user.click(options.getByRole('button', { name: 'M' }))
+      const rename = screen.getByLabelText('Value \u201cM\u201d of Size')
+      await user.clear(rename)
+      await user.type(rename, 'Medium{Enter}')
+      expect(options.getByText('Medium')).toBeInTheDocument()
+      await user.click(options.getByRole('button', { name: 'Medium' }))
+      await user.keyboard('xx{Escape}')
+      expect(options.getByText('Medium')).toBeInTheDocument()
+
+      // Removing the new value with its \u2715 takes the variant it opened away too.
       await user.click(screen.getByRole('button', { name: 'Remove new value Large' }))
       expect(screen.queryByRole('list', { name: 'New variants' })).not.toBeInTheDocument()
     })
 
-    it('is split into Variant options, Current variants and New variants cards', async () => {
+    it('has the plain options, then Current variants and New variants cards', async () => {
       withOptions()
       const user = await editVariants()
 
-      expect(screen.getByRole('button', { name: /^Variant options/ })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
+      // The options are not a card: no toggle, just the region.
+      expect(screen.getByRole('region', { name: 'Options' })).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /^Variant options/ }),
+      ).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: /^Current variants/ })).toHaveAttribute(
         'aria-expanded',
         'true',
@@ -1193,7 +1202,6 @@ describe('editing a section in place', () => {
       ).not.toBeInTheDocument()
 
       // A new variant (from a new value) opens its own card so it is never hidden.
-      await user.click(screen.getByRole('button', { name: 'Add a value to Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       expect(screen.getByRole('button', { name: /^New variants/ })).toHaveAttribute(
         'aria-expanded',
@@ -1232,7 +1240,6 @@ describe('editing a section in place', () => {
         screen.queryByRole('button', { name: 'Discard changes' }),
       ).not.toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: 'Add a value to Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       await user.type(created.getByLabelText(/^Price/), '9.99')
@@ -1301,26 +1308,16 @@ describe('editing a section in place', () => {
 
       const name = screen.getByLabelText('New variant name')
       await waitFor(() => expect(name).toHaveFocus())
-      expect(screen.getByRole('button', { name: /^Variant options/ })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
-      const card = screen.getByRole('button', { name: 'Option New option' })
-      expect(card).toHaveAttribute('aria-expanded', 'true')
-      expect(card).toHaveTextContent('New')
+      // The new option is a plain block of its own, marked New.
+      const options = within(screen.getByRole('region', { name: 'Options' }))
+      expect(options.getByText('New')).toBeInTheDocument()
 
       await user.type(name, 'Colour')
       expect(screen.getByText('+ Colour (new option)')).toBeInTheDocument()
       await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
 
-      // Done folds it to its name and values, a click opens it again.
-      await user.click(screen.getByRole('button', { name: 'Done' }))
-      const folded = screen.getByRole('button', { name: 'Option Colour' })
-      expect(folded).toHaveAttribute('aria-expanded', 'false')
-      expect(
-        within(screen.getByRole('region', { name: 'Options' })).getByText('Clear'),
-      ).toBeInTheDocument()
-      await user.click(folded)
+      // Its values stay in the box as pills, and the name is still in its box.
+      expect(options.getByText('Clear')).toBeInTheDocument()
       expect(screen.getByLabelText('New variant name')).toHaveValue('Colour')
 
       // Delete takes the draft option away again.
@@ -1336,7 +1333,6 @@ describe('editing a section in place', () => {
       await user.type(screen.getByLabelText('New variant name'), 'Colour')
       await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
       // A variant for the new size, with a colour, is made from the size's Add value.
-      await user.click(screen.getByRole('button', { name: 'Option Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'L{Enter}')
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
@@ -1382,7 +1378,6 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.click(screen.getByRole('button', { name: 'Option Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       // The price box is where the person is taken; leave it empty.
       await user.click(saveButton('variants'))
@@ -1396,12 +1391,16 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.click(screen.getByRole('button', { name: 'Option Size' }))
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       // Renaming the new value to one the product already has is refused on save.
+      await user.click(
+        within(screen.getByRole('region', { name: 'Options' })).getByRole('button', {
+          name: 'XL',
+        }),
+      )
       const value = screen.getByLabelText('New value of Size')
       await user.clear(value)
-      await user.type(value, 'm')
+      await user.type(value, 'm{Enter}')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       await user.type(created.getByLabelText(/^Price/), '9.99')
       await user.click(saveButton('variants'))

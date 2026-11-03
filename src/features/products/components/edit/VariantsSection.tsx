@@ -5,15 +5,10 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   LayersIcon,
-  SlidersIcon,
   TrashIcon,
 } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
-import {
-  optionCount,
-  variantPreviewUrl,
-  type VariantDraft,
-} from '../../utils/editDraft.ts'
+import { variantPreviewUrl, type VariantDraft } from '../../utils/editDraft.ts'
 import { ProductImage } from '../ProductImage.tsx'
 import { NewVariantsEditor } from './NewVariantsEditor.tsx'
 import { VariantOptionsEditor } from './VariantOptionsEditor.tsx'
@@ -35,15 +30,6 @@ const NO_IMAGE = 'none'
  */
 export function VariantsSection(props: SectionProps) {
   const { draft } = props
-  // **Add variant** (beside Save, in the tab's header) adds a new option; the Variant options
-  // card opens for it when that happens (the "adjust state while rendering" pattern).
-  const added = draft.addedOptions.length
-  const [seenAdded, setSeenAdded] = useState(added)
-  const [openOptions, setOpenOptions] = useState(false)
-  if (added !== seenAdded) {
-    setSeenAdded(added)
-    setOpenOptions(added > seenAdded)
-  }
   const coming = [
     ...draft.addedOptions
       .filter((option) => option.name.trim())
@@ -76,16 +62,8 @@ export function VariantsSection(props: SectionProps) {
         </div>
       )}
 
-      {/* The variant options (Size, Colour…) in columns, then the variants themselves. */}
-      <DetailSection
-        title="Variant options"
-        icon={SlidersIcon}
-        count={optionCount(draft)}
-        forceOpen={openOptions || problemIn('options', 'addedOptions')}
-        flush
-      >
-        <VariantOptionsEditor {...props} />
-      </DetailSection>
+      {/* The variant options (Size, Colour…) laid out plainly — no card — then the variants. */}
+      <VariantOptionsEditor {...props} />
 
       <DetailSection
         title="Current variants"
