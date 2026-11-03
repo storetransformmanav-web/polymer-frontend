@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
-import { PlusIcon, RefreshIcon } from '../../../components/ui/icons.tsx'
+import { LockIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icons.tsx'
+import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { LockConfirmDialog } from '../components/LockConfirmDialog.tsx'
 import { LockCreateView } from '../components/LockCreateView.tsx'
@@ -12,6 +13,7 @@ import { LocksList } from '../components/LocksList.tsx'
 import { LocksToolbar } from '../components/LocksToolbar.tsx'
 import { useLockShop } from '../hooks/useLockShop.ts'
 import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
+import { useLockTabs } from '../hooks/useLockTabs.ts'
 import { useSetupStore } from '../hooks/useLockWrites.ts'
 import { lockPath } from '../utils/format.ts'
 
@@ -49,6 +51,14 @@ export function LocksPage() {
     ? (locks.items.find((item) => item.handle === activeHandle) ?? null)
     : null
   const details = useLockDetails(shop, activeHandle, activeRow)
+  const lockTabs = useLockTabs()
+  const { openTab, closeTab } = lockTabs
+  const openedTitle = details.lock?.title ?? null
+
+  // An opened lock gets a tab (also one opened from a bare address), named once it is known.
+  useEffect(() => {
+    if (activeHandle) openTab({ id: activeHandle, title: openedTitle })
+  }, [activeHandle, openedTitle, openTab])
 
   const [notice, setNotice] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -72,6 +82,37 @@ export function LocksPage() {
     if (dirty) setConfirmingClose(true)
     else closeForm()
   }, [dirty, closeForm])
+
+  /** ✕ on a tab: closing the lock on screen moves to its neighbour, else to the list. */
+  function closeLockTab(id: string) {
+    const index = lockTabs.tabs.findIndex((tab) => tab.id === id)
+    const neighbour = lockTabs.tabs[index + 1] ?? lockTabs.tabs[index - 1]
+    closeTab(id)
+    if (id === activeHandle) navigate(neighbour ? lockPath(neighbour.id) : LIST_PATH)
+  }
+
+  const tabsBar = (
+    <OpenTabsBar
+      tabs={lockTabs.tabs.map((tab) => ({
+        id: tab.id,
+        label: tab.title ?? tab.id,
+        title: `/products/${tab.id}`,
+      }))}
+      activeId={activeHandle}
+      navLabel="Open locks"
+      listLabel="All Locks"
+      kind="Lock"
+      historyLabel="Opened locks"
+      icon={LockIcon}
+      onShowList={() => navigate(LIST_PATH)}
+      onSelect={(id) => navigate(lockPath(id))}
+      onClose={closeLockTab}
+      onClear={() => {
+        lockTabs.clearTabs()
+        if (activeHandle) navigate(LIST_PATH)
+      }}
+    />
+  )
 
   const addButton = (
     <button
@@ -117,6 +158,7 @@ export function LocksPage() {
   if (activeHandle) {
     return (
       <div className={`flex flex-col gap-4 ${SCROLL_VIEW}`}>
+        {tabsBar}
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
         <LockDetailsView
           key={activeHandle}
@@ -135,6 +177,7 @@ export function LocksPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      {tabsBar}
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       <LocksToolbar

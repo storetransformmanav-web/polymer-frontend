@@ -41,7 +41,13 @@ export function LockCard({
   )
 }
 
-const SIZES = { sm: 'h-8 w-8', lg: 'h-14 w-14' } as const
+const SIZES = {
+  sm: 'h-8 w-8',
+  lg: 'h-14 w-14',
+  // The lock page's big picture: a square, the whole product visible (as a product page's).
+  xl: 'aspect-square w-full rounded-xl',
+} as const
+const ICON = { sm: 16, lg: 22, xl: 56 } as const
 
 /** A product's picture (https/http only, no referrer) or a plain tile when it has none. */
 export function LockImage({
@@ -59,14 +65,14 @@ export function LockImage({
       alt=""
       loading="lazy"
       referrerPolicy="no-referrer"
-      className={`${box} object-cover`}
+      className={`${box} ${size === 'xl' ? 'object-contain' : 'object-cover'}`}
     />
   ) : (
     <span
       aria-hidden="true"
       className={`${box} text-text-muted inline-flex items-center justify-center`}
     >
-      <ImageIcon width={size === 'lg' ? 22 : 16} height={size === 'lg' ? 22 : 16} />
+      <ImageIcon width={ICON[size]} height={ICON[size]} />
     </span>
   )
 }

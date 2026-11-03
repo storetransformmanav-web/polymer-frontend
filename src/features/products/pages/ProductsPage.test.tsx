@@ -1073,11 +1073,24 @@ describe('ProductsPage details', () => {
       const second = screen.getByRole('button', { name: /^Product Information/ })
       expect(first).toHaveAttribute('aria-expanded', 'false')
       expect(second).toHaveAttribute('aria-expanded', 'false')
-      // No card header of its own: the two rows are all there is (the product's own
-      // description is not shown either).
+      // No card header of its own around the rows; the product's own description is a
+      // separate "Shopify description" card above them, closed to begin with.
       expect(screen.queryByRole('button', { name: /^Description/ })).toBeNull()
       expect(screen.queryByRole('heading', { name: 'Description' })).toBeNull()
-      expect(screen.queryByText('The plain store description')).not.toBeInTheDocument()
+      const shopify = screen.getByRole('button', { name: /^Shopify description/ })
+      expect(shopify).toHaveAttribute('aria-expanded', 'false')
+      // Closed, its text is folded away (inert) until the card is opened.
+      expect(
+        screen.getByText('The plain store description').closest('[inert]'),
+      ).not.toBeNull()
+      await user.click(shopify)
+      expect(shopify).toHaveAttribute('aria-expanded', 'true')
+      expect(
+        screen.getByText('The plain store description').closest('[inert]'),
+      ).toBeNull()
+      // No explanatory note sits above the text any more.
+      expect(screen.queryByText(/Google Shopping/)).toBeNull()
+      await user.click(shopify)
       expect(screen.queryByRole('button', { name: /^Product Details/ })).toBeNull()
       expect(screen.queryByText(/Hippo Microwave/)).not.toBeInTheDocument()
 

@@ -895,6 +895,66 @@ describe('media and variant pictures, as in the new shared create request', () =
   })
 })
 
+describe('the description & information sections', () => {
+  const section = (title: string, content = '<p>Text</p>') => ({
+    key: `s-${title}`,
+    title,
+    content,
+    source: null,
+  })
+
+  it('go out as the apd metafield, in order, one section open at a time', () => {
+    const body = buildCreateBody(
+      valid({
+        descriptionSections: [
+          section('Product Description'),
+          section('Product Information', '<table></table>'),
+        ],
+      }),
+    )
+
+    expect(body.metafields).toHaveLength(1)
+    const field = body.metafields![0]
+    expect([field.namespace, field.key, field.type]).toEqual([
+      'apd',
+      'apd',
+      'json_string',
+    ])
+    expect(JSON.parse(field.value)).toEqual({
+      accordian_multi: false,
+      sections: [
+        { title: 'Product Description', content: '<p>Text</p>', position: 0 },
+        { title: 'Product Information', content: '<table></table>', position: 1 },
+      ],
+    })
+  })
+
+  it('sit beside the typed metafields, and add nothing when there are none', () => {
+    expect(buildCreateBody(valid()).metafields).toBeUndefined()
+
+    const draft = valid({ descriptionSections: [section('Product Description')] })
+    draft.metafields = [
+      { ...blankMetafield(), namespace: 'custom', metaKey: 'material', value: 'Paper' },
+    ]
+    expect(
+      buildCreateBody(draft).metafields?.map(
+        (field) => `${field.namespace}.${field.key}`,
+      ),
+    ).toEqual(['custom.material', 'apd.apd'])
+  })
+
+  it('need a title each, and count as typed work', () => {
+    const draft = valid({ descriptionSections: [section('  ')] })
+    expect(validateCreateDraft(draft)['descriptionSections.0.title']).toBe(
+      'Enter a title',
+    )
+    expect(
+      validateCreateDraft(valid({ descriptionSections: [section('Fine')] })),
+    ).toEqual({})
+    expect(isCreateDirty(draft)).toBe(true)
+  })
+})
+
 describe('isCreateDirty', () => {
   it('is false for a fresh form, true as soon as anything is entered', () => {
     expect(isCreateDirty(blankCreateDraft('polymer-uk'))).toBe(false)

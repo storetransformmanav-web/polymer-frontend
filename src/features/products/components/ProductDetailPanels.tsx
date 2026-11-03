@@ -413,36 +413,36 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             />
           )}
 
-          {sections ? (
-            // The description app's sections (metafield apd) stand on their own: just the accordion.
+          {/* The product's own description (description_html), first: with sections it is the
+              "Shopify description", then the sections (Product Description, Product
+              Information…) the product page shows. */}
+          <EditableCard
+            product={product}
+            title={sections ? 'Shopify description' : 'Description'}
+            icon={CheckCircleIcon}
+            defaultOpen={false}
+            what={sections ? 'Shopify description' : 'description'}
+            onEditIntent={preloadRichTextEditor}
+            errorPrefixes={NO_ERRORS}
+            onSaved={onSaved}
+            view={
+              description ? (
+                <SafeHtml
+                  html={product.description_html ?? ''}
+                  className="text-text text-[0.9rem] leading-relaxed"
+                />
+              ) : (
+                <p className="text-text-muted text-[0.9rem]">No description.</p>
+              )
+            }
+            editor={(section) => <DescriptionField {...section} />}
+          />
+          {sections && (
+            // The description app's sections (metafield apd): the accordion customers see.
             <DescriptionSectionsBlock
               product={product}
               sections={sections}
               onSaved={onSaved}
-            />
-          ) : (
-            // A product without sections keeps its own description (description_html).
-            <EditableCard
-              product={product}
-              title="Description"
-              icon={CheckCircleIcon}
-              defaultOpen={false}
-              what="description"
-              onEditIntent={preloadRichTextEditor}
-              errorPrefixes={NO_ERRORS}
-              onSaved={onSaved}
-              view={
-                description ? (
-                  // The product's own description (description_html), with its structure.
-                  <SafeHtml
-                    html={product.description_html ?? ''}
-                    className="text-[0.9rem] leading-relaxed"
-                  />
-                ) : (
-                  <p className="text-text-muted text-[0.9rem]">No description.</p>
-                )
-              }
-              editor={(section) => <DescriptionField {...section} />}
             />
           )}
         </div>

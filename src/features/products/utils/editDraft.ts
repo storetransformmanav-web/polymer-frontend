@@ -22,6 +22,7 @@ import {
   APD_MAX_LENGTH,
   APD_NAMESPACE,
   buildSectionsMetafield,
+  buildSectionsRemoval,
   draftSections,
   SECTION_TITLE_MAX,
   type SectionDraft,
@@ -805,6 +806,9 @@ export function buildUpdateBody(
   // The description sections are one metafield (a JSON string): sent whole, only if changed.
   const sections = buildSectionsMetafield(product, draft.descriptionSections)
   if (sections) body.metafields = [...(body.metafields ?? []), sections]
+  // "Delete all": every section removed takes the `apd` metafield away.
+  const removal = buildSectionsRemoval(product, draft.descriptionSections)
+  if (removal) body.metafields_remove = [...(body.metafields_remove ?? []), removal]
 
   return body
 }

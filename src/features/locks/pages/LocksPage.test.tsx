@@ -453,6 +453,14 @@ describe('LocksPage', () => {
 
       expect(screen.getByRole('tablist', { name: 'Lock sections' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Back to list' })).toBeInTheDocument()
+      // Like a product's header: the figures beside the name.
+      expect(screen.getByText('with access')).toBeInTheDocument()
+      expect(screen.getByText(/^keys?$/)).toBeInTheDocument()
+      // Like a product's Overview: the big picture links to the product page.
+      expect(screen.getByRole('link', { name: 'View product' })).toHaveAttribute(
+        'href',
+        expect.stringMatching(/^\/products\//),
+      )
       // The keys are plain chips: no add box, no pencil, no Save.
       expect(
         within(screen.getByRole('list', { name: 'Keys' })).getByText('vans'),
@@ -467,6 +475,33 @@ describe('LocksPage', () => {
       expect(screen.queryByRole('switch')).not.toBeInTheDocument()
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
+    })
+
+    it('keeps a strip of opened locks, as the products page does', async () => {
+      const user = await openLock()
+      const strip = screen.getByRole('navigation', { name: 'Open locks' })
+      expect(within(strip).getByText('Locked Product 1')).toBeInTheDocument()
+
+      // "All Locks" goes back to the list; the tab stays and brings the lock back.
+      await user.click(within(strip).getByRole('button', { name: 'All Locks' }))
+      expect(
+        await screen.findByRole('button', { name: 'View lock on Locked Product 1' }),
+      ).toBeInTheDocument()
+      await user.click(
+        within(screen.getByRole('navigation', { name: 'Open locks' })).getByText(
+          'Locked Product 1',
+        ),
+      )
+      expect(
+        await screen.findByRole('heading', { name: 'Locked Product 1' }),
+      ).toBeInTheDocument()
+
+      // Its ✕ closes it and returns to the list; with no tab left the strip goes.
+      await user.click(screen.getByRole('button', { name: 'Close Locked Product 1' }))
+      expect(
+        await screen.findByRole('button', { name: 'View lock on Locked Product 1' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('navigation', { name: 'Open locks' })).toBeNull()
     })
 
     it('never writes: opening a lock sends no lock or tag update', async () => {

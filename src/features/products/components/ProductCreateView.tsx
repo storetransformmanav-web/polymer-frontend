@@ -19,6 +19,7 @@ import {
 } from '../utils/createDraft.ts'
 import { CreateBasicsCard } from './create/CreateBasicsCard.tsx'
 import { CreateMetafieldsCard, CreateSeoCard } from './create/CreateListingCards.tsx'
+import { CreateSectionsCard } from './create/CreateSectionsCard.tsx'
 import {
   CreateInventoryCard,
   CreatePriceCard,
@@ -213,6 +214,7 @@ export function ProductCreateView({
             onFiles={setFiles}
             uploading={isCreating}
           />
+          <CreateSectionsCard draft={effective} errors={errors} update={update} />
           <CreatePriceCard
             draft={effective}
             errors={errors}

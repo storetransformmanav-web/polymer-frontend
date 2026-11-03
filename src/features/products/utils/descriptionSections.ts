@@ -151,6 +151,8 @@ export function buildSectionsMetafield(
 ): ProductMetafieldInput | null {
   const apd = parseApd(product)
   if (!apd || apd.sections.length === 0) return null
+  // Every section deleted: the metafield is removed instead (see `buildSectionsRemoval`).
+  if (drafts.length === 0) return null
 
   const unchanged =
     drafts.length === apd.sections.length &&
@@ -175,4 +177,42 @@ export function buildSectionsMetafield(
       })),
     }),
   }
+}
+
+/**
+ * The `apd` metafield for a product that is being **created** with sections — null when there are
+ * none. Same JSON the description app saves: `{ accordian_multi, sections: [{ title, content,
+ * position }] }`, one section open at a time.
+ */
+export function buildNewSectionsMetafield(
+  drafts: SectionDraft[],
+): { namespace: string; key: string; type: string; value: string } | null {
+  if (drafts.length === 0) return null
+  return {
+    namespace: APD_NAMESPACE,
+    key: APD_KEY,
+    type: 'json_string',
+    value: JSON.stringify({
+      accordian_multi: false,
+      sections: drafts.map((draft, index) => ({
+        title: draft.title.trim(),
+        content: draft.content,
+        position: index,
+      })),
+    }),
+  }
+}
+
+/**
+ * The metafield to remove when **every** section was deleted from a product that has sections:
+ * its `apd` metafield. Null when sections remain, or the product has none to delete.
+ */
+export function buildSectionsRemoval(
+  product: Pick<ProductDetail, 'metafields'>,
+  drafts: SectionDraft[],
+): { namespace: string; key: string } | null {
+  if (drafts.length > 0) return null
+  const apd = parseApd(product)
+  if (!apd || apd.sections.length === 0) return null
+  return { namespace: APD_NAMESPACE, key: APD_KEY }
 }

@@ -427,6 +427,38 @@ describe('the Variants tab', () => {
       expect(win.getByRole('button', { name: 'Update variant' })).toBeDisabled()
     })
 
+    it('has one Shipping section: Physical product and Weight once each, then the packed size, country and HS code', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<VariantsPanel product={PRODUCT} />)
+
+      const win = await open(user)
+      expect(win.getAllByRole('checkbox', { name: 'Physical product' })).toHaveLength(1)
+      expect(win.getAllByLabelText('Weight')).toHaveLength(1)
+      expect(win.getByRole('group', { name: 'Packed product size' })).toBeInTheDocument()
+      expect(win.getByLabelText('Length')).toBeInTheDocument()
+      expect(win.getByLabelText('Country of origin')).toBeInTheDocument()
+      expect(win.getByLabelText('HS code')).toBeInTheDocument()
+      // No second "Shipping" card with its own switch inside.
+      expect(win.queryByText('Package when shipped alone')).toBeNull()
+
+      await user.type(win.getByLabelText('Length'), '22')
+      await user.type(win.getByLabelText('Width'), '13')
+      await user.type(win.getByLabelText('Height'), '4')
+      await user.click(win.getByRole('button', { name: 'Update variant' }))
+      await confirmUpdate(user)
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+      expect(update.mock.calls[0][1].variants?.[0]).toEqual(
+        expect.objectContaining({
+          id: 'v1',
+          packed_dimensions: expect.objectContaining({
+            length: 22,
+            width: 13,
+            height: 4,
+          }),
+        }),
+      )
+    })
+
     it('the unit price follows the price typed, and Update variant sends only what changed after "Are you sure?"', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)

@@ -404,6 +404,87 @@ describe('adding a product', () => {
     })
   })
 
+  describe('the product description & information sections', () => {
+    const card = (form: HTMLElement) =>
+      within(
+        within(form).getByRole('region', { name: 'Product description & information' }),
+      )
+
+    it('has a card for them, empty to begin with, with a quick button for each', async () => {
+      const { form } = await openForm()
+
+      expect(card(form).getByText(/No sections yet/)).toBeInTheDocument()
+      expect(
+        card(form).getByRole('button', { name: 'Add Product Description' }),
+      ).toBeInTheDocument()
+      expect(
+        card(form).getByRole('button', { name: 'Add Product Information' }),
+      ).toBeInTheDocument()
+      expect(card(form).queryByRole('button', { name: 'Delete all' })).toBeNull()
+    })
+
+    it('adds, edits and sends them with the new product as the apd metafield', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+
+      await user.click(
+        card(form).getByRole('button', { name: 'Add Product Description' }),
+      )
+      await user.click(card(form).getByRole('button', { name: 'Add section' }))
+      const titles = card(form).getAllByLabelText(/^Title/)
+      expect(titles[0]).toHaveValue('Product Description')
+      await user.type(titles[1], 'Product Information')
+      await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+      const field = create.mock.calls[0][0].metafields?.[0]
+      expect([field?.namespace, field?.key, field?.type]).toEqual([
+        'apd',
+        'apd',
+        'json_string',
+      ])
+      expect(
+        JSON.parse(field?.value ?? '{}').sections.map(
+          (section: { title: string; position: number }) => [
+            section.title,
+            section.position,
+          ],
+        ),
+      ).toEqual([
+        ['Product Description', 0],
+        ['Product Information', 1],
+      ])
+    })
+
+    it('Delete all asks first, then leaves none — and nothing about them is sent', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(
+        card(form).getByRole('button', { name: 'Add Product Description' }),
+      )
+      await user.click(card(form).getByRole('button', { name: 'Add section' }))
+
+      await user.click(card(form).getByRole('button', { name: 'Delete all' }))
+      expect(card(form).getByText(/Delete all 2 sections\?/)).toBeInTheDocument()
+      await user.click(card(form).getByRole('button', { name: 'Yes, delete all' }))
+      expect(card(form).queryAllByLabelText(/^Title/)).toHaveLength(0)
+
+      await user.click(submit(form))
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+      expect(create.mock.calls[0][0].metafields).toBeUndefined()
+    })
+
+    it('needs a title for every section before anything is sent', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(card(form).getByRole('button', { name: 'Add section' }))
+      await user.click(submit(form))
+
+      expect(await card(form).findByText('Enter a title')).toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+    })
+  })
+
   it('sends the product category by name', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)

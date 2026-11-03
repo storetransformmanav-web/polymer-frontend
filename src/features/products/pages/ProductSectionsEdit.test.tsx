@@ -308,7 +308,7 @@ describe('editing the description sections (metafield apd)', () => {
     ])
   })
 
-  it('keeps at least one section, and the move buttons stop at the ends', async () => {
+  it('the move buttons stop at the ends, and every section can be removed', async () => {
     const user = await openDetails()
     await user.click(pencil())
 
@@ -319,9 +319,33 @@ describe('editing the description sections (metafield apd)', () => {
       screen.getByRole('button', { name: 'Move Product Information down' }),
     ).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Remove Product Description' }))
+    // The last one can go too: nothing forces a section to stay.
     expect(
       screen.getByRole('button', { name: 'Remove Product Information' }),
-    ).toBeDisabled()
+    ).toBeEnabled()
+  })
+
+  it('Delete all asks first, then removes every section — and sends the apd metafield removal', async () => {
+    const user = await openDetails()
+    await user.click(pencil())
+
+    await user.click(screen.getByRole('button', { name: 'Delete all' }))
+    // Nothing is gone until it is confirmed; "Keep them" puts it away.
+    expect(screen.getByText(/Delete all 2 sections\?/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Keep them' }))
+    expect(screen.getAllByLabelText(/^Title/)).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'Delete all' }))
+    await user.click(screen.getByRole('button', { name: 'Yes, delete all' }))
+    expect(screen.queryAllByLabelText(/^Title/)).toHaveLength(0)
+    expect(screen.getByText(/No sections yet/)).toBeInTheDocument()
+
+    await user.click(save())
+    await confirmUpdate(user)
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    expect(update.mock.calls[0][1]).toEqual({
+      metafields_remove: [{ namespace: 'apd', key: 'apd' }],
+    })
   })
 
   it('needs a title for every section, and sends nothing until it has them', async () => {

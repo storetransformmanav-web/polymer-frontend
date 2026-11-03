@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import {
+  DETAIL_CARD,
   DetailSection,
   DetailSkeleton,
   Field,
@@ -18,6 +19,7 @@ import {
   SlidersIcon,
   SpinnerIcon,
   TagIcon,
+  UsersIcon,
 } from '../../../components/ui/icons.tsx'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
@@ -206,12 +208,43 @@ export function LockDetailsView({
         <div className="flex items-start gap-4">
           <LockImage src={lock.image_url} size="lg" />
           <div className="min-w-0 flex-1">
-            <h1
-              className="text-lg leading-snug font-bold break-words sm:text-2xl"
-              title={lock.title}
-            >
-              {lock.title}
-            </h1>
+            {/* The name, then the lock's figures beside it — as a product's stock and price. */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <h1
+                className="text-lg leading-snug font-bold break-words sm:text-2xl"
+                title={lock.title}
+              >
+                {lock.title}
+              </h1>
+              <dl className="flex flex-col gap-y-2 lg:flex-row lg:flex-wrap lg:items-center">
+                <div className="border-border flex items-center gap-2 lg:border-l lg:pl-5">
+                  <dt className="sr-only">Customers with access</dt>
+                  <dd className="flex items-center gap-2 whitespace-nowrap">
+                    <UsersIcon width={18} height={18} className="text-accent shrink-0" />
+                    <span className="font-semibold">
+                      {lock.customers_with_access != null
+                        ? lock.customers_with_access.toLocaleString('en-GB')
+                        : '—'}
+                    </span>
+                    <span className="text-text-muted text-[0.85rem]">with access</span>
+                  </dd>
+                </div>
+                <div className="border-border flex items-center gap-2 lg:ml-5 lg:border-l lg:pl-5">
+                  <dt className="sr-only">Keys</dt>
+                  <dd className="flex items-center gap-2 whitespace-nowrap">
+                    <TagIcon
+                      width={18}
+                      height={18}
+                      className="text-text-muted shrink-0"
+                    />
+                    <span className="font-semibold">{lock.tags.length}</span>
+                    <span className="text-text-muted text-[0.85rem]">
+                      {lock.tags.length === 1 ? 'key' : 'keys'}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
               <Badge tone={lock.enabled ? 'success' : 'neutral'}>
                 <span
@@ -303,68 +336,82 @@ export function LockDetailsView({
           )}
 
           {tab === 'overview' && (
-            <>
-              <DetailSection title="Protected product" icon={LockIcon}>
-                <FieldGrid>
-                  <Field label="Product">
-                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {lock.title}
-                      <Link
-                        to={`/products/${encodeURIComponent(lock.product_id)}`}
-                        className="text-accent inline-flex items-center gap-1 text-[0.82rem] font-semibold no-underline hover:underline"
-                      >
-                        <ExternalLinkIcon width={14} height={14} />
-                        View product
-                      </Link>
-                    </span>
-                  </Field>
-                  <Field label="Handle">{lock.handle}</Field>
-                  <Field label="Product status">{lock.status}</Field>
-                  <Field label="Customers with access">
-                    {lock.customers_with_access != null
-                      ? lock.customers_with_access.toLocaleString('en-GB')
-                      : null}
-                  </Field>
-                  <Field label="Last updated">
-                    {lock.updated_at ? formatDateTime(lock.updated_at) : null}
-                  </Field>
-                  <Field label="Last sent to Shopify">
-                    {lock.last_pushed_at ? formatDateTime(lock.last_pushed_at) : null}
-                  </Field>
-                </FieldGrid>
-              </DetailSection>
+            // Laid out like a product's Overview: the big picture on the left, the cards on the right.
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+              <div className={`${DETAIL_CARD} relative p-3`}>
+                <LockImage src={lock.image_url} size="xl" />
+                <Link
+                  to={`/products/${encodeURIComponent(lock.product_id)}`}
+                  className="border-border bg-bg text-text hover:border-accent absolute right-6 bottom-6 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.78rem] font-semibold no-underline shadow-sm transition-colors"
+                >
+                  <ExternalLinkIcon width={14} height={14} />
+                  View product
+                </Link>
+              </div>
 
-              <DetailSection title="Keys (tags)" icon={TagIcon} count={lock.tags.length}>
-                {hasKeys ? (
-                  <ul aria-label="Keys" className="flex flex-wrap gap-2">
-                    {lock.tags.map((tag) => (
-                      <li key={tag} className={TAG_CHIP}>
-                        {tag}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-text-muted text-[0.9rem]">
-                    No keys: any signed-in customer can open this product.
-                  </p>
-                )}
-              </DetailSection>
+              <div className="flex min-w-0 flex-col gap-4">
+                <DetailSection title="Protected product" icon={LockIcon}>
+                  <div className="flex flex-col gap-5">
+                    <FieldGrid>
+                      <Field label="Product">{lock.title}</Field>
+                      <Field label="Handle">{lock.handle}</Field>
+                      <Field label="Product status">{lock.status}</Field>
+                      <Field label="Customers with access">
+                        {lock.customers_with_access != null
+                          ? lock.customers_with_access.toLocaleString('en-GB')
+                          : null}
+                      </Field>
+                      <Field label="Last updated">
+                        {lock.updated_at ? formatDateTime(lock.updated_at) : null}
+                      </Field>
+                      <Field label="Last sent to Shopify">
+                        {lock.last_pushed_at ? formatDateTime(lock.last_pushed_at) : null}
+                      </Field>
+                    </FieldGrid>
+                    {/* The keys under the fields, drawn like a product's tags. */}
+                    <section
+                      aria-labelledby="lock-keys-heading"
+                      className="flex flex-col gap-2.5"
+                    >
+                      <h3 id="lock-keys-heading" className="text-[0.95rem] font-semibold">
+                        Keys (tags)
+                      </h3>
+                      {hasKeys ? (
+                        <ul
+                          aria-label="Keys"
+                          className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5"
+                        >
+                          {lock.tags.map((tag) => (
+                            <li key={tag} className={TAG_CHIP}>
+                              {tag}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
+                          No keys: any signed-in customer can open this product.
+                        </p>
+                      )}
+                    </section>
+                  </div>
+                </DetailSection>
 
-              <DetailSection title="Message" icon={InfoIcon}>
-                <p className="text-text-muted mb-2 text-[0.8rem]">
-                  Shown to a customer who does not have access.
-                </p>
-                {lock.message?.trim() ? (
-                  <p className="text-[0.9rem] break-words whitespace-pre-wrap">
-                    {lock.message}
+                <DetailSection title="Message" icon={InfoIcon}>
+                  <p className="text-text-muted mb-2 text-[0.8rem]">
+                    Shown to a customer who does not have access.
                   </p>
-                ) : (
-                  <p className="text-text-muted text-[0.9rem]">
-                    The store’s default message.
-                  </p>
-                )}
-              </DetailSection>
-            </>
+                  {lock.message?.trim() ? (
+                    <p className="text-[0.9rem] break-words whitespace-pre-wrap">
+                      {lock.message}
+                    </p>
+                  ) : (
+                    <p className="text-text-muted text-[0.9rem]">
+                      The store’s default message.
+                    </p>
+                  )}
+                </DetailSection>
+              </div>
+            </div>
           )}
 
           {tab === 'settings' && (

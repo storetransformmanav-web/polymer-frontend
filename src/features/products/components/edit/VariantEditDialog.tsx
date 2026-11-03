@@ -6,25 +6,33 @@ import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
 import { PlusIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
 import {
+  DIMENSION_UNITS,
   WEIGHT_UNITS,
+  type DimensionUnit,
   type ProductDetail,
   type WeightUnit,
 } from '../../../../lib/api/endpoints.ts'
 import { currencySymbol, formatPrice } from '../../../../lib/format.ts'
 import { useSectionEdit, type SavedHandler } from '../../hooks/useSectionEdit.ts'
 import { variantPreviewUrl, type VariantDraft } from '../../utils/editDraft.ts'
+import { countryOptions } from '../../utils/countries.ts'
 import { variantStock } from '../../utils/stock.ts'
 import { ConfirmUpdateDialog } from '../ConfirmUpdateDialog.tsx'
 import { ProductImage } from '../ProductImage.tsx'
 import { DialogAccordion } from './DialogAccordion.tsx'
 import { ImagePicker, NO_PICTURE } from './ImagePicker.tsx'
-import { VariantShippingCard } from './VariantSections.tsx'
 import { CheckField, EditField, FIELD_INPUT, MoneyInput } from './fields.tsx'
 
 const UNIT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
   value: unit,
   label: unit.charAt(0) + unit.slice(1).toLowerCase(),
 }))
+
+const SIZE_UNIT_OPTIONS = DIMENSION_UNITS.map((unit) => ({
+  value: unit,
+  label: unit === 'CENTIMETERS' ? 'cm' : 'in',
+}))
+const COUNTRY_OPTIONS = countryOptions()
 
 const BUTTON =
   'inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -332,38 +340,136 @@ export function VariantEditDialog({
                 checked={variant.requiresShipping}
                 onChange={(requiresShipping) => update({ requiresShipping })}
               />
-              <div className="grid max-w-sm grid-cols-[minmax(0,1fr)_6.5rem] items-end gap-2">
-                <EditField id={`${id}-weight`} label="Weight" error={at('weight')}>
-                  <input
-                    id={`${id}-weight`}
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={variant.weight}
-                    placeholder="0"
-                    aria-invalid={at('weight') ? true : undefined}
-                    onChange={(event) => update({ weight: event.target.value })}
-                    className={FIELD_INPUT}
-                  />
-                </EditField>
-                <SelectField
-                  id={`${id}-unit`}
-                  label="Unit"
-                  hideLabel
-                  compact
-                  value={variant.weightUnit}
-                  options={UNIT_OPTIONS}
-                  onChange={(unit) => update({ weightUnit: unit as WeightUnit })}
-                />
-              </div>
-              {variant.requiresShipping && (
-                <VariantShippingCard
-                  product={product}
-                  variant={variant}
-                  index={index}
-                  errors={edit.errors}
-                  prefix={id}
-                  update={update}
-                />
+              {variant.requiresShipping ? (
+                <div className="flex flex-col gap-2.5">
+                  {/* Weight: one box and its unit. */}
+                  <div className="grid max-w-sm grid-cols-[minmax(0,1fr)_6.5rem] items-end gap-2">
+                    <EditField id={`${id}-weight`} label="Weight" error={at('weight')}>
+                      <input
+                        id={`${id}-weight`}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={variant.weight}
+                        placeholder="0"
+                        aria-invalid={at('weight') ? true : undefined}
+                        onChange={(event) => update({ weight: event.target.value })}
+                        className={FIELD_INPUT}
+                      />
+                    </EditField>
+                    <SelectField
+                      id={`${id}-unit`}
+                      label="Weight unit"
+                      hideLabel
+                      compact
+                      value={variant.weightUnit}
+                      options={UNIT_OPTIONS}
+                      onChange={(unit) => update({ weightUnit: unit as WeightUnit })}
+                    />
+                  </div>
+
+                  {/* Packed size: three small boxes with their letters above, then the unit. */}
+                  <fieldset className="m-0 min-w-0 border-0 p-0">
+                    <legend className="text-text mb-1 p-0 text-[0.72rem] font-semibold">
+                      Packed product size
+                    </legend>
+                    <div className="grid max-w-md grid-cols-[repeat(3,minmax(0,1fr))_5rem] items-end gap-2">
+                      {(
+                        [
+                          ['length', 'Length', 'L'],
+                          ['width', 'Width', 'W'],
+                          ['height', 'Height', 'H'],
+                        ] as const
+                      ).map(([field, name, letter]) => (
+                        <label key={field} className="flex min-w-0 flex-col gap-1">
+                          <span className="text-text-muted text-[0.68rem] font-semibold">
+                            {letter}
+                            <span className="sr-only">{name}</span>
+                          </span>
+                          <input
+                            aria-label={name}
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder="0.0"
+                            value={variant.shipping[field]}
+                            aria-invalid={at('dimensions') ? true : undefined}
+                            onChange={(event) =>
+                              update({
+                                shipping: {
+                                  ...variant.shipping,
+                                  [field]: event.target.value,
+                                },
+                              })
+                            }
+                            className={FIELD_INPUT}
+                          />
+                        </label>
+                      ))}
+                      <SelectField
+                        id={`${id}-size-unit`}
+                        label="Size unit"
+                        hideLabel
+                        compact
+                        value={variant.shipping.dimensionUnit}
+                        options={SIZE_UNIT_OPTIONS}
+                        onChange={(unit) =>
+                          update({
+                            shipping: {
+                              ...variant.shipping,
+                              dimensionUnit: unit as DimensionUnit,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    {at('dimensions') && (
+                      <p role="alert" className="text-danger m-0 mt-1">
+                        {at('dimensions')}
+                      </p>
+                    )}
+                  </fieldset>
+
+                  {/* Customs: where it comes from and its HS code, side by side. */}
+                  <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[480px]:grid-cols-2">
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <SelectField
+                        id={`${id}-country`}
+                        label="Country of origin"
+                        compact
+                        value={variant.shipping.countryCode}
+                        options={COUNTRY_OPTIONS}
+                        onChange={(countryCode) =>
+                          update({ shipping: { ...variant.shipping, countryCode } })
+                        }
+                      />
+                      {at('countryCode') && (
+                        <p role="alert" className="text-danger m-0">
+                          {at('countryCode')}
+                        </p>
+                      )}
+                    </div>
+                    <EditField id={`${id}-hs`} label="HS code" error={at('hsCode')}>
+                      <input
+                        id={`${id}-hs`}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="6–13 digits"
+                        value={variant.shipping.hsCode}
+                        aria-invalid={at('hsCode') ? true : undefined}
+                        onChange={(event) =>
+                          update({
+                            shipping: { ...variant.shipping, hsCode: event.target.value },
+                          })
+                        }
+                        className={FIELD_INPUT}
+                      />
+                    </EditField>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-text-muted m-0">
+                  This variant doesn&apos;t need shipping (for example a digital product
+                  or a service).
+                </p>
               )}
             </DialogAccordion>
 

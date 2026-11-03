@@ -15,6 +15,12 @@ import {
   type ShippingDetailsDraft,
 } from './shipping.ts'
 import {
+  APD_MAX_LENGTH,
+  buildNewSectionsMetafield,
+  SECTION_TITLE_MAX,
+  type SectionDraft,
+} from './descriptionSections.ts'
+import {
   buildMediaItems,
   LIMITS,
   newKey,
@@ -138,6 +144,8 @@ export interface CreateDraft {
   /** CRM collection ids. */
   collections: string[]
   metafields: MetafieldDraft[]
+  /** Product description & information sections, sent as the `apd` metafield. */
+  descriptionSections: SectionDraft[]
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -202,6 +210,7 @@ export function blankCreateDraft(shop: string): CreateDraft {
     media: [],
     collections: [],
     metafields: [],
+    descriptionSections: [],
   }
 }
 
@@ -276,6 +285,7 @@ export function isCreateDirty(draft: CreateDraft): boolean {
     draft.metafields.some(
       (field) => field.metaKey.trim() !== '' || field.value.trim() !== '',
     ) ||
+    draft.descriptionSections.length > 0 ||
     draft.variants.some((variant) =>
       [
         variant.price,
@@ -450,6 +460,20 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
     put(`collections.${index}`, UUID.test(id) ? null : 'Not a valid collection ID')
   })
 
+  // Description sections: each needs a title, and the whole must fit one metafield.
+  draft.descriptionSections.forEach((section, index) => {
+    put(
+      `descriptionSections.${index}.title`,
+      section.title.trim()
+        ? tooLong('The title', section.title, SECTION_TITLE_MAX)
+        : 'Enter a title',
+    )
+  })
+  const sectionsValue = buildNewSectionsMetafield(draft.descriptionSections)?.value
+  if (sectionsValue && sectionsValue.length > APD_MAX_LENGTH) {
+    errors.descriptionSections = 'There is too much text in the sections to create'
+  }
+
   // Metafields (a row with nothing typed is skipped)
   const filledMetafields = draft.metafields.filter(
     (field) => field.metaKey.trim() !== '' || field.value.trim() !== '',
@@ -598,6 +622,8 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
       type: trimmed(field.type),
       value: field.value,
     }))
+  const sections = buildNewSectionsMetafield(draft.descriptionSections)
+  if (sections) metafields.push(sections)
   if (metafields.length > 0) body.metafields = metafields
 
   return body
