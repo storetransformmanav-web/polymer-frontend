@@ -13,6 +13,8 @@ interface DialogProps {
   wide?: boolean
   /** Wider still, for a dialog that shows a table or a preview. */
   extraWide?: boolean
+  /** A round tile at the heading's left (an info icon for a question). */
+  icon?: ReactNode
   /** A round ✕ at the heading's right (Escape and the backdrop close it either way). */
   closeButton?: boolean
   /** The action buttons, pinned under the content. */
@@ -34,6 +36,7 @@ export function Dialog({
   wide = false,
   extraWide = false,
   closeButton = false,
+  icon,
   footer,
   children,
 }: DialogProps) {
@@ -81,25 +84,30 @@ export function Dialog({
         role={role}
         aria-modal="true"
         aria-label={title}
-        className={`bg-bg border-border relative flex max-h-[90svh] w-full flex-col gap-4 overflow-y-auto rounded-2xl border p-5 ${extraWide ? 'max-w-2xl' : wide ? 'max-w-xl' : 'max-w-md'} shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0`}
+        className={`bg-bg border-border relative flex max-h-[90svh] w-full flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-2xl border p-5 ${extraWide ? 'max-w-2xl' : wide ? 'max-w-xl' : 'max-w-md'} shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0`}
       >
-        {closeButton ? (
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="text-[1.05rem] leading-snug font-semibold">{title}</h2>
-            <button
-              type="button"
-              aria-label={`Close ${title}`}
-              disabled={closeDisabled}
-              onClick={onClose}
-              className="border-border text-text hover:border-accent -mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border bg-transparent transition-colors disabled:pointer-events-none disabled:opacity-50"
-            >
-              <XIcon width={16} height={16} />
-            </button>
+        {closeButton || icon ? (
+          <div className={`flex gap-3 ${icon ? 'items-center' : 'items-start'}`}>
+            {icon}
+            <h2 className="min-w-0 flex-1 text-[1.05rem] leading-snug font-semibold break-words">
+              {title}
+            </h2>
+            {closeButton && (
+              <button
+                type="button"
+                aria-label={`Close ${title}`}
+                disabled={closeDisabled}
+                onClick={onClose}
+                className="border-border text-text hover:border-accent -mt-1 -mr-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border bg-transparent transition-colors disabled:pointer-events-none disabled:opacity-50"
+              >
+                <XIcon width={16} height={16} />
+              </button>
+            )}
           </div>
         ) : (
           <h2 className="text-[1.05rem] leading-snug font-semibold">{title}</h2>
         )}
-        <div className="text-text-muted flex flex-col gap-3 text-[0.88rem] leading-relaxed">
+        <div className="text-text-muted flex min-w-0 flex-col gap-3 text-[0.88rem] leading-relaxed">
           {children}
         </div>
         <div className="flex flex-wrap justify-end gap-2 pt-1">{footer}</div>

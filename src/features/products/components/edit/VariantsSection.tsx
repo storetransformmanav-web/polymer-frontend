@@ -60,7 +60,9 @@ export function VariantsSection(props: SectionProps) {
   const problemIn = (...prefixes: string[]) =>
     Object.keys(props.errors).some((key) => prefixes.some((p) => key.startsWith(p)))
   return (
-    <div className="flex flex-col gap-4">
+    // The small type of the product list (0.85rem body, 0.75rem labels): the boxes, labels and
+    // dropdowns of this editor are set a size down from the forms'.
+    <div className="flex flex-col gap-4 [&_input]:text-[0.82rem] [&_input:not([type=checkbox]):not([type=radio])]:h-9 [&_label]:text-[0.75rem] [&_select]:text-[0.8rem] [&_textarea]:text-[0.82rem]">
       {coming.length > 0 && (
         <div className="border-accent/50 bg-accent-tint/30 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
           <span className="text-[0.8rem] font-semibold">

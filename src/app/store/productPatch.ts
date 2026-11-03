@@ -192,6 +192,19 @@ function patchLevels(
   ]
 }
 
+/** The stock across the locations that give a figure; `fallback` when none does. */
+function sumAvailable(
+  levels: ProductVariant['inventory_levels'],
+  fallback: number | null | undefined,
+): number | null | undefined {
+  const counted = levels
+    .map((level) => level.available)
+    .filter((available): available is number => typeof available === 'number')
+  return counted.length > 0
+    ? counted.reduce((sum, available) => sum + available, 0)
+    : fallback
+}
+
 function patchVariant(
   variant: ProductVariant,
   body: ProductUpdateBody,
@@ -211,14 +224,21 @@ function patchVariant(
     : undefined
   const image_url = edit.remove_image ? null : (picked?.url ?? variant.image_url)
 
+  // Only a stock edit touches the levels — and the variant's own total follows them, so the
+  // Variants tab agrees with the Inventory tab at once.
+  const inventory_levels = edit.stock
+    ? patchLevels(variant.inventory_levels, edit.stock)
+    : variant.inventory_levels
+  const inventory_quantity = edit.stock
+    ? sumAvailable(inventory_levels, variant.inventory_quantity)
+    : variant.inventory_quantity
+
   return {
     ...variant,
     selected_options,
     image_url,
-    // Only a stock edit touches the levels.
-    inventory_levels: edit.stock
-      ? patchLevels(variant.inventory_levels, edit.stock)
-      : variant.inventory_levels,
+    inventory_levels,
+    inventory_quantity,
     price: edit.price !== undefined ? (text(edit.price) ?? variant.price) : variant.price,
     compare_at_price:
       edit.compare_at_price !== undefined
@@ -249,6 +269,45 @@ function patchVariant(
     // The variant's own metafields: set (value replaced or added) and removed.
     metafields: patchMetafields(variant.metafields, edit),
   }
+}
+
+/** The lowest and highest figure the variants give, written as the variants wrote them. */
+function rangeOf(
+  variants: ProductVariant[],
+  read: (variant: ProductVariant) => string | null | undefined,
+): { min: string; max: string } | null {
+  let min: string | null = null
+  let max: string | null = null
+  for (const variant of variants) {
+    const value = read(variant)
+    if (value === null || value === undefined || value.trim() === '') continue
+    if (!Number.isFinite(Number(value))) continue
+    if (min === null || Number(value) < Number(min)) min = value
+    if (max === null || Number(value) > Number(max)) max = value
+  }
+  return min === null || max === null ? null : { min, max }
+}
+
+/**
+ * The figures of a list row that follow a stock or price edit — its stock total and its price range
+ * — taken from the product's own patched copy, so the list agrees with the details page at once.
+ */
+export function patchListFigures(
+  item: ProductListItem,
+  detail: ProductDetail,
+  body: ProductUpdateBody,
+): ProductListItem {
+  let next = item
+  if (body.variants?.some((edit) => edit.stock)) {
+    next = { ...next, total_inventory: detail.total_inventory ?? next.total_inventory }
+  }
+  if (body.variants?.some((edit) => edit.price !== undefined)) {
+    const range = detail.price_range
+    if (range?.min && range?.max) {
+      next = { ...next, price_min: range.min, price_max: range.max }
+    }
+  }
+  return next
 }
 
 export function patchDetail(
@@ -285,9 +344,35 @@ export function patchDetail(
     (body.collections_remove ?? []).map((name) => name.trim().toLowerCase()),
   )
   const metafields = patchMetafields(product.metafields, body)
+  const variants = product.variants
+    .map((variant) => patchVariant(variant, body, images))
+    .filter((variant): variant is ProductVariant => variant !== null)
+  // A stock edit changes the product's total too (the header and the Variants footer read it).
+  const stockEdited = body.variants?.some((edit) => edit.stock)
+  const total_inventory = stockEdited
+    ? variants.reduce((sum, variant) => sum + (variant.inventory_quantity ?? 0), 0)
+    : product.total_inventory
+
+  // A price edit moves the header's range (and the compare-at range) at once.
+  const priceRange = body.variants?.some((edit) => edit.price !== undefined)
+    ? rangeOf(variants, (variant) => variant.price)
+    : null
+  const compareEdited = body.variants?.some((edit) => edit.compare_at_price !== undefined)
+  const compareRange = compareEdited
+    ? rangeOf(variants, (variant) => variant.compare_at_price)
+    : null
 
   return {
     ...product,
+    total_inventory,
+    price_range: priceRange
+      ? { ...product.price_range, ...priceRange }
+      : product.price_range,
+    compare_at_price_range: compareEdited
+      ? compareRange
+        ? { ...product.compare_at_price_range, ...compareRange }
+        : null
+      : product.compare_at_price_range,
     title: body.title ?? product.title,
     description_html: body.description_html ?? product.description_html,
     vendor: body.vendor ?? product.vendor,
@@ -303,9 +388,7 @@ export function patchDetail(
       (collection) => !collectionsRemoved.has(collection.title.trim().toLowerCase()),
     ),
     options: patchOptions(product.options, body),
-    variants: product.variants
-      .map((variant) => patchVariant(variant, body, images))
-      .filter((variant): variant is ProductVariant => variant !== null),
+    variants,
     images,
   }
 }

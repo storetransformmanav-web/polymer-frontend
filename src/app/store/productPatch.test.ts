@@ -8,6 +8,7 @@ import {
   hideRemovedImages,
   keepPreviewImages,
   patchDetail,
+  patchListFigures,
   patchListItem,
   patchMetafields,
   patchTags,
@@ -78,6 +79,39 @@ describe('patchDetail — stock, pictures and options', () => {
     expect(next.variants[0].inventory_levels.map((level) => level.available)).toEqual([
       12, 1,
     ])
+  })
+
+  it("moves the variant's stock and the product's total with the edit", () => {
+    // The variant said 0 (out of stock) while its levels were being filled in.
+    const empty = {
+      ...stocked,
+      total_inventory: 0,
+      variants: [{ ...stocked.variants[0], inventory_quantity: 0 }],
+    } as unknown as ProductDetail
+    const next = patchDetail(empty, {
+      variants: [
+        {
+          id: 'v1',
+          stock: [
+            { location_id: 7, available: 25 },
+            { location_id: 8, available: 0 },
+          ],
+        },
+      ],
+    })
+    expect(next.variants[0].inventory_quantity).toBe(25)
+    expect(next.total_inventory).toBe(25)
+  })
+
+  it('leaves the stock totals alone when the edit has no stock', () => {
+    const counted = {
+      ...stocked,
+      total_inventory: 6,
+      variants: [{ ...stocked.variants[0], inventory_quantity: 6 }],
+    } as unknown as ProductDetail
+    const next = patchDetail(counted, { variants: [{ id: 'v1', price: '11.00' }] })
+    expect(next.variants[0].inventory_quantity).toBe(6)
+    expect(next.total_inventory).toBe(6)
   })
 
   it('adds a level for a location the variant had none at', () => {
@@ -379,5 +413,49 @@ describe('patchMetafields', () => {
       ['added', 'true'],
     ])
     expect(next.variants[1].metafields).toHaveLength(2)
+  })
+})
+
+describe('price and stock edits move the figures the header and list show', () => {
+  it('moves the price range when a variant’s price is edited', () => {
+    const patched = patchDetail(
+      {
+        ...detail,
+        price_range: { min: '10.00', max: '20.00' },
+      } as unknown as ProductDetail,
+      { variants: [{ id: 'v2', price: '35.00' }] },
+    )
+    expect(patched.price_range).toMatchObject({ min: '10.00', max: '35.00' })
+  })
+
+  it('leaves the range alone when no price was edited', () => {
+    const before = {
+      ...detail,
+      price_range: { min: '10.00', max: '20.00' },
+    } as unknown as ProductDetail
+    expect(patchDetail(before, { title: 'New' }).price_range).toEqual(before.price_range)
+  })
+
+  it('patchListFigures copies the stock total and price range onto the list row', () => {
+    const patched = {
+      ...detail,
+      total_inventory: 42,
+      price_range: { min: '10.00', max: '35.00' },
+    } as unknown as ProductDetail
+    const next = patchListFigures(row, patched, {
+      variants: [
+        { id: 'v1', stock: [{ location_id: 1, available: 42 }] },
+        { id: 'v2', price: '35.00' },
+      ],
+    })
+    expect(next).toMatchObject({
+      total_inventory: 42,
+      price_min: '10.00',
+      price_max: '35.00',
+    })
+  })
+
+  it('patchListFigures changes nothing for an edit of something else', () => {
+    expect(patchListFigures(row, detail, { title: 'New' })).toBe(row)
   })
 })

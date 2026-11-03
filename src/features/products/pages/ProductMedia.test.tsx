@@ -641,6 +641,90 @@ describe('adding and deleting media', () => {
     })
   })
 
+  describe('the alt text under each picture, changed by double-clicking it', () => {
+    it('shows an image\u2019s alt text under it, and nothing extra for one without', async () => {
+      details.mockResolvedValue(
+        product([
+          { id: IMG_1, url: 'https://cdn.example.com/1.jpg', alt: 'A red bag' },
+          { id: IMG_2, url: 'https://cdn.example.com/2.jpg', alt: '' },
+        ]),
+      )
+      await openMediaTab()
+
+      expect(await screen.findByText('A red bag')).toBeInTheDocument()
+      // Only the picture that has alt text has a caption to edit.
+      expect(screen.getAllByTitle('Double-click to edit')).toHaveLength(1)
+      // It sits under the picture's card, not inside it.
+      const caption = screen.getByRole('button', { name: 'A red bag' })
+      const tile = caption.closest('li') as HTMLElement
+      expect(tile.firstElementChild).not.toContainElement(caption)
+      expect(tile.firstElementChild).toContainElement(
+        within(tile).getByRole('button', { name: /^Open image 1/ }),
+      )
+    })
+
+    it('turns into a box holding the text on a double-click, and saves it after \u201cAre you sure?\u201d', async () => {
+      const updateMock = vi.mocked(api.products.update)
+      updateMock.mockResolvedValue(WRITE_OK)
+      const user = await openMediaTab()
+
+      // One click opens nothing to type in; a double-click does, with the saved text selected.
+      await user.click(await screen.findByRole('button', { name: 'One' }))
+      expect(screen.queryByRole('textbox', { name: 'Alt text of image 1' })).toBeNull()
+      await user.dblClick(screen.getByRole('button', { name: 'One' }))
+      const box = screen.getByRole('textbox', { name: 'Alt text of image 1' })
+      expect(box).toHaveValue('One')
+
+      await user.keyboard('A red bag{Enter}')
+      // Nothing is sent until "Yes, update"; the question shows the text now and the text after.
+      expect(updateMock).not.toHaveBeenCalled()
+      const dialog = screen.getByRole('alertdialog')
+      expect(within(dialog).getByText('Alt text of image 1')).toBeInTheDocument()
+      expect(within(dialog).getByText('\u201cOne\u201d')).toBeInTheDocument()
+      expect(within(dialog).getByText('\u201cA red bag\u201d')).toBeInTheDocument()
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(updateMock).toHaveBeenCalledWith(
+          'id-1',
+          { media_update: [{ attachment_id: IMG_1, alt: 'A red bag' }] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends nothing on Escape, on Cancel, or when the text is left as it was', async () => {
+      const updateMock = vi.mocked(api.products.update)
+      const user = await openMediaTab()
+
+      await user.dblClick(await screen.findByRole('button', { name: 'One' }))
+      await user.keyboard('Something else{Escape}')
+      expect(screen.getByRole('button', { name: 'One' })).toBeInTheDocument()
+
+      await user.dblClick(screen.getByRole('button', { name: 'Two' }))
+      await user.keyboard('{Enter}')
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      await user.dblClick(screen.getByRole('button', { name: 'Two' }))
+      await user.keyboard('Changed{Enter}')
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.getByRole('button', { name: 'Two' })).toBeInTheDocument()
+      expect(updateMock).not.toHaveBeenCalled()
+    })
+
+    it('shows the backend\u2019s message under the picture when the save fails', async () => {
+      const updateMock = vi.mocked(api.products.update)
+      updateMock.mockRejectedValue(new ApiError('The store refused it.', { status: 422 }))
+      const user = await openMediaTab()
+
+      await user.dblClick(await screen.findByRole('button', { name: 'One' }))
+      await user.keyboard('A red bag{Enter}')
+      await confirmUpdate(user)
+
+      expect(await screen.findByText('The store refused it.')).toBeInTheDocument()
+    })
+  })
+
   describe('editing the media in place', () => {
     it('saves an alt-text edit as media_update only — the API field, nothing else', async () => {
       const updateMock = vi.mocked(api.products.update)

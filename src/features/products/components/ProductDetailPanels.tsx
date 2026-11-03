@@ -39,6 +39,7 @@ import {
 } from '../utils/format.ts'
 import { countryName } from '../utils/countries.ts'
 import { packedSizeLabel } from '../utils/shipping.ts'
+import { productStock, variantStock } from '../utils/stock.ts'
 import { classifySync, readableSyncError } from '../utils/sync.ts'
 import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
@@ -98,6 +99,13 @@ import { LocalMediaTile, LocalPreview } from './LocalMediaTile.tsx'
 import { RemoveCollectionDialog } from './RemoveCollectionDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
 import { MetafieldDetailsModal } from './MetafieldDetailsModal.tsx'
+import {
+  AltCaption,
+  ContinueSellingBox,
+  LocationCell,
+  PriceCell,
+  StockCell,
+} from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 
@@ -629,6 +637,7 @@ function VariantRow({
   variant,
   label,
   nested = false,
+  onSaved,
 }: {
   product: ProductDetail
   variant: ProductVariant
@@ -636,6 +645,7 @@ function VariantRow({
   label?: string
   /** Shown inside an open group: indented and a shade lighter. */
   nested?: boolean
+  onSaved?: SavedHandler
 }) {
   const currency = variant.currency ?? product.currency
   const weight = weightLabel(variant)
@@ -647,7 +657,10 @@ function VariantRow({
     country ? `Origin ${countryName(country)}` : '',
     variant.harmonized_system_code ? `HS ${variant.harmonized_system_code}` : '',
   ].filter(Boolean)
-  const stock = variant.inventory_quantity
+  const stock = variantStock(variant)
+  // One recorded location: the figure can be changed right here (several go through the Inventory tab).
+  const onlyLevel =
+    variant.inventory_levels.length === 1 ? variant.inventory_levels[0] : null
   const name = label ?? variant.title ?? '—'
   return (
     <tr
@@ -687,7 +700,12 @@ function VariantRow({
       </td>
       <td className={TD}>
         <span className="flex flex-col">
-          <span className="font-semibold">{formatPrice(variant.price, currency)}</span>
+          <PriceCell
+            product={product}
+            variant={variant}
+            currency={currency}
+            onSaved={onSaved}
+          />
           {variant.compare_at_price && (
             <span className="text-text-muted text-[0.78rem] line-through">
               {formatPrice(variant.compare_at_price, currency)}
@@ -697,11 +715,21 @@ function VariantRow({
       </td>
       <td className={TD}>
         <span className="flex items-center gap-2">
-          <span
-            className={(stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'}
-          >
-            {(stock ?? 1) <= 0 ? 'Out of stock' : num(stock)}
-          </span>
+          {onlyLevel ? (
+            <StockCell
+              product={product}
+              variant={variant}
+              level={onlyLevel}
+              onSaved={onSaved}
+              zeroLabel="Out of stock"
+            />
+          ) : (
+            <span
+              className={(stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'}
+            >
+              {(stock ?? 1) <= 0 ? 'Out of stock' : num(stock)}
+            </span>
+          )}
           {variant.available_for_sale === false && (
             <Badge tone="neutral">Unavailable</Badge>
           )}
@@ -720,10 +748,12 @@ function VariantGroupRows({
   product,
   name,
   variants,
+  onSaved,
 }: {
   product: ProductDetail
   name: string
   variants: ProductVariant[]
+  onSaved?: SavedHandler
 }) {
   const [open, setOpen] = useState(false)
   const currency = variants[0].currency ?? product.currency
@@ -738,10 +768,7 @@ function VariantGroupRows({
       : low === high
         ? formatPrice(String(low), currency)
         : `${formatPrice(String(low), currency)} – ${formatPrice(String(high), currency)}`
-  const stock = variants.reduce(
-    (sum, variant) => sum + (variant.inventory_quantity ?? 0),
-    0,
-  )
+  const stock = variants.reduce((sum, variant) => sum + (variantStock(variant) ?? 0), 0)
   const picture = variants.find((variant) => variant.image_url)?.image_url ?? null
   const count = `${variants.length} ${variants.length === 1 ? 'variant' : 'variants'}`
   // What a variant is called inside the group: its other option values ("Red"), else its title.
@@ -793,21 +820,27 @@ function VariantGroupRows({
             variant={variant}
             label={labelOf(variant)}
             nested
+            onSaved={onSaved}
           />
         ))}
     </>
   )
 }
 
-function VariantsView({ product }: { product: ProductDetail }) {
+function VariantsView({
+  product,
+  onSaved,
+}: {
+  product: ProductDetail
+  onSaved?: SavedHandler
+}) {
   if (product.variants.length === 0) {
     return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
   }
 
-  // Everything the store has in stock, across all locations (the sum when it isn't given).
-  const total =
-    product.total_inventory ??
-    product.variants.reduce((sum, variant) => sum + (variant.inventory_quantity ?? 0), 0)
+  // Everything in stock across all locations: the variants' own figures, so it always agrees with
+  // the header and the Inventory tab (the store's own total can lag behind a stock edit).
+  const total = productStock(product) ?? 0
   // With two or more options the variants are grouped under the first one (Small, Medium…).
   const groups = groupByFirstOption(product)
 
@@ -830,10 +863,16 @@ function VariantsView({ product }: { product: ProductDetail }) {
                     product={product}
                     name={group.name}
                     variants={group.variants}
+                    onSaved={onSaved}
                   />
                 ))
               : product.variants.map((variant) => (
-                  <VariantRow key={variant.id} product={product} variant={variant} />
+                  <VariantRow
+                    key={variant.id}
+                    product={product}
+                    variant={variant}
+                    onSaved={onSaved}
+                  />
                 ))}
           </tbody>
         </table>
@@ -847,7 +886,13 @@ function VariantsView({ product }: { product: ProductDetail }) {
 
 // --- Inventory ---------------------------------------------------------------
 
-function InventoryView({ product }: { product: ProductDetail }) {
+function InventoryView({
+  product,
+  onSaved,
+}: {
+  product: ProductDetail
+  onSaved?: SavedHandler
+}) {
   const withLevels = product.variants.filter(
     (variant) => variant.inventory_levels.length > 0,
   )
@@ -887,15 +932,20 @@ function InventoryView({ product }: { product: ProductDetail }) {
                   className="border-border even:bg-surface border-b last:border-b-0"
                 >
                   <td className={TD}>
-                    <span
-                      className="block max-w-80 truncate"
-                      title={level.location_name ?? ''}
-                    >
-                      {level.location_name ?? `Location ${level.location_shopify_id}`}
-                    </span>
+                    <LocationCell
+                      product={product}
+                      variant={variant}
+                      level={level}
+                      onSaved={onSaved}
+                    />
                   </td>
-                  <td className={`${TD} text-right font-semibold`}>
-                    {num(level.available)}
+                  <td className={`${TD} text-right`}>
+                    <StockCell
+                      product={product}
+                      variant={variant}
+                      level={level}
+                      onSaved={onSaved}
+                    />
                   </td>
                   <td className={`${TD} text-right`}>{num(level.on_hand)}</td>
                   <td className={`${TD} text-right`}>{num(level.committed)}</td>
@@ -905,6 +955,7 @@ function InventoryView({ product }: { product: ProductDetail }) {
               ))}
             </tbody>
           </TableWrap>
+          <ContinueSellingBox product={product} variant={variant} onSaved={onSaved} />
         </section>
       ))}
     </div>
@@ -930,6 +981,11 @@ function InventoryHeader({
           ? 'Editing inventory'
           : `${locations} ${locations === 1 ? 'location' : 'locations'}`}
       </p>
+      {!edit.editing && locations > 0 && (
+        <p className="text-text-muted hidden text-[0.78rem] md:block">
+          Double-click an Available number to change it.
+        </p>
+      )}
       <div className="ml-auto flex items-center gap-1.5">
         <SectionEditControls edit={edit} what="inventory" />
       </div>
@@ -950,7 +1006,7 @@ export function InventoryPanel({ product, onSaved }: TabProps) {
       errorPrefixes={VARIANT_ERRORS}
       onSaved={onSaved}
       header={(edit) => <InventoryHeader product={product} edit={edit} />}
-      view={<InventoryView product={product} />}
+      view={<InventoryView product={product} onSaved={onSaved} />}
       editor={(section) => <InventoryEditor {...section} />}
     />
   )
@@ -1095,37 +1151,48 @@ function MediaView({
           </button>
         </div>
       )}
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <ul className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
         {tiles.map((tile, index) => (
-          <li key={tile.image.id} className={`${CARD} relative overflow-hidden`}>
-            <button
-              type="button"
-              onClick={() => setLightboxIndex(index)}
-              aria-label={`Open image ${index + 1} of ${tiles.length}`}
-              className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
-            >
-              <ProductImage src={tile.src} alt={tile.alt} size="xl" />
-            </button>
-            <div className="absolute top-2 right-2">
-              <IconAction
-                label="Delete"
-                accessibleLabel={`Delete image ${index + 1}`}
-                icon={TrashIcon}
-                tone="danger"
-                onClick={() => onDelete(tile.image, index + 1)}
-              />
+          <li key={tile.image.id} className="flex flex-col">
+            <div className={`${CARD} relative overflow-hidden`}>
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(index)}
+                aria-label={`Open image ${index + 1} of ${tiles.length}`}
+                className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
+              >
+                <ProductImage src={tile.src} alt={tile.alt} size="xl" />
+              </button>
+              <div className="absolute top-2 right-2">
+                <IconAction
+                  label="Delete"
+                  accessibleLabel={`Delete image ${index + 1}`}
+                  icon={TrashIcon}
+                  tone="danger"
+                  onClick={() => onDelete(tile.image, index + 1)}
+                />
+              </div>
+              <p className="text-text-muted truncate px-2.5 pt-1.5 text-[0.7rem]">
+                {tile.width && tile.height ? `${tile.width} × ${tile.height}` : 'Image'}
+              </p>
+              <p
+                className="text-text truncate px-2.5 pb-1.5 text-[0.7rem] font-medium"
+                title={usedBy(tile.image).join(', ')}
+              >
+                {usedBy(tile.image).length > 0
+                  ? `Variant: ${usedBy(tile.image).join(', ')}`
+                  : 'Product image'}
+              </p>
             </div>
-            <p className="text-text-muted truncate px-3 pt-2 text-[0.75rem]">
-              {tile.width && tile.height ? `${tile.width} × ${tile.height}` : 'Image'}
-            </p>
-            <p
-              className="text-text truncate px-3 pb-2 text-[0.75rem] font-medium"
-              title={usedBy(tile.image).join(', ')}
-            >
-              {usedBy(tile.image).length > 0
-                ? `Variant: ${usedBy(tile.image).join(', ')}`
-                : 'Product image'}
-            </p>
+            {(tile.image.alt_text ?? '').trim() !== '' && (
+              <AltCaption
+                product={product}
+                imageId={tile.image.id}
+                alt={(tile.image.alt_text ?? '').trim()}
+                position={index + 1}
+                editor={altEditor}
+              />
+            )}
           </li>
         ))}
 
@@ -1521,7 +1588,7 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
       errorPrefixes={VARIANT_ERRORS}
       onSaved={onSaved}
       header={(edit) => <VariantsHeader product={product} edit={edit} />}
-      view={<VariantsView product={product} />}
+      view={<VariantsView product={product} onSaved={onSaved} />}
       editor={(section) => <VariantsEditor {...section} />}
     />
   )

@@ -30,6 +30,7 @@ import {
   SeoPanel,
   VariantsPanel,
 } from './ProductDetailPanels.tsx'
+import { productStock } from '../utils/stock.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
@@ -96,7 +97,8 @@ export function ProductDetailsView({
       ? formatPriceRange(preview)
       : '—'
   const compareAt = product?.compare_at_price_range
-  const stock = (product ? product.total_inventory : preview?.total_inventory) ?? null
+  // The variants' own stock, so the header moves with an edit made in any tab at once.
+  const stock = (product ? productStock(product) : preview?.total_inventory) ?? null
 
   const inventoryLevels = product?.variants.reduce(
     (sum, variant) => sum + variant.inventory_levels.length,

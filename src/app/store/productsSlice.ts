@@ -27,6 +27,7 @@ import {
   hideRemovedImages,
   keepPreviewImages,
   patchDetail,
+  patchListFigures,
   patchListItem,
   type PreviewImage,
   type RemovedImage,
@@ -554,20 +555,25 @@ function addSorted(list: string[], values: (string | null)[]) {
  * copy stale so each refreshes quietly (old values stay on screen meanwhile).
  */
 function patchCachedProduct(state: ProductsState, id: string, body: ProductUpdateBody) {
+  let patched: ProductDetail | null = null
   for (const key of [detailsKey(id), detailsKey(id, true)]) {
     const entry = state.details[key]
     if (!entry?.data) continue
     entry.data = patchDetail(entry.data, body)
     entry.fetchedAt = null
+    patched = entry.data
+  }
+  // A list row follows what the patched product now says (stock total, price range).
+  const patchRow = (item: ProductListItem) => {
+    const row = patchListItem(item, body)
+    return patched ? patchListFigures(row, patched, body) : row
   }
 
   for (const entry of Object.values(state.entries)) {
     if (entry.data?.items.some((item) => item.id === id)) {
       entry.data = {
         ...entry.data,
-        items: entry.data.items.map((item) =>
-          item.id === id ? patchListItem(item, body) : item,
-        ),
+        items: entry.data.items.map((item) => (item.id === id ? patchRow(item) : item)),
       }
     }
     // Titles, statuses and prices can move a product between filters and counts.
@@ -577,9 +583,7 @@ function patchCachedProduct(state: ProductsState, id: string, body: ProductUpdat
   if (state.lastData?.items.some((item) => item.id === id)) {
     state.lastData = {
       ...state.lastData,
-      items: state.lastData.items.map((item) =>
-        item.id === id ? patchListItem(item, body) : item,
-      ),
+      items: state.lastData.items.map((item) => (item.id === id ? patchRow(item) : item)),
     }
   }
 

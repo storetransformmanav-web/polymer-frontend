@@ -451,6 +451,87 @@ describe('editing a section in place', () => {
     )
   })
 
+  describe('changing a variant\u2019s price by double-clicking it', () => {
+    async function openVariants() {
+      const user = await openDetails()
+      await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+      return user
+    }
+    const price = () => screen.getByRole('button', { name: '\u00a325.85' })
+
+    it('turns the price into a box, and the question says the price now and the price it becomes', async () => {
+      const user = await openVariants()
+
+      await user.click(price())
+      expect(screen.queryByRole('textbox', { name: 'Price of M' })).toBeNull()
+      await user.dblClick(price())
+      expect(screen.getByRole('textbox', { name: 'Price of M' })).toHaveValue('25.85')
+
+      await user.keyboard('30{Enter}')
+      expect(update).not.toHaveBeenCalled()
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Update \u201cHippo Bag\u201d?',
+      })
+      expect(within(dialog).getByText('Price of M')).toBeInTheDocument()
+      expect(within(dialog).getByText('\u00a325.85')).toBeInTheDocument()
+      expect(within(dialog).getByText('\u00a330.00')).toBeInTheDocument()
+      expect(within(dialog).getByText(/also be updated in Shopify/)).toBeInTheDocument()
+
+      await confirmUpdate(user)
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { variants: [{ id: VARIANT, price: '30' }] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends nothing on Escape, on Cancel, or for the same price written another way', async () => {
+      const user = await openVariants()
+
+      await user.dblClick(price())
+      await user.keyboard('99{Escape}')
+      expect(screen.queryByRole('textbox')).toBeNull()
+
+      // 25.850 is the same price as 25.85: nothing to ask.
+      await user.dblClick(price())
+      await user.keyboard('25.850{Enter}')
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+
+      await user.dblClick(price())
+      await user.keyboard('31{Enter}')
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(price()).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('only takes a price: a number, 0 or more', async () => {
+      const user = await openVariants()
+
+      await user.dblClick(price())
+      await user.keyboard('abc{Enter}')
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a price, such as 9.99')
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+
+      await user.clear(screen.getByRole('textbox'))
+      await user.keyboard('-5{Enter}')
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a price, such as 9.99')
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('shows the backend\u2019s message when the save fails', async () => {
+      update.mockRejectedValueOnce(new ApiError('Price is locked.', { status: 422 }))
+      const user = await openVariants()
+
+      await user.dblClick(price())
+      await user.keyboard('30{Enter}')
+      await confirmUpdate(user)
+
+      expect(await screen.findByText('Price is locked.')).toBeInTheDocument()
+    })
+  })
+
   describe('asking "are you sure?" before a save', () => {
     async function startEditingVendor() {
       const user = await openDetails()
@@ -2344,6 +2425,286 @@ describe('the Inventory tab is editable too', () => {
     await user.click(screen.getByRole('button', { name: 'Save inventory' }))
     await confirmUpdate(user)
   }
+
+  describe('changing the location of a stock row by double-clicking it', () => {
+    beforeEach(() => {
+      vi.mocked(api.inventory.locations).mockResolvedValue([
+        { id: LOCATION, name: 'Unit 9', variants: 1 },
+        { id: 70137741495, name: 'Shop floor', variants: 1 },
+      ])
+    })
+    const locationButton = () => screen.getByRole('button', { name: /Unit 9/ })
+
+    it('turns the name into a dropdown, and moves the stock after “Are you sure?”', async () => {
+      const user = await editInventory()
+      expect(vi.mocked(api.inventory.locations)).not.toHaveBeenCalled()
+
+      await user.dblClick(locationButton())
+      const place = await screen.findByLabelText('Location of M at Unit 9')
+      expect(within(place).getByRole('option', { name: 'Unit 9' })).toBeInTheDocument()
+      await user.selectOptions(place, 'Shop floor')
+
+      expect(update).not.toHaveBeenCalled()
+      const dialog = screen.getByRole('alertdialog')
+      expect(within(dialog).getByText('Location of M’s stock')).toBeInTheDocument()
+      expect(within(dialog).getByText('Shop floor')).toBeInTheDocument()
+      expect(
+        within(dialog).getByText('Are you sure you want to update this?'),
+      ).toBeInTheDocument()
+      expect(
+        within(dialog).getByText('These changes will also be updated in Shopify.'),
+      ).toBeInTheDocument()
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              {
+                id: VARIANT,
+                stock: [
+                  { location_id: 70137741495, available: 5 },
+                  { location_id: LOCATION, available: 0 },
+                ],
+              },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends nothing on Escape or the ✕', async () => {
+      const user = await editInventory()
+
+      await user.dblClick(locationButton())
+      await screen.findByLabelText('Location of M at Unit 9')
+      await user.keyboard('{Escape}')
+      expect(screen.queryByLabelText('Location of M at Unit 9')).toBeNull()
+
+      await user.dblClick(locationButton())
+      await user.click(
+        screen.getByRole('button', { name: 'Cancel changing the location' }),
+      )
+      expect(screen.queryByLabelText('Location of M at Unit 9')).toBeNull()
+      expect(update).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Continue selling when out of stock, on the Inventory tab', () => {
+    const box = () =>
+      screen.getByRole('checkbox', { name: /Continue selling when out of stock/ })
+
+    it('shows the explanation, and sends the policy after “Are you sure?”', async () => {
+      const user = await editInventory()
+      expect(
+        screen.getByText('Customers can keep buying after the stock runs out.'),
+      ).toBeInTheDocument()
+      expect(box()).not.toBeChecked()
+
+      await user.click(box())
+      expect(update).not.toHaveBeenCalled()
+      const dialog = screen.getByRole('alertdialog')
+      expect(within(dialog).getByText('Off')).toBeInTheDocument()
+      expect(within(dialog).getByText('On')).toBeInTheDocument()
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          { variants: [{ id: VARIANT, inventory_policy: 'CONTINUE' }] },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends nothing on Cancel, and the box stays as it was', async () => {
+      const user = await editInventory()
+      await user.click(box())
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(box()).not.toBeChecked()
+      expect(update).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the Variants tab agrees with the Inventory tab', () => {
+    const stockedAs = (quantity: number, available: number) =>
+      details.mockResolvedValue({
+        ...DETAIL,
+        variants: [
+          {
+            ...DETAIL.variants[0],
+            inventory_quantity: quantity,
+            inventory_levels: [
+              {
+                location_shopify_id: LOCATION,
+                location_name: 'Unit 9',
+                available,
+                committed: 0,
+                on_hand: available,
+              },
+            ],
+          },
+        ],
+      } as unknown as ProductDetail)
+
+    async function openVariants() {
+      const user = userEvent.setup()
+      renderPage('/products/id-1')
+      await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
+      await user.click(screen.getByRole('tab', { name: /^Variants/ }))
+      return user
+    }
+    const variantsTable = () =>
+      within(
+        screen
+          .getByRole('columnheader', { name: 'Available' })
+          .closest('table') as HTMLElement,
+      )
+
+    it('shows the stock added in Inventory even when the variant total still says 0', async () => {
+      stockedAs(0, 25)
+      await openVariants()
+
+      expect(variantsTable().getByRole('button', { name: '25' })).toBeInTheDocument()
+      expect(variantsTable().queryByText('Out of stock')).not.toBeInTheDocument()
+    })
+
+    it('changes the stock where it is shown, and the figure follows at once', async () => {
+      stockedAs(0, 0)
+      // Once the store has the new stock, the quiet re-read after the save returns it.
+      update.mockImplementationOnce(async () => {
+        stockedAs(25, 25)
+        return WRITE_OK
+      })
+      const user = await openVariants()
+
+      await user.dblClick(variantsTable().getByRole('button', { name: 'Out of stock' }))
+      await user.keyboard('25{Enter}')
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              { id: VARIANT, stock: [{ location_id: LOCATION, available: 25 }] },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+      expect(
+        await variantsTable().findByRole('button', { name: '25' }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  describe('changing an Available number by double-clicking it', () => {
+    // The stock table is the one with an "Available" column (the products list is mounted too).
+    const figure = () =>
+      within(
+        screen
+          .getByRole('columnheader', { name: 'Available' })
+          .closest('table') as HTMLElement,
+      ).getByRole('button', { name: '5' })
+
+    it('turns the number into a box, and saves just that stock after \u201cAre you sure?\u201d', async () => {
+      const user = await editInventory()
+
+      await user.click(figure())
+      expect(
+        screen.queryByRole('textbox', { name: 'Available of M at Unit 9' }),
+      ).not.toBeInTheDocument()
+      await user.dblClick(figure())
+      const box = screen.getByRole('textbox', { name: 'Available of M at Unit 9' })
+      expect(box).toHaveValue('5')
+
+      await user.keyboard('12{Enter}')
+      expect(update).not.toHaveBeenCalled()
+      // The question names what changes: this stock, 5 now and 12 after.
+      const dialog = screen.getByRole('alertdialog')
+      expect(within(dialog).getByText('Available of M at Unit 9')).toBeInTheDocument()
+      expect(within(dialog).getByText('5')).toBeInTheDocument()
+      expect(within(dialog).getByText('12')).toBeInTheDocument()
+      await confirmUpdate(user)
+
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'id-1',
+          {
+            variants: [
+              { id: VARIANT, stock: [{ location_id: LOCATION, available: 12 }] },
+            ],
+          },
+          'polymer-uk',
+        ),
+      )
+    })
+
+    it('sends nothing on Escape, on Cancel, or when the number is left as it was', async () => {
+      const user = await editInventory()
+
+      await user.dblClick(figure())
+      await user.keyboard('99{Escape}')
+      expect(
+        screen.queryByRole('textbox', { name: 'Available of M at Unit 9' }),
+      ).not.toBeInTheDocument()
+
+      await user.dblClick(figure())
+      await user.keyboard('{Enter}')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      await user.dblClick(figure())
+      await user.keyboard('7{Enter}')
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(figure()).toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('only takes a whole number, 0 or more', async () => {
+      const user = await editInventory()
+
+      await user.dblClick(figure())
+      await user.keyboard('abc{Enter}')
+      expect(screen.getAllByRole('alert')[0]).toHaveTextContent(
+        'Enter a whole number, 0 or more',
+      )
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      await user.clear(screen.getByRole('textbox', { name: 'Available of M at Unit 9' }))
+      await user.keyboard('-3{Enter}')
+      expect(screen.getAllByRole('alert')[0]).toHaveTextContent(
+        'Enter a whole number, 0 or more',
+      )
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('says so above the table, and the pencil still opens the whole editor', async () => {
+      const user = await editInventory()
+      expect(
+        screen.getByText('Double-click an Available number to change it.'),
+      ).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Edit inventory' }))
+      expect(screen.getByLabelText('Stock quantity 1')).toHaveValue('5')
+      expect(
+        screen.queryByText('Double-click an Available number to change it.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows the backend\u2019s message when the save fails', async () => {
+      update.mockRejectedValueOnce(new ApiError('Stock is locked.', { status: 422 }))
+      const user = await editInventory()
+
+      await user.dblClick(figure())
+      await user.keyboard('12{Enter}')
+      await confirmUpdate(user)
+
+      expect(await screen.findByText('Stock is locked.')).toBeInTheDocument()
+    })
+  })
 
   it('shows the store’s figures until the pencil is pressed', async () => {
     await editInventory()
