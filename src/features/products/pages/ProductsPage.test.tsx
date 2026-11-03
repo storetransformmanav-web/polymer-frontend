@@ -995,7 +995,9 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
     expect(screen.getByText('SKU-7')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Default Title' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Details of Default Title' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Inventory/ }))

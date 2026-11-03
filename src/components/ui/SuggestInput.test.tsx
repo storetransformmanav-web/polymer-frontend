@@ -37,6 +37,23 @@ describe('SuggestInput', () => {
     expect(options()).toEqual(['Acme', 'Packaging By Polymer', 'Polymer', 'polymer labs'])
   })
 
+  it('draws its list on the page body, fixed to the screen, so nothing that clips can cut it off', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <div style={{ overflow: 'hidden', height: 20 }}>
+        <Harness />
+      </div>,
+    )
+
+    await user.click(screen.getByLabelText('Vendor'))
+
+    const list = screen.getByRole('listbox')
+    // Not inside the clipping box — a child of the body, positioned against the screen.
+    expect(container.contains(list)).toBe(false)
+    expect(list.parentElement).toBe(document.body)
+    expect(list.style.position).toBe('fixed')
+  })
+
   it('narrows to what is typed, any case, those starting with it first', async () => {
     const user = userEvent.setup()
     render(<Harness />)

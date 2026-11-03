@@ -104,7 +104,6 @@ import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 import { AddVariantDialog } from './edit/AddVariantDialog.tsx'
 import { VariantCombinations } from './VariantCombinations.tsx'
-import { VariantOptionsCard } from './OptionPills.tsx'
 
 // Which validation problems belong to each editable section (see useSectionEdit).
 const SPEC_ERRORS = [
@@ -612,7 +611,6 @@ function VariantsView({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <VariantOptionsCard product={product} onSaved={onSaved} />
       <VariantCombinations
         product={product}
         onSaved={onSaved}
@@ -1274,32 +1272,22 @@ const HEADER_BUTTON =
   'inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
 
 /**
- * "Product variants · N variants" and, at the right, **Add variant** and **Edit variants** (text
+ * The bar over the Variants tab (it carries no title: the Variants card says "Variants N" once) with, at the right, **Add variant** and **Edit variants** (text
  * buttons — no pencil) that open the whole-tab editor; while it is open, the editor's own Add
  * variant (a new option) and ✓ Save / ✕ Discard.
  */
 function VariantsHeader({
-  product,
   edit,
   onAdd,
 }: {
-  product: ProductDetail
   edit: SectionEdit
   /** Opens the New variant window. */
   onAdd: () => void
 }) {
-  const count = product.variants.length
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
-      {edit.editing ? (
+      {edit.editing && (
         <p className="text-text-muted text-[0.82rem] font-medium">Editing variants</p>
-      ) : (
-        <p className="flex items-baseline gap-2 text-[1rem] font-semibold">
-          Product variants
-          <span className="text-text-muted text-[0.82rem] font-normal">
-            {count} {count === 1 ? 'variant' : 'variants'}
-          </span>
-        </p>
       )}
       <div className="ml-auto flex items-center gap-1.5">
         {edit.editing ? (
@@ -1342,9 +1330,7 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
         what="variants"
         errorPrefixes={VARIANT_ERRORS}
         onSaved={onSaved}
-        header={(edit) => (
-          <VariantsHeader product={product} edit={edit} onAdd={() => setAdding(true)} />
-        )}
+        header={(edit) => <VariantsHeader edit={edit} onAdd={() => setAdding(true)} />}
         view={
           <VariantsView
             product={product}

@@ -1,8 +1,21 @@
-import { useId, useMemo, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDownIcon } from './icons.tsx'
 
 /** How many suggestions fit before the list scrolls. */
 const MAX_VISIBLE = 50
+
+/** The room a list wants under its box before it opens upward instead (px). */
+const LIST_ROOM = 220
+
+/** Where the open list goes: fixed to the screen, under the box (or above it with no room). */
+interface ListPlace {
+  left: number
+  width: number
+  top?: number
+  bottom?: number
+  visible: boolean
+}
 
 /** The suggestions that contain what was typed (any case), those starting with it first. */
 function matches(
@@ -73,11 +86,44 @@ export function SuggestInput({
   const listId = useId()
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
+  const box = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<ListPlace | null>(null)
   const shown = useMemo(
     () => matches(suggestions, value, asSelect),
     [suggestions, value, asSelect],
   )
   const expanded = open && shown.length > 0
+
+  // The list is drawn on the page body, fixed to the screen under its box — so no ancestor that
+  // clips (a window, an accordion, a scrolling card) can cut it off or leave it under the next
+  // field — and follows the box while the page scrolls or resizes.
+  useEffect(() => {
+    if (!expanded) return undefined
+    function measure() {
+      const rect = box.current?.getBoundingClientRect()
+      if (!rect) return
+      const below = window.innerHeight - rect.bottom
+      const upward = below < LIST_ROOM && rect.top > below
+      setPlace({
+        left: rect.left,
+        width: rect.width,
+        ...(upward
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+        // A box that isn't laid out can't be off screen; otherwise it must be in view.
+        visible:
+          (rect.width === 0 && rect.height === 0) ||
+          (rect.bottom > 0 && rect.top < window.innerHeight),
+      })
+    }
+    measure()
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [expanded])
 
   function choose(next: string) {
     onChange(next)
@@ -107,7 +153,7 @@ export function SuggestInput({
   }
 
   return (
-    <div className="relative">
+    <div ref={box} className="relative">
       <input
         id={id}
         role="combobox"
@@ -146,37 +192,47 @@ export function SuggestInput({
           }`}
         />
       )}
-      {expanded && (
-        <ul
-          id={listId}
-          role="listbox"
-          className="border-border bg-bg absolute top-full right-0 left-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border p-1 shadow-lg"
-        >
-          {shown.map((suggestion, index) => (
-            <li
-              key={suggestion}
-              id={`${listId}-${index}`}
-              role="option"
-              aria-selected={index === active}
-              // Pressing (not clicking) so the box keeps the focus and doesn't close first.
-              onMouseDown={(event) => {
-                event.preventDefault()
-                choose(suggestion)
-              }}
-              onMouseEnter={() => setActive(index)}
-              className={`cursor-pointer truncate rounded-lg px-2.5 py-2 text-[0.85rem] font-medium ${
-                index === active
-                  ? 'bg-accent-tint'
-                  : asSelect && suggestion.toLowerCase() === value.trim().toLowerCase()
-                    ? 'bg-accent-tint font-semibold'
-                    : 'hover:bg-accent-tint/60'
-              }`}
-            >
-              {suggestion}
-            </li>
-          ))}
-        </ul>
-      )}
+      {expanded &&
+        place?.visible &&
+        createPortal(
+          <ul
+            id={listId}
+            role="listbox"
+            style={{
+              position: 'fixed',
+              left: place.left,
+              width: place.width,
+              top: place.top,
+              bottom: place.bottom,
+            }}
+            className="border-border bg-bg z-[70] max-h-56 overflow-y-auto rounded-xl border p-1 shadow-lg"
+          >
+            {shown.map((suggestion, index) => (
+              <li
+                key={suggestion}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={index === active}
+                // Pressing (not clicking) so the box keeps the focus and doesn't close first.
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  choose(suggestion)
+                }}
+                onMouseEnter={() => setActive(index)}
+                className={`cursor-pointer truncate rounded-lg px-2.5 py-2 text-[0.85rem] font-medium ${
+                  index === active
+                    ? 'bg-accent-tint'
+                    : asSelect && suggestion.toLowerCase() === value.trim().toLowerCase()
+                      ? 'bg-accent-tint font-semibold'
+                      : 'hover:bg-accent-tint/60'
+                }`}
+              >
+                {suggestion}
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )}
     </div>
   )
 }

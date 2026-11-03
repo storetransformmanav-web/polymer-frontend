@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import type { ProductDetail, ProductUpdateBody } from '../../../lib/api/endpoints.ts'
+import type {
+  ProductDetail,
+  ProductUpdateBody,
+  ProductVariant,
+} from '../../../lib/api/endpoints.ts'
 import { useSaveProduct } from '../hooks/useSaveProduct.ts'
 import type { SavedHandler } from '../hooks/useSectionEdit.ts'
 import { LIMITS } from '../utils/editDraft.ts'
@@ -10,19 +14,53 @@ type Change =
   | { kind: 'value'; option: string; from: string; to: string }
 
 /**
- * The product's options, one row each — a tag with the option's name (Size) and a pill per value
- * (Small, Medium, Large), then the next option (Color…) on its own row. **Hover a name or a value,
- * click it, and it becomes a box**: Enter (or leaving the box) keeps what was typed, Escape puts
- * the old one back. A change asks "Are you sure?" (old → new) and then sends just
- * `options_update` — `{ name, new_name }` or `{ name, values_rename: [{ from, to }] }` — and the
- * new name shows at once, in the table below too. Adding or removing values is in the editor
- * (**Edit variants**).
+ * The variant that goes with a click on `value` of the option `name`: one that has that value and
+ * agrees with the current choice on as many of the other options as possible (so clicking Large
+ * while Blue is chosen goes to Large / Blue when there is one, else to another Large).
  */
-export function VariantOptionsCard({
+export function variantFor(
+  variants: ProductVariant[],
+  current: ProductVariant,
+  name: string,
+  value: string,
+): ProductVariant | null {
+  const wanted = new Map((current.selected_options ?? []).map((o) => [o.name, o.value]))
+  wanted.set(name, value)
+  let best: ProductVariant | null = null
+  let bestScore = -1
+  for (const variant of variants) {
+    const options = variant.selected_options ?? []
+    if (!options.some((o) => o.name === name && o.value === value)) continue
+    const score = options.filter((o) => wanted.get(o.name) === o.value).length
+    if (score > bestScore) {
+      best = variant
+      bestScore = score
+    }
+  }
+  return best
+}
+
+/**
+ * The product's options and the way to choose a variant, in one place: one row per option — a tag
+ * with the option's name (Size) and a pill per value (Small, Medium, Large), then the next option
+ * (Color…) on its own row. **Click a value to choose it**: the chosen value of each option is
+ * marked, and the variant with those values is the one shown below (a click on a value that
+ * doesn't go with the other choice moves to the nearest variant that has it). **Double-click a
+ * name or a value to rename it** (it becomes a box: Enter or leaving it keeps the text, Escape puts
+ * the old one back). A change asks "Are you sure?" (old → new) and then sends just
+ * `options_update` — `{ name, new_name }` or `{ name, values_rename: [{ from, to }] }` — and the
+ * new name shows at once. Adding or removing values is in the editor (**Edit variants**).
+ */
+export function VariantOptionRows({
   product,
+  selected,
+  onSelect,
   onSaved,
 }: {
   product: ProductDetail
+  /** The variant shown now. */
+  selected: ProductVariant
+  onSelect: (variantId: string) => void
   onSaved?: SavedHandler
 }) {
   const { save, error, clearError } = useSaveProduct()
@@ -35,6 +73,8 @@ export function VariantOptionsCard({
   if (options.length === 0) return null
 
   const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  const chosen = (name: string) =>
+    selected.selected_options?.find((o) => o.name === name)?.value
 
   /** Why `to` can't be this option's new name, or null. */
   function nameProblem(option: string, to: string): string | null {
@@ -85,7 +125,7 @@ export function VariantOptionsCard({
   return (
     <section
       aria-label="Variant options"
-      className={`flex flex-col gap-3 px-1 ${sending ? 'opacity-70' : ''}`}
+      className={`flex flex-col gap-2.5 ${sending ? 'opacity-70' : ''}`}
     >
       {options.map((option) => (
         <div key={option.name} className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -97,13 +137,26 @@ export function VariantOptionsCard({
             check={(to) => nameProblem(option.name, to)}
             onCommit={(to) => setAsking({ kind: 'name', option: option.name, to })}
           />
-          <ul aria-label={`Values of ${option.name}`} className="flex flex-wrap gap-1.5">
+          <ul
+            aria-label={`Values of ${option.name}`}
+            className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+          >
             {option.values.map((value) => (
               <li key={value}>
                 <EditablePill
                   text={value}
                   label={`Value “${value}” of ${option.name}`}
+                  pressed={chosen(option.name) === value}
                   disabled={sending}
+                  onPick={() => {
+                    const next = variantFor(
+                      product.variants,
+                      selected,
+                      option.name,
+                      value,
+                    )
+                    if (next) onSelect(next.id)
+                  }}
                   check={(to) => valueProblem(option.name, value, to)}
                   onCommit={(to) =>
                     setAsking({ kind: 'value', option: option.name, from: value, to })
@@ -139,32 +192,45 @@ export function VariantOptionsCard({
 }
 
 /**
- * A name or a value as a pill that tints on hover; one click turns it into a box. A refused value
- * (`check` says why) stays open with the reason under it; nothing is sent from here — `onCommit`
- * hands the new text over.
+ * A name or a value as a pill that tints on hover. A value is chosen with a click (`onPick`,
+ * `pressed` marks the chosen one); a double-click (or F2) turns any pill into a box to rename it. A
+ * refused name (`check` says why) stays open with the reason under it; nothing is sent from here —
+ * `onCommit` hands the new text over.
  */
 function EditablePill({
   text,
   label,
   tag = false,
+  pressed,
   disabled,
   check,
+  onPick,
   onCommit,
 }: {
   text: string
   label: string
   /** The option's name (a square tag) rather than one of its values (a round pill). */
   tag?: boolean
+  /** The chosen value of its option (values only). */
+  pressed?: boolean
   disabled: boolean
   check: (to: string) => string | null
+  onPick?: () => void
   onCommit: (to: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(text)
   const [problem, setProblem] = useState<string | null>(null)
   const shape = tag
-    ? 'rounded-md bg-accent-tint px-2.5 py-0.5 text-[0.82rem] font-semibold hover:bg-table-head'
-    : 'rounded-full bg-bg px-3 py-0.5 text-[0.8rem] font-medium hover:bg-accent-tint/60'
+    ? 'border-border-strong rounded-md bg-accent-tint px-2.5 py-0.5 text-[0.82rem] font-semibold hover:bg-table-head'
+    : pressed
+      ? 'rounded-full border-accent bg-accent-tint px-3 py-0.5 text-[0.8rem] font-semibold'
+      : 'border-border-strong rounded-full bg-bg px-3 py-0.5 text-[0.8rem] font-medium hover:bg-accent-tint/60'
+
+  function start() {
+    setDraft(text)
+    setEditing(true)
+  }
 
   function finish() {
     const next = draft.trim()
@@ -225,13 +291,20 @@ function EditablePill({
   return (
     <button
       type="button"
-      title="Click to rename"
+      title={
+        onPick ? 'Click to choose · double-click to rename' : 'Double-click to rename'
+      }
+      aria-pressed={onPick ? Boolean(pressed) : undefined}
       disabled={disabled}
-      onClick={() => {
-        setDraft(text)
-        setEditing(true)
+      onClick={() => onPick?.()}
+      onDoubleClick={start}
+      onKeyDown={(event) => {
+        if (event.key === 'F2') {
+          event.preventDefault()
+          start()
+        }
       }}
-      className={`border-border-strong text-text cursor-text border transition-colors disabled:cursor-default ${shape}`}
+      className={`text-text cursor-pointer border transition-colors disabled:cursor-default ${shape}`}
     >
       {text}
     </button>

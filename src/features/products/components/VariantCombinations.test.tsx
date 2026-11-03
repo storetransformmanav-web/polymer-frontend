@@ -99,7 +99,13 @@ const picture = () => within(screen.getByRole('figure'))
 const price = () => within(screen.getByRole('region', { name: 'Unit price' }))
 const details = (name: string) =>
   within(screen.getByRole('region', { name: `Details of ${name}` }))
-const choose = (name: string) => screen.getByRole('button', { name, pressed: undefined })
+/** Chooses a variant by clicking its values ("Medium / Red") in the option rows. */
+const choose = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  const rows = within(screen.getByRole('region', { name: 'Variant options' }))
+  for (const value of name.split(' / ')) {
+    await user.click(rows.getByRole('button', { name: value }))
+  }
+}
 
 const IMAGES = [
   { id: 'img-1', url: 'https://cdn.example.com/a.jpg', alt_text: 'Front' },
@@ -149,7 +155,7 @@ describe('the Variants tab', () => {
     const user = userEvent.setup()
     renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-    await user.click(choose('Medium / Red'))
+    await choose(user, 'Medium / Red')
     expect(
       screen.getByRole('figure', { name: 'Picture of Medium / Red' }),
     ).toBeInTheDocument()
@@ -160,7 +166,7 @@ describe('the Variants tab', () => {
     expect(fields.getByText('250 g')).toBeInTheDocument()
     expect(fields.getByText('Stops selling')).toBeInTheDocument()
 
-    await user.click(choose('Small / Black'))
+    await choose(user, 'Small / Black')
     expect(price().getByText('£200.00')).toBeInTheDocument()
     expect(price().getByText('10 in stock')).toBeInTheDocument()
   })
@@ -169,7 +175,7 @@ describe('the Variants tab', () => {
     const user = userEvent.setup()
     renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-    await user.click(choose('Small / Black'))
+    await choose(user, 'Small / Black')
     await user.dblClick(details('Small / Black').getByRole('button', { name: 'SKU-2' }))
     const box = screen.getByRole('textbox', { name: 'SKU of Small / Black' })
     await user.clear(box)
@@ -300,6 +306,130 @@ describe('the Variants tab', () => {
     })
   })
 
+  describe('one section to choose the variant', () => {
+    it('has the option rows as the only chooser — no second list of variants', () => {
+      renderWithProviders(<VariantsPanel product={PRODUCT} />)
+
+      expect(screen.getAllByRole('region', { name: 'Variants' })).toHaveLength(1)
+      expect(screen.queryByRole('list', { name: 'Variants' })).toBeNull()
+      // The first variant is chosen: its value of each option is marked.
+      const rows = within(screen.getByRole('region', { name: 'Variant options' }))
+      expect(rows.getByRole('button', { name: 'Small' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(rows.getByRole('button', { name: 'Red' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(rows.getByRole('button', { name: 'Medium' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+    })
+
+    it('a click on a value goes to the nearest variant that has it', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<VariantsPanel product={PRODUCT} />)
+      const rows = within(screen.getByRole('region', { name: 'Variant options' }))
+
+      await user.click(rows.getByRole('button', { name: 'Medium' }))
+      expect(
+        screen.getByRole('figure', { name: 'Picture of Medium / Red' }),
+      ).toBeInTheDocument()
+
+      // There is no Medium / Black, so Black moves to a Black variant that exists.
+      await user.click(rows.getByRole('button', { name: 'Black' }))
+      expect(
+        screen.getByRole('figure', { name: 'Picture of Small / Black' }),
+      ).toBeInTheDocument()
+      expect(rows.getByRole('button', { name: 'Black' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(rows.getByRole('button', { name: 'Medium' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      )
+    })
+  })
+
+  describe('choosing a picture: from media or by web address', () => {
+    beforeEach(() => {
+      vi.mocked(api.products.details).mockResolvedValue(PICTURED)
+    })
+
+    it('Change image shows both ways before anything is chosen, and sends a new address with the media', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<VariantsPanel product={PICTURED} />)
+
+      await user.click(picture().getByRole('button', { name: 'Change image' }))
+      const dialog = within(
+        screen.getByRole('dialog', { name: 'Change the picture of Small / Red' }),
+      )
+      expect(dialog.getByRole('button', { name: 'From media' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(dialog.getByRole('button', { name: 'Web address' })).toBeInTheDocument()
+
+      await user.click(dialog.getByRole('button', { name: 'Web address' }))
+      await user.type(
+        dialog.getByLabelText(/^Picture web address/),
+        'https://cdn.example.com/new.jpg',
+      )
+      await user.click(dialog.getByRole('button', { name: 'Use this picture' }))
+      await confirmUpdate(user)
+
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+      expect(update.mock.calls[0][1]).toEqual(
+        expect.objectContaining({
+          media_add: [
+            expect.objectContaining({ url: 'https://cdn.example.com/new.jpg' }),
+          ],
+        }),
+      )
+    })
+
+    it('the New variant window offers both in its Picture section; a media picture is used by its address', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<VariantsPanel product={PICTURED} />)
+
+      await user.click(screen.getByRole('button', { name: 'Add variant' }))
+      const win = within(screen.getByRole('dialog', { name: 'New variant' }))
+      await user.click(win.getByRole('button', { name: 'Picture' }))
+      expect(win.getByRole('button', { name: 'From media' })).toBeInTheDocument()
+      expect(win.getByRole('button', { name: 'Web address' })).toBeInTheDocument()
+
+      await user.click(win.getByRole('button', { name: 'Image 2' }))
+      await user.type(win.getByLabelText('Size'), 'Large')
+      await user.type(win.getByLabelText('Color'), 'Red')
+      await user.type(win.getByLabelText('Price'), '71.5')
+      await user.click(win.getByRole('button', { name: 'Add variant' }))
+      await confirmUpdate(user)
+
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+      expect(update.mock.calls[0][1].variants?.[0]).toEqual(
+        expect.objectContaining({ image_url: IMAGES[1]!.url }),
+      )
+    })
+
+    it('the Edit variant window has both too, in its Picture section', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<VariantsPanel product={PICTURED} />)
+
+      await user.click(screen.getByRole('button', { name: 'Edit variant Small / Red' }))
+      const win = within(screen.getByRole('dialog', { name: /^Edit variant/ }))
+      await user.click(win.getByRole('button', { name: 'Picture' }))
+      expect(win.getByRole('button', { name: 'From media' })).toBeInTheDocument()
+      expect(win.getByRole('button', { name: 'Web address' })).toBeInTheDocument()
+      expect(win.getByRole('button', { name: 'Image 1' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+    })
+  })
+
   describe('the Edit variant window', () => {
     const open = async (
       user: ReturnType<typeof userEvent.setup>,
@@ -313,7 +443,7 @@ describe('the Variants tab', () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-      await user.click(choose('Medium / Red'))
+      await choose(user, 'Medium / Red')
       const win = await open(user, 'Medium / Red')
       expect(win.getByText('Unit price')).toBeInTheDocument()
       expect(win.getByLabelText('Price')).toHaveValue('62.00')
@@ -464,7 +594,7 @@ describe('the Variants tab', () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-      await user.click(options().getByRole('button', { name: 'Medium' }))
+      await user.dblClick(options().getByRole('button', { name: 'Medium' }))
       const box = screen.getByLabelText('Value \u201cMedium\u201d of Size')
       expect(box).toHaveValue('Medium')
       await user.clear(box)
@@ -494,7 +624,7 @@ describe('the Variants tab', () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-      await user.click(options().getByRole('button', { name: 'Color' }))
+      await user.dblClick(options().getByRole('button', { name: 'Color' }))
       const box = screen.getByLabelText('Name of option Color')
       await user.clear(box)
       await user.type(box, 'Colour{Enter}')
@@ -513,7 +643,7 @@ describe('the Variants tab', () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-      await user.click(options().getByRole('button', { name: 'Medium' }))
+      await user.dblClick(options().getByRole('button', { name: 'Medium' }))
       const box = screen.getByLabelText('Value \u201cMedium\u201d of Size')
       await user.clear(box)
       await user.type(box, 'small{Enter}')
@@ -523,7 +653,7 @@ describe('the Variants tab', () => {
       await user.keyboard('{Escape}')
       expect(screen.queryByLabelText('Value \u201cMedium\u201d of Size')).toBeNull()
 
-      await user.click(options().getByRole('button', { name: 'Red' }))
+      await user.dblClick(options().getByRole('button', { name: 'Red' }))
       await user.keyboard('{Enter}')
       expect(screen.queryByRole('alertdialog')).toBeNull()
       expect(update).not.toHaveBeenCalled()
@@ -540,8 +670,10 @@ describe('the Variants tab', () => {
 
     // The All variants row sets the price of every one; then one SKU is changed on its own.
     await user.type(bulk.getByLabelText('Price for all variants'), '55')
-    expect(bulk.getByLabelText('Price for Small / Red')).toHaveValue('55')
-    expect(bulk.getByLabelText('Price for Medium / Red')).toHaveValue('55')
+    expect(bulk.getByLabelText('Price for Small / Red')).toHaveTextContent('55')
+    expect(bulk.getByLabelText('Price for Medium / Red')).toHaveTextContent('55')
+    // A cell is plain text until it is double-clicked.
+    await user.dblClick(bulk.getByLabelText('SKU for Medium / Red'))
     await user.clear(bulk.getByLabelText('SKU for Medium / Red'))
     await user.type(bulk.getByLabelText('SKU for Medium / Red'), 'HM-M')
 
@@ -571,6 +703,7 @@ describe('the Variants tab', () => {
 
     await user.click(screen.getByRole('button', { name: 'Bulk edit' }))
     const bulk = within(screen.getByRole('region', { name: 'Bulk edit variants' }))
+    await user.dblClick(bulk.getByLabelText('Price for Small / Red'))
     await user.type(bulk.getByLabelText('Price for Small / Red'), '9')
     await user.click(bulk.getByRole('button', { name: 'Cancel bulk editing' }))
     await user.click(screen.getByRole('button', { name: 'Yes, cancel' }))

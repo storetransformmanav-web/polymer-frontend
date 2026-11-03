@@ -12,7 +12,8 @@ import { ProductImage } from '../ProductImage.tsx'
 /** Every variant problem belongs to this editor. */
 const BULK_ERRORS = ['variants'] as const
 
-type ColumnId = 'price' | 'compareAtPrice' | 'cost' | 'sku' | 'barcode' | 'stock'
+type ColumnId =
+  'price' | 'compareAtPrice' | 'cost' | 'sku' | 'barcode' | 'stock' | 'weight'
 
 const COLUMNS: { id: ColumnId; label: string; width: string; numeric?: boolean }[] = [
   { id: 'price', label: 'Price', width: 'w-32', numeric: true },
@@ -21,8 +22,9 @@ const COLUMNS: { id: ColumnId; label: string; width: string; numeric?: boolean }
   { id: 'sku', label: 'SKU', width: 'w-44' },
   { id: 'barcode', label: 'Barcode', width: 'w-44' },
   { id: 'stock', label: 'Inventory', width: 'w-28', numeric: true },
+  { id: 'weight', label: 'Weight', width: 'w-28', numeric: true },
 ]
-/** What the "All variants" row can set for every variant: not SKU, barcode or stock. */
+/** What the "All variants" row can set for every variant: not SKU, barcode, stock or weight. */
 const COMMON: ColumnId[] = ['price', 'compareAtPrice', 'cost']
 
 // The same table as the products' bulk editor.
@@ -31,6 +33,88 @@ const TH =
 const TD = 'border-border border-b border-l p-0 align-middle first:border-l-0'
 const CELL =
   'h-10 w-full min-w-0 border-none bg-transparent px-3 text-[0.85rem] outline-none transition-colors focus:bg-bg focus:outline-2 focus:-outline-offset-2 focus:outline-accent disabled:opacity-60'
+/**
+ * A cell of the spreadsheet. It reads as plain text — no box, no colour — and only tints when the
+ * pointer is over it (light) or it is clicked / focused (stronger); a **double-click** (or Enter, or
+ * F2) turns it into a box to type in, and Enter, Escape or leaving the box turns it back. A changed
+ * value is drawn bold in the accent colour, a refused one in red.
+ */
+function BulkCell({
+  value,
+  label,
+  error,
+  changed,
+  numeric,
+  disabled,
+  maxLength,
+  onChange,
+}: {
+  value: string
+  label: string
+  error?: string
+  changed: boolean
+  numeric: boolean
+  disabled: boolean
+  maxLength: number
+  onChange: (value: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const side = numeric ? 'text-right' : 'text-left'
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        aria-label={label}
+        aria-invalid={error ? true : undefined}
+        title={error}
+        value={value}
+        maxLength={maxLength}
+        inputMode={numeric ? 'decimal' : undefined}
+        autoComplete="off"
+        disabled={disabled}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === 'Escape') {
+            // Only this box: Escape must not leave the whole editor.
+            event.preventDefault()
+            event.stopPropagation()
+            setEditing(false)
+          }
+        }}
+        className={`${CELL} bg-accent-tint/70 ${side} ${
+          error ? 'outline-danger bg-danger-bg outline-2 -outline-offset-2' : ''
+        }`}
+      />
+    )
+  }
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={error ?? 'Double-click to edit'}
+      disabled={disabled}
+      onDoubleClick={() => setEditing(true)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === 'F2') {
+          event.preventDefault()
+          setEditing(true)
+        }
+      }}
+      className={`hover:bg-accent-tint/50 focus:bg-accent-tint/80 focus:outline-accent active:bg-accent-tint block h-10 w-full min-w-0 cursor-cell border-none bg-transparent px-3 text-[0.85rem] transition-colors outline-none focus:outline-2 focus:-outline-offset-2 disabled:opacity-60 ${side} ${
+        error
+          ? 'bg-danger-bg text-danger outline-danger outline-2 -outline-offset-2'
+          : changed
+            ? 'text-accent font-semibold'
+            : ''
+      }`}
+    >
+      {value === '' ? <span className="text-text-muted/60">{'—'}</span> : value}
+    </button>
+  )
+}
+
 const ROW =
   'border-border-strong bg-table-head/50 hover:bg-table-head/70 border-b border-t transition-colors'
 const ROW_BAR = 'shadow-[inset_3px_0_0_var(--color-accent)]'
@@ -52,7 +136,7 @@ function cellOf(variant: VariantDraft, index: number, id: ColumnId) {
 /**
  * **Bulk edit** of a product's variants, laid out like the products' bulk editor: a bar with
  * "Editing N variants", ✓ Save, ✕ Cancel and **Back to list**; then a spreadsheet — one row per
- * variant with its price, compare-at price, cost, SKU, barcode and stock (a variant kept at one
+ * variant with its price, compare-at price, cost, SKU, barcode, stock and weight (stock for a variant kept at one
  * location; several locations are changed on the Inventory tab) — topped by an **All variants**
  * row whose price, compare-at and cost are applied to every row at once (a blank one changes
  * nothing). Changed cells are tinted; nothing is sent until Save, which checks the cells, asks
@@ -295,11 +379,13 @@ export function VariantBulkEdit({
                       const error = edit.errors[cell.error]
                       return (
                         <td key={column.id} className={TD}>
-                          <input
-                            aria-label={`${column.label} for ${variant.title}`}
-                            aria-invalid={error ? true : undefined}
-                            title={error}
+                          <BulkCell
+                            label={`${column.label} for ${variant.title}`}
+                            error={error}
                             value={cell.value}
+                            changed={cell.value !== was}
+                            numeric={Boolean(column.numeric)}
+                            disabled={edit.isSaving}
                             maxLength={
                               column.id === 'sku'
                                 ? LIMITS.sku
@@ -307,19 +393,7 @@ export function VariantBulkEdit({
                                   ? LIMITS.barcode
                                   : 20
                             }
-                            inputMode={column.numeric ? 'decimal' : undefined}
-                            autoComplete="off"
-                            disabled={edit.isSaving}
-                            onChange={(event) =>
-                              setCell(index, column.id, event.target.value)
-                            }
-                            className={`${CELL} ${column.numeric ? 'text-right' : ''} ${
-                              error
-                                ? 'outline-danger bg-danger-bg outline-2 -outline-offset-2'
-                                : cell.value !== was
-                                  ? 'bg-accent-tint/60'
-                                  : ''
-                            }`}
+                            onChange={(next) => setCell(index, column.id, next)}
                           />
                         </td>
                       )

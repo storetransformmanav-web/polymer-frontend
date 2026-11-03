@@ -23,6 +23,7 @@ import { productStock, variantStock } from '../utils/stock.ts'
 import { VariantBulkEdit } from './edit/VariantBulkEdit.tsx'
 import { VariantEditDialog } from './edit/VariantEditDialog.tsx'
 import { StockCell, VariantFieldCell } from './InlineEdits.tsx'
+import { VariantOptionRows } from './OptionPills.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 import { VariantImageDialog } from './VariantImageDialog.tsx'
@@ -114,262 +115,249 @@ export function VariantCombinations({
     at >= 0 || !src ? slides : [{ src, alt: `Picture of ${title}` }]
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <figure
-          aria-label={`Picture of ${title}`}
-          className={`${CARD} relative m-0 overflow-hidden p-3`}
-        >
-          <ProductImage
-            src={variant.image_url ?? null}
-            alt={`Picture of ${title}`}
-            size="xl"
-          />
-          <div className="absolute right-5 bottom-5 left-5 flex flex-wrap justify-end gap-1.5">
-            {src && (
-              <button
-                type="button"
-                onClick={() => setLightbox(at >= 0 ? at : 0)}
-                className={IMAGE_BUTTON}
-              >
-                <ExternalLinkIcon width={14} height={14} />
-                View Full
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setChanging(true)}
-              className={IMAGE_BUTTON}
-            >
-              <ImageIcon width={14} height={14} />
-              Change image
-            </button>
-          </div>
-        </figure>
-
-        <section
-          aria-label="Unit price"
-          className="border-border-strong bg-accent-tint/30 flex flex-col gap-1 rounded-xl border px-4 py-3"
-        >
-          <p className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
-            Unit price
-          </p>
-          <p className="flex flex-wrap items-baseline gap-x-2.5 text-[1.7rem] leading-tight font-bold">
-            {formatPrice(variant.price, currency)}
-            {variant.compare_at_price &&
-              Number(variant.compare_at_price) > Number(variant.price) && (
-                <span className="text-text-muted text-[0.95rem] font-medium line-through">
-                  {formatPrice(variant.compare_at_price, currency)}
-                </span>
-              )}
-          </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            {out ? (
-              <Badge tone="danger">Out of stock</Badge>
-            ) : (
-              <Badge tone="success">{`${num(stock ?? 0)} in stock`}</Badge>
-            )}
-            {variant.available_for_sale === false && (
-              <Badge tone="neutral">Unavailable</Badge>
-            )}
-          </p>
-        </section>
-      </div>
-
-      <div className="flex min-w-0 flex-col gap-3">
-        <section
-          aria-label="Choose a variant"
-          className={`${CARD} flex flex-col gap-3 p-4`}
-        >
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold">
-              Variants
-              <span className="bg-accent-tint text-text-muted rounded-full px-2 text-[0.72rem]">
-                {product.variants.length}
-              </span>
-            </h3>
-            <span className="text-text-muted text-[0.8rem]">
-              Total inventory across all locations: <strong>{num(total)}</strong>{' '}
-              available
+    <div className="flex flex-col gap-4">
+      {/* The one section for choosing: the heading, the total, Bulk edit and the option rows. */}
+      <section aria-label="Variants" className={`${CARD} flex flex-col gap-3 p-4`}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold">
+            Variants
+            <span className="bg-accent-tint text-text-muted rounded-full px-2 text-[0.72rem]">
+              {product.variants.length}
             </span>
-            <button
-              type="button"
-              onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
-              className="border-border bg-bg text-text hover:border-accent ml-auto inline-flex h-8 cursor-pointer items-center rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
-            >
-              Bulk edit
-            </button>
-          </div>
-          <ul aria-label="Variants" className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {product.variants.map((candidate) => (
-              <li key={candidate.id}>
+          </h3>
+          <span className="text-text-muted text-[0.8rem]">
+            Total inventory across all locations: <strong>{num(total)}</strong> available
+          </span>
+          <button
+            type="button"
+            onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
+            className="border-border bg-bg text-text hover:border-accent ml-auto inline-flex h-8 cursor-pointer items-center rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
+          >
+            Bulk edit
+          </button>
+        </div>
+        <VariantOptionRows
+          product={product}
+          selected={variant}
+          onSelect={setSelectedId}
+          onSaved={onSaved}
+        />
+      </section>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <figure
+            aria-label={`Picture of ${title}`}
+            className={`${CARD} relative m-0 overflow-hidden p-3`}
+          >
+            <ProductImage
+              src={variant.image_url ?? null}
+              alt={`Picture of ${title}`}
+              size="xl"
+            />
+            <div className="absolute right-5 bottom-5 left-5 flex flex-wrap justify-end gap-1.5">
+              {src && (
                 <button
                   type="button"
-                  aria-pressed={candidate.id === variant.id}
-                  onClick={() => setSelectedId(candidate.id)}
-                  className={`cursor-pointer rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition-colors ${
-                    candidate.id === variant.id
-                      ? 'border-accent bg-accent-tint text-text'
-                      : 'border-border-strong bg-bg text-text hover:bg-accent-tint/60'
-                  }`}
+                  onClick={() => setLightbox(at >= 0 ? at : 0)}
+                  className={IMAGE_BUTTON}
                 >
-                  {candidate.title ?? 'Variant'}
+                  <ExternalLinkIcon width={14} height={14} />
+                  View Full
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section aria-label={`Details of ${title}`} className={CARD}>
-          <div className="border-border-strong flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-            <h3 className="text-[0.95rem] font-semibold">{title}</h3>
-            <div className="flex items-center gap-3">
-              <p className="text-text-muted hidden items-center gap-1.5 text-[0.76rem] sm:flex">
-                <PencilIcon width={12} height={12} />
-                Double-click a value to change it
-              </p>
+              )}
               <button
                 type="button"
-                aria-label={`Edit variant ${title}`}
-                onClick={() => setEditing(true)}
-                className="border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
+                onClick={() => setChanging(true)}
+                className={IMAGE_BUTTON}
               >
-                <PencilIcon width={13} height={13} />
-                Edit variant
+                <ImageIcon width={14} height={14} />
+                Change image
               </button>
             </div>
-          </div>
-          <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Field label="Options">
-              {variant.selected_options && variant.selected_options.length > 0 ? (
-                <span className="flex flex-wrap gap-1.5">
-                  {variant.selected_options.map((chosen) => (
-                    <span
-                      key={chosen.name}
-                      className="border-border-strong bg-surface rounded-full border px-2.5 py-0.5 text-[0.8rem]"
-                    >
-                      <span className="text-text-muted">{chosen.name}: </span>
-                      {chosen.value}
-                    </span>
-                  ))}
+          </figure>
+
+          <section
+            aria-label="Unit price"
+            className="border-border-strong bg-accent-tint/30 flex flex-col gap-1 rounded-xl border px-4 py-3"
+          >
+            <p className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
+              Unit price
+            </p>
+            <p className="flex flex-wrap items-baseline gap-x-2.5 text-[1.7rem] leading-tight font-bold">
+              {formatPrice(variant.price, currency)}
+              {variant.compare_at_price &&
+                Number(variant.compare_at_price) > Number(variant.price) && (
+                  <span className="text-text-muted text-[0.95rem] font-medium line-through">
+                    {formatPrice(variant.compare_at_price, currency)}
+                  </span>
+                )}
+            </p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              {out ? (
+                <Badge tone="danger">Out of stock</Badge>
+              ) : (
+                <Badge tone="success">{`${num(stock ?? 0)} in stock`}</Badge>
+              )}
+              {variant.available_for_sale === false && (
+                <Badge tone="neutral">Unavailable</Badge>
+              )}
+            </p>
+          </section>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-3">
+          <section aria-label={`Details of ${title}`} className={CARD}>
+            <div className="border-border-strong flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+              <h3 className="text-[0.95rem] font-semibold">{title}</h3>
+              <div className="flex items-center gap-3">
+                <p className="text-text-muted hidden items-center gap-1.5 text-[0.76rem] sm:flex">
+                  <PencilIcon width={12} height={12} />
+                  Double-click a value to change it
+                </p>
+                <button
+                  type="button"
+                  aria-label={`Edit variant ${title}`}
+                  onClick={() => setEditing(true)}
+                  className="border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
+                >
+                  <PencilIcon width={13} height={13} />
+                  Edit variant
+                </button>
+              </div>
+            </div>
+            <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              <Field label="Options">
+                {variant.selected_options && variant.selected_options.length > 0 ? (
+                  <span className="flex flex-wrap gap-1.5">
+                    {variant.selected_options.map((chosen) => (
+                      <span
+                        key={chosen.name}
+                        className="border-border-strong bg-surface rounded-full border px-2.5 py-0.5 text-[0.8rem]"
+                      >
+                        <span className="text-text-muted">{chosen.name}: </span>
+                        {chosen.value}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+              </Field>
+              <Field label="SKU">
+                <span className="flex items-center gap-1">
+                  <VariantFieldCell
+                    product={product}
+                    variant={variant}
+                    field="sku"
+                    onSaved={onSaved}
+                    icon
+                  />
+                  {variant.sku && (
+                    <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
+                  )}
                 </span>
-              ) : null}
-            </Field>
-            <Field label="SKU">
-              <span className="flex items-center gap-1">
+              </Field>
+              <Field label="Barcode">
                 <VariantFieldCell
                   product={product}
                   variant={variant}
-                  field="sku"
+                  field="barcode"
                   onSaved={onSaved}
                   icon
                 />
-                {variant.sku && (
-                  <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
-                )}
-              </span>
-            </Field>
-            <Field label="Barcode">
-              <VariantFieldCell
-                product={product}
-                variant={variant}
-                field="barcode"
-                onSaved={onSaved}
-                icon
-              />
-            </Field>
-            <Field label="Price">
-              <VariantFieldCell
-                product={product}
-                variant={variant}
-                field="price"
-                onSaved={onSaved}
-                icon
-              />
-            </Field>
-            <Field label="Compare-at price">
-              <VariantFieldCell
-                product={product}
-                variant={variant}
-                field="compare_at_price"
-                strike
-                onSaved={onSaved}
-                icon
-              />
-            </Field>
-            <Field label="Cost per item">
-              <VariantFieldCell
-                product={product}
-                variant={variant}
-                field="cost"
-                onSaved={onSaved}
-                icon
-              />
-            </Field>
-            <Field label="Available">
-              {onlyLevel ? (
-                <StockCell
+              </Field>
+              <Field label="Price">
+                <VariantFieldCell
                   product={product}
                   variant={variant}
-                  level={onlyLevel}
+                  field="price"
                   onSaved={onSaved}
+                  icon
                 />
-              ) : (
-                <span
-                  title={
-                    variant.inventory_levels.length > 1
-                      ? 'Several locations: change them on the Inventory tab'
-                      : undefined
-                  }
-                  className={out ? 'text-danger' : ''}
-                >
-                  {stock === null ? '' : num(stock)}
-                </span>
-              )}
-            </Field>
-            <Field label="Weight">{weightOf(variant)}</Field>
-            <Field label="Packed size">{sizeOf(variant)}</Field>
-            <Field label="Country of origin">
-              {variant.country_code_of_origin
-                ? countryName(variant.country_code_of_origin)
-                : ''}
-            </Field>
-            <Field label="HS code">{variant.harmonized_system_code}</Field>
-            <Field label="When out of stock">
-              {variant.inventory_policy?.toUpperCase() === 'CONTINUE'
-                ? 'Keeps selling'
-                : 'Stops selling'}
-            </Field>
-            <Field label="Physical product">{yesNo(variant.requires_shipping)}</Field>
-            <Field label="Charge tax">{yesNo(variant.taxable)}</Field>
-          </dl>
-        </section>
-      </div>
+              </Field>
+              <Field label="Compare-at price">
+                <VariantFieldCell
+                  product={product}
+                  variant={variant}
+                  field="compare_at_price"
+                  strike
+                  onSaved={onSaved}
+                  icon
+                />
+              </Field>
+              <Field label="Cost per item">
+                <VariantFieldCell
+                  product={product}
+                  variant={variant}
+                  field="cost"
+                  onSaved={onSaved}
+                  icon
+                />
+              </Field>
+              <Field label="Available">
+                {onlyLevel ? (
+                  <StockCell
+                    product={product}
+                    variant={variant}
+                    level={onlyLevel}
+                    onSaved={onSaved}
+                  />
+                ) : (
+                  <span
+                    title={
+                      variant.inventory_levels.length > 1
+                        ? 'Several locations: change them on the Inventory tab'
+                        : undefined
+                    }
+                    className={out ? 'text-danger' : ''}
+                  >
+                    {stock === null ? '' : num(stock)}
+                  </span>
+                )}
+              </Field>
+              <Field label="Weight">{weightOf(variant)}</Field>
+              <Field label="Packed size">{sizeOf(variant)}</Field>
+              <Field label="Country of origin">
+                {variant.country_code_of_origin
+                  ? countryName(variant.country_code_of_origin)
+                  : ''}
+              </Field>
+              <Field label="HS code">{variant.harmonized_system_code}</Field>
+              <Field label="When out of stock">
+                {variant.inventory_policy?.toUpperCase() === 'CONTINUE'
+                  ? 'Keeps selling'
+                  : 'Stops selling'}
+              </Field>
+              <Field label="Physical product">{yesNo(variant.requires_shipping)}</Field>
+              <Field label="Charge tax">{yesNo(variant.taxable)}</Field>
+            </dl>
+          </section>
+        </div>
 
-      {editing && (
-        <VariantEditDialog
-          key={`edit-${variant.id}`}
-          product={product}
-          variantId={variant.id}
-          onSaved={onSaved}
-          onClose={() => setEditing(false)}
-          onNewVariant={onNewVariant}
+        {editing && (
+          <VariantEditDialog
+            key={`edit-${variant.id}`}
+            product={product}
+            variantId={variant.id}
+            onSaved={onSaved}
+            onClose={() => setEditing(false)}
+            onNewVariant={onNewVariant}
+          />
+        )}
+        {changing && (
+          <VariantImageDialog
+            key={variant.id}
+            product={product}
+            variant={variant}
+            onSaved={onSaved}
+            onClose={() => setChanging(false)}
+          />
+        )}
+        <ProductLightbox
+          slides={viewSlides}
+          index={lightbox}
+          onClose={() => setLightbox(null)}
         />
-      )}
-      {changing && (
-        <VariantImageDialog
-          key={variant.id}
-          product={product}
-          variant={variant}
-          onSaved={onSaved}
-          onClose={() => setChanging(false)}
-        />
-      )}
-      <ProductLightbox
-        slides={viewSlides}
-        index={lightbox}
-        onClose={() => setLightbox(null)}
-      />
+      </div>
     </div>
   )
 }
