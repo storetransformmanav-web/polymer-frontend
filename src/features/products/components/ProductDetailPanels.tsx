@@ -700,7 +700,7 @@ function VariantRow({
           <span
             className={(stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'}
           >
-            {num(stock)}
+            {(stock ?? 1) <= 0 ? 'Out of stock' : num(stock)}
           </span>
           {variant.available_for_sale === false && (
             <Badge tone="neutral">Unavailable</Badge>
@@ -781,7 +781,7 @@ function VariantGroupRows({
         <td className={`${TD} font-semibold`}>{range}</td>
         <td className={TD}>
           <span className={stock <= 0 ? 'text-danger font-semibold' : 'font-medium'}>
-            {num(stock)}
+            {stock <= 0 ? 'Out of stock' : num(stock)}
           </span>
         </td>
       </tr>
