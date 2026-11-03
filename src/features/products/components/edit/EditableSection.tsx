@@ -88,8 +88,11 @@ interface SharedProps {
   /** Which validation problems belong to this section (a stable, module-level array). */
   errorPrefixes: readonly string[]
   onSaved?: SavedHandler
-  /** The section as it is normally shown. */
-  view: ReactNode
+  /**
+   * The section as it is normally shown — or, for a tab whose own content holds the edit
+   * buttons (Variants), a function of the edit.
+   */
+  view: ReactNode | ((edit: SectionEdit) => ReactNode)
   /** The editable fields, shown in place of `view` while editing. */
   editor: (props: SectionProps) => ReactNode
   /**
@@ -177,7 +180,7 @@ export function EditableCard({
       >
         {/* Only listens for Escape; every control inside stays an ordinary focusable element. */}
         <div onKeyDown={discardOnEscape(edit)}>
-          {edit.editing ? renderBody(edit, editor) : view}
+          {edit.editing ? renderBody(edit, editor) : showView(view, edit)}
         </div>
       </DetailSection>
       <ConfirmSave edit={edit} title={product.title} />
@@ -215,9 +218,13 @@ export function EditableTab({
             <SectionEditControls edit={edit} what={what} />
           </div>
         )}
-        {edit.editing ? renderBody(edit, editor) : view}
+        {edit.editing ? renderBody(edit, editor) : showView(view, edit)}
       </div>
       <ConfirmSave edit={edit} title={product.title} />
     </>
   )
+}
+
+function showView(view: SharedProps['view'], edit: SectionEdit): ReactNode {
+  return typeof view === 'function' ? view(edit) : view
 }

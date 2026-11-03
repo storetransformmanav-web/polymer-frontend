@@ -11,6 +11,7 @@ import {
   ExternalLinkIcon,
   ImageIcon,
   PencilIcon,
+  PlusIcon,
 } from '../../../components/ui/icons.tsx'
 import { SelectField } from '../../../components/ui/SelectField.tsx'
 import { safeUrl } from '../../../lib/safeUrl.ts'
@@ -29,6 +30,9 @@ import { ProductLightbox } from './ProductLightbox.tsx'
 import { VariantImageDialog } from './VariantImageDialog.tsx'
 
 const num = (value: number) => value.toLocaleString('en-GB')
+/** Add variant, Edit variants and Bulk edit in the Variants card: one size, side by side. */
+const CARD_BUTTON =
+  'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors'
 const IMAGE_BUTTON =
   'border-border bg-bg text-text hover:border-accent inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.78rem] font-semibold shadow-sm transition-colors'
 
@@ -68,11 +72,14 @@ export function VariantCombinations({
   product,
   onSaved,
   onNewVariant,
+  onEditVariants,
 }: {
   product: ProductDetail
   onSaved?: SavedHandler
   /** Opens the New variant window. */
   onNewVariant?: () => void
+  /** Opens the whole-tab variants editor. */
+  onEditVariants?: () => void
 }) {
   const [selectedId, setSelectedId] = useState(product.variants[0]?.id ?? '')
   const [bulk, setBulk] = useState<string[] | null>(null)
@@ -139,13 +146,35 @@ export function VariantCombinations({
               onChange={setSelectedId}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
-            className="border-border bg-bg text-text hover:border-accent ml-auto inline-flex h-8 cursor-pointer items-center rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
-          >
-            Bulk edit
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {onNewVariant && (
+              <button
+                type="button"
+                onClick={onNewVariant}
+                className={`${CARD_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
+              >
+                <PlusIcon width={14} height={14} />
+                Add variant
+              </button>
+            )}
+            {onEditVariants && (
+              <button
+                type="button"
+                onClick={onEditVariants}
+                className={`${CARD_BUTTON} border-border bg-bg text-text hover:border-accent`}
+              >
+                <PencilIcon width={13} height={13} />
+                Edit variants
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
+              className={`${CARD_BUTTON} border-border bg-bg text-text hover:border-accent`}
+            >
+              Bulk edit
+            </button>
+          </div>
         </div>
       </section>
 

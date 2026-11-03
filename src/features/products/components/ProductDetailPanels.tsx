@@ -604,10 +604,12 @@ function VariantsView({
   product,
   onSaved,
   onNewVariant,
+  onEditVariants,
 }: {
   product: ProductDetail
   onSaved?: SavedHandler
   onNewVariant: () => void
+  onEditVariants: () => void
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -615,6 +617,7 @@ function VariantsView({
         product={product}
         onSaved={onSaved}
         onNewVariant={onNewVariant}
+        onEditVariants={onEditVariants}
       />
     </div>
   )
@@ -1272,18 +1275,22 @@ const HEADER_BUTTON =
   'inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
 
 /**
- * The bar over the Variants tab (it carries no title: the Variants card says "Variants N" once) with, at the right, **Add variant** and **Edit variants** (text
- * buttons — no pencil) that open the whole-tab editor; while it is open, the editor's own Add
- * variant (a new option) and ✓ Save / ✕ Discard.
+ * The bar over the Variants tab while the whole-tab editor is open: the editor's own Add
+ * variant (a new option) and ✓ Save / ✕ Discard. Viewing, **Add variant** and **Edit variants**
+ * sit in the Variants card beside Bulk edit, so the bar is empty — except for a product with no
+ * variants, which has no card to hold them.
  */
 function VariantsHeader({
   edit,
   onAdd,
+  hasVariants,
 }: {
   edit: SectionEdit
   /** Opens the New variant window. */
   onAdd: () => void
+  hasVariants: boolean
 }) {
+  if (!edit.editing && hasVariants) return null
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
       {edit.editing && (
@@ -1330,14 +1337,21 @@ export function VariantsPanel({ product, onSaved }: TabProps) {
         what="variants"
         errorPrefixes={VARIANT_ERRORS}
         onSaved={onSaved}
-        header={(edit) => <VariantsHeader edit={edit} onAdd={() => setAdding(true)} />}
-        view={
+        header={(edit) => (
+          <VariantsHeader
+            edit={edit}
+            onAdd={() => setAdding(true)}
+            hasVariants={product.variants.length > 0}
+          />
+        )}
+        view={(edit) => (
           <VariantsView
             product={product}
             onSaved={onSaved}
             onNewVariant={() => setAdding(true)}
+            onEditVariants={edit.start}
           />
-        }
+        )}
         editor={(section) => <VariantsEditor {...section} />}
       />
       {adding && (
