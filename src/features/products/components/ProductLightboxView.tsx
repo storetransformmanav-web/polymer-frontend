@@ -196,22 +196,22 @@ function ImageInfoCard({
   const [left, setLeft] = useState<number | null>(null)
 
   useEffect(() => {
+    // Follows the picture on every frame. A one-off measurement is wrong whenever the library
+    // sizes the picture later than the moment measured (it fits it only after it has loaded, and
+    // again when the thumbnails appear or the window changes), which left the card on top of it.
+    // Setting the same position again re-renders nothing.
+    let frame = 0
     function measure() {
       const picture = document.querySelector('.yarl__slide_current .yarl__slide_image')
       const rect = picture?.getBoundingClientRect()
-      if (!rect || rect.width === 0) return
-      const x = Math.round(rect.right + CARD_GAP)
-      setLeft(window.innerWidth - x - CARD_GAP >= CARD_MIN_WIDTH ? x : null)
+      if (rect && rect.width > 0) {
+        const x = Math.round(rect.right + CARD_GAP)
+        setLeft(window.innerWidth - x - CARD_GAP >= CARD_MIN_WIDTH ? x : null)
+      }
+      frame = window.requestAnimationFrame(measure)
     }
-    // After the slide has settled (the carousel slides for a moment) and once a picture has loaded.
-    const timers = [60, 400].map((delay) => window.setTimeout(measure, delay))
-    window.addEventListener('resize', measure)
-    document.addEventListener('load', measure, true)
-    return () => {
-      timers.forEach(window.clearTimeout)
-      window.removeEventListener('resize', measure)
-      document.removeEventListener('load', measure, true)
-    }
+    frame = window.requestAnimationFrame(measure)
+    return () => window.cancelAnimationFrame(frame)
   }, [slide.src])
 
   const altText = slide.altText?.trim() ?? ''

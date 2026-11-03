@@ -271,3 +271,107 @@ export function rawMetafieldValue(
   }
   return value.length > 120 || type === 'rich_text_field' ? value : null
 }
+
+// --- A value read out for people ------------------------------------------------------
+
+/**
+ * A structured value laid out for reading — names and values, lists as lists, no braces, quotes
+ * or commas. `readableMetafield` turns a metafield into one; the details window draws it.
+ */
+export type ReadableValue =
+  | { kind: 'empty' }
+  | { kind: 'text'; text: string }
+  | { kind: 'html'; html: string }
+  | { kind: 'list'; items: ReadableValue[] }
+  | { kind: 'group'; entries: { label: string; value: ReadableValue }[] }
+
+const MARKUP = /<\/?[a-z][^>]*>/i
+const MOST_ITEMS = 100
+const MOST_DEPTH = 6
+
+/** Any parsed value as a ReadableValue: keys become plain names, true/false become Yes/No. */
+export function readableValue(value: unknown, depth = 0): ReadableValue {
+  if (value === null || value === undefined) return { kind: 'empty' }
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return { kind: 'empty' }
+    // Text with tags in it is drawn as formatted text (through the safe renderer), not as code.
+    return MARKUP.test(text) ? { kind: 'html', html: text } : { kind: 'text', text }
+  }
+  if (typeof value === 'boolean') return { kind: 'text', text: value ? 'Yes' : 'No' }
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return { kind: 'text', text: String(value) }
+  }
+  if (depth >= MOST_DEPTH) {
+    return { kind: 'text', text: 'There is more detail here than can be shown.' }
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return { kind: 'empty' }
+    const items = value.slice(0, MOST_ITEMS).map((item) => readableValue(item, depth + 1))
+    if (value.length > MOST_ITEMS) {
+      items.push({ kind: 'text', text: `…and ${value.length - MOST_ITEMS} more` })
+    }
+    return { kind: 'list', items }
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value).map(([key, item]) => ({
+      label: humanise(key),
+      value: readableValue(item, depth + 1),
+    }))
+    return entries.length === 0 ? { kind: 'empty' } : { kind: 'group', entries }
+  }
+  return { kind: 'text', text: String(value) }
+}
+
+/** The words of a Shopify rich-text value (it is JSON: root → paragraphs → text). */
+function richTextWords(node: unknown): string {
+  if (!isRecord(node)) return ''
+  if (typeof node.value === 'string') return node.value
+  const children = Array.isArray(node.children) ? node.children.map(richTextWords) : []
+  if (node.type === 'list-item') return `\u2022 ${children.join('')}`
+  return children.join(node.type === 'root' || node.type === 'list' ? '\n' : '')
+}
+
+/** A metafield's value, read out for people — the JSON of structured data is never shown as JSON. */
+export function readableMetafield(
+  type: string | null | undefined,
+  value: string | null | undefined,
+): ReadableValue {
+  if (!value) return { kind: 'empty' }
+  if (type === 'rich_text_field') {
+    const json = parseJson(value)
+    return readableValue(json === undefined ? value : richTextWords(json).trim())
+  }
+  if (type === 'json' || type === 'json_string' || type?.startsWith('list.')) {
+    const json = parseJson(value)
+    return readableValue(json === undefined ? value : json)
+  }
+  return readableValue(value)
+}
+
+/**
+ * The sections of the description-sections metafield, in their order, and its other settings —
+ * or null when the value is not that shape (the window then shows it like any other value).
+ */
+export function readableSections(value: string | null | undefined): {
+  sections: { title: string; html: string }[]
+  settings: ReadableValue
+} | null {
+  const json = value ? parseJson(value) : undefined
+  if (!isRecord(json) || !Array.isArray(json.sections)) return null
+  const sections = json.sections
+    .filter((section): section is Record<string, unknown> => isRecord(section))
+    .map((section, index) => ({
+      title: typeof section.title === 'string' ? section.title.trim() : '',
+      html: typeof section.content === 'string' ? section.content : '',
+      position: typeof section.position === 'number' ? section.position : index,
+    }))
+    .filter((section) => section.title !== '')
+    .sort((a, b) => a.position - b.position)
+    .map(({ title, html }) => ({ title, html }))
+  if (sections.length === 0) return null
+  const rest = Object.fromEntries(
+    Object.entries(json).filter(([key]) => key !== 'sections'),
+  )
+  return { sections, settings: readableValue(rest) }
+}

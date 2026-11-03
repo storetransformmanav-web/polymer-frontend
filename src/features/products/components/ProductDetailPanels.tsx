@@ -97,6 +97,7 @@ import { AddMediaDialog } from './AddMediaDialog.tsx'
 import { LocalMediaTile, LocalPreview } from './LocalMediaTile.tsx'
 import { RemoveCollectionDialog } from './RemoveCollectionDialog.tsx'
 import { DeleteMediaDialog } from './DeleteMediaDialog.tsx'
+import { MetafieldDetailsModal } from './MetafieldDetailsModal.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 
@@ -1328,12 +1329,15 @@ function MetafieldValue({ display }: { display: MetafieldDisplay }) {
 /**
  * Metafields, in plain words: what the detail is called, what kind of detail it is, what
  * it holds, and whether it belongs to the whole product or to one variant. The technical
- * name (`namespace.key`) stays underneath for anyone who needs it, and the original value
- * can be opened for structured data.
+ * name (`namespace.key`) stays underneath for anyone who needs it, and the full value of
+ * structured data opens in a window, read out for people (never as JSON).
  */
 function MetafieldsView({ product }: { product: ProductDetail }) {
   const rows = getMetafieldRows(product)
   const sections = readDescriptionSections(product)
+  // The row whose full value is open in the window.
+  const [viewing, setViewing] = useState<number | null>(null)
+  const open = viewing === null ? null : (rows[viewing] ?? null)
   if (rows.length === 0) return <Empty icon={ListChecksIcon}>No metafields yet.</Empty>
 
   return (
@@ -1382,14 +1386,14 @@ function MetafieldsView({ product }: { product: ProductDetail }) {
                     <MetafieldValue display={display} />
                   )}
                   {raw && (
-                    <details className="mt-1.5">
-                      <summary className="text-accent cursor-pointer text-[0.76rem] font-semibold">
-                        View original value
-                      </summary>
-                      <pre className="border-border bg-surface mt-1.5 max-h-56 overflow-auto rounded-lg border p-2.5 font-mono text-[0.72rem] leading-relaxed break-words whitespace-pre-wrap">
-                        {raw}
-                      </pre>
-                    </details>
+                    <button
+                      type="button"
+                      aria-label={`View details of ${metafieldName(row.namespace, row.key)}`}
+                      onClick={() => setViewing(index)}
+                      className="text-accent hover:text-accent-hover mt-1.5 inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-[0.78rem] font-semibold"
+                    >
+                      View details
+                    </button>
                   )}
                 </td>
               </tr>
@@ -1397,6 +1401,17 @@ function MetafieldsView({ product }: { product: ProductDetail }) {
           })}
         </tbody>
       </TableWrap>
+      {open && (
+        <MetafieldDetailsModal
+          title={metafieldName(open.namespace, open.key)}
+          appliesTo={open.appliesTo}
+          kind={metafieldTypeLabel(open.type)}
+          name={`${open.namespace}.${open.key}`}
+          type={open.type}
+          value={open.value}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   )
 }

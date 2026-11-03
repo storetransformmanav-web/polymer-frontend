@@ -5,6 +5,9 @@ import {
   metafieldName,
   metafieldTypeLabel,
   rawMetafieldValue,
+  readableMetafield,
+  readableSections,
+  readableValue,
 } from './metafields.ts'
 
 describe('metafieldName / metafieldGroup', () => {
@@ -138,5 +141,141 @@ describe('rawMetafieldValue', () => {
     expect(rawMetafieldValue('single_line_text_field', 'Hello')).toBeNull()
     expect(rawMetafieldValue('single_line_text_field', 'x'.repeat(200))).toHaveLength(200)
     expect(rawMetafieldValue('json', null)).toBeNull()
+  })
+})
+
+describe('readableValue', () => {
+  it('turns keys into plain names and true / false into Yes / No', () => {
+    expect(
+      readableValue({ accordian_multi: true, accentColor: '#557b97', count: 3 }),
+    ).toEqual({
+      kind: 'group',
+      entries: [
+        { label: 'Accordian multi', value: { kind: 'text', text: 'Yes' } },
+        { label: 'Accent color', value: { kind: 'text', text: '#557b97' } },
+        { label: 'Count', value: { kind: 'text', text: '3' } },
+      ],
+    })
+    expect(readableValue(false)).toEqual({ kind: 'text', text: 'No' })
+  })
+
+  it('keeps lists as lists and nests groups', () => {
+    expect(readableValue(['Plastic', { size: 'L' }])).toEqual({
+      kind: 'list',
+      items: [
+        { kind: 'text', text: 'Plastic' },
+        {
+          kind: 'group',
+          entries: [{ label: 'Size', value: { kind: 'text', text: 'L' } }],
+        },
+      ],
+    })
+  })
+
+  it('treats text with tags as formatted text, never as plain code', () => {
+    expect(readableValue('<p>Hello <b>there</b></p>')).toEqual({
+      kind: 'html',
+      html: '<p>Hello <b>there</b></p>',
+    })
+    expect(readableValue('2 < 3 and 5 > 4')).toEqual({
+      kind: 'text',
+      text: '2 < 3 and 5 > 4',
+    })
+  })
+
+  it('says nothing is set for empty values', () => {
+    for (const empty of [null, undefined, '', '   ', [], {}]) {
+      expect(readableValue(empty)).toEqual({ kind: 'empty' })
+    }
+  })
+
+  it('stops at a hundred list items and at a sensible depth', () => {
+    const many = readableValue(Array.from({ length: 120 }, (_, index) => `v${index}`))
+    expect(many.kind === 'list' && many.items).toHaveLength(101)
+    expect(many.kind === 'list' && many.items[100]).toEqual({
+      kind: 'text',
+      text: '…and 20 more',
+    })
+    let deep: unknown = 'bottom'
+    for (let level = 0; level < 12; level += 1) deep = { inner: deep }
+    expect(JSON.stringify(readableValue(deep))).toContain(
+      'more detail here than can be shown',
+    )
+  })
+})
+
+describe('readableMetafield', () => {
+  it('reads structured values out of their JSON', () => {
+    expect(
+      readableMetafield('list.single_line_text_field', '["Plastic","Foil"]'),
+    ).toEqual({
+      kind: 'list',
+      items: [
+        { kind: 'text', text: 'Plastic' },
+        { kind: 'text', text: 'Foil' },
+      ],
+    })
+    expect(readableMetafield('json', '{"material":"PET"}')).toEqual({
+      kind: 'group',
+      entries: [{ label: 'Material', value: { kind: 'text', text: 'PET' } }],
+    })
+  })
+
+  it('shows a value that is not valid JSON as the text it is', () => {
+    expect(readableMetafield('json', '{not json')).toEqual({
+      kind: 'text',
+      text: '{not json',
+    })
+  })
+
+  it('reads the words out of a rich-text value', () => {
+    const rich = JSON.stringify({
+      type: 'root',
+      children: [
+        { type: 'paragraph', children: [{ type: 'text', value: 'First line' }] },
+        { type: 'paragraph', children: [{ type: 'text', value: 'Second line' }] },
+      ],
+    })
+    expect(readableMetafield('rich_text_field', rich)).toEqual({
+      kind: 'text',
+      text: 'First line\nSecond line',
+    })
+  })
+
+  it('says nothing is set for no value', () => {
+    expect(readableMetafield('json', null)).toEqual({ kind: 'empty' })
+  })
+})
+
+describe('readableSections', () => {
+  const value = JSON.stringify({
+    accordian_multi: false,
+    sections: [
+      { title: 'Information', content: '<p>y</p>', position: 1 },
+      { title: 'Description', content: '<p>x</p>', position: 0 },
+      { title: '  ', content: '<p>no title</p>', position: 2 },
+    ],
+  })
+
+  it('lists the sections in their order, leaving out one with no title', () => {
+    const read = readableSections(value)
+    expect(read?.sections).toEqual([
+      { title: 'Description', html: '<p>x</p>' },
+      { title: 'Information', html: '<p>y</p>' },
+    ])
+  })
+
+  it('keeps the other settings by name, without the sections', () => {
+    expect(readableSections(value)?.settings).toEqual({
+      kind: 'group',
+      entries: [{ label: 'Accordian multi', value: { kind: 'text', text: 'No' } }],
+    })
+  })
+
+  it('is null for a value that is not that shape', () => {
+    expect(readableSections('{not json')).toBeNull()
+    expect(readableSections('{"other":1}')).toBeNull()
+    expect(readableSections('{"sections":[]}')).toBeNull()
+    expect(readableSections(null)).toBeNull()
   })
 })

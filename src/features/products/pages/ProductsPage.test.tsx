@@ -1200,13 +1200,74 @@ describe('ProductsPage details', () => {
         within(row).getByText(/2 sections: Product Description, Product Information/),
       ).toBeInTheDocument()
       expect(within(row).getByText(/Shown in the Description card/)).toBeInTheDocument()
-      // The long JSON string is not dumped into the table: it is only inside "View original value".
-      expect(within(row).getByText('View original value')).toBeInTheDocument()
+      // The long JSON is not dumped into the table, nor into the page: a button opens it.
       expect(
-        within(row)
-          .getByText(/accent_color/)
-          .closest('details'),
-      ).not.toBeNull()
+        within(row).getByRole('button', { name: /View details/ }),
+      ).toBeInTheDocument()
+      expect(within(row).queryByText(/accent_color/)).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('opens the full value in a window, read out for people and not as JSON', async () => {
+      withMetafields()
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('tab', { name: /^Metafields/ }))
+
+      await user.click(
+        screen.getByRole('button', { name: 'View details of Description sections' }),
+      )
+
+      const dialog = screen.getByRole('dialog', { name: 'Description sections: details' })
+      // What it is called and what it is.
+      expect(
+        within(dialog).getByRole('heading', { name: 'Description sections' }),
+      ).toBeVisible()
+      expect(within(dialog).getByText(/Whole product · Structured data/)).toBeVisible()
+      // Each section with its title and its text as it reads.
+      expect(
+        within(dialog).getByRole('heading', { name: 'Product Description' }),
+      ).toBeVisible()
+      expect(
+        within(dialog).getByRole('heading', { name: 'Product Information' }),
+      ).toBeVisible()
+      expect(within(dialog).getByText('x')).toBeVisible()
+      expect(within(dialog).getByText('y')).toBeVisible()
+      // The description app's other settings, by name.
+      expect(within(dialog).getByText('Accent color')).toBeVisible()
+      expect(within(dialog).getByText('#557b97')).toBeVisible()
+      // And no JSON anywhere in it.
+      expect(dialog.textContent).not.toMatch(/[{}]|"sections"|"title"|accent_color/)
+
+      await user.click(within(dialog).getByRole('button', { name: 'Close' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('opens a list value as chips, with the kind and the place it applies to', async () => {
+      withMetafields()
+      const user = userEvent.setup()
+      renderPage('/products/id-7')
+      await screen.findByText('Home > Desks')
+      await user.click(screen.getByRole('tab', { name: /^Metafields/ }))
+
+      // A list is laid out in the table already, and its button opens the same list in full.
+      const row = screen
+        .getByText('Pack materials', { selector: 'p' })
+        .closest('tr') as HTMLElement
+      expect(
+        within(row).getByRole('button', { name: /View details/ }),
+      ).toBeInTheDocument()
+      await user.click(within(row).getByRole('button', { name: /View details/ }))
+
+      const dialog = screen.getByRole('dialog', { name: 'Pack materials: details' })
+      expect(within(dialog).getByText(/List of text \(one line\)/)).toBeVisible()
+      expect(within(dialog).getByText('Plastic')).toBeVisible()
+      expect(within(dialog).getByText('Foil')).toBeVisible()
+      expect(dialog.textContent).not.toMatch(/[\[\]"]/)
+      // Escape closes it, like the app's other windows.
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).toBeNull()
     })
   })
 
