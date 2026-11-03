@@ -82,7 +82,7 @@ export function AdvancedFields({ options, onChange, disabled }: OptionCardProps)
     <div className="flex flex-col gap-3">
       <Check
         label="Enable manual locking"
-        hint="Turns off the app’s own protection for this lock, so the theme developer enforces it in Liquid code."
+        hint="Manual locking: the website shows the product to everyone and leaves the lock to custom theme code. Keep this off unless a theme developer asks for it."
         checked={options.manualLocking}
         disabled={disabled}
         onChange={(manualLocking) => onChange({ manualLocking })}

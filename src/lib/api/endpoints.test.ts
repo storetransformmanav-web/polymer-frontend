@@ -20,6 +20,18 @@ describe('api.products.remove', () => {
     vi.mocked(apiClient.delete).mockResolvedValue(WRITE_RESULT)
   })
 
+  it('sends DELETE /products/{id}?mode=...&shop=... when a mode is given', async () => {
+    await api.products.remove('p1', 'polymer-uk', 'delete')
+    expect(apiClient.delete).toHaveBeenCalledWith('/products/p1', {
+      params: { shop: 'polymer-uk', mode: 'delete' },
+    })
+
+    await api.products.remove('p1', null, 'archive')
+    expect(apiClient.delete).toHaveBeenLastCalledWith('/products/p1', {
+      params: { mode: 'archive' },
+    })
+  })
+
   it('sends DELETE /products/{id} for the store, leaving `mode` to the backend', async () => {
     const result = await api.products.remove('p1', 'polymer-uk')
 

@@ -1,9 +1,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import {
   BoxesIcon,
-  ChevronDownIcon,
   CheckCircleIcon,
   ExternalLinkIcon,
   ImageIcon,
@@ -19,9 +17,8 @@ import type {
   ProductImage as ProductImageData,
   ProductListItem,
   ProductMediaInput,
-  ProductVariant,
 } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatPrice } from '../../../lib/format.ts'
+import { formatDate } from '../../../lib/format.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
 import {
   APD_KEY,
@@ -37,9 +34,6 @@ import {
   storefrontProductUrl,
   svgImageWarning,
 } from '../utils/format.ts'
-import { countryName } from '../utils/countries.ts'
-import { packedSizeLabel } from '../utils/shipping.ts'
-import { productStock, variantStock } from '../utils/stock.ts'
 import { classifySync, readableSyncError } from '../utils/sync.ts'
 import { useProductSyncHistory } from '../hooks/useProductSyncHistory.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
@@ -103,11 +97,12 @@ import {
   AltCaption,
   ContinueSellingBox,
   LocationCell,
-  PriceCell,
   StockCell,
 } from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
+import { VariantCombinations, VariantOptionsCard } from './VariantCombinations.tsx'
+import { blankNewVariant, draftFromProduct, optionChoices } from '../utils/editDraft.ts'
 
 // Which validation problems belong to each editable section (see useSectionEdit).
 const SPEC_ERRORS = [
@@ -603,230 +598,7 @@ function CollectionsBlock({
 
 // --- Variants ----------------------------------------------------------------
 
-function weightLabel(variant: ProductVariant): string {
-  const weight = Number.parseFloat(variant.weight ?? '')
-  if (!Number.isFinite(weight) || weight === 0) return '—'
-  return `${weight} ${(variant.weight_unit ?? '').toLowerCase()}`.trim()
-}
-
-/**
- * The variants grouped by the value of the product's first option — "Small" holds Small / Red and
- * Small / Black — or null when there is nothing to group by: fewer than two options, or a variant
- * that doesn't say its value. Groups come in the order their value first appears.
- */
-function groupByFirstOption(
-  product: ProductDetail,
-): { name: string; variants: ProductVariant[] }[] | null {
-  const options = product.has_only_default_variant
-    ? []
-    : [...product.options].sort((a, b) => a.position - b.position)
-  if (options.length < 2) return null
-  const first = options[0].name
-  const groups = new Map<string, ProductVariant[]>()
-  for (const variant of product.variants) {
-    const value = variant.selected_options?.find((chosen) => chosen.name === first)?.value
-    if (!value) return null
-    groups.set(value, [...(groups.get(value) ?? []), variant])
-  }
-  return [...groups].map(([name, variants]) => ({ name, variants }))
-}
-
-/** One variant as a table row: its picture, name, SKU and details, price (compare-at struck through) and stock. */
-function VariantRow({
-  product,
-  variant,
-  label,
-  nested = false,
-  onSaved,
-}: {
-  product: ProductDetail
-  variant: ProductVariant
-  /** What to call it instead of its full title (the part a group does not already say). */
-  label?: string
-  /** Shown inside an open group: indented and a shade lighter. */
-  nested?: boolean
-  onSaved?: SavedHandler
-}) {
-  const currency = variant.currency ?? product.currency
-  const weight = weightLabel(variant)
-  const country = (variant.country_code_of_origin ?? '').trim().toUpperCase()
-  const details = [
-    variant.barcode ? `Barcode ${variant.barcode}` : '',
-    weight !== '—' ? weight : '',
-    packedSizeLabel(variant.packed_dimensions),
-    country ? `Origin ${countryName(country)}` : '',
-    variant.harmonized_system_code ? `HS ${variant.harmonized_system_code}` : '',
-  ].filter(Boolean)
-  const stock = variantStock(variant)
-  // One recorded location: the figure can be changed right here (several go through the Inventory tab).
-  const onlyLevel =
-    variant.inventory_levels.length === 1 ? variant.inventory_levels[0] : null
-  const name = label ?? variant.title ?? '—'
-  return (
-    <tr
-      className={`border-border hover:bg-accent-tint/60 border-b align-middle transition-colors last:border-b-0 ${
-        nested ? 'bg-surface' : ''
-      }`}
-    >
-      <td className={`${TD} py-3 ${nested ? 'pl-12' : ''}`}>
-        <div className="flex items-center gap-4">
-          {/* A tall picture tile, as in the store's own admin. */}
-          <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
-            <ProductImage
-              src={variant.image_url ?? null}
-              alt={variant.title ?? ''}
-              size="thumb"
-            />
-          </div>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="block truncate font-semibold" title={variant.title ?? ''}>
-              {name}
-            </span>
-            {variant.sku && (
-              <span className="text-text-muted flex items-center gap-1.5 font-mono text-[0.8rem]">
-                <span className="truncate" title={variant.sku}>
-                  {variant.sku}
-                </span>
-                <CopyButton value={variant.sku} label={`Copy ${variant.sku}`} />
-              </span>
-            )}
-            {details.length > 0 && (
-              <span className="text-text-muted truncate text-[0.75rem]">
-                {details.join(' · ')}
-              </span>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className={TD}>
-        <span className="flex flex-col">
-          <PriceCell
-            product={product}
-            variant={variant}
-            currency={currency}
-            onSaved={onSaved}
-          />
-          {variant.compare_at_price && (
-            <span className="text-text-muted text-[0.78rem] line-through">
-              {formatPrice(variant.compare_at_price, currency)}
-            </span>
-          )}
-        </span>
-      </td>
-      <td className={TD}>
-        <span className="flex items-center gap-2">
-          {onlyLevel ? (
-            <StockCell
-              product={product}
-              variant={variant}
-              level={onlyLevel}
-              onSaved={onSaved}
-              zeroLabel="Out of stock"
-            />
-          ) : (
-            <span
-              className={(stock ?? 1) <= 0 ? 'text-danger font-semibold' : 'font-medium'}
-            >
-              {(stock ?? 1) <= 0 ? 'Out of stock' : num(stock)}
-            </span>
-          )}
-          {variant.available_for_sale === false && (
-            <Badge tone="neutral">Unavailable</Badge>
-          )}
-        </span>
-      </td>
-    </tr>
-  )
-}
-
-/**
- * A group of variants (all the "Small" ones) as an accordion row: its first picture, its name,
- * how many variants it holds, their price range and total stock. Closed to begin with; opening it
- * lists the variants under it, named by the values the group does not already say ("Red").
- */
-function VariantGroupRows({
-  product,
-  name,
-  variants,
-  onSaved,
-}: {
-  product: ProductDetail
-  name: string
-  variants: ProductVariant[]
-  onSaved?: SavedHandler
-}) {
-  const [open, setOpen] = useState(false)
-  const currency = variants[0].currency ?? product.currency
-  const prices = variants
-    .map((variant) => Number(variant.price))
-    .filter((price) => Number.isFinite(price))
-  const low = Math.min(...prices)
-  const high = Math.max(...prices)
-  const range =
-    prices.length === 0
-      ? '—'
-      : low === high
-        ? formatPrice(String(low), currency)
-        : `${formatPrice(String(low), currency)} – ${formatPrice(String(high), currency)}`
-  const stock = variants.reduce((sum, variant) => sum + (variantStock(variant) ?? 0), 0)
-  const picture = variants.find((variant) => variant.image_url)?.image_url ?? null
-  const count = `${variants.length} ${variants.length === 1 ? 'variant' : 'variants'}`
-  // What a variant is called inside the group: its other option values ("Red"), else its title.
-  const labelOf = (variant: ProductVariant) => {
-    const rest = (variant.selected_options ?? [])
-      .slice(1)
-      .map((chosen) => chosen.value)
-      .join(' / ')
-    return rest || variant.title || '—'
-  }
-
-  return (
-    <>
-      <tr className="border-border hover:bg-accent-tint/60 border-b align-middle transition-colors">
-        <td className={`${TD} py-3`}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-label={`${name}, ${count}`}
-            onClick={() => setOpen((value) => !value)}
-            className="flex w-full cursor-pointer items-center gap-4 border-none bg-transparent p-0 text-left"
-          >
-            <ChevronDownIcon
-              width={16}
-              height={16}
-              className={`text-text-muted shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-            />
-            <div className="border-border h-14 w-14 shrink-0 overflow-hidden border">
-              <ProductImage src={picture} alt="" size="thumb" />
-            </div>
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="block truncate font-semibold">{name}</span>
-              <span className="text-text-muted text-[0.75rem]">{count}</span>
-            </div>
-          </button>
-        </td>
-        <td className={`${TD} font-semibold`}>{range}</td>
-        <td className={TD}>
-          <span className={stock <= 0 ? 'text-danger font-semibold' : 'font-medium'}>
-            {stock <= 0 ? 'Out of stock' : num(stock)}
-          </span>
-        </td>
-      </tr>
-      {open &&
-        variants.map((variant) => (
-          <VariantRow
-            key={variant.id}
-            product={product}
-            variant={variant}
-            label={labelOf(variant)}
-            nested
-            onSaved={onSaved}
-          />
-        ))}
-    </>
-  )
-}
-
+/** The options (Size · Small, Medium…) and then every variant in one table (see VariantCombinations). */
 function VariantsView({
   product,
   onSaved,
@@ -834,52 +606,10 @@ function VariantsView({
   product: ProductDetail
   onSaved?: SavedHandler
 }) {
-  if (product.variants.length === 0) {
-    return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
-  }
-
-  // Everything in stock across all locations: the variants' own figures, so it always agrees with
-  // the header and the Inventory tab (the store's own total can lag behind a stock edit).
-  const total = productStock(product) ?? 0
-  // With two or more options the variants are grouped under the first one (Small, Medium…).
-  const groups = groupByFirstOption(product)
-
   return (
-    <div className={`${CARD} overflow-hidden`}>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] table-fixed border-collapse">
-          <thead>
-            <tr>
-              <th className={`${TH} w-[56%]`}>Variant</th>
-              <th className={`${TH} w-[24%]`}>Price</th>
-              <th className={`${TH} w-[20%]`}>Available</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups
-              ? groups.map((group) => (
-                  <VariantGroupRows
-                    key={group.name}
-                    product={product}
-                    name={group.name}
-                    variants={group.variants}
-                    onSaved={onSaved}
-                  />
-                ))
-              : product.variants.map((variant) => (
-                  <VariantRow
-                    key={variant.id}
-                    product={product}
-                    variant={variant}
-                    onSaved={onSaved}
-                  />
-                ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="border-border-strong bg-surface border-t px-3.5 py-3 text-[0.85rem]">
-        Total inventory across all locations: <strong>{num(total)}</strong> available
-      </p>
+    <div className="flex flex-col gap-4">
+      <VariantOptionsCard product={product} />
+      <VariantCombinations product={product} onSaved={onSaved} />
     </div>
   )
 }
@@ -1532,7 +1262,14 @@ interface TabProps {
   onSaved?: SavedHandler
 }
 
-/** "2 variants", each option as a label with a pill per value, and the pencil (or Save / Discard). */
+const HEADER_BUTTON =
+  'inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
+
+/**
+ * "Product variants · N variants" and, at the right, **Add variant** and **Edit variants** (text
+ * buttons — no pencil) that open the whole-tab editor; while it is open, the editor's own Add
+ * variant (a new option) and ✓ Save / ✕ Discard.
+ */
 function VariantsHeader({
   product,
   edit,
@@ -1540,41 +1277,57 @@ function VariantsHeader({
   product: ProductDetail
   edit: SectionEdit
 }) {
-  const options = product.has_only_default_variant ? [] : product.options
   const count = product.variants.length
   return (
-    <div className="flex min-h-8 flex-wrap items-center gap-x-5 gap-y-2">
+    <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
       {edit.editing ? (
         <p className="text-text-muted text-[0.82rem] font-medium">Editing variants</p>
       ) : (
-        <>
-          <p className="text-[0.95rem] font-semibold">
+        <p className="flex items-baseline gap-2 text-[1rem] font-semibold">
+          Product variants
+          <span className="text-text-muted text-[0.82rem] font-normal">
             {count} {count === 1 ? 'variant' : 'variants'}
-          </p>
-          {options.map((option) => (
-            <div key={option.name} className="flex flex-wrap items-center gap-1.5">
-              <span className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
-                {option.name}
-              </span>
-              <ul className="flex flex-wrap gap-1.5">
-                {option.values.map((value) => (
-                  <li
-                    key={value}
-                    className="border-border-strong bg-bg rounded-full border px-2.5 py-0.5 text-[0.78rem] font-medium"
-                  >
-                    {value}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </>
+          </span>
+        </p>
       )}
       <div className="ml-auto flex items-center gap-1.5">
-        {edit.editing && edit.draft && (
-          <AddVariantButton draft={edit.draft} onChange={edit.change} />
+        {edit.editing ? (
+          <>
+            {edit.draft && <AddVariantButton draft={edit.draft} onChange={edit.change} />}
+            <SectionEditControls edit={edit} what="variants" />
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                // Opens the editor with a new variant waiting to be filled in.
+                edit.start()
+                const draft = draftFromProduct(product)
+                const unit = draft.variants[0]?.weightUnit ?? 'GRAMS'
+                edit.change({
+                  newVariants: [
+                    {
+                      ...blankNewVariant(unit),
+                      optionValues: optionChoices(draft).map(() => ''),
+                    },
+                  ],
+                })
+              }}
+              className={`${HEADER_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
+            >
+              <PlusIcon width={14} height={14} />
+              Add variant
+            </button>
+            <button
+              type="button"
+              onClick={edit.start}
+              className={`${HEADER_BUTTON} border-border bg-bg text-text hover:border-accent`}
+            >
+              Edit variants
+            </button>
+          </>
         )}
-        <SectionEditControls edit={edit} what="variants" />
       </div>
     </div>
   )

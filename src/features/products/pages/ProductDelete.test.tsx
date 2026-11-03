@@ -12,9 +12,6 @@ import {
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
 import { ProductsPage } from './ProductsPage.tsx'
 
-// The Delete button is hidden for now (utils/flags.ts); these tests are about the feature itself.
-vi.mock('../utils/flags.ts', () => ({ SHOW_PRODUCT_DELETE: true }))
-
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {
@@ -126,12 +123,18 @@ describe('deleting a product from the list', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('asks first, with just Cancel and Delete, and sends nothing yet', async () => {
+  it('asks first — Archive is chosen, Cancel is focused — and sends nothing yet', async () => {
     const { dialog } = await askToDelete()
 
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
-    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: 'Archive product' }),
+    ).toBeInTheDocument()
     expect(within(dialog).getAllByRole('button')).toHaveLength(2)
+    expect(within(dialog).getByRole('radio', { name: /^Archive/ })).toBeChecked()
+    expect(
+      within(dialog).getByRole('radio', { name: /^Delete permanently/ }),
+    ).not.toBeChecked()
     expect(remove).not.toHaveBeenCalled()
   })
 
@@ -149,13 +152,15 @@ describe('deleting a product from the list', () => {
     expect(screen.getByLabelText('Select Hippo Bag')).toBeInTheDocument()
   })
 
-  it("deletes for that store with the backend's default, and reports the backend's message", async () => {
+  it("archives for that store with mode=archive, and reports the backend's message", async () => {
     const { user, dialog } = await askToDelete()
     // The refetch hasn't answered yet — what shows is the instant update.
     list.mockImplementation(never)
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Archive product' }))
 
-    await waitFor(() => expect(remove).toHaveBeenCalledWith('id-1', 'polymer-uk'))
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith('id-1', 'polymer-uk', 'archive'),
+    )
     expect(await screen.findByText('“Hippo Bag”: Product archived')).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     // Still in the list, now marked Archived, with no wait for a refetch.
@@ -165,26 +170,52 @@ describe('deleting a product from the list', () => {
     expect(within(hippoRow).getByText('Archived')).toBeInTheDocument()
   })
 
+  it('deletes permanently with mode=delete: the red button says so, and the row is gone at once', async () => {
+    remove.mockResolvedValue({ ...WRITE_OK, message: 'Product deleted' })
+    const { user, dialog } = await askToDelete()
+    list.mockImplementation(never)
+
+    await user.click(within(dialog).getByRole('radio', { name: /^Delete permanently/ }))
+    expect(within(dialog).getByText(/undone/)).toBeInTheDocument()
+    expect(
+      within(dialog).queryByRole('button', { name: 'Archive product' }),
+    ).not.toBeInTheDocument()
+    expect(remove).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Delete permanently' }))
+
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith('id-1', 'polymer-uk', 'delete'),
+    )
+    expect(await screen.findByText('“Hippo Bag”: Product deleted')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    // Not archived — gone from the list, with the other product still there.
+    expect(screen.queryByLabelText('Select Hippo Bag')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Select Foil Lid')).toBeInTheDocument()
+  })
+
   it("keeps the dialog open and shows the backend's message when it fails", async () => {
     remove.mockRejectedValue(new ApiError('Product not found.', { status: 404 }))
     const { user, dialog } = await askToDelete()
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Archive product' }))
 
     expect(await within(dialog).findByText('Product not found.')).toBeInTheDocument()
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     expect(screen.getByLabelText('Select Hippo Bag')).toBeInTheDocument()
     // Usable again for another try.
-    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: 'Archive product' })).toBeEnabled()
   })
 
   it('locks the dialog while the request is in flight, so it cannot be sent twice', async () => {
     remove.mockImplementation(never)
     const { user, dialog } = await askToDelete()
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Archive product' }))
 
     await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeDisabled(),
+      expect(
+        within(dialog).getByRole('button', { name: 'Archive product' }),
+      ).toBeDisabled(),
     )
+    expect(within(dialog).getByRole('radio', { name: /^Archive/ })).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
 
     await user.keyboard('{Escape}')

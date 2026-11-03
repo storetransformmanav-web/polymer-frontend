@@ -15,6 +15,7 @@ import {
   type ProductListParams,
   type MediaType,
   type ProductMediaInput,
+  type ProductDeleteMode,
   type ProductListResponse,
   type ProductSort,
   type ProductStatus,
@@ -385,10 +386,24 @@ export const updateProduct = createAsyncThunk<
   }
 })
 
+/** Takes a deleted product out of a cached page, keeping its totals right. */
+function withoutProduct(data: ProductListResponse, id: string): ProductListResponse {
+  if (!data.items.some((item) => item.id === id)) return data
+  const total = Math.max(0, data.total - 1)
+  return {
+    ...data,
+    items: data.items.filter((item) => item.id !== id),
+    total,
+    total_pages: Math.max(1, Math.ceil(total / Math.max(1, data.page_size))),
+  }
+}
+
 interface DeleteProductArg {
   id: string
   /** The product's store key (sent as `shop=`), when it has one. */
   shop?: string | null
+  /** `archive` (reversible, the default) or `delete` (permanent in Shopify). */
+  mode?: ProductDeleteMode
 }
 
 /**
@@ -400,9 +415,9 @@ export const deleteProduct = createAsyncThunk<
   ProductWriteResult,
   DeleteProductArg,
   { state: ProductsRootState; rejectValue: string }
->('products/delete', async ({ id, shop }, { rejectWithValue }) => {
+>('products/delete', async ({ id, shop, mode }, { rejectWithValue }) => {
   try {
-    return await api.products.remove(id, shop)
+    return await api.products.remove(id, shop, mode)
   } catch (error) {
     return rejectWithValue(toUserMessage(error))
   }
@@ -867,7 +882,21 @@ const productsSlice = createSlice({
         patchCachedProduct(state, action.meta.arg.id, action.meta.arg.body)
       })
       .addCase(deleteProduct.fulfilled, (state, action) => {
-        patchCachedProduct(state, action.meta.arg.id, { status: 'ARCHIVED' })
+        const { id, mode } = action.meta.arg
+        if (mode !== 'delete') {
+          patchCachedProduct(state, id, { status: 'ARCHIVED' })
+          return
+        }
+        // Deleted for good: it leaves every cached page (totals corrected), the open tabs and
+        // the details caches, so it is gone at once with no loader.
+        for (const entry of Object.values(state.entries)) {
+          if (entry.data) entry.data = withoutProduct(entry.data, id)
+          entry.fetchedAt = null
+        }
+        if (state.lastData) state.lastData = withoutProduct(state.lastData, id)
+        state.tabs = state.tabs.filter((tab) => tab.id !== id)
+        delete state.details[detailsKey(id)]
+        delete state.details[detailsKey(id, true)]
       })
       .addCase(addProductMedia.fulfilled, (state, action) => {
         patchCachedProduct(state, action.meta.arg.id, {})

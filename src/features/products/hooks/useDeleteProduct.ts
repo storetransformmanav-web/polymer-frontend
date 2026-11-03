@@ -7,7 +7,7 @@ import {
   fetchProducts,
   statusCountFilters,
 } from '../../../app/store/productsSlice.ts'
-import type { ProductWriteResult } from '../../../lib/api/endpoints.ts'
+import type { ProductDeleteMode, ProductWriteResult } from '../../../lib/api/endpoints.ts'
 import { productSyncPrefix } from './useProductSyncHistory.ts'
 
 /** Every status tab, so their counts can be refreshed (a removal moves a product between them). */
@@ -17,15 +17,17 @@ interface DeleteArg {
   id: string
   /** The product's store key (sent as `shop=`). */
   shop?: string | null
+  /** `archive` (reversible, the default) or `delete` (permanent in Shopify). */
+  mode?: ProductDeleteMode
 }
 
 /**
- * Deletes a product (the backend archives it by default).
+ * Archives or permanently deletes a product (`mode`; the backend archives by default).
  *
  * The moment the server confirms, the product shows as Archived in every cached
- * copy (see `deleteProduct.fulfilled` in productsSlice) — no loader, no waiting
- * for a refetch. This hook then refreshes the list, the product and the tab
- * counts quietly.
+ * copy — or, when deleted for good, is gone from every cached list and tab (see
+ * `deleteProduct.fulfilled` in productsSlice) — no loader, no waiting for a refetch.
+ * This hook then refreshes the list, the tab counts and (unless it is gone) the product quietly.
  */
 export function useDeleteProduct() {
   const dispatch = useAppDispatch()
@@ -35,10 +37,10 @@ export function useDeleteProduct() {
   const [error, setError] = useState<string | null>(null)
 
   const remove = useCallback(
-    async ({ id, shop }: DeleteArg): Promise<ProductWriteResult | null> => {
+    async ({ id, shop, mode }: DeleteArg): Promise<ProductWriteResult | null> => {
       setIsDeleting(true)
       setError(null)
-      const result = await dispatch(deleteProduct({ id, shop }))
+      const result = await dispatch(deleteProduct({ id, shop, mode }))
       setIsDeleting(false)
 
       if (!deleteProduct.fulfilled.match(result)) {
@@ -53,7 +55,8 @@ export function useDeleteProduct() {
         )
       }
       void queryClient.invalidateQueries({ queryKey: productSyncPrefix(id) })
-      void dispatch(fetchProductDetails({ id, force: true }))
+      // A product deleted for good has no details left to read.
+      if (mode !== 'delete') void dispatch(fetchProductDetails({ id, force: true }))
       return result.payload
     },
     [dispatch, filters, queryClient],

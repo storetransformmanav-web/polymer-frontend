@@ -1188,6 +1188,10 @@ export type ProductPush = z.infer<typeof productPushSchema>
 
 /** Statuses the API accepts for an edit (a product can't be edited *to* "unlisted"). */
 export const PRODUCT_EDIT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED'] as const
+/** `DELETE /products/{id}?mode=`: archive (the default, reversible) or delete (permanent in Shopify). */
+export const PRODUCT_DELETE_MODES = ['archive', 'delete'] as const
+export type ProductDeleteMode = (typeof PRODUCT_DELETE_MODES)[number]
+
 export const INVENTORY_POLICIES = ['DENY', 'CONTINUE'] as const
 export const WEIGHT_UNITS = ['GRAMS', 'KILOGRAMS', 'OUNCES', 'POUNDS'] as const
 export const MEDIA_TYPES = ['IMAGE', 'VIDEO', 'EXTERNAL_VIDEO', 'MODEL_3D'] as const
@@ -1713,6 +1717,11 @@ const accessCheckResponseSchema = z.object({
     reason: z.string(),
     matched_tags: z.array(z.string()).default([]),
     customer_tags: z.array(z.string()).default([]),
+    /**
+     * False when the website does not enforce the lock (manual locking is on, so the theme shows
+     * the product to everyone). Absent from older answers.
+     */
+    theme_enforces: z.boolean().nullish(),
   }),
 })
 
@@ -2002,14 +2011,19 @@ export const api = {
     },
 
     /**
-     * Deletes a product with the backend's default behaviour (`mode` is left out,
-     * so the backend decides — it archives, which can be undone). The answer is
-     * the same as for an edit, and the change is pushed to the store right after.
+     * Deletes a product: `mode` `archive` (the backend's default, reversible — the product stays
+     * as Archived) or `delete` (permanent in Shopify); left out, the backend's default applies.
+     * The answer is the same as for an edit, and the change is pushed to the store right after.
      * Never retried automatically. `shop` is the product's store key.
      */
-    async remove(id: string, shop?: string | null): Promise<ProductWriteResult> {
+    async remove(
+      id: string,
+      shop?: string | null,
+      mode?: ProductDeleteMode,
+    ): Promise<ProductWriteResult> {
+      const params = { ...(shop ? { shop } : {}), ...(mode ? { mode } : {}) }
       const data = await apiClient.delete(ENDPOINTS.products.remove(id), {
-        params: shop ? { shop } : undefined,
+        params: Object.keys(params).length > 0 ? params : undefined,
       })
       return productWriteResponseSchema.parse(data)
     },

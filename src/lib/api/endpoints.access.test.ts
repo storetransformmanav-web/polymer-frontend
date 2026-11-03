@@ -252,6 +252,44 @@ describe('api.access', () => {
       matched_tags: ['b2b-delivery-in-our-vans'],
       message: 'Allowed: customer tag b2b-delivery-in-our-vans matches',
     })
+    // An older answer without it says nothing about the theme.
+    expect(check.theme_enforces).toBeUndefined()
+  })
+
+  it('reads whether the website enforces the lock (theme_enforces)', async () => {
+    get.mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message:
+        'Denied: the customer has none of category_cold food packaging. But Manual locking is on for this product, so the theme shows it to everyone: switch Manual locking off to enforce the lock',
+      check: {
+        allowed: false,
+        reason: 'no_matching_tag',
+        matched_tags: [],
+        lock: {
+          v: 1,
+          enabled: true,
+          tags: ['category_cold food packaging'],
+          lists: true,
+          nav: true,
+          noindex: true,
+          manual: true,
+          msg: null,
+        },
+        customer_tags: ['test'],
+        theme_enforces: false,
+      },
+    })
+
+    const check = await api.access.check({
+      shop: 'polymer-uk',
+      customer: 'buyer@example.com',
+      product: 'cold-box',
+    })
+
+    expect(check.allowed).toBe(false)
+    expect(check.theme_enforces).toBe(false)
+    expect(check.message).toMatch(/^Denied: .*switch Manual locking off/)
   })
 
   it('sets a store up with the shop in the query, no body', async () => {

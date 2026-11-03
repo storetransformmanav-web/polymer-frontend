@@ -9,6 +9,7 @@ import type {
   ProductListItem,
   ProductUpdateBody,
   ProductWriteResult,
+  ProductDeleteMode,
 } from '../../../lib/api/endpoints.ts'
 import { BulkEditView } from '../components/BulkEditView.tsx'
 import { ConfirmUpdateDialog } from '../components/ConfirmUpdateDialog.tsx'
@@ -277,10 +278,18 @@ export function ProductsPage() {
     setDeleting(product)
   }
 
-  function handleDeleted(product: ProductListItem, result: ProductWriteResult) {
+  function handleDeleted(
+    product: ProductListItem,
+    result: ProductWriteResult,
+    mode: ProductDeleteMode,
+  ) {
     setDeleting(null)
     // What happened, in the backend's own words.
-    setNotice(`“${product.title}”: ${result.message || 'Product deleted.'}`)
+    setNotice(
+      `“${product.title}”: ${
+        result.message || (mode === 'delete' ? 'Product deleted.' : 'Product archived.')
+      }`,
+    )
   }
 
   // A status picked in the list, waiting for "Yes, update" (it is also changed in Shopify).
@@ -566,7 +575,7 @@ export function ProductsPage() {
           key={`delete-${deleting.id}`}
           product={deleting}
           onClose={closeDelete}
-          onDone={(result) => handleDeleted(deleting, result)}
+          onDone={(result, mode) => handleDeleted(deleting, result, mode)}
         />
       )}
 

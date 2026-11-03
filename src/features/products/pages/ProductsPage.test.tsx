@@ -377,7 +377,7 @@ describe('ProductsPage list', () => {
     )
   })
 
-  it('shows the Variants tab as Variant (picture, name, SKU), Price and Available, with the total inventory under it', async () => {
+  it('shows the Variants tab as one table of combinations, with the total inventory under it', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')
     await screen.findByRole('heading', { level: 1, name: 'Product 7' })
@@ -389,11 +389,23 @@ describe('ProductsPage list', () => {
       within(table)
         .getAllByRole('columnheader')
         .map((header) => header.textContent),
-    ).toEqual(['Variant', 'Price', 'Available'])
+    ).toEqual([
+      '',
+      'Variant',
+      'SKU',
+      'Price',
+      'Compare-at',
+      'Cost',
+      'Inventory',
+      'Status',
+      'Actions',
+    ])
 
-    // The SKU sits under the variant's name, in the same cell.
-    const cell = screen.getByRole('cell', { name: /Default Title/ })
-    expect(cell).toHaveTextContent('SKU-7')
+    // Each variant is a row: its name, then its SKU in a column of its own.
+    const row = screen
+      .getByRole('cell', { name: 'Default Title' })
+      .closest('tr') as HTMLElement
+    expect(row).toHaveTextContent('SKU-7')
 
     // The footer adds it all up.
     expect(screen.getByText(/Total inventory across all locations:/)).toHaveTextContent(
@@ -993,7 +1005,7 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
     expect(screen.getByText('SKU-7')).toBeInTheDocument()
-    expect(screen.getByRole('cell', { name: /Default Title/ })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Default Title' })).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Inventory/ }))
@@ -1022,7 +1034,7 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
 
-    const cell = screen.getByRole('cell', { name: /Default Title/ })
+    const cell = screen.getByRole('cell', { name: 'Default Title' })
     expect(cell.querySelector('img')).toHaveAttribute(
       'src',
       'https://cdn.example.com/variant-small.jpg',
@@ -1225,15 +1237,15 @@ describe('ProductsPage details', () => {
         within(dialog).getByRole('heading', { name: 'Description sections' }),
       ).toBeVisible()
       expect(within(dialog).getByText(/Whole product · Structured data/)).toBeVisible()
-      // Each section with its title and its text as it reads.
+      // The sections' own titles and text are not repeated here (the Overview shows them).
       expect(
-        within(dialog).getByRole('heading', { name: 'Product Description' }),
-      ).toBeVisible()
+        within(dialog).queryByRole('heading', { name: 'Product Description' }),
+      ).toBeNull()
       expect(
-        within(dialog).getByRole('heading', { name: 'Product Information' }),
-      ).toBeVisible()
-      expect(within(dialog).getByText('x')).toBeVisible()
-      expect(within(dialog).getByText('y')).toBeVisible()
+        within(dialog).queryByRole('heading', { name: 'Product Information' }),
+      ).toBeNull()
+      expect(within(dialog).queryByText('x')).toBeNull()
+      expect(within(dialog).queryByText('y')).toBeNull()
       // The description app's other settings, by name.
       expect(within(dialog).getByText('Accent color')).toBeVisible()
       expect(within(dialog).getByText('#557b97')).toBeVisible()
@@ -1269,6 +1281,13 @@ describe('ProductsPage details', () => {
       expect(dialog.textContent).not.toMatch(/[\[\]"]/)
       // Escape closes it, like the app's other windows.
       await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // It is a right-hand panel like the products quick view; its foot button closes it too.
+      await user.click(within(row).getByRole('button', { name: /View details/ }))
+      const panel = screen.getByRole('dialog', { name: 'Pack materials: details' })
+      expect(within(panel).getByText('Metafield details')).toBeVisible()
+      await user.click(within(panel).getByRole('button', { name: 'Close details' }))
       expect(screen.queryByRole('dialog')).toBeNull()
     })
   })

@@ -212,6 +212,22 @@ describe('LocksPage', () => {
       expect(screen.getByText(/2 locked products/)).toBeInTheDocument()
     })
 
+    it('marks a lock with manual locking on with an amber Manual tag in Status', async () => {
+      locks.mockResolvedValue(
+        locksAnswer([makeLock(1, { manual_locking: true }), makeLock(2)]),
+      )
+      renderPage()
+
+      const first = within(
+        (await screen.findByText('Locked Product 1')).closest('tr') as HTMLElement,
+      )
+      expect(first.getByText('Manual')).toBeInTheDocument()
+      const second = within(
+        screen.getByText('Locked Product 2').closest('tr') as HTMLElement,
+      )
+      expect(second.queryByText('Manual')).not.toBeInTheDocument()
+    })
+
     it('asks for no tags and no products until they are needed', async () => {
       renderPage()
       await screen.findByText('Locked Product 1')
@@ -333,6 +349,17 @@ describe('LocksPage', () => {
       // Back on the list, with what the backend said.
       expect(await screen.findByText(WRITE_OK.message)).toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'Add lock' })).not.toBeInTheDocument()
+    })
+
+    it('starts with manual locking off, and explains it', async () => {
+      await openForm()
+      const box = await screen.findByLabelText(/Enable manual locking/)
+      expect(box).not.toBeChecked()
+      expect(
+        screen.getByText(
+          'Manual locking: the website shows the product to everyone and leaves the lock to custom theme code. Keep this off unless a theme developer asks for it.',
+        ),
+      ).toBeInTheDocument()
     })
 
     it('adds a tag that does not exist yet by typing it', async () => {
@@ -459,7 +486,8 @@ describe('LocksPage', () => {
         reason: 'no_matching_tag',
         matched_tags: [],
         customer_tags: ['retail'],
-        message: 'Not allowed',
+        theme_enforces: true,
+        message: 'Denied: the customer has none of vans.',
       })
 
       await user.type(screen.getByLabelText('Customer email or id'), 'jane@example.com')
@@ -473,7 +501,44 @@ describe('LocksPage', () => {
         }),
       )
       expect(await screen.findByText('Not allowed')).toBeInTheDocument()
-      expect(screen.getByText(/none of the lock/)).toBeInTheDocument()
+      // The backend's own explanation, as it sent it.
+      expect(
+        screen.getByText('Denied: the customer has none of vans.'),
+      ).toBeInTheDocument()
+      // The website enforces this lock: no warning.
+      expect(screen.queryByText(/Manual locking is on/)).not.toBeInTheDocument()
+    })
+
+    it('warns when the website does not enforce the lock, and opens its settings', async () => {
+      const user = await openLock()
+      await tab(user, 'Check access')
+      check.mockResolvedValue({
+        allowed: false,
+        reason: 'no_matching_tag',
+        matched_tags: [],
+        customer_tags: ['test'],
+        theme_enforces: false,
+        message:
+          'Denied: the customer has none of vans. But Manual locking is on for this product, so the theme shows it to everyone',
+      })
+
+      await user.type(screen.getByLabelText('Customer email or id'), 'jane@example.com')
+      await user.click(screen.getByRole('button', { name: 'Check' }))
+
+      const warning = await screen.findByRole('alert')
+      expect(warning).toHaveTextContent(
+        'Manual locking is on for this product, so the website shows it to everyone. Switch Manual locking off to enforce the lock.',
+      )
+      await user.click(
+        within(warning).getByRole('button', { name: 'Open lock settings' }),
+      )
+
+      // The Settings tab, with the advanced card (where manual locking is) open.
+      expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      expect(screen.getByText('Manual locking')).toBeInTheDocument()
     })
 
     it('finds a lock opened from a bare address by its handle', async () => {

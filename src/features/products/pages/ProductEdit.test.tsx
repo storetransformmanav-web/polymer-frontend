@@ -207,17 +207,13 @@ describe('editing a product', () => {
   })
 
   describe('opening', () => {
-    it('has only View in every row under an Actions column — no Edit pencil, and Delete is hidden for now', async () => {
+    it('has View and Delete in every row under an Actions column — no Edit pencil', async () => {
       renderPage()
       await screen.findByText('Hippo Bag')
 
       expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'View Hippo Bag' })).toBeInTheDocument()
-      // Temporarily hidden (utils/flags.ts → SHOW_PRODUCT_DELETE).
-      expect(
-        screen.queryByRole('button', { name: 'Delete Hippo Bag' }),
-      ).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^Delete / })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete Hippo Bag' })).toBeInTheDocument()
       expect(
         screen.queryByRole('button', { name: 'Edit Hippo Bag' }),
       ).not.toBeInTheDocument()
@@ -2557,18 +2553,17 @@ describe('the Inventory tab is editable too', () => {
       return user
     }
     const variantsTable = () =>
-      within(
-        screen
-          .getByRole('columnheader', { name: 'Available' })
-          .closest('table') as HTMLElement,
-      )
+      within(screen.getByRole('region', { name: 'Variant combinations' }))
 
     it('shows the stock added in Inventory even when the variant total still says 0', async () => {
       stockedAs(0, 25)
       await openVariants()
 
       expect(variantsTable().getByRole('button', { name: '25' })).toBeInTheDocument()
-      expect(variantsTable().queryByText('Out of stock')).not.toBeInTheDocument()
+      // Its status pill (the filter dropdown also has an "Out of stock" choice).
+      const row = variantsTable().getByRole('button', { name: '25' }).closest('tr')
+      expect(row).toHaveTextContent('In stock')
+      expect(row).not.toHaveTextContent('Out of stock')
     })
 
     it('changes the stock where it is shown, and the figure follows at once', async () => {
@@ -2580,7 +2575,7 @@ describe('the Inventory tab is editable too', () => {
       })
       const user = await openVariants()
 
-      await user.dblClick(variantsTable().getByRole('button', { name: 'Out of stock' }))
+      await user.dblClick(variantsTable().getByRole('button', { name: '0' }))
       await user.keyboard('25{Enter}')
       await confirmUpdate(user)
 

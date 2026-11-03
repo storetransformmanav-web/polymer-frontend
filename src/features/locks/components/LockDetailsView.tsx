@@ -55,8 +55,21 @@ interface LockDetailsViewProps {
   onBack: () => void
 }
 
-/** "Would a customer see this product?": type an email (or id) and the backend says why. */
-function CheckAccessCard({ lock, shop }: { lock: AccessLock; shop: string }) {
+/**
+ * "Would a customer see this product?": type an email (or id) and the backend says why — its own
+ * `message` is shown as is (no reason text is made up here). When the answer says the website
+ * does not enforce the lock (`theme_enforces: false`: manual locking is on) an amber warning
+ * follows, with a button to the lock's settings.
+ */
+function CheckAccessCard({
+  lock,
+  shop,
+  onOpenSettings,
+}: {
+  lock: AccessLock
+  shop: string
+  onOpenSettings: () => void
+}) {
   const [customer, setCustomer] = useState('')
   const { check, result, isChecking, error, reset } = useAccessCheck()
 
@@ -105,10 +118,29 @@ function CheckAccessCard({ lock, shop }: { lock: AccessLock; shop: string }) {
             className={`flex flex-col gap-1 rounded-lg px-3 py-2.5 text-[0.85rem] ${result.allowed ? 'bg-accent-tint text-accent' : 'bg-danger-bg text-danger'}`}
           >
             <strong>{result.allowed ? 'Allowed' : 'Not allowed'}</strong>
-            <span>{checkReasonText(result.reason)}</span>
+            {/* The backend's own explanation; the reason in words only if it sent none. */}
+            <span>{result.message.trim() || checkReasonText(result.reason)}</span>
             {result.matched_tags.length > 0 && (
               <span>Matching tags: {result.matched_tags.join(', ')}</span>
             )}
+          </div>
+        )}
+        {result?.theme_enforces === false && (
+          <div
+            role="alert"
+            className="bg-warning-bg text-warning flex flex-col items-start gap-2 rounded-lg px-3 py-2.5 text-[0.85rem]"
+          >
+            <span>
+              Manual locking is on for this product, so the website shows it to everyone.
+              Switch Manual locking off to enforce the lock.
+            </span>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="border-warning/40 bg-bg text-text hover:border-warning cursor-pointer rounded-md border px-2.5 py-1 text-[0.8rem] font-semibold transition-colors"
+            >
+              Open lock settings
+            </button>
           </div>
         )}
       </form>
@@ -133,6 +165,8 @@ export function LockDetailsView({
   onBack,
 }: LockDetailsViewProps) {
   const [tab, setTab] = useState<TabId>('overview')
+  // The Settings tab was opened from Check access's manual-locking warning.
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   if (error || notFound) {
     return (
@@ -348,6 +382,8 @@ export function LockDetailsView({
                 title="Advanced settings"
                 icon={SlidersIcon}
                 defaultOpen={false}
+                // Opened from Check access's warning: the manual locking setting is in here.
+                forceOpen={showAdvanced}
               >
                 <FieldGrid>
                   <Field label="Manual locking">{yesNo(lock.manual_locking)}</Field>
@@ -362,7 +398,16 @@ export function LockDetailsView({
             </>
           )}
 
-          {tab === 'access' && <CheckAccessCard lock={lock} shop={shop} />}
+          {tab === 'access' && (
+            <CheckAccessCard
+              lock={lock}
+              shop={shop}
+              onOpenSettings={() => {
+                setShowAdvanced(true)
+                setTab('settings')
+              }}
+            />
+          )}
         </div>
       </div>
     </article>

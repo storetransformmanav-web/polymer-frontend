@@ -37,6 +37,7 @@ export function StockCell({
   level,
   onSaved,
   zeroLabel,
+  icon = true,
 }: {
   product: ProductDetail
   variant: ProductVariant
@@ -44,6 +45,8 @@ export function StockCell({
   onSaved?: SavedHandler
   /** What to show instead of a 0 (the Variants tab says "Out of stock"); the box still holds 0. */
   zeroLabel?: string
+  /** The small pencil beside the figure (the Variants table has none: a double-click is enough). */
+  icon?: boolean
 }) {
   const { save, error, clearError } = useSaveProduct()
   // The new number waiting for "Yes, update", and the one being sent.
@@ -85,7 +88,7 @@ export function StockCell({
         label={`Available of ${variant.title ?? 'variant'} at ${place}`}
         inputMode="numeric"
         align="right"
-        showIcon
+        showIcon={icon}
         busy={sending !== null}
         validate={(next) =>
           WHOLE_UNITS.test(next) ? null : 'Enter a whole number, 0 or more'
@@ -198,6 +201,124 @@ export function PriceCell({
             from: formatPrice(saved, currency),
             to: formatPrice(asking, currency),
           }}
+          onConfirm={() => void confirm()}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+    </>
+  )
+}
+
+/** The variant values the Variants table changes with a double-click. */
+export type VariantField = 'sku' | 'barcode' | 'price' | 'compare_at_price' | 'cost'
+
+const MONEY_FIELDS: VariantField[] = ['price', 'compare_at_price', 'cost']
+const FIELD_NAMES: Record<VariantField, string> = {
+  sku: 'SKU',
+  barcode: 'Barcode',
+  price: 'Price',
+  compare_at_price: 'Compare-at price',
+  cost: 'Cost per item',
+}
+
+/**
+ * One value of a variant in the Variants table — SKU, barcode, price, compare-at price or cost —
+ * changed where it is shown: double-click it (or press Enter on it), type, Enter. It asks "Are you
+ * sure?" first, saying the value now and the one it becomes, then sends just that field —
+ * `variants: [{ id, <field> }]` — and the new value shows at once. No pencil is drawn. A blank
+ * compare-at price or cost clears it (`null`); a price can't be blank. Escape, or the same value,
+ * sends nothing.
+ */
+export function VariantFieldCell({
+  product,
+  variant,
+  field,
+  onSaved,
+  align = 'left',
+  strike = false,
+}: {
+  product: ProductDetail
+  variant: ProductVariant
+  field: VariantField
+  onSaved?: SavedHandler
+  align?: 'left' | 'right'
+  /** Drawn struck through, as a compare-at price is. */
+  strike?: boolean
+}) {
+  const { save, error, clearError } = useSaveProduct()
+  const [asking, setAsking] = useState<string | null>(null)
+  const [sending, setSending] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const money = MONEY_FIELDS.includes(field)
+  const currency = variant.currency ?? product.currency
+  const saved = (variant[field] ?? '').toString()
+  const title = variant.title ?? 'variant'
+  const what = `${FIELD_NAMES[field]} of ${title}`
+  const shown = sending ?? saved
+  const show = (value: string) =>
+    value === '' ? '—' : money ? formatPrice(value, currency) : value
+
+  async function confirm() {
+    const next = asking
+    if (next === null) return
+    setAsking(null)
+    setSending(next)
+    setFailed(false)
+    clearError()
+    const value = next === '' && field !== 'sku' && field !== 'barcode' ? null : next
+    const body = {
+      variants: [{ id: variant.id, [field]: value }],
+    } as ProductUpdateBody
+    const result = await save({ id: product.id, body, shop: product.shop?.key })
+    setSending(null)
+    if (result) onSaved?.(result, product, body)
+    else setFailed(true)
+  }
+
+  return (
+    <>
+      <DoubleClickEdit
+        value={saved}
+        label={what}
+        inputMode={money ? 'decimal' : 'text'}
+        align={align}
+        maxLength={
+          field === 'sku' ? LIMITS.sku : field === 'barcode' ? LIMITS.barcode : 20
+        }
+        busy={sending !== null}
+        validate={(next) => {
+          if (!money) return null
+          if (next === '') return field === 'price' ? 'Enter a price' : null
+          if (DECIMAL_PRICE.test(next)) return null
+          return field === 'price'
+            ? 'Enter a price, such as 9.99'
+            : 'Enter a number, such as 9.99'
+        }}
+        // "50" and "50.00" are the same amount: nothing to ask about.
+        onCommit={(next) => {
+          if (money && next !== '' && saved !== '' && Number(next) === Number(saved))
+            return
+          setAsking(next)
+        }}
+        display={
+          <span
+            className={`${shown === '' ? 'text-text-muted' : ''} ${
+              strike && shown !== '' ? 'text-text-muted line-through' : ''
+            } ${field === 'price' ? 'font-semibold' : ''} ${field === 'sku' ? 'font-mono text-[0.8rem]' : ''}`}
+          >
+            {show(shown)}
+          </span>
+        }
+      />
+      {failed && error && (
+        <span role="alert" className="text-danger block text-[0.72rem] font-normal">
+          {error}
+        </span>
+      )}
+      {asking !== null && (
+        <ConfirmUpdateDialog
+          title={`Update “${product.title}”?`}
+          change={{ label: what, from: show(saved), to: show(asking) }}
           onConfirm={() => void confirm()}
           onCancel={() => setAsking(null)}
         />

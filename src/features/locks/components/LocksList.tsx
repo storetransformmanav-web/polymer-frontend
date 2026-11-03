@@ -55,11 +55,22 @@ function Chips({ values, empty }: { values: string[]; empty: string }) {
   )
 }
 
+/**
+ * Enabled / Disabled, and an amber "Manual" when the lock has manual locking on — the website
+ * then shows the product to everyone and leaves the lock to custom theme code.
+ */
 function StatusBadges({ lock }: { lock: AccessLock }) {
   return (
-    <Badge tone={lock.enabled ? 'success' : 'neutral'} className="w-24 justify-center">
-      {lock.enabled ? 'Enabled' : 'Disabled'}
-    </Badge>
+    <span className="inline-flex flex-wrap items-center justify-center gap-1">
+      <Badge tone={lock.enabled ? 'success' : 'neutral'} className="w-24 justify-center">
+        {lock.enabled ? 'Enabled' : 'Disabled'}
+      </Badge>
+      {lock.manual_locking && (
+        <span title="Manual locking is on: the website shows this product to everyone">
+          <Badge tone="warning">Manual</Badge>
+        </span>
+      )}
+    </span>
   )
 }
 

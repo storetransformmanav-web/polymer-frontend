@@ -20,7 +20,6 @@ import {
   statusTone,
 } from '../utils/format.ts'
 import type { ProductEditStatus } from '../../../lib/api/endpoints.ts'
-import { SHOW_PRODUCT_DELETE } from '../utils/flags.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
@@ -416,17 +415,15 @@ export function ProductsList({
                       >
                         <EyeIcon />
                       </button>
-                      {SHOW_PRODUCT_DELETE && (
-                        <button
-                          type="button"
-                          aria-label={`Delete ${product.title}`}
-                          title="Delete"
-                          onClick={() => onDelete(product)}
-                          className={ROW_ACTION_DANGER}
-                        >
-                          <TrashIcon />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        aria-label={`Delete ${product.title}`}
+                        title="Delete"
+                        onClick={() => onDelete(product)}
+                        className={ROW_ACTION_DANGER}
+                      >
+                        <TrashIcon />
+                      </button>
                     </span>
                   </td>
                 </tr>
