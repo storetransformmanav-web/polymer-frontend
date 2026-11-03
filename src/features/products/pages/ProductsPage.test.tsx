@@ -1237,6 +1237,8 @@ describe('ProductsPage details', () => {
       // The description app's other settings, by name.
       expect(within(dialog).getByText('Accent color')).toBeVisible()
       expect(within(dialog).getByText('#557b97')).toBeVisible()
+      // A colour is shown as a swatch of that colour as well as its code.
+      expect(within(dialog).getByTitle('#557b97')).toBeInTheDocument()
       // And no JSON anywhere in it.
       expect(dialog.textContent).not.toMatch(/[{}]|"sections"|"title"|accent_color/)
 

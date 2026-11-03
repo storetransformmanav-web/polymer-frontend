@@ -282,10 +282,14 @@ export type ReadableValue =
   | { kind: 'empty' }
   | { kind: 'text'; text: string }
   | { kind: 'html'; html: string }
+  | { kind: 'color'; color: string }
   | { kind: 'list'; items: ReadableValue[] }
   | { kind: 'group'; entries: { label: string; value: ReadableValue }[] }
 
 const MARKUP = /<\/?[a-z][^>]*>/i
+/** A CSS colour written as a hex code or as rgb() / rgba() / hsl() / hsla() — only these, so it is safe to paint. */
+const COLOR =
+  /^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgb|hsl)a?\(\s*[\d.%\s,/-]+\))$/i
 const MOST_ITEMS = 100
 const MOST_DEPTH = 6
 
@@ -295,6 +299,8 @@ export function readableValue(value: unknown, depth = 0): ReadableValue {
   if (typeof value === 'string') {
     const text = value.trim()
     if (!text) return { kind: 'empty' }
+    // A colour is shown as a swatch, so a setting like "accent_color" can be seen at a glance.
+    if (COLOR.test(text)) return { kind: 'color', color: text }
     // Text with tags in it is drawn as formatted text (through the safe renderer), not as code.
     return MARKUP.test(text) ? { kind: 'html', html: text } : { kind: 'text', text }
   }

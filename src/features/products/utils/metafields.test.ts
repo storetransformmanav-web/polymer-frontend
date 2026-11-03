@@ -152,7 +152,7 @@ describe('readableValue', () => {
       kind: 'group',
       entries: [
         { label: 'Accordian multi', value: { kind: 'text', text: 'Yes' } },
-        { label: 'Accent color', value: { kind: 'text', text: '#557b97' } },
+        { label: 'Accent color', value: { kind: 'color', color: '#557b97' } },
         { label: 'Count', value: { kind: 'text', text: '3' } },
       ],
     })
@@ -201,6 +201,38 @@ describe('readableValue', () => {
     expect(JSON.stringify(readableValue(deep))).toContain(
       'more detail here than can be shown',
     )
+  })
+})
+
+describe('readableValue colours', () => {
+  it('knows a hex code and rgb / rgba / hsl colours', () => {
+    for (const color of [
+      '#fff',
+      '#e2e2e2',
+      '#e2e2e2ff',
+      'rgb(255, 0, 10)',
+      'rgba(255,255,255,0)',
+      'rgba(10 20 30 / 50%)',
+      'hsl(120, 40%, 50%)',
+    ]) {
+      expect(readableValue(color)).toEqual({ kind: 'color', color })
+    }
+    expect(readableValue('  #557B97 ')).toEqual({ kind: 'color', color: '#557B97' })
+  })
+
+  it('leaves anything else as text, so only a real colour is ever painted', () => {
+    for (const text of [
+      '#12',
+      '#12345',
+      '#ggg',
+      'red',
+      'rgb(1, 2, 3); background: url(x)',
+      'rgba(0,0,0,0) !important',
+      'url(javascript:alert(1))',
+      'colour: #fff',
+    ]) {
+      expect(readableValue(text)).toEqual({ kind: 'text', text })
+    }
   })
 })
 
