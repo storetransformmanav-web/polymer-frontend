@@ -225,7 +225,7 @@ const FIELD_NAMES: Record<VariantField, string> = {
  * One value of a variant in the Variants table — SKU, barcode, price, compare-at price or cost —
  * changed where it is shown: double-click it (or press Enter on it), type, Enter. It asks "Are you
  * sure?" first, saying the value now and the one it becomes, then sends just that field —
- * `variants: [{ id, <field> }]` — and the new value shows at once. No pencil is drawn. A blank
+ * `variants: [{ id, <field> }]` — and the new value shows at once. A pencil is drawn only with `icon`. A blank
  * compare-at price or cost clears it (`null`); a price can't be blank. Escape, or the same value,
  * sends nothing.
  */
@@ -236,6 +236,7 @@ export function VariantFieldCell({
   onSaved,
   align = 'left',
   strike = false,
+  icon = false,
 }: {
   product: ProductDetail
   variant: ProductVariant
@@ -244,6 +245,8 @@ export function VariantFieldCell({
   align?: 'left' | 'right'
   /** Drawn struck through, as a compare-at price is. */
   strike?: boolean
+  /** A small pencil beside the value (the details view); the table drew none. */
+  icon?: boolean
 }) {
   const { save, error, clearError } = useSaveProduct()
   const [asking, setAsking] = useState<string | null>(null)
@@ -282,6 +285,7 @@ export function VariantFieldCell({
         label={what}
         inputMode={money ? 'decimal' : 'text'}
         align={align}
+        showIcon={icon}
         maxLength={
           field === 'sku' ? LIMITS.sku : field === 'barcode' ? LIMITS.barcode : 20
         }

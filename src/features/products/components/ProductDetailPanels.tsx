@@ -7,6 +7,7 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
+  PencilIcon,
   PlusIcon,
   SpinnerIcon,
   TrashIcon,
@@ -101,8 +102,9 @@ import {
 } from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
-import { VariantCombinations, VariantOptionsCard } from './VariantCombinations.tsx'
-import { blankNewVariant, draftFromProduct, optionChoices } from '../utils/editDraft.ts'
+import { AddVariantDialog } from './edit/AddVariantDialog.tsx'
+import { VariantCombinations } from './VariantCombinations.tsx'
+import { VariantOptionsCard } from './OptionPills.tsx'
 
 // Which validation problems belong to each editable section (see useSectionEdit).
 const SPEC_ERRORS = [
@@ -602,14 +604,20 @@ function CollectionsBlock({
 function VariantsView({
   product,
   onSaved,
+  onNewVariant,
 }: {
   product: ProductDetail
   onSaved?: SavedHandler
+  onNewVariant: () => void
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <VariantOptionsCard product={product} />
-      <VariantCombinations product={product} onSaved={onSaved} />
+      <VariantOptionsCard product={product} onSaved={onSaved} />
+      <VariantCombinations
+        product={product}
+        onSaved={onSaved}
+        onNewVariant={onNewVariant}
+      />
     </div>
   )
 }
@@ -1273,9 +1281,12 @@ const HEADER_BUTTON =
 function VariantsHeader({
   product,
   edit,
+  onAdd,
 }: {
   product: ProductDetail
   edit: SectionEdit
+  /** Opens the New variant window. */
+  onAdd: () => void
 }) {
   const count = product.variants.length
   return (
@@ -1300,20 +1311,7 @@ function VariantsHeader({
           <>
             <button
               type="button"
-              onClick={() => {
-                // Opens the editor with a new variant waiting to be filled in.
-                edit.start()
-                const draft = draftFromProduct(product)
-                const unit = draft.variants[0]?.weightUnit ?? 'GRAMS'
-                edit.change({
-                  newVariants: [
-                    {
-                      ...blankNewVariant(unit),
-                      optionValues: optionChoices(draft).map(() => ''),
-                    },
-                  ],
-                })
-              }}
+              onClick={onAdd}
               className={`${HEADER_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
             >
               <PlusIcon width={14} height={14} />
@@ -1324,6 +1322,7 @@ function VariantsHeader({
               onClick={edit.start}
               className={`${HEADER_BUTTON} border-border bg-bg text-text hover:border-accent`}
             >
+              <PencilIcon width={13} height={13} />
               Edit variants
             </button>
           </>
@@ -1334,16 +1333,35 @@ function VariantsHeader({
 }
 
 export function VariantsPanel({ product, onSaved }: TabProps) {
+  // The New variant window (the header's Add variant, and the Edit variant window's New variant).
+  const [adding, setAdding] = useState(false)
   return (
-    <EditableTab
-      product={product}
-      what="variants"
-      errorPrefixes={VARIANT_ERRORS}
-      onSaved={onSaved}
-      header={(edit) => <VariantsHeader product={product} edit={edit} />}
-      view={<VariantsView product={product} onSaved={onSaved} />}
-      editor={(section) => <VariantsEditor {...section} />}
-    />
+    <>
+      <EditableTab
+        product={product}
+        what="variants"
+        errorPrefixes={VARIANT_ERRORS}
+        onSaved={onSaved}
+        header={(edit) => (
+          <VariantsHeader product={product} edit={edit} onAdd={() => setAdding(true)} />
+        )}
+        view={
+          <VariantsView
+            product={product}
+            onSaved={onSaved}
+            onNewVariant={() => setAdding(true)}
+          />
+        }
+        editor={(section) => <VariantsEditor {...section} />}
+      />
+      {adding && (
+        <AddVariantDialog
+          product={product}
+          onSaved={onSaved}
+          onClose={() => setAdding(false)}
+        />
+      )}
+    </>
   )
 }
 

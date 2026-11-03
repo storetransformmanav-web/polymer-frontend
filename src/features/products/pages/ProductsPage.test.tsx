@@ -377,37 +377,27 @@ describe('ProductsPage list', () => {
     )
   })
 
-  it('shows the Variants tab as one table of combinations, with the total inventory under it', async () => {
+  it('shows the Variants tab as a picture, a unit price and a details card, with the total inventory', async () => {
     const user = userEvent.setup()
     renderPage('/products/id-7')
     await screen.findByRole('heading', { level: 1, name: 'Product 7' })
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
 
     // (the hidden list's table is still mounted, so look inside the tab's panel)
-    const table = screen.getByRole('tabpanel')
+    const panel = within(screen.getByRole('tabpanel'))
+    expect(panel.queryByRole('table')).toBeNull()
     expect(
-      within(table)
-        .getAllByRole('columnheader')
-        .map((header) => header.textContent),
-    ).toEqual([
-      '',
-      'Variant',
-      'SKU',
-      'Price',
-      'Compare-at',
-      'Cost',
-      'Inventory',
-      'Status',
-      'Actions',
-    ])
+      panel.getByRole('figure', { name: 'Picture of Default Title' }),
+    ).toBeInTheDocument()
+    expect(panel.getByRole('region', { name: 'Unit price' })).toBeInTheDocument()
+    // The chosen variant's SKU is a field of its details.
+    expect(
+      within(panel.getByRole('region', { name: 'Details of Default Title' })).getByText(
+        'SKU-7',
+      ),
+    ).toBeInTheDocument()
 
-    // Each variant is a row: its name, then its SKU in a column of its own.
-    const row = screen
-      .getByRole('cell', { name: 'Default Title' })
-      .closest('tr') as HTMLElement
-    expect(row).toHaveTextContent('SKU-7')
-
-    // The footer adds it all up.
+    // The total adds it all up.
     expect(screen.getByText(/Total inventory across all locations:/)).toHaveTextContent(
       /Total inventory across all locations: \d[\d,]* available/,
     )
@@ -1005,7 +995,7 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
     expect(screen.getByText('SKU-7')).toBeInTheDocument()
-    expect(screen.getByRole('cell', { name: 'Default Title' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Default Title' })).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Inventory/ }))
@@ -1024,7 +1014,7 @@ describe('ProductsPage details', () => {
     expect(screen.getByText('This product has no images.')).toBeInTheDocument()
   })
 
-  it("shows each variant's own picture beside its name in the Variants tab", async () => {
+  it("shows the chosen variant's own picture in the Variants tab", async () => {
     const detail = makeDetail('id-7')
     detail.variants[0].image_url = 'https://cdn.example.com/variant-small.jpg'
     details.mockResolvedValue(detail)
@@ -1034,8 +1024,7 @@ describe('ProductsPage details', () => {
 
     await user.click(screen.getByRole('tab', { name: /Variants/ }))
 
-    const cell = screen.getByRole('cell', { name: 'Default Title' })
-    expect(cell.querySelector('img')).toHaveAttribute(
+    expect(screen.getByRole('img', { name: 'Picture of Default Title' })).toHaveAttribute(
       'src',
       'https://cdn.example.com/variant-small.jpg',
     )

@@ -11,8 +11,9 @@ import {
 } from './fields.tsx'
 import { TagsInput } from './TagsSection.tsx'
 
+// A value inside the values box: the same chip as a tag.
 const PILL =
-  'border-border-strong bg-bg inline-flex h-9 items-center rounded-full border text-[0.85rem] font-medium'
+  'border-border bg-surface inline-flex h-8 items-center rounded-md border text-[0.82rem] font-medium'
 
 /**
  * The product's options (Size, Colour…) in the Variants editor, laid out plainly — no cards, no
@@ -146,37 +147,38 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
                 />
               </EditField>
             </div>
-            <div className="flex flex-col gap-2">
-              <p
-                className={`${FIELD_LABEL} flex items-center gap-2`}
-                id={`option-${index}-values-label`}
-              >
-                <span className="bg-accent-tint border-border-strong rounded-md border px-2 py-0.5">
-                  {name}
-                </span>
-                <span className="text-text-muted text-[0.72rem] font-normal">
-                  {chips.filter((chip) => chip.text).length}
-                </span>
+            <div className="flex max-w-3xl flex-col gap-1.5">
+              <p className={FIELD_LABEL} id={`option-${index}-values-label`}>
+                Variant values
               </p>
-              <ul
-                aria-labelledby={`option-${index}-values-label`}
-                className="flex flex-wrap items-start gap-2"
+              {/* One box, like the tags box: every value as a chip, then a place to type the next. */}
+              <div
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) {
+                    document.getElementById(`new-value-${option.key}`)?.focus()
+                  }
+                }}
+                className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex cursor-text flex-wrap items-center gap-1.5 rounded-xl border p-2.5 transition-colors focus-within:outline-2"
               >
-                {chips
-                  .filter((chip) => chip.text)
-                  .map((chip) => (
-                    <li key={chip.key}>
-                      <ValueChip chip={chip} />
-                    </li>
-                  ))}
-                <li className="min-w-0">
-                  <AddValueBox
-                    id={`new-value-${option.key}`}
-                    name={name}
-                    onAdd={(value) => addValue(index, value)}
-                  />
-                </li>
-              </ul>
+                <ul aria-labelledby={`option-${index}-values-label`} className="contents">
+                  {chips
+                    .filter((chip) => chip.text)
+                    .map((chip) => (
+                      <li key={chip.key} className="flex">
+                        <ValueChip chip={chip} />
+                      </li>
+                    ))}
+                </ul>
+                <AddValueBox
+                  id={`new-value-${option.key}`}
+                  name={name}
+                  onAdd={(value) => addValue(index, value)}
+                />
+              </div>
+              <p className="text-text-muted text-[0.75rem]">
+                Click a value to rename it. Type a new one and press Enter or a comma to
+                add it — it comes with a new variant, which you price below.
+              </p>
               {valueErrors.map((message) => (
                 <p key={message} role="alert" className="text-danger text-[0.76rem]">
                   {message}
@@ -312,7 +314,7 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
             finish(false)
           }
         }}
-        className={`${PILL} border-accent bg-bg text-text focus:outline-accent-tint w-36 px-4 outline-none focus:outline-2 ${tone}`}
+        className={`${PILL} border-accent bg-bg text-text focus:outline-accent-tint w-32 px-2.5 outline-none focus:outline-2 ${tone}`}
       />
     )
   }
@@ -327,8 +329,8 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
           setText(chip.text)
           setEditing(true)
         }}
-        className={`text-text h-full cursor-text border-none bg-transparent pl-4 text-[0.85rem] font-medium disabled:cursor-default ${
-          chip.remove ? 'pr-2' : 'pr-4'
+        className={`text-text h-full cursor-text border-none bg-transparent pl-2.5 text-[0.82rem] font-medium disabled:cursor-default ${
+          chip.remove ? 'pr-1' : 'pr-2.5'
         }`}
       >
         {chip.text}
@@ -363,44 +365,65 @@ function AddValueBox({
 }) {
   const [text, setText] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
-  const submit = () => {
-    const message = onAdd(text)
+  /** Adds every value in `raw` (commas separate several); keeps the ones that were refused. */
+  const submit = (raw: string) => {
+    const parts = raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    if (parts.length === 0) {
+      setProblem(raw.trim() ? null : 'Type the new value first.')
+      return
+    }
+    const left: string[] = []
+    let message: string | null = null
+    for (const part of parts) {
+      const refused = onAdd(part)
+      if (refused) {
+        message = refused
+        left.push(part)
+      }
+    }
     setProblem(message)
-    if (!message) setText('')
+    setText(left.join(', '))
   }
 
   return (
-    <span className="flex min-w-0 flex-col gap-1">
+    <span className="flex min-w-40 flex-1 flex-col gap-1">
       <span className="flex items-center gap-1.5">
         <input
           id={id}
           aria-label={`New value for ${name}`}
           autoComplete="off"
           value={text}
-          maxLength={LIMITS.optionValue}
-          placeholder={`Add a ${name.toLowerCase()} here`}
+          maxLength={LIMITS.optionValue * 4}
+          placeholder={`Add a ${name.toLowerCase()} (e.g. Small) and press Enter`}
           title="A new value comes with a new variant, which you price below."
           aria-invalid={problem ? true : undefined}
           onChange={(event) => {
-            setText(event.target.value)
+            const next = event.target.value
             setProblem(null)
+            // A comma finishes a value, as in the tags box.
+            if (next.includes(',')) submit(next)
+            else setText(next)
           }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return
             // Enter adds the value; it must not save the section.
             event.preventDefault()
             event.stopPropagation()
-            submit()
+            submit(text)
           }}
-          className={`${PILL} focus:outline-accent-tint aria-[invalid=true]:border-danger w-52 min-w-0 px-4 outline-none focus:outline-2`}
+          className="text-text placeholder:text-text-muted/70 h-8 min-w-0 flex-1 border-none bg-transparent px-1 text-[0.85rem] outline-none"
         />
         <button
           type="button"
           aria-label={`Add value to ${name}`}
-          onClick={submit}
-          className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-colors"
+          title="Add this value"
+          onClick={() => submit(text)}
+          className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-colors"
         >
-          <PlusIcon width={14} height={14} />
+          <PlusIcon width={12} height={12} />
         </button>
       </span>
       {problem && (

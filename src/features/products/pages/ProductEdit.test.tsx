@@ -1161,13 +1161,25 @@ describe('editing a section in place', () => {
       expect(options.getByLabelText(/^Variant name/)).toHaveValue('Size')
       expect(options.getByText('M')).toBeInTheDocument()
       const box = options.getByLabelText('New value for Size')
-      expect(box).toHaveAttribute('placeholder', 'Add a size here')
+      expect(box).toHaveAttribute(
+        'placeholder',
+        'Add a size (e.g. Small) and press Enter',
+      )
       expect(options.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
+      // One box, like the tags box: the values and the typing box sit in it together.
+      const values = options.getByRole('list', { name: 'Variant values' })
+      expect(values.parentElement).toContainElement(box)
 
-      // Enter adds the value as a pill, and the box stays for the next one.
+      // Enter adds the value as a chip, and the box stays for the next one.
       await user.type(box, 'Large{Enter}')
       expect(options.getByText('Large')).toBeInTheDocument()
       expect(box).toHaveValue('')
+
+      // A comma adds one too.
+      await user.type(box, 'XL,')
+      expect(options.getByText('XL')).toBeInTheDocument()
+      expect(box).toHaveValue('')
+      await user.click(screen.getByRole('button', { name: 'Remove new value XL' }))
 
       // Clicking a value turns it into a box: Enter renames it, Escape keeps the old name.
       await user.click(options.getByRole('button', { name: 'M' }))
@@ -2551,18 +2563,18 @@ describe('the Inventory tab is editable too', () => {
       await user.click(screen.getByRole('tab', { name: /^Variants/ }))
       return user
     }
-    const variantsTable = () =>
-      within(screen.getByRole('region', { name: 'Variant combinations' }))
+    // The Variants tab's own panel (the products list is mounted too).
+    const variantsTable = () => within(screen.getByRole('tabpanel'))
 
     it('shows the stock added in Inventory even when the variant total still says 0', async () => {
       stockedAs(0, 25)
       await openVariants()
 
       expect(variantsTable().getByRole('button', { name: '25' })).toBeInTheDocument()
-      // Its status pill (the filter dropdown also has an "Out of stock" choice).
-      const row = variantsTable().getByRole('button', { name: '25' }).closest('tr')
-      expect(row).toHaveTextContent('In stock')
-      expect(row).not.toHaveTextContent('Out of stock')
+      // The unit-price card says so too.
+      const price = within(screen.getByRole('region', { name: 'Unit price' }))
+      expect(price.getByText('25 in stock')).toBeInTheDocument()
+      expect(price.queryByText('Out of stock')).toBeNull()
     })
 
     it('changes the stock where it is shown, and the figure follows at once', async () => {
