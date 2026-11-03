@@ -12,6 +12,7 @@ import {
   ImageIcon,
   PencilIcon,
 } from '../../../components/ui/icons.tsx'
+import { SelectField } from '../../../components/ui/SelectField.tsx'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { formatPrice } from '../../../lib/format.ts'
 import type { ProductDetail, ProductVariant } from '../../../lib/api/endpoints.ts'
@@ -19,11 +20,10 @@ import type { SavedHandler } from '../hooks/useSectionEdit.ts'
 import { countryName } from '../utils/countries.ts'
 import { variantImageId } from '../utils/editDraft.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
-import { productStock, variantStock } from '../utils/stock.ts'
+import { variantStock } from '../utils/stock.ts'
 import { VariantBulkEdit } from './edit/VariantBulkEdit.tsx'
 import { VariantEditDialog } from './edit/VariantEditDialog.tsx'
 import { StockCell, VariantFieldCell } from './InlineEdits.tsx'
-import { VariantOptionRows } from './OptionPills.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 import { VariantImageDialog } from './VariantImageDialog.tsx'
@@ -103,7 +103,6 @@ export function VariantCombinations({
   const out = (stock ?? 0) <= 0
   const onlyLevel =
     variant.inventory_levels.length === 1 ? variant.inventory_levels[0] : null
-  const total = productStock(product) ?? 0
   const src = safeUrl(variant.image_url)
 
   // The lightbox: the product's pictures, opened on the variant's own; a picture that is not
@@ -116,7 +115,7 @@ export function VariantCombinations({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The one section for choosing: the heading, the total, Bulk edit and the option rows. */}
+      {/* The one place to choose: the variant dropdown (with the heading and Bulk edit). */}
       <section aria-label="Variants" className={`${CARD} flex flex-col gap-3 p-4`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold">
@@ -125,9 +124,21 @@ export function VariantCombinations({
               {product.variants.length}
             </span>
           </h3>
-          <span className="text-text-muted text-[0.8rem]">
-            Total inventory across all locations: <strong>{num(total)}</strong> available
-          </span>
+          {/* The same choice as the option rows, as a dropdown of every variant. */}
+          <div className="w-64 max-w-full">
+            <SelectField
+              id={`variant-select-${product.id}`}
+              label="Choose a variant"
+              hideLabel
+              compact
+              value={variant.id}
+              options={product.variants.map((candidate) => ({
+                value: candidate.id,
+                label: candidate.title ?? 'Variant',
+              }))}
+              onChange={setSelectedId}
+            />
+          </div>
           <button
             type="button"
             onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
@@ -136,12 +147,6 @@ export function VariantCombinations({
             Bulk edit
           </button>
         </div>
-        <VariantOptionRows
-          product={product}
-          selected={variant}
-          onSelect={setSelectedId}
-          onSaved={onSaved}
-        />
       </section>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
@@ -211,10 +216,6 @@ export function VariantCombinations({
             <div className="border-border-strong flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
               <h3 className="text-[0.95rem] font-semibold">{title}</h3>
               <div className="flex items-center gap-3">
-                <p className="text-text-muted hidden items-center gap-1.5 text-[0.76rem] sm:flex">
-                  <PencilIcon width={12} height={12} />
-                  Double-click a value to change it
-                </p>
                 <button
                   type="button"
                   aria-label={`Edit variant ${title}`}
@@ -299,6 +300,7 @@ export function VariantCombinations({
                     product={product}
                     variant={variant}
                     level={onlyLevel}
+                    align="left"
                     onSaved={onSaved}
                   />
                 ) : (

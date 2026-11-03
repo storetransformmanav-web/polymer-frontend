@@ -397,10 +397,9 @@ describe('ProductsPage list', () => {
       ),
     ).toBeInTheDocument()
 
-    // The total adds it all up.
-    expect(screen.getByText(/Total inventory across all locations:/)).toHaveTextContent(
-      /Total inventory across all locations: \d[\d,]* available/,
-    )
+    // No total line and no "double-click" hint: the pencils say it.
+    expect(screen.queryByText(/Total inventory across all locations/)).toBeNull()
+    expect(screen.queryByText(/Double-click a value to change it/)).toBeNull()
   })
 
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {

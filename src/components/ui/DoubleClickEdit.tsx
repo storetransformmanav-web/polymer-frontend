@@ -151,7 +151,7 @@ export function DoubleClickEdit({
         }
       }}
       className={`focus-visible:outline-accent min-w-0 cursor-text rounded border-none transition-colors focus-visible:outline-2 ${tone} ${
-        showIcon ? 'inline-flex items-start gap-1.5' : ''
+        showIcon ? 'inline-flex items-center gap-1.5' : ''
       } ${place} ${busy ? 'opacity-60' : ''} ${className}`}
     >
       {display}
@@ -159,7 +159,7 @@ export function DoubleClickEdit({
         <span
           data-edit-icon
           aria-hidden="true"
-          className="text-text-muted hover:text-accent mt-0.5 inline-flex shrink-0 cursor-pointer opacity-70 transition-colors hover:opacity-100"
+          className="text-text-muted hover:text-accent inline-flex shrink-0 cursor-pointer opacity-70 transition-colors hover:opacity-100"
         >
           <PencilIcon width={12} height={12} />
         </span>

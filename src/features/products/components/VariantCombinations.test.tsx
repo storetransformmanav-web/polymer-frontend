@@ -99,12 +99,9 @@ const picture = () => within(screen.getByRole('figure'))
 const price = () => within(screen.getByRole('region', { name: 'Unit price' }))
 const details = (name: string) =>
   within(screen.getByRole('region', { name: `Details of ${name}` }))
-/** Chooses a variant by clicking its values ("Medium / Red") in the option rows. */
+/** Chooses a variant from the dropdown ("Medium / Red"). */
 const choose = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
-  const rows = within(screen.getByRole('region', { name: 'Variant options' }))
-  for (const value of name.split(' / ')) {
-    await user.click(rows.getByRole('button', { name: value }))
-  }
+  await user.selectOptions(screen.getByLabelText('Choose a variant'), name)
 }
 
 const IMAGES = [
@@ -306,51 +303,26 @@ describe('the Variants tab', () => {
     })
   })
 
-  describe('one section to choose the variant', () => {
-    it('has the option rows as the only chooser — no second list of variants', () => {
+  describe('one place to choose the variant', () => {
+    it('is a dropdown of every variant — no option rows and no second list', async () => {
+      const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
       expect(screen.getAllByRole('region', { name: 'Variants' })).toHaveLength(1)
+      expect(screen.queryByRole('region', { name: 'Variant options' })).toBeNull()
       expect(screen.queryByRole('list', { name: 'Variants' })).toBeNull()
-      // The first variant is chosen: its value of each option is marked.
-      const rows = within(screen.getByRole('region', { name: 'Variant options' }))
-      expect(rows.getByRole('button', { name: 'Small' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
-      expect(rows.getByRole('button', { name: 'Red' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
-      expect(rows.getByRole('button', { name: 'Medium' })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      )
-    })
+      const dropdown = screen.getByLabelText('Choose a variant')
+      expect(dropdown).toHaveValue('v1')
+      expect(
+        within(dropdown)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Small / Red', 'Small / Black', 'Medium / Red'])
 
-    it('a click on a value goes to the nearest variant that has it', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-      const rows = within(screen.getByRole('region', { name: 'Variant options' }))
-
-      await user.click(rows.getByRole('button', { name: 'Medium' }))
+      await user.selectOptions(dropdown, 'Medium / Red')
       expect(
         screen.getByRole('figure', { name: 'Picture of Medium / Red' }),
       ).toBeInTheDocument()
-
-      // There is no Medium / Black, so Black moves to a Black variant that exists.
-      await user.click(rows.getByRole('button', { name: 'Black' }))
-      expect(
-        screen.getByRole('figure', { name: 'Picture of Small / Black' }),
-      ).toBeInTheDocument()
-      expect(rows.getByRole('button', { name: 'Black' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      )
-      expect(rows.getByRole('button', { name: 'Medium' })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      )
     })
   })
 
@@ -568,94 +540,6 @@ describe('the Variants tab', () => {
       await user.click(dialog.getByRole('button', { name: 'Image 2' }))
       await user.click(dialog.getByRole('button', { name: 'Cancel' }))
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect(update).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('the option rows', () => {
-    const options = () => within(screen.getByRole('region', { name: 'Variant options' }))
-
-    it('shows each option on its own row — Size with its values, Color with its values', () => {
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-      const size = within(options().getByRole('list', { name: 'Values of Size' }))
-      expect(size.getAllByRole('button').map((b) => b.textContent)).toEqual([
-        'Small',
-        'Medium',
-      ])
-      const color = within(options().getByRole('list', { name: 'Values of Color' }))
-      expect(color.getAllByRole('button').map((b) => b.textContent)).toEqual([
-        'Red',
-        'Black',
-      ])
-    })
-
-    it('a click on a value makes it a box; Enter asks, and Yes renames just that value', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-      await user.dblClick(options().getByRole('button', { name: 'Medium' }))
-      const box = screen.getByLabelText('Value \u201cMedium\u201d of Size')
-      expect(box).toHaveValue('Medium')
-      await user.clear(box)
-      await user.type(box, 'Large{Enter}')
-
-      expect(update).not.toHaveBeenCalled()
-      const dialog = screen.getByRole('alertdialog')
-      expect(within(dialog).getByText('Value of Size')).toBeInTheDocument()
-      expect(within(dialog).getByText('Medium')).toBeInTheDocument()
-      expect(within(dialog).getByText('Large')).toBeInTheDocument()
-      await confirmUpdate(user)
-
-      await waitFor(() =>
-        expect(update).toHaveBeenCalledWith(
-          'id-1',
-          {
-            options_update: [
-              { name: 'Size', values_rename: [{ from: 'Medium', to: 'Large' }] },
-            ],
-          },
-          'polymer-uk',
-        ),
-      )
-    })
-
-    it('the option\u2019s name is renamed the same way', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-      await user.dblClick(options().getByRole('button', { name: 'Color' }))
-      const box = screen.getByLabelText('Name of option Color')
-      await user.clear(box)
-      await user.type(box, 'Colour{Enter}')
-      await confirmUpdate(user)
-
-      await waitFor(() =>
-        expect(update).toHaveBeenCalledWith(
-          'id-1',
-          { options_update: [{ name: 'Color', new_name: 'Colour' }] },
-          'polymer-uk',
-        ),
-      )
-    })
-
-    it('refuses a value the option already has, sends nothing on Escape or an unchanged value', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-      await user.dblClick(options().getByRole('button', { name: 'Medium' }))
-      const box = screen.getByLabelText('Value \u201cMedium\u201d of Size')
-      await user.clear(box)
-      await user.type(box, 'small{Enter}')
-      expect(screen.getByRole('alert')).toHaveTextContent('already has that value')
-      expect(screen.queryByRole('alertdialog')).toBeNull()
-
-      await user.keyboard('{Escape}')
-      expect(screen.queryByLabelText('Value \u201cMedium\u201d of Size')).toBeNull()
-
-      await user.dblClick(options().getByRole('button', { name: 'Red' }))
-      await user.keyboard('{Enter}')
-      expect(screen.queryByRole('alertdialog')).toBeNull()
       expect(update).not.toHaveBeenCalled()
     })
   })

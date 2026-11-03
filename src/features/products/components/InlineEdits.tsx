@@ -38,11 +38,14 @@ export function StockCell({
   onSaved,
   zeroLabel,
   icon = true,
+  align = 'right',
 }: {
   product: ProductDetail
   variant: ProductVariant
   level: StockLevel
   onSaved?: SavedHandler
+  /** Right in a table's number column; left among the Variants tab's labelled fields. */
+  align?: 'left' | 'right'
   /** What to show instead of a 0 (the Variants tab says "Out of stock"); the box still holds 0. */
   zeroLabel?: string
   /** The small pencil beside the figure (the Variants table has none: a double-click is enough). */
@@ -87,7 +90,7 @@ export function StockCell({
         value={saved}
         label={`Available of ${variant.title ?? 'variant'} at ${place}`}
         inputMode="numeric"
-        align="right"
+        align={align}
         showIcon={icon}
         busy={sending !== null}
         validate={(next) =>
