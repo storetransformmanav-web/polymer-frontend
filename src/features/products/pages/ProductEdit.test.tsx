@@ -1002,6 +1002,27 @@ describe('editing a section in place', () => {
       expect(update).not.toHaveBeenCalled()
     })
 
+    it('a new variant picks each option from a dropdown of the values it has', async () => {
+      withOptions()
+      const user = await editVariants()
+      await user.click(screen.getByRole('button', { name: 'Add a value to Size' }))
+      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+
+      const created = within(screen.getByRole('list', { name: 'New variants' }))
+      // Another value is chosen from the dropdown: a list of the option's values, not the browser's.
+      const box = created.getByLabelText('Size')
+      await user.clear(box)
+      await user.click(box)
+      const list = within(screen.getByRole('listbox'))
+      expect(list.getAllByRole('option').map((option) => option.textContent)).toEqual([
+        'M',
+      ])
+      await user.click(list.getByRole('option', { name: 'M' }))
+      expect(created.getByLabelText('Size')).toHaveValue('M')
+      // Closed again once one is picked.
+      expect(screen.queryByRole('listbox')).toBeNull()
+    })
+
     it('adds a value to an existing option: Add value opens a new variant with it', async () => {
       withOptions()
       const user = await editVariants()

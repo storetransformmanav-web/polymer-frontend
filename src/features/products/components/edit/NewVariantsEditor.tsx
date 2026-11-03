@@ -1,8 +1,9 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
 import { useProductStockLocations } from '../../hooks/useProductStockLocations.ts'
 import { ChevronDownIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
+import { SuggestInput } from '../../../../components/ui/SuggestInput.tsx'
 import { WEIGHT_UNITS, type WeightUnit } from '../../../../lib/api/endpoints.ts'
 import { LIMITS, optionChoices, type NewVariantDraft } from '../../utils/editDraft.ts'
 import { EditField, FIELD_INPUT, ICON_BUTTON, type SectionProps } from './fields.tsx'
@@ -20,7 +21,6 @@ const UNIT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
  */
 export function NewVariantsEditor({ product, draft, errors, onChange }: SectionProps) {
   const choices = optionChoices(draft)
-  const listId = useId()
 
   const locations = useProductStockLocations(product)
   // A new variant opens with its fields showing; its header folds it away.
@@ -117,25 +117,16 @@ export function NewVariantsEditor({ product, draft, errors, onChange }: SectionP
                           label={choice.name}
                           error={at(`optionValues.${position}`)}
                         >
-                          <input
+                          <SuggestInput
                             id={`${prefix}-option-${position}`}
-                            list={`${listId}-${index}-${position}`}
-                            autoComplete="off"
+                            asSelect
                             value={created.optionValues[position] ?? ''}
+                            suggestions={choice.values}
                             maxLength={LIMITS.optionValue}
-                            aria-invalid={
-                              at(`optionValues.${position}`) ? true : undefined
-                            }
-                            onChange={(event) =>
-                              setValue(index, position, event.target.value)
-                            }
-                            className={FIELD_INPUT}
+                            invalid={Boolean(at(`optionValues.${position}`))}
+                            onChange={(value) => setValue(index, position, value)}
+                            className={`${FIELD_INPUT} pr-9`}
                           />
-                          <datalist id={`${listId}-${index}-${position}`}>
-                            {choice.values.map((value) => (
-                              <option key={value} value={value} />
-                            ))}
-                          </datalist>
                         </EditField>
                       ))}
 

@@ -1,11 +1,24 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react'
+import { ChevronDownIcon } from './icons.tsx'
 
 /** How many suggestions fit before the list scrolls. */
 const MAX_VISIBLE = 50
 
 /** The suggestions that contain what was typed (any case), those starting with it first. */
-function matches(suggestions: readonly string[], typed: string): string[] {
+function matches(
+  suggestions: readonly string[],
+  typed: string,
+  asSelect: boolean,
+): string[] {
   const needle = typed.trim().toLowerCase()
+  if (asSelect) {
+    // Like a dropdown: every value, in the order given — also when the box already holds one of
+    // them, so the choice can be changed — narrowed only while something else is being typed.
+    const holdsOne = suggestions.some((value) => value.toLowerCase() === needle)
+    return suggestions
+      .filter((value) => !needle || holdsOne || value.toLowerCase().includes(needle))
+      .slice(0, MAX_VISIBLE)
+  }
   const hits = suggestions.filter((value) => {
     const lower = value.toLowerCase()
     // The value that is already in the box is not a suggestion.
@@ -30,6 +43,13 @@ interface SuggestInputProps {
   placeholder?: string
   invalid?: boolean
   maxLength?: number
+  /**
+   * Draw it as a dropdown (a chevron at the right; the whole list, in its own order, even when a
+   * value is already chosen, which is marked) rather than a box that suggests as you type. The box
+   * stays free text, so a value that is not in the list can still be typed. The caller leaves room
+   * for the chevron in `className` (`pr-9`).
+   */
+  asSelect?: boolean
 }
 
 /**
@@ -48,11 +68,15 @@ export function SuggestInput({
   placeholder,
   invalid = false,
   maxLength,
+  asSelect = false,
 }: SuggestInputProps) {
   const listId = useId()
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
-  const shown = useMemo(() => matches(suggestions, value), [suggestions, value])
+  const shown = useMemo(
+    () => matches(suggestions, value, asSelect),
+    [suggestions, value, asSelect],
+  )
   const expanded = open && shown.length > 0
 
   function choose(next: string) {
@@ -113,6 +137,15 @@ export function SuggestInput({
         onKeyDown={handleKeyDown}
         className={className}
       />
+      {asSelect && (
+        <ChevronDownIcon
+          width={16}
+          height={16}
+          className={`text-text-muted pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 transition-transform ${
+            expanded ? 'rotate-180' : ''
+          }`}
+        />
+      )}
       {expanded && (
         <ul
           id={listId}
@@ -132,7 +165,11 @@ export function SuggestInput({
               }}
               onMouseEnter={() => setActive(index)}
               className={`cursor-pointer truncate rounded-lg px-2.5 py-2 text-[0.85rem] font-medium ${
-                index === active ? 'bg-accent-tint' : 'hover:bg-accent-tint/60'
+                index === active
+                  ? 'bg-accent-tint'
+                  : asSelect && suggestion.toLowerCase() === value.trim().toLowerCase()
+                    ? 'bg-accent-tint font-semibold'
+                    : 'hover:bg-accent-tint/60'
               }`}
             >
               {suggestion}

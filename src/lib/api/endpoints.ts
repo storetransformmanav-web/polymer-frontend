@@ -874,7 +874,7 @@ export type CustomerAddress = z.infer<typeof customerAddressSchema>
 const priceRangeSchema = z.object({
   min: z.string().nullish(),
   max: z.string().nullish(),
-  currency: z.string().nullish(), 
+  currency: z.string().nullish(),
 })
 
 const inventoryLevelSchema = z.object({
