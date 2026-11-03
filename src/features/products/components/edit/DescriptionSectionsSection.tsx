@@ -1,18 +1,43 @@
 import { useState } from 'react'
 import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
-import { ChevronDownIcon, PlusIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
+import {
+  ChevronDownIcon,
+  InfoIcon,
+  ListChecksIcon,
+  PlusIcon,
+  TrashIcon,
+} from '../../../../components/ui/icons.tsx'
 import {
   blankSection,
   SECTION_TITLE_MAX,
   type SectionDraft,
 } from '../../utils/descriptionSections.ts'
-import {
-  EditField,
-  FIELD_INPUT,
-  ICON_BUTTON,
-  TEXT_BUTTON,
-  type SectionProps,
-} from './fields.tsx'
+import { EditField, FIELD_INPUT, ICON_BUTTON, type SectionProps } from './fields.tsx'
+
+/** The ready-made starts offered while there are no sections: two named ones and a blank. */
+const STARTS = [
+  {
+    label: 'Add Product Description',
+    title: 'Product Description',
+    hint: 'What the product is, and why customers will want it.',
+    icon: InfoIcon,
+  },
+  {
+    label: 'Add Product Information',
+    title: 'Product Information',
+    hint: 'Sizes, materials, specifications and care.',
+    icon: ListChecksIcon,
+  },
+  {
+    label: 'Add section',
+    title: '',
+    hint: 'Any other heading, such as Delivery or Returns.',
+    icon: PlusIcon,
+  },
+] as const
+
+const OUTLINE_BUTTON =
+  'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors'
 
 /**
  * The description sections (Product Description, Product Information…) being edited: each has a
@@ -48,21 +73,30 @@ export function SectionsEditor({
   return (
     <div className="flex flex-col gap-4">
       {sections.length === 0 && (
-        <div className="border-border bg-surface flex flex-col gap-2 rounded-xl border border-dashed p-4">
-          <p className="text-text-muted m-0 text-[0.85rem]">
-            No sections yet. Add the ones the product page shows — for example a Product
-            Description and the Product Information.
+        <div className="flex flex-col gap-2.5">
+          <p className="text-text-muted m-0 text-[0.82rem]">
+            No sections yet. Start with one:
           </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {['Product Description', 'Product Information'].map((title) => (
+          <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-3">
+            {STARTS.map((start) => (
               <button
-                key={title}
+                key={start.label}
                 type="button"
-                onClick={() => onChange([...sections, { ...blankSection(), title }])}
-                className={TEXT_BUTTON}
+                aria-label={start.label}
+                onClick={() =>
+                  onChange([...sections, { ...blankSection(), title: start.title }])
+                }
+                className="border-border-strong bg-bg hover:border-accent hover:bg-accent-tint/40 flex cursor-pointer flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-colors"
               >
-                <PlusIcon width={14} height={14} />
-                Add {title}
+                <span className="bg-accent-tint text-accent flex h-8 w-8 items-center justify-center rounded-lg">
+                  <start.icon width={16} height={16} />
+                </span>
+                <span className="text-text text-[0.88rem] font-semibold">
+                  {start.title || 'Another section'}
+                </span>
+                <span className="text-text-muted text-[0.78rem] leading-snug">
+                  {start.hint}
+                </span>
               </button>
             ))}
           </div>
@@ -153,18 +187,39 @@ export function SectionsEditor({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => onChange([...sections, blankSection()])}
-          className={TEXT_BUTTON}
-        >
-          <PlusIcon width={14} height={14} />
-          Add section
-        </button>
+      {sections.length > 0 && (
+        <div className="border-border flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onChange([...sections, blankSection()])}
+              className={OUTLINE_BUTTON}
+            >
+              <PlusIcon width={13} height={13} />
+              Add section
+            </button>
+            {/* The named ones that are not there yet, one click each. */}
+            {STARTS.filter(
+              (start) =>
+                start.title !== '' &&
+                !sections.some((section) => section.title.trim() === start.title),
+            ).map((start) => (
+              <button
+                key={start.label}
+                type="button"
+                aria-label={start.label}
+                onClick={() =>
+                  onChange([...sections, { ...blankSection(), title: start.title }])
+                }
+                className={OUTLINE_BUTTON}
+              >
+                <PlusIcon width={13} height={13} />
+                {start.title}
+              </button>
+            ))}
+          </div>
 
-        {sections.length > 0 &&
-          (deletingAll ? (
+          {deletingAll ? (
             <span className="text-text flex flex-wrap items-center gap-2 text-[0.82rem]">
               Delete all {sections.length}{' '}
               {sections.length === 1 ? 'section' : 'sections'}?
@@ -195,8 +250,9 @@ export function SectionsEditor({
               <TrashIcon width={14} height={14} />
               Delete all
             </button>
-          ))}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -12,9 +12,7 @@ export function CreateSectionsCard({ draft, errors, update }: CreateSectionProps
   return (
     <CreateCard title="Product description & information" headingAbove>
       <p className="text-text-muted m-0 text-[0.85rem]">
-        Optional. The sections customers see on the product page, one after another — for
-        example a Product Description and the Product Information. The text above in
-        Description is the store&rsquo;s own description.
+        Optional. What customers read on the product page, one section after another.
       </p>
       <SectionsEditor
         sections={draft.descriptionSections}
