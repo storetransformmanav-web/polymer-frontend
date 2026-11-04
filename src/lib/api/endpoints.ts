@@ -1426,6 +1426,8 @@ const inventoryListResponseSchema = z.object({
 export type InventoryListResponse = z.infer<typeof inventoryListResponseSchema>
 
 export interface InventoryListParams {
+  /** Store key or domain; omit for every store (the top bar's store dropdown). */
+  shop?: string
   search?: string
   /** A Shopify location id: the totals then count that location only. */
   location?: string | number

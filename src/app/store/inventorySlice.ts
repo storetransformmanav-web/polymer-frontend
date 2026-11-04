@@ -34,6 +34,7 @@ import {
   sumLines,
 } from '../../lib/inventoryStock.ts'
 import { sessionCleared } from './authSlice.ts'
+import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
 
 /**
  * Inventory, built for instant-feeling use like the products list:
@@ -57,6 +58,8 @@ export const trackingConfig = { intervalMs: 1500, maxMs: 30_000 }
 export interface InventoryFilters {
   search: string
   /** A Shopify location id ('' = every location). */
+  /** The store picked in the top bar ('' = all). Set by `shopSelected`, not by this page's toolbar. */
+  shop: string
   location: string
   status: InventoryStatus | ''
   productStatus: '' | 'ACTIVE' | 'DRAFT' | 'ARCHIVED'
@@ -69,6 +72,7 @@ export interface InventoryFilters {
 }
 
 export const DEFAULT_FILTERS: InventoryFilters = {
+  shop: '',
   search: '',
   location: '',
   status: '',
@@ -88,6 +92,7 @@ export function toParams(filters: InventoryFilters): InventoryListParams {
     page: filters.page,
     page_size: filters.pageSize,
   }
+  if (filters.shop) params.shop = filters.shop
   const search = filters.search.trim()
   if (search) params.search = search
   if (filters.location) params.location = filters.location
@@ -473,8 +478,9 @@ const inventorySlice = createSlice({
       if (cached) state.lastData = cached
     },
     filtersReset(state) {
-      const { sort, order, pageSize } = state.filters
-      state.filters = { ...DEFAULT_FILTERS, sort, order, pageSize }
+      // "Clear All" keeps the store chosen in the top bar.
+      const { shop, sort, order, pageSize } = state.filters
+      state.filters = { ...DEFAULT_FILTERS, shop, sort, order, pageSize }
       const cached = state.entries[cacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },
@@ -523,6 +529,19 @@ const inventorySlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(sessionCleared, () => initialState)
+      // The top-bar store changed: list that store (from page 1), at once if it is cached. The
+      // location filter goes too — another store has other locations.
+      .addCase(shopSelected, (state, action) => {
+        const next = {
+          ...state.filters,
+          shop: action.payload === ALL_SHOPS ? '' : action.payload,
+          location: '',
+          page: 1,
+        }
+        state.filters = next
+        const cached = state.entries[cacheKey(next)]?.data
+        if (cached) state.lastData = cached
+      })
       .addCase(fetchInventory.pending, (state, action) => {
         const key = cacheKey(action.meta.arg.filters)
         const entry = state.entries[key]
