@@ -325,7 +325,12 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
     await openLines(user)
 
     await user.dblClick(cell('Unit 9', '5'))
-    await user.keyboard('22{Enter}')
+    // The box is as wide as its text and grows as more is typed — it is not held to the cell.
+    const box = screen.getByRole('textbox', { name: /^Available of / })
+    expect(box.style.width).toBe('calc(2ch + 1.25rem)')
+    await user.keyboard('22')
+    expect(box.style.width).toBe('calc(3ch + 1.25rem)')
+    await user.keyboard('{Enter}')
     // The question says what changes.
     const dialog = screen.getByRole('alertdialog')
     expect(within(dialog).getByText('Available at Unit 9')).toBeInTheDocument()

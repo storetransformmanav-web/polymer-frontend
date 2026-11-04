@@ -62,6 +62,7 @@ export function StockValueCell({
         inputMode="numeric"
         align="right"
         showIcon
+        autoWidth
         validate={validateSet}
         onCommit={(next) => setAsking(Number(next))}
         display={<span className="font-semibold">{formatQuantity(saved)}</span>}

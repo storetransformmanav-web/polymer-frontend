@@ -121,4 +121,30 @@ describe('DoubleClickEdit', () => {
     await user.dblClick(screen.getByText('Blue bag'))
     expect(screen.getByRole('textbox', { name: 'Alt text' })).toHaveClass('text-center')
   })
+
+  it('fills its place by default', async () => {
+    const { user } = setup()
+    await user.dblClick(screen.getByText('Blue bag'))
+    const box = screen.getByRole('textbox', { name: 'Alt text' })
+    expect(box).toHaveClass('w-full')
+    expect(box.style.width).toBe('')
+  })
+
+  it('with autoWidth, is as wide as the text and keeps growing with it, with no upper limit', async () => {
+    const { user } = setup({ autoWidth: true, value: '25', display: <span>25</span> })
+    await user.dblClick(screen.getByText('25'))
+    const box = screen.getByRole('textbox', { name: 'Alt text' })
+    expect(box).not.toHaveClass('w-full')
+    expect(box).toHaveClass('max-w-none')
+    // Two characters (and one spare).
+    expect(box.style.width).toBe('calc(3ch + 1.25rem)')
+
+    await user.clear(box)
+    await user.type(box, '1234567890123456789012345')
+    expect(box.style.width).toBe('calc(26ch + 1.25rem)')
+
+    // An empty box keeps a width of its own.
+    await user.clear(box)
+    expect(box.style.width).toBe('calc(2ch + 1.25rem)')
+  })
 })

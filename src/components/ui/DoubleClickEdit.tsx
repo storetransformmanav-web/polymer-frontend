@@ -21,6 +21,7 @@ export function DoubleClickEdit({
   highlighted = false,
   showIcon = false,
   busy = false,
+  autoWidth = false,
   className = '',
 }: {
   /** The value as saved. */
@@ -43,6 +44,11 @@ export function DoubleClickEdit({
   showIcon?: boolean
   /** Something is happening to the value (waiting for the question, saving): shown dimmed. */
   busy?: boolean
+  /**
+   * The box is as wide as what is typed — it grows with long text, with no upper limit (a small
+   * minimum keeps a short number easy to hit) — instead of filling its place.
+   */
+  autoWidth?: boolean
   className?: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -97,7 +103,15 @@ export function DoubleClickEdit({
 
   if (editing) {
     return (
-      <span className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <span
+        className={`${autoWidth ? 'inline-flex' : 'flex min-w-0'} flex-col gap-1 ${
+          autoWidth && align === 'right'
+            ? 'items-end'
+            : autoWidth && align === 'center'
+              ? 'items-center'
+              : ''
+        } ${className}`}
+      >
         <input
           autoFocus
           aria-label={label}
@@ -115,7 +129,15 @@ export function DoubleClickEdit({
           }}
           onKeyDown={handleKeyDown}
           onBlur={() => finish(true)}
-          className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 w-full min-w-0 rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
+          // One `ch` per character typed, plus one spare and the padding and border.
+          style={
+            autoWidth
+              ? { width: `calc(${Math.max(draft.length, 1) + 1}ch + 1.25rem)` }
+              : undefined
+          }
+          className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 ${
+            autoWidth ? 'max-w-none min-w-16' : 'w-full min-w-0'
+          } rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
             highlighted ? 'bg-accent-tint/40' : 'bg-bg'
           } ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : ''}`}
         />
