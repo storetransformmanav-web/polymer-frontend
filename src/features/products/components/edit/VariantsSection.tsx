@@ -1,16 +1,11 @@
 import { useState } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
-import { DetailSection } from '../../../../components/ui/DetailSection.tsx'
-import {
-  BoxesIcon,
-  ChevronDownIcon,
-  LayersIcon,
-  TrashIcon,
-} from '../../../../components/ui/icons.tsx'
+import { ChevronDownIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import { variantPreviewUrl, type VariantDraft } from '../../utils/editDraft.ts'
 import { ProductImage } from '../ProductImage.tsx'
 import { NewVariantsEditor } from './NewVariantsEditor.tsx'
+import { PageCard } from './PageCard.tsx'
 import { VariantOptionsEditor } from './VariantOptionsEditor.tsx'
 import {
   VariantImageCard,
@@ -62,34 +57,31 @@ export function VariantsSection(props: SectionProps) {
         </div>
       )}
 
-      {/* The variant options (Size, Colour…) laid out plainly — no card — then the variants. */}
-      <VariantOptionsEditor {...props} />
+      {/* The page's cards: the options (Size, Colour…), then every variant, then the new ones. */}
+      <PageCard title="Variant options" problem={problemIn('options', 'addedOptions')}>
+        <VariantOptionsEditor {...props} />
+      </PageCard>
 
-      <DetailSection
+      <PageCard
         title="Current variants"
-        icon={LayersIcon}
         count={draft.variants.length}
-        actions={
+        aside={
           <Summary>{variantSummary(draft.variants, props.product.currency)}</Summary>
         }
-        forceOpen={problemIn('variants')}
+        problem={problemIn('variants')}
         flush
       >
         <ExistingVariants {...props} />
-      </DetailSection>
+      </PageCard>
 
       {draft.newVariants.length > 0 && (
-        // Opens whenever one is added or removed (the key), so a new variant is never hidden.
-        <DetailSection
-          key={`new-variants-${draft.newVariants.length}`}
+        <PageCard
           title="New variants · added when you save"
-          icon={BoxesIcon}
           count={draft.newVariants.length}
-          defaultOpen={false}
-          forceOpen
+          problem={problemIn('newVariants')}
         >
           <NewVariantsEditor {...props} />
-        </DetailSection>
+        </PageCard>
       )}
     </div>
   )

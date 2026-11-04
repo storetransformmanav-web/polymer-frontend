@@ -50,7 +50,7 @@ function Avatar({ name }: { name: string }) {
  * access: Name, Email, Phone, Company, the lock tags each customer holds (hover: how many locked
  * products share the tag) and the row actions — Edit (a pencil, only when the lock has another key
  * to give) and Remove access (a bin). A search box, a Tag filter (the lock's own tags), a Sort by
- * and the paging footer narrow it, all by the API. **The customer just checked is highlighted** (a
+ * and the paging footer narrow it, all by the API. **The customers just checked are highlighted** (a
  * tinted row with a "Checked" pill). A login-only lock (no keys) lists every customer with an
  * account and has no row actions. The data and the writes are held by the parent.
  */
@@ -64,8 +64,8 @@ export function LockCustomersList({
 }: {
   lock: AccessLock
   customers: LockCustomersState
-  /** The email (or id) of the customer that was checked, to highlight. */
-  highlight: string | null
+  /** The emails (and ids) of the customers that were checked, to highlight. */
+  highlight: readonly string[]
   /** The backend's message about the last change. */
   notice?: ReactNode
   onEdit: (customer: LockCustomer) => void
@@ -77,11 +77,12 @@ export function LockCustomersList({
     { value: '', label: 'All tags' },
     ...lock.tags.map((tag) => ({ value: tag, label: tag })),
   ]
-  const marked = highlight?.trim().toLowerCase() ?? ''
+  const marked = new Set(
+    highlight.map((ref) => ref.trim().toLowerCase()).filter((ref) => ref !== ''),
+  )
   const isChecked = (customer: LockCustomer) =>
-    marked !== '' &&
-    ((customer.email ?? '').toLowerCase() === marked ||
-      customer.id.toLowerCase() === marked)
+    marked.has((customer.email ?? '').toLowerCase()) ||
+    marked.has(customer.id.toLowerCase())
 
   return (
     <DetailSection title="Customers" icon={UsersIcon} count={data?.total} flush>

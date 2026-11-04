@@ -38,7 +38,7 @@ type TabId = 'overview' | 'settings' | 'access'
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'settings', label: 'Settings' },
-  { id: 'access', label: 'Check access' },
+  { id: 'access', label: 'Customer Access' },
 ]
 
 interface LockDetailsViewProps {
@@ -61,7 +61,7 @@ interface LockDetailsViewProps {
  * sitemaps, no-index, manual locking — and the access-denied message is **double-clicked** to
  * change it (a dropdown of Yes / No or Enabled / Disabled, a box for the message), then asked
  * "Are you sure?" (`LockChangeConfirm`) and sent with `POST /access/locks`; the page changes at
- * once. "Check access" (`GET /access/check`) changes nothing.
+ * once. "Customer Access" (`GET /access/check`) changes nothing.
  */
 export function LockDetailsView({
   lock,
@@ -74,7 +74,7 @@ export function LockDetailsView({
   onBack,
 }: LockDetailsViewProps) {
   const [tab, setTab] = useState<TabId>('overview')
-  // The Settings tab was opened from Check access's manual-locking warning.
+  // The Settings tab was opened from Customer Access's manual-locking warning.
   const [showAdvanced, setShowAdvanced] = useState(false)
   // The setting being changed, waiting for "Yes, update".
   const [pending, setPending] = useState<PendingLockChange | null>(null)
@@ -329,7 +329,7 @@ export function LockDetailsView({
                 title="Advanced settings"
                 icon={SlidersIcon}
                 defaultOpen={false}
-                // Opened from Check access's warning: the manual locking setting is in here.
+                // Opened from Customer Access's warning: the manual locking setting is in here.
                 forceOpen={showAdvanced}
               >
                 <FieldGrid>

@@ -36,7 +36,7 @@ const UNIT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
 const BUTTON =
   'inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 
-/** The same small boxes as the Edit variant window. */
+/** Small boxes: this is a dense window. */
 const DENSE =
   '[&_input:not([type=checkbox]):not([type=radio])]:h-8 [&_input]:text-[0.8rem] [&_label]:text-[0.72rem] [&_p]:text-[0.74rem]'
 

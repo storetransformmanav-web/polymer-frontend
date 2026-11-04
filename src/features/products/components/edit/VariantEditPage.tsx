@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
 import { ConfirmCancelDialog } from '../../../../components/ui/ConfirmCancelDialog.tsx'
-import { Dialog } from '../../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
-import { PlusIcon } from '../../../../components/ui/icons.tsx'
+import { ArrowLeftIcon, BoxesIcon, PencilIcon } from '../../../../components/ui/icons.tsx'
+import { OpenTabsBar } from '../../../../components/ui/OpenTabsBar.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
 import {
   DIMENSION_UNITS,
@@ -19,8 +19,8 @@ import { countryOptions } from '../../utils/countries.ts'
 import { variantStock } from '../../utils/stock.ts'
 import { ConfirmUpdateDialog } from '../ConfirmUpdateDialog.tsx'
 import { ProductImage } from '../ProductImage.tsx'
-import { DialogAccordion } from './DialogAccordion.tsx'
 import { ImagePicker, NO_PICTURE } from './ImagePicker.tsx'
+import { PageCard } from './PageCard.tsx'
 import { CheckField, EditField, FIELD_INPUT, MoneyInput } from './fields.tsx'
 
 const UNIT_OPTIONS = WEIGHT_UNITS.map((unit) => ({
@@ -35,43 +35,38 @@ const SIZE_UNIT_OPTIONS = DIMENSION_UNITS.map((unit) => ({
 const COUNTRY_OPTIONS = countryOptions()
 
 const BUTTON =
-  'inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-5 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+const GHOST = `${BUTTON} border-border bg-bg text-text hover:border-accent`
+const SOLID = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`
 
-/** The boxes are one size down from the forms': this is a dense window. */
-const DENSE =
-  '[&_input:not([type=checkbox]):not([type=radio])]:h-8 [&_input]:text-[0.8rem] [&_label]:text-[0.72rem] [&_p]:text-[0.74rem]'
+const GRID = 'grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2'
 
-/** Which accordion section a problem belongs to, so a closed one opens when it has one. */
-const inSection = (errors: Record<string, string>, index: number, pattern: RegExp) =>
+/** Which section a problem belongs to, so the page can say where to look. */
+const hasProblem = (errors: Record<string, string>, index: number, pattern: RegExp) =>
   Object.keys(errors).some((key) => {
     const prefix = `variants.${index}.`
     return key.startsWith(prefix) && pattern.test(key.slice(prefix.length))
   })
 
 /**
- * **Edit variant** — the chosen variant of the Variants tab in a window, laid out like the tab
- * itself: its picture and a live **Unit price** card on the left, and on the right accordion
- * sections of small labelled boxes — **Pricing** (price, compare-at price, cost per item, tax code,
- * Charge tax), **Inventory** (SKU, barcode, available, Continue selling when out of stock),
- * **Shipping** (weight and its unit, Physical product, and the shipping and customs details) and
- * **Picture**: one of the product's media to pick, or a new picture by web address (added to the
- * product's media in the same save). Nothing is sent until **Update variant**, which checks the
- * fields, asks "Are you sure?" and sends just this variant's changes (`variants: [{ id, … }]`);
- * Cancel, ✕ or Escape close it, asking first when something was changed.
+ * **Edit Variant** — the chosen variant of the Variants tab as a page of its own, in place of the
+ * tab (the way the demo's Edit Customer page is laid out): a strip with an "Editing <variant>" tab,
+ * a header (title, one-line note and a **Back to <variant>** button), cards for the variant's
+ * **Variant** summary, **Pricing**, **Inventory**, **Shipping** and **Picture**, and a foot with
+ * **Cancel** and **Save Changes**. Nothing is sent until Save Changes, which checks the fields,
+ * asks "Are you sure?" and sends just this variant's changes (`variants: [{ id, … }]`); Cancel,
+ * Back, the tab's ✕ or Escape leave, asking first when something was changed.
  */
-export function VariantEditDialog({
+export function VariantEditPage({
   product,
   variantId,
   onSaved,
   onClose,
-  onNewVariant,
 }: {
   product: ProductDetail
   variantId: string
   onSaved?: SavedHandler
   onClose: () => void
-  /** Closes this window and opens the New variant window (offered while nothing is changed). */
-  onNewVariant?: () => void
 }) {
   const index = product.variants.findIndex((variant) => variant.id === variantId)
   // Only this variant's problems can block its save.
@@ -84,7 +79,7 @@ export function VariantEditDialog({
     },
   })
   const [cancelling, setCancelling] = useState(false)
-  // The edit starts as the window opens (once: after a save the window closes).
+  // The edit starts as the page opens (once: after a save the page closes).
   const [begun, setBegun] = useState(false)
   if (!begun) {
     setBegun(true)
@@ -110,6 +105,7 @@ export function VariantEditDialog({
   const stock = variantStock(original)
   // The stock is changed here for a variant kept at one location (several: the Inventory tab).
   const oneLocation = variant.tracked && variant.stock.length === 1
+  const stockError = edit.errors[`variants.${index}.stock.0.quantity`]
   const busy = edit.confirming || cancelling
   const picked = variant.removeImage
     ? NO_PICTURE
@@ -127,86 +123,113 @@ export function VariantEditDialog({
 
   return (
     <>
-      <Dialog
-        title={`Edit variant – ${title}`}
-        role="dialog"
-        extraWide
-        closeButton
-        closeDisabled={edit.isSaving || busy}
-        onClose={close}
-        footer={
-          <>
-            {onNewVariant && (
-              <button
-                type="button"
-                disabled={edit.isSaving || edit.dirty}
-                title={edit.dirty ? 'Update or cancel your changes first' : undefined}
-                onClick={() => {
-                  edit.discard()
-                  onClose()
-                  onNewVariant()
-                }}
-                className={`${BUTTON} border-border bg-bg text-text hover:border-accent mr-auto`}
-              >
-                <PlusIcon width={14} height={14} />
-                New variant
-              </button>
-            )}
+      <div
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !event.defaultPrevented && !busy) {
+            event.stopPropagation()
+            close()
+          }
+        }}
+        className="flex flex-col gap-4"
+      >
+        <OpenTabsBar
+          tabs={[
+            {
+              id: original.id,
+              label: title,
+              title: `Editing ${product.title} – ${title}`,
+            },
+          ]}
+          activeId={original.id}
+          navLabel="Editing a variant"
+          listLabel="All variants"
+          kind="Editing"
+          historyLabel="Variant being edited"
+          icon={PencilIcon}
+          onShowList={close}
+          onSelect={() => undefined}
+          onClose={close}
+          onClear={close}
+        />
+
+        <section
+          aria-label={`Edit variant – ${title}`}
+          className="border-border bg-bg flex flex-col rounded-2xl border"
+        >
+          <div className="border-border flex flex-wrap items-start justify-between gap-3 rounded-t-2xl border-b px-5 py-4">
+            <div className="min-w-0">
+              <h2 className="m-0 text-[1.1rem] font-bold">Edit Variant</h2>
+              <p className="text-text-muted m-0 mt-1 text-[0.8rem]">
+                {product.title} · {title} · changes are also saved to Shopify
+              </p>
+            </div>
             <button
               type="button"
               onClick={close}
               disabled={edit.isSaving}
-              className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
+              className={SOLID}
             >
-              Cancel
+              <ArrowLeftIcon width={16} height={16} />
+              Back to {title}
             </button>
-            <button
-              type="button"
-              onClick={edit.commit}
-              disabled={!edit.dirty || edit.isSaving}
-              className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
-            >
-              {edit.isSaving ? 'Updating…' : 'Update variant'}
-            </button>
-          </>
-        }
-      >
-        <div
-          className={`text-text grid grid-cols-1 gap-3 sm:grid-cols-[9.5rem_minmax(0,1fr)] ${DENSE}`}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="border-border-strong w-full overflow-hidden rounded-lg border p-1.5">
-              <ProductImage src={preview} alt={`Picture of ${title}`} size="xl" />
-            </div>
-            <div className="border-border-strong bg-accent-tint/30 flex flex-col gap-0.5 rounded-lg border px-3 py-2">
-              <p className="text-text-muted text-[0.62rem] font-bold tracking-wide uppercase">
-                Unit price
-              </p>
-              <p className="text-[1.15rem] leading-tight font-bold">
-                {variant.price.trim() && Number.isFinite(Number(variant.price))
-                  ? formatPrice(variant.price, product.currency)
-                  : '—'}
-              </p>
-              <p className="mt-0.5">
-                {(stock ?? 0) <= 0 ? (
-                  <Badge tone="danger">Out of stock</Badge>
-                ) : (
-                  <Badge tone="success">In stock</Badge>
-                )}
-              </p>
-            </div>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-2">
-            <DialogAccordion
+          <div className="flex flex-col gap-4 p-4 sm:p-5">
+            <PageCard title="Variant">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                <div className="border-border-strong w-36 overflow-hidden rounded-lg border p-1.5">
+                  <ProductImage src={preview} alt={`Picture of ${title}`} size="xl" />
+                </div>
+                <div className="flex min-w-0 flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-text m-0 text-[0.8rem] font-semibold">Options</p>
+                    {original.selected_options && original.selected_options.length > 0 ? (
+                      <span className="flex flex-wrap gap-1.5">
+                        {original.selected_options.map((chosen) => (
+                          <span
+                            key={chosen.name}
+                            className="border-border-strong bg-surface rounded-full border px-2.5 py-0.5 text-[0.8rem]"
+                          >
+                            <span className="text-text-muted">{chosen.name}: </span>
+                            {chosen.value}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-text-muted text-[0.85rem]">{title}</span>
+                    )}
+                    <p className="text-text-muted m-0 text-[0.74rem]">
+                      Names and values of the options are changed with Edit options.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-text m-0 text-[0.8rem] font-semibold">
+                      Unit price
+                    </p>
+                    <p className="m-0 flex flex-wrap items-center gap-2.5 text-[1.4rem] leading-tight font-bold">
+                      {variant.price.trim() && Number.isFinite(Number(variant.price))
+                        ? formatPrice(variant.price, product.currency)
+                        : '—'}
+                      {(stock ?? 0) <= 0 ? (
+                        <Badge tone="danger">Out of stock</Badge>
+                      ) : (
+                        <Badge tone="success">In stock</Badge>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </PageCard>
+
+            <PageCard
               title="Pricing"
-              forceOpen={inSection(
+              problem={hasProblem(
                 edit.errors,
                 index,
                 /^(price|compareAtPrice|cost|taxCode)/,
               )}
             >
-              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[520px]:grid-cols-2">
+              <div className={GRID}>
                 <EditField id={`${id}-price`} label="Price" error={at('price')}>
                   <MoneyInput
                     id={`${id}-price`}
@@ -256,13 +279,13 @@ export function VariantEditDialog({
                 checked={variant.taxable}
                 onChange={(taxable) => update({ taxable })}
               />
-            </DialogAccordion>
+            </PageCard>
 
-            <DialogAccordion
+            <PageCard
               title="Inventory"
-              forceOpen={inSection(edit.errors, index, /^(sku|barcode|stock)/)}
+              problem={hasProblem(edit.errors, index, /^(sku|barcode|stock)/)}
             >
-              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[520px]:grid-cols-2">
+              <div className={GRID}>
                 <EditField id={`${id}-sku`} label="SKU" error={at('sku')}>
                   <input
                     id={`${id}-sku`}
@@ -286,7 +309,7 @@ export function VariantEditDialog({
                 <EditField
                   id={`${id}-available`}
                   label="Available"
-                  error={edit.errors[`variants.${index}.stock.0.quantity`]}
+                  error={stockError}
                   hint={
                     oneLocation
                       ? undefined
@@ -302,9 +325,7 @@ export function VariantEditDialog({
                     disabled={!oneLocation}
                     value={oneLocation ? variant.stock[0].available : ''}
                     placeholder={oneLocation ? undefined : '—'}
-                    aria-invalid={
-                      edit.errors[`variants.${index}.stock.0.quantity`] ? true : undefined
-                    }
+                    aria-invalid={stockError ? true : undefined}
                     onChange={(event) =>
                       update({
                         stock: variant.stock.map((row, i) =>
@@ -324,11 +345,11 @@ export function VariantEditDialog({
                   update({ inventoryPolicy: keep ? 'CONTINUE' : 'DENY' })
                 }
               />
-            </DialogAccordion>
+            </PageCard>
 
-            <DialogAccordion
+            <PageCard
               title="Shipping"
-              forceOpen={inSection(
+              problem={hasProblem(
                 edit.errors,
                 index,
                 /^(weight|dimensions|countryCode|hsCode)/,
@@ -341,9 +362,9 @@ export function VariantEditDialog({
                 onChange={(requiresShipping) => update({ requiresShipping })}
               />
               {variant.requiresShipping ? (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-3">
                   {/* Weight: one box and its unit. */}
-                  <div className="grid max-w-sm grid-cols-[minmax(0,1fr)_6.5rem] items-end gap-2">
+                  <div className="grid max-w-sm grid-cols-[minmax(0,1fr)_7rem] items-end gap-2">
                     <EditField id={`${id}-weight`} label="Weight" error={at('weight')}>
                       <input
                         id={`${id}-weight`}
@@ -360,7 +381,6 @@ export function VariantEditDialog({
                       id={`${id}-unit`}
                       label="Weight unit"
                       hideLabel
-                      compact
                       value={variant.weightUnit}
                       options={UNIT_OPTIONS}
                       onChange={(unit) => update({ weightUnit: unit as WeightUnit })}
@@ -369,10 +389,10 @@ export function VariantEditDialog({
 
                   {/* Packed size: three small boxes with their letters above, then the unit. */}
                   <fieldset className="m-0 min-w-0 border-0 p-0">
-                    <legend className="text-text mb-1 p-0 text-[0.72rem] font-semibold">
+                    <legend className="text-text mb-1 p-0 text-[0.8rem] font-semibold">
                       Packed product size
                     </legend>
-                    <div className="grid max-w-md grid-cols-[repeat(3,minmax(0,1fr))_5rem] items-end gap-2">
+                    <div className="grid max-w-lg grid-cols-[repeat(3,minmax(0,1fr))_5.5rem] items-end gap-2">
                       {(
                         [
                           ['length', 'Length', 'L'],
@@ -381,7 +401,7 @@ export function VariantEditDialog({
                         ] as const
                       ).map(([field, name, letter]) => (
                         <label key={field} className="flex min-w-0 flex-col gap-1">
-                          <span className="text-text-muted text-[0.68rem] font-semibold">
+                          <span className="text-text-muted text-[0.72rem] font-semibold">
                             {letter}
                             <span className="sr-only">{name}</span>
                           </span>
@@ -408,7 +428,6 @@ export function VariantEditDialog({
                         id={`${id}-size-unit`}
                         label="Size unit"
                         hideLabel
-                        compact
                         value={variant.shipping.dimensionUnit}
                         options={SIZE_UNIT_OPTIONS}
                         onChange={(unit) =>
@@ -422,19 +441,18 @@ export function VariantEditDialog({
                       />
                     </div>
                     {at('dimensions') && (
-                      <p role="alert" className="text-danger m-0 mt-1">
+                      <p role="alert" className="text-danger m-0 mt-1 text-[0.8rem]">
                         {at('dimensions')}
                       </p>
                     )}
                   </fieldset>
 
                   {/* Customs: where it comes from and its HS code, side by side. */}
-                  <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 min-[480px]:grid-cols-2">
+                  <div className={GRID}>
                     <div className="flex min-w-0 flex-col gap-1.5">
                       <SelectField
                         id={`${id}-country`}
                         label="Country of origin"
-                        compact
                         value={variant.shipping.countryCode}
                         options={COUNTRY_OPTIONS}
                         onChange={(countryCode) =>
@@ -442,7 +460,7 @@ export function VariantEditDialog({
                         }
                       />
                       {at('countryCode') && (
-                        <p role="alert" className="text-danger m-0">
+                        <p role="alert" className="text-danger m-0 text-[0.8rem]">
                           {at('countryCode')}
                         </p>
                       )}
@@ -466,17 +484,17 @@ export function VariantEditDialog({
                   </div>
                 </div>
               ) : (
-                <p className="text-text-muted m-0">
+                <p className="text-text-muted m-0 flex items-center gap-2 text-[0.85rem]">
+                  <BoxesIcon width={16} height={16} />
                   This variant doesn&apos;t need shipping (for example a digital product
                   or a service).
                 </p>
               )}
-            </DialogAccordion>
+            </PageCard>
 
-            <DialogAccordion
+            <PageCard
               title="Picture"
-              defaultOpen={false}
-              forceOpen={inSection(edit.errors, index, /^imageUrl/)}
+              problem={hasProblem(edit.errors, index, /^imageUrl/)}
             >
               <ImagePicker
                 idPrefix={id}
@@ -498,15 +516,34 @@ export function VariantEditDialog({
                 }
                 error={at('imageUrl')}
               />
-            </DialogAccordion>
+            </PageCard>
 
             {edit.error && <FormMessage tone="error">{edit.error}</FormMessage>}
             {!edit.error && edit.showErrors && edit.hasProblems && (
               <FormMessage tone="error">Fix the highlighted fields to save.</FormMessage>
             )}
           </div>
-        </div>
-      </Dialog>
+
+          <div className="border-border bg-bg sticky bottom-0 z-[2] flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t px-5 py-3">
+            <button
+              type="button"
+              onClick={close}
+              disabled={edit.isSaving}
+              className={GHOST}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={edit.commit}
+              disabled={!edit.dirty || edit.isSaving}
+              className={SOLID}
+            >
+              {edit.isSaving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </section>
+      </div>
 
       {edit.confirming && (
         <ConfirmUpdateDialog

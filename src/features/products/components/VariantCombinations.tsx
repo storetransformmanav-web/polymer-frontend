@@ -22,15 +22,14 @@ import { countryName } from '../utils/countries.ts'
 import { variantImageId } from '../utils/editDraft.ts'
 import { toSlides, type LightboxSlide } from '../utils/slides.ts'
 import { variantStock } from '../utils/stock.ts'
-import { VariantBulkEdit } from './edit/VariantBulkEdit.tsx'
-import { VariantEditDialog } from './edit/VariantEditDialog.tsx'
+import { VariantEditPage } from './edit/VariantEditPage.tsx'
 import { StockCell, VariantFieldCell } from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductLightbox } from './ProductLightbox.tsx'
 import { VariantImageDialog } from './VariantImageDialog.tsx'
 
 const num = (value: number) => value.toLocaleString('en-GB')
-/** Add variant, Edit variants and Bulk edit in the Variants card: one size, side by side. */
+/** Add variant, Edit variants and Edit options in the Variants card: one size, side by side. */
 const CARD_BUTTON =
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors'
 const IMAGE_BUTTON =
@@ -66,23 +65,23 @@ function yesNo(value: boolean | null | undefined): ReactNode {
  * picture, the price and every field at once. **Change image** picks one of the product's pictures
  * for the variant; **View Full** opens it in the lightbox. Every value in the details is changed
  * by double-clicking it (a small pencil marks it): each asks "Are you sure?" and sends just that
- * field. **Bulk edit** turns all the variants into the spreadsheet like the products' bulk editor.
+ * field. **Edit variants** opens the chosen variant as the Edit Variant page (in place of the tab);
+ * **Edit options** opens the whole-tab editor for the options' names and values.
  */
 export function VariantCombinations({
   product,
   onSaved,
   onNewVariant,
-  onEditVariants,
+  onEditOptions,
 }: {
   product: ProductDetail
   onSaved?: SavedHandler
   /** Opens the New variant window. */
   onNewVariant?: () => void
-  /** Opens the whole-tab variants editor. */
-  onEditVariants?: () => void
+  /** Opens the whole-tab variants editor (the options' names and values). */
+  onEditOptions?: () => void
 }) {
   const [selectedId, setSelectedId] = useState(product.variants[0]?.id ?? '')
-  const [bulk, setBulk] = useState<string[] | null>(null)
   const [changing, setChanging] = useState(false)
   const [editing, setEditing] = useState(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
@@ -90,13 +89,14 @@ export function VariantCombinations({
   if (product.variants.length === 0) {
     return <Empty icon={BoxesIcon}>This product has no variants.</Empty>
   }
-  if (bulk) {
+  if (editing) {
     return (
-      <VariantBulkEdit
+      <VariantEditPage
+        key={`edit-${selectedId}`}
         product={product}
-        ids={bulk}
+        variantId={selectedId}
         onSaved={onSaved}
-        onClose={() => setBulk(null)}
+        onClose={() => setEditing(false)}
       />
     )
   }
@@ -122,7 +122,7 @@ export function VariantCombinations({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The one place to choose: the variant dropdown (with the heading and Bulk edit). */}
+      {/* The one place to choose: the variant dropdown (with the heading and its buttons). */}
       <section aria-label="Variants" className={`${CARD} flex flex-col gap-3 p-4`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold">
@@ -157,23 +157,23 @@ export function VariantCombinations({
                 Add variant
               </button>
             )}
-            {onEditVariants && (
-              <button
-                type="button"
-                onClick={onEditVariants}
-                className={`${CARD_BUTTON} border-border bg-bg text-text hover:border-accent`}
-              >
-                <PencilIcon width={13} height={13} />
-                Edit variants
-              </button>
-            )}
             <button
               type="button"
-              onClick={() => setBulk(product.variants.map((candidate) => candidate.id))}
+              onClick={() => setEditing(true)}
               className={`${CARD_BUTTON} border-border bg-bg text-text hover:border-accent`}
             >
-              Bulk edit
+              <PencilIcon width={13} height={13} />
+              Edit variants
             </button>
+            {onEditOptions && (
+              <button
+                type="button"
+                onClick={onEditOptions}
+                className={`${CARD_BUTTON} border-border bg-bg text-text hover:border-accent`}
+              >
+                Edit options
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -244,17 +244,6 @@ export function VariantCombinations({
           <section aria-label={`Details of ${title}`} className={CARD}>
             <div className="border-border-strong flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
               <h3 className="text-[0.95rem] font-semibold">{title}</h3>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  aria-label={`Edit variant ${title}`}
-                  onClick={() => setEditing(true)}
-                  className="border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors"
-                >
-                  <PencilIcon width={13} height={13} />
-                  Edit variant
-                </button>
-              </div>
             </div>
             <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 p-4 sm:grid-cols-2 xl:grid-cols-3">
               <Field label="Options">
@@ -364,16 +353,6 @@ export function VariantCombinations({
           </section>
         </div>
 
-        {editing && (
-          <VariantEditDialog
-            key={`edit-${variant.id}`}
-            product={product}
-            variantId={variant.id}
-            onSaved={onSaved}
-            onClose={() => setEditing(false)}
-            onNewVariant={onNewVariant}
-          />
-        )}
         {changing && (
           <VariantImageDialog
             key={variant.id}

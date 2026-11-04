@@ -730,13 +730,13 @@ describe('editing a section in place', () => {
   it('edits the variants tab in place', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-    await user.click(pencil('variants'))
+    await user.click(pencil('options'))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     const price = screen.getByLabelText(/^Price/)
     await user.clear(price)
     await user.type(price, '27.5')
-    await user.click(saveButton('variants'))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
     await confirmUpdate(user)
 
     await waitFor(() =>
@@ -770,7 +770,7 @@ describe('editing a section in place', () => {
     const editVariants = async () => {
       const user = await openDetails()
       await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-      await user.click(pencil('variants'))
+      await user.click(pencil('options'))
       return user
     }
 
@@ -783,7 +783,7 @@ describe('editing a section in place', () => {
       expect(screen.getByLabelText('Stock quantity 1')).toHaveValue('5')
       await user.clear(screen.getByLabelText('Stock quantity 1'))
       await user.type(screen.getByLabelText('Stock quantity 1'), '12')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -817,7 +817,7 @@ describe('editing a section in place', () => {
       )
       await user.selectOptions(location, 'Shop floor')
       await user.type(screen.getByLabelText('Stock quantity 2'), '25')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -840,7 +840,7 @@ describe('editing a section in place', () => {
       await user.click(screen.getByRole('button', { name: 'Add location' }))
       await user.selectOptions(screen.getByLabelText('Stock location 2'), 'Unit 9')
       await user.type(screen.getByLabelText('Stock quantity 2'), '1')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       expect(
@@ -855,7 +855,7 @@ describe('editing a section in place', () => {
 
       await user.clear(screen.getByLabelText('Stock quantity 1'))
       await user.type(screen.getByLabelText('Stock quantity 1'), '2.5')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       expect(
@@ -903,7 +903,7 @@ describe('editing a section in place', () => {
       const user = await editVariants()
 
       await user.selectOptions(screen.getByLabelText('Image'), 'No image')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -931,7 +931,7 @@ describe('editing a section in place', () => {
       const value = screen.getByLabelText('Value “M” of Size')
       await user.clear(value)
       await user.type(value, 'Medium{Enter}')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -972,7 +972,7 @@ describe('editing a section in place', () => {
         'United Kingdom',
       )
       await user.type(screen.getByLabelText('Harmonized System (HS) code'), '392310')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -1032,7 +1032,7 @@ describe('editing a section in place', () => {
       expect(screen.getByLabelText('Country/Region of origin')).toHaveValue('GB')
       expect(screen.getByLabelText('Harmonized System (HS) code')).toHaveValue('392310')
       // Untouched: nothing to save.
-      expect(saveButton('variants')).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
 
       await user.clear(screen.getByLabelText('Length'))
       await user.clear(screen.getByLabelText('Width'))
@@ -1042,7 +1042,7 @@ describe('editing a section in place', () => {
         'Select',
       )
       await user.clear(screen.getByLabelText('Harmonized System (HS) code'))
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -1074,7 +1074,7 @@ describe('editing a section in place', () => {
       await user.type(screen.getByLabelText('Length'), '22')
       await user.click(screen.getByRole('button', { name: 'HS Code' }))
       await user.type(screen.getByLabelText('Harmonized System (HS) code'), '123')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       expect(
@@ -1129,7 +1129,7 @@ describe('editing a section in place', () => {
       expect(created.getByLabelText(/^Price/)).toHaveFocus()
 
       await user.type(created.getByLabelText(/^Price/), '29.99')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -1196,67 +1196,57 @@ describe('editing a section in place', () => {
       expect(screen.queryByRole('list', { name: 'New variants' })).not.toBeInTheDocument()
     })
 
-    it('has the plain options, then Current variants and New variants cards', async () => {
+    it('is a page of cards: Variant options, Current variants and — once a value is added — New variants', async () => {
       withOptions()
       const user = await editVariants()
 
-      // The options are not a card: no toggle, just the region.
+      expect(
+        screen.getByRole('navigation', { name: 'Editing the variants' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Edit Variants' })).toBeInTheDocument()
+      // The product's own tab strip gives way to the page's strip.
+      expect(screen.queryByRole('tablist', { name: 'Product sections' })).toBeNull()
+      expect(screen.getByRole('region', { name: 'Variant options' })).toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'Options' })).toBeInTheDocument()
-      expect(
-        screen.queryByRole('button', { name: /^Variant options/ }),
-      ).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /^Current variants/ })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
-      expect(
-        screen.queryByRole('button', { name: /^New variants/ }),
-      ).not.toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Current variants' })).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: /^New variants/ })).toBeNull()
 
-      // A new variant (from a new value) opens its own card so it is never hidden.
+      // A new variant (from a new value) gets its own card so it is never hidden.
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
-      expect(screen.getByRole('button', { name: /^New variants/ })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
+      expect(screen.getByRole('region', { name: /^New variants/ })).toBeInTheDocument()
       expect(screen.getByText(/Will be added when you save/)).toBeInTheDocument()
       expect(screen.getByText('+ XL')).toBeInTheDocument()
     })
 
-    it('has Add variant in the top bar, to the left of Save, and none in Current variants', async () => {
+    it('has Add variant in the page header, beside Back, and none in Current variants', async () => {
       withOptions()
       await editVariants()
 
       const add = screen.getByRole('button', { name: 'Add variant' })
       expect(screen.getAllByRole('button', { name: 'Add variant' })).toHaveLength(1)
-      const current = screen.getByRole('button', { name: /^Current variants/ })
-      expect(current.closest('section')).not.toContainElement(add)
-      // Same bar as the ✓ Save / ✕ Discard icons, and before them.
-      const save = saveButton('variants')
-      expect(add.parentElement).toContainElement(save)
-      expect(
-        add.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy()
+      const current = screen.getByRole('region', { name: 'Current variants' })
+      expect(current).not.toContainElement(add)
+      const back = screen.getByRole('button', { name: /^Back to variants/ })
+      expect(add.parentElement).toContainElement(back)
       expect(screen.queryByText('Add another option')).not.toBeInTheDocument()
       expect(screen.queryByText(/for example Material or Style/)).not.toBeInTheDocument()
     })
 
-    it('has no Discard changes / Save changes buttons at the foot; the icons at the top do it', async () => {
+    it('has Cancel and Save Changes in the foot, and no icon buttons at the top', async () => {
       withOptions()
       const user = await editVariants()
 
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Save variants' })).toBeNull()
       expect(
-        screen.queryByRole('button', { name: 'Save changes' }),
-      ).not.toBeInTheDocument()
-      expect(
-        screen.queryByRole('button', { name: 'Discard changes' }),
-      ).not.toBeInTheDocument()
+        screen.queryByRole('button', { name: 'Discard variants changes' }),
+      ).toBeNull()
 
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       await user.type(created.getByLabelText(/^Price/), '9.99')
 
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
       await waitFor(() =>
         expect(update).toHaveBeenCalledWith(
@@ -1293,7 +1283,7 @@ describe('editing a section in place', () => {
       })
       const user = await openDetails()
       await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-      await user.click(pencil('variants'))
+      await user.click(pencil('options'))
 
       // One closed row per first-option value, with its variant count.
       const small = screen.getByRole('button', { name: 'Small, 2 variants' })
@@ -1359,7 +1349,7 @@ describe('editing a section in place', () => {
         created.getByLabelText(/^Image address/),
         'https://cdn.example.com/new.jpg',
       )
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       await waitFor(() =>
@@ -1392,7 +1382,7 @@ describe('editing a section in place', () => {
 
       await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
       // The price box is where the person is taken; leave it empty.
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       expect(await screen.findByText('Enter a price')).toBeInTheDocument()
@@ -1415,7 +1405,7 @@ describe('editing a section in place', () => {
       await user.type(value, 'm{Enter}')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       await user.type(created.getByLabelText(/^Price/), '9.99')
-      await user.click(saveButton('variants'))
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
 
       expect(
@@ -1432,12 +1422,12 @@ describe('editing a section in place', () => {
       const name = screen.getByLabelText('New variant name')
       await waitFor(() => expect(name).toHaveFocus())
       // Nothing named yet, so there is nothing to send.
-      expect(saveButton('variants')).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
 
       // Once it is named and has a value, it is a change to send.
       await user.type(name, 'Size')
       await user.type(screen.getByLabelText('Values of Size'), 'Small{Enter}')
-      expect(saveButton('variants')).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
     })
   })
 
@@ -2264,11 +2254,11 @@ describe('the Variants editor is laid out in sections, like Add product', () => 
     renderPage('/products/id-1')
     await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
     await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-    await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+    await user.click(screen.getByRole('button', { name: 'Edit options' }))
     return user
   }
   const save = async (user: ReturnType<typeof userEvent.setup>) => {
-    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
     await confirmUpdate(user)
   }
 
@@ -2828,7 +2818,7 @@ describe('a variant picture by web address, in the Variants editor', () => {
     const view = renderPage('/products/id-1')
     await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
     await user.click(screen.getByRole('tab', { name: /^Variants/ }))
-    await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+    await user.click(screen.getByRole('button', { name: 'Edit options' }))
     return { user, view }
   }
 
@@ -2836,7 +2826,7 @@ describe('a variant picture by web address, in the Variants editor', () => {
     const { user, view } = await editVariants()
 
     await user.type(screen.getByLabelText(/^Or add a picture by web address/), ADDRESS)
-    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
     await confirmUpdate(user)
 
     await waitFor(() =>
@@ -2862,7 +2852,7 @@ describe('a variant picture by web address, in the Variants editor', () => {
       screen.getByLabelText(/^Or add a picture by web address/),
       'http://example.com/a.jpg',
     )
-    await user.click(screen.getByRole('button', { name: 'Save variants' }))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
 
     expect(await screen.findByText('Use a public https:// address')).toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()

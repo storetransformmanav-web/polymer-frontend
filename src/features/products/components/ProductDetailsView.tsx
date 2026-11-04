@@ -69,6 +69,8 @@ export function ProductDetailsView({
   // on whichever tab is open, not only on the Media tab.
   usePendingMediaSync(product)
   const [tab, setTab] = useState<TabId>('overview')
+  // The Edit Variants page replaces the tab strip while it is open (it has its own strip).
+  const [editingVariants, setEditingVariants] = useState(false)
   // The status picked in the header, waiting for "Yes, update" (it is also changed in Shopify).
   const statusChange = useProductStatusChange()
   const [askedStatus, setAskedStatus] = useState<ProductEditStatus | null>(null)
@@ -263,51 +265,57 @@ export function ProductDetailsView({
         </div>
       </header>
 
-      <div
-        role="tablist"
-        aria-label="Product sections"
-        className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
-      >
-        {tabs.map((item) => {
-          const selected = item.id === tab
-          return (
-            <button
-              key={item.id}
-              id={`product-tab-${item.id}`}
-              role="tab"
-              type="button"
-              aria-selected={selected}
-              aria-controls="product-tabpanel"
-              onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
-                selected
-                  ? 'border-accent text-text'
-                  : 'text-text-muted hover:text-text border-transparent'
-              }`}
-            >
-              {item.label}
-              {item.count !== undefined && (
-                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
-                  {item.count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      {!editingVariants && (
+        <div
+          role="tablist"
+          aria-label="Product sections"
+          className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
+        >
+          {tabs.map((item) => {
+            const selected = item.id === tab
+            return (
+              <button
+                key={item.id}
+                id={`product-tab-${item.id}`}
+                role="tab"
+                type="button"
+                aria-selected={selected}
+                aria-controls="product-tabpanel"
+                onClick={() => setTab(item.id)}
+                className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
+                  selected
+                    ? 'border-accent text-text'
+                    : 'text-text-muted hover:text-text border-transparent'
+                }`}
+              >
+                {item.label}
+                {item.count !== undefined && (
+                  <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
+                    {item.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div
         id="product-tabpanel"
         role="tabpanel"
         aria-labelledby={`product-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        className={`bg-surface p-3 sm:p-5 ${editingVariants ? 'border-border border-t' : ''}`}
       >
         {tab === 'overview' && (
           <OverviewPanel product={product} preview={preview} onSaved={onSaved} />
         )}
         {tab !== 'overview' && !product && <PanelSkeleton />}
         {product && tab === 'variants' && (
-          <VariantsPanel product={product} onSaved={onSaved} />
+          <VariantsPanel
+            product={product}
+            onSaved={onSaved}
+            onEditingChange={setEditingVariants}
+          />
         )}
         {product && tab === 'inventory' && (
           <InventoryPanel product={product} onSaved={onSaved} />

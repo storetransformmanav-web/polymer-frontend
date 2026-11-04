@@ -7,6 +7,7 @@ import {
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
+  type AccessCheck,
   type AccessLock,
   type AccessLockBody,
   type AccessTagsUpdateBody,
@@ -213,17 +214,53 @@ export function useSetupStore() {
   }
 }
 
-/** `GET /access/check`: asked on demand ("would this customer see this product?"). */
-export function useAccessCheck() {
+/** One customer's answer from `GET /access/check`, or why it could not be checked. */
+export type AccessCheckOutcome =
+  | { ref: string; check: AccessCheck; error: null }
+  | { ref: string; check: null; error: string }
+
+/** How many checks run at once when several customers are checked together. */
+const CHECKS_AT_ONCE = 4
+
+/**
+ * `GET /access/check` for several customers at once, asked on demand ("would these customers see
+ * this product?") — one call each, a few at a time, in the order given. One that fails keeps its
+ * own message; the others still answer.
+ */
+export function useAccessChecks() {
   const mutation = useMutation({
-    mutationFn: (params: { shop: string; customer: string; product: string }) =>
-      api.access.check(params),
+    mutationFn: async (params: {
+      shop: string
+      product: string
+      customers: string[]
+    }) => {
+      const outcomes: AccessCheckOutcome[] = []
+      for (let start = 0; start < params.customers.length; start += CHECKS_AT_ONCE) {
+        const batch = params.customers.slice(start, start + CHECKS_AT_ONCE)
+        outcomes.push(
+          ...(await Promise.all(
+            batch.map(async (ref): Promise<AccessCheckOutcome> => {
+              try {
+                const check = await api.access.check({
+                  shop: params.shop,
+                  customer: ref,
+                  product: params.product,
+                })
+                return { ref, check, error: null }
+              } catch (caught) {
+                return { ref, check: null, error: toUserMessage(caught) }
+              }
+            }),
+          )),
+        )
+      }
+      return outcomes
+    },
   })
   return {
     check: mutation.mutate,
-    result: mutation.data ?? null,
+    results: mutation.data ?? null,
     isChecking: mutation.isPending,
-    error: mutation.isError ? toUserMessage(mutation.error) : null,
     reset: mutation.reset,
   }
 }

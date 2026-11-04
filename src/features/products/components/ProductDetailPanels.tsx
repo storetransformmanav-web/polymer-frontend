@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   BoxesIcon,
@@ -56,7 +56,11 @@ import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { useAddLocalMedia, useLocalMedia } from '../hooks/useLocalMedia.ts'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import { useImageAltSave } from '../hooks/useImageAltSave.ts'
-import type { SavedHandler, SectionEdit } from '../hooks/useSectionEdit.ts'
+import {
+  useSectionEdit,
+  type SavedHandler,
+  type SectionEdit,
+} from '../hooks/useSectionEdit.ts'
 import {
   CategoryField,
   DescriptionField,
@@ -68,7 +72,6 @@ import {
 } from './edit/BasicsSection.tsx'
 import { AddCollectionDialog } from './AddCollectionDialog.tsx'
 import { CollectionAdder } from './CollectionAdder.tsx'
-import { AddVariantButton } from './edit/AddVariantButton.tsx'
 import { DescriptionSectionsSection as DescriptionSectionsEditor } from './edit/DescriptionSectionsSection.tsx'
 import {
   EditableCard,
@@ -80,7 +83,7 @@ import { MediaSection as MediaEditor } from './edit/MediaSection.tsx'
 import { MetafieldsSection as MetafieldsEditor } from './edit/MetafieldsSection.tsx'
 import { SeoSection as SeoEditor } from './edit/SeoSection.tsx'
 import { TAG_CHIP, TagsSection as TagsEditor } from './edit/TagsSection.tsx'
-import { VariantsSection as VariantsEditor } from './edit/VariantsSection.tsx'
+import { VariantsEditPage } from './edit/VariantsEditPage.tsx'
 import {
   formatMetafieldValue,
   metafieldName,
@@ -604,12 +607,12 @@ function VariantsView({
   product,
   onSaved,
   onNewVariant,
-  onEditVariants,
+  onEditOptions,
 }: {
   product: ProductDetail
   onSaved?: SavedHandler
   onNewVariant: () => void
-  onEditVariants: () => void
+  onEditOptions: () => void
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -617,7 +620,7 @@ function VariantsView({
         product={product}
         onSaved={onSaved}
         onNewVariant={onNewVariant}
-        onEditVariants={onEditVariants}
+        onEditOptions={onEditOptions}
       />
     </div>
   )
@@ -1275,85 +1278,80 @@ const HEADER_BUTTON =
   'inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
 
 /**
- * The bar over the Variants tab while the whole-tab editor is open: the editor's own Add
- * variant (a new option) and ✓ Save / ✕ Discard. Viewing, **Add variant** and **Edit variants**
- * sit in the Variants card beside Bulk edit, so the bar is empty — except for a product with no
- * variants, which has no card to hold them.
+ * The bar over the Variants tab for a product with no variants, which has no Variants card to hold
+ * the buttons: **Add variant** and **Edit options**. (Otherwise the card has them.)
  */
 function VariantsHeader({
   edit,
   onAdd,
-  hasVariants,
 }: {
   edit: SectionEdit
   /** Opens the New variant window. */
   onAdd: () => void
-  hasVariants: boolean
 }) {
-  if (!edit.editing && hasVariants) return null
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
-      {edit.editing && (
-        <p className="text-text-muted text-[0.82rem] font-medium">Editing variants</p>
-      )}
       <div className="ml-auto flex items-center gap-1.5">
-        {edit.editing ? (
-          <>
-            {edit.draft && <AddVariantButton draft={edit.draft} onChange={edit.change} />}
-            <SectionEditControls edit={edit} what="variants" />
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onAdd}
-              className={`${HEADER_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
-            >
-              <PlusIcon width={14} height={14} />
-              Add variant
-            </button>
-            <button
-              type="button"
-              onClick={edit.start}
-              className={`${HEADER_BUTTON} border-border bg-bg text-text hover:border-accent`}
-            >
-              <PencilIcon width={13} height={13} />
-              Edit variants
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={onAdd}
+          className={`${HEADER_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
+        >
+          <PlusIcon width={14} height={14} />
+          Add variant
+        </button>
+        <button
+          type="button"
+          onClick={edit.start}
+          className={`${HEADER_BUTTON} border-border bg-bg text-text hover:border-accent`}
+        >
+          <PencilIcon width={13} height={13} />
+          Edit options
+        </button>
       </div>
     </div>
   )
 }
 
-export function VariantsPanel({ product, onSaved }: TabProps) {
-  // The New variant window (the header's Add variant, and the Edit variant window's New variant).
+/**
+ * The Variants tab. Viewing, it is the chosen variant's page (`VariantCombinations`); **Edit
+ * options** turns the whole tab into the **Edit Variants page** (`VariantsEditPage`), which replaces
+ * the tab and — through `onEditingChange` — the product's tab strip while it is open.
+ */
+export function VariantsPanel({
+  product,
+  onSaved,
+  onEditingChange,
+}: TabProps & {
+  /** Tells the product page whether the Edit Variants page is open (it hides its tab strip). */
+  onEditingChange?: (editing: boolean) => void
+}) {
+  // The New variant window (the Variants card's Add variant).
   const [adding, setAdding] = useState(false)
+  const edit = useSectionEdit(product, { errorPrefixes: VARIANT_ERRORS, onSaved })
+  const editing = edit.editing
+  useEffect(() => {
+    onEditingChange?.(editing)
+    return () => onEditingChange?.(false)
+  }, [editing, onEditingChange])
+
   return (
     <>
-      <EditableTab
-        product={product}
-        what="variants"
-        errorPrefixes={VARIANT_ERRORS}
-        onSaved={onSaved}
-        header={(edit) => (
-          <VariantsHeader
-            edit={edit}
-            onAdd={() => setAdding(true)}
-            hasVariants={product.variants.length > 0}
-          />
-        )}
-        view={(edit) => (
+      {editing ? (
+        <VariantsEditPage edit={edit} productTitle={product.title} />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {product.variants.length === 0 && (
+            <VariantsHeader edit={edit} onAdd={() => setAdding(true)} />
+          )}
           <VariantsView
             product={product}
             onSaved={onSaved}
             onNewVariant={() => setAdding(true)}
-            onEditVariants={edit.start}
+            onEditOptions={edit.start}
           />
-        )}
-        editor={(section) => <VariantsEditor {...section} />}
-      />
+        </div>
+      )}
       {adding && (
         <AddVariantDialog
           product={product}

@@ -222,7 +222,7 @@ describe('the Variants tab', () => {
       expect(win().getByLabelText(/^SKU/)).toBeInTheDocument()
       expect(win().getByLabelText(/^Weight/)).toBeInTheDocument()
       // The whole-tab editor did not open.
-      expect(screen.queryByRole('button', { name: 'Save variants' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull()
     })
 
     it('adds one new variant — a typed Large with a chosen colour — and sends only it, after "Are you sure?"', async () => {
@@ -288,18 +288,6 @@ describe('the Variants tab', () => {
       await user.click(screen.getByRole('button', { name: 'Yes, cancel' }))
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(update).not.toHaveBeenCalled()
-    })
-
-    it('the Edit variant window has a New variant button that switches to it', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-      await user.click(screen.getByRole('button', { name: 'Edit variant Small / Red' }))
-      const editWin = within(screen.getByRole('dialog', { name: /^Edit variant/ }))
-      await user.click(editWin.getByRole('button', { name: 'New variant' }))
-
-      expect(screen.queryByRole('dialog', { name: /^Edit variant/ })).toBeNull()
-      expect(screen.getByRole('dialog', { name: 'New variant' })).toBeInTheDocument()
     })
   })
 
@@ -386,13 +374,14 @@ describe('the Variants tab', () => {
       )
     })
 
-    it('the Edit variant window has both too, in its Picture section', async () => {
+    it('the Edit Variant page has both too, in its Picture card', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PICTURED} />)
 
-      await user.click(screen.getByRole('button', { name: 'Edit variant Small / Red' }))
-      const win = within(screen.getByRole('dialog', { name: /^Edit variant/ }))
-      await user.click(win.getByRole('button', { name: 'Picture' }))
+      await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+      const win = within(
+        screen.getByRole('region', { name: 'Edit variant \u2013 Small / Red' }),
+      )
       expect(win.getByRole('button', { name: 'From media' })).toBeInTheDocument()
       expect(win.getByRole('button', { name: 'Web address' })).toBeInTheDocument()
       expect(win.getByRole('button', { name: 'Image 1' })).toHaveAttribute(
@@ -402,21 +391,41 @@ describe('the Variants tab', () => {
     })
   })
 
-  describe('the Edit variant window', () => {
+  describe('the Edit Variant page', () => {
+    const NAME = 'Edit variant \u2013 '
     const open = async (
       user: ReturnType<typeof userEvent.setup>,
       name = 'Small / Red',
     ) => {
-      await user.click(screen.getByRole('button', { name: `Edit variant ${name}` }))
-      return within(screen.getByRole('dialog', { name: `Edit variant \u2013 ${name}` }))
+      if (name !== 'Small / Red') await choose(user, name)
+      await user.click(screen.getByRole('button', { name: 'Edit variants' }))
+      return within(screen.getByRole('region', { name: `${NAME}${name}` }))
     }
+    const gone = () =>
+      waitFor(() =>
+        expect(screen.queryByRole('region', { name: /^Edit variant/ })).toBeNull(),
+      )
 
-    it('opens for the chosen variant, laid out like the tab: picture, unit price and fields', async () => {
+    it('has no Bulk edit button and no Edit variant button on the details card', () => {
+      renderWithProviders(<VariantsPanel product={PRODUCT} />)
+
+      expect(screen.queryByRole('button', { name: 'Bulk edit' })).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Edit variant / })).toBeNull()
+    })
+
+    it('opens in place of the tab for the chosen variant, with an Editing tab and cards of fields', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
-      await choose(user, 'Medium / Red')
       const win = await open(user, 'Medium / Red')
+      expect(
+        screen.getByRole('navigation', { name: 'Editing a variant' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Variants' })).toBeNull()
+      expect(win.getByRole('heading', { name: 'Edit Variant' })).toBeInTheDocument()
+      for (const card of ['Variant', 'Pricing', 'Inventory', 'Shipping', 'Picture']) {
+        expect(win.getByRole('region', { name: card })).toBeInTheDocument()
+      }
       expect(win.getByText('Unit price')).toBeInTheDocument()
       expect(win.getByLabelText('Price')).toHaveValue('62.00')
       expect(win.getByLabelText('SKU')).toHaveValue('SKU-3')
@@ -424,10 +433,10 @@ describe('the Variants tab', () => {
       expect(win.getByLabelText('Weight')).toHaveValue('250')
       expect(win.getByRole('checkbox', { name: 'Charge tax' })).toBeChecked()
       // Nothing to save until something changes.
-      expect(win.getByRole('button', { name: 'Update variant' })).toBeDisabled()
+      expect(win.getByRole('button', { name: 'Save Changes' })).toBeDisabled()
     })
 
-    it('has one Shipping section: Physical product and Weight once each, then the packed size, country and HS code', async () => {
+    it('has one Shipping card: Physical product and Weight once each, then the packed size, country and HS code', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
@@ -438,13 +447,11 @@ describe('the Variants tab', () => {
       expect(win.getByLabelText('Length')).toBeInTheDocument()
       expect(win.getByLabelText('Country of origin')).toBeInTheDocument()
       expect(win.getByLabelText('HS code')).toBeInTheDocument()
-      // No second "Shipping" card with its own switch inside.
-      expect(win.queryByText('Package when shipped alone')).toBeNull()
 
       await user.type(win.getByLabelText('Length'), '22')
       await user.type(win.getByLabelText('Width'), '13')
       await user.type(win.getByLabelText('Height'), '4')
-      await user.click(win.getByRole('button', { name: 'Update variant' }))
+      await user.click(win.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
       await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
       expect(update.mock.calls[0][1].variants?.[0]).toEqual(
@@ -459,7 +466,7 @@ describe('the Variants tab', () => {
       )
     })
 
-    it('the unit price follows the price typed, and Update variant sends only what changed after "Are you sure?"', async () => {
+    it('the unit price follows the price typed, and Save Changes sends only what changed after "Are you sure?", then returns to the tab', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
@@ -467,11 +474,11 @@ describe('the Variants tab', () => {
       const price = win.getByLabelText('Price')
       await user.clear(price)
       await user.type(price, '55')
-      expect(win.getByText('£55.00')).toBeInTheDocument()
+      expect(win.getByText('\u00a355.00')).toBeInTheDocument()
       await user.clear(win.getByLabelText('SKU'))
       await user.type(win.getByLabelText('SKU'), 'HM-NEW')
 
-      await user.click(win.getByRole('button', { name: 'Update variant' }))
+      await user.click(win.getByRole('button', { name: 'Save Changes' }))
       expect(update).not.toHaveBeenCalled()
       await confirmUpdate(user)
 
@@ -482,7 +489,10 @@ describe('the Variants tab', () => {
           'polymer-uk',
         ),
       )
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await gone()
+      expect(
+        screen.getByRole('figure', { name: 'Picture of Small / Red' }),
+      ).toBeInTheDocument()
     })
 
     it('says what is wrong instead of asking, when a price is not a number', async () => {
@@ -492,28 +502,40 @@ describe('the Variants tab', () => {
       const win = await open(user)
       await user.clear(win.getByLabelText('Price'))
       await user.type(win.getByLabelText('Price'), 'abc')
-      await user.click(win.getByRole('button', { name: 'Update variant' }))
+      await user.click(win.getByRole('button', { name: 'Save Changes' }))
 
       expect(await win.findByText('Enter a number, 0 or more')).toBeInTheDocument()
       expect(screen.queryByRole('alertdialog')).toBeNull()
       expect(update).not.toHaveBeenCalled()
     })
 
-    it('Cancel closes at once when nothing changed, and asks first when something did', async () => {
+    it('Cancel and Back leave at once when nothing changed, and ask first when something did', async () => {
       const user = userEvent.setup()
       renderWithProviders(<VariantsPanel product={PRODUCT} />)
 
       let win = await open(user)
       await user.click(win.getByRole('button', { name: 'Cancel' }))
-      expect(screen.queryByRole('dialog')).toBeNull()
+      await gone()
+
+      win = await open(user)
+      await user.click(win.getByRole('button', { name: 'Back to Small / Red' }))
+      await gone()
 
       win = await open(user)
       await user.type(win.getByLabelText('Barcode'), '123')
       await user.click(win.getByRole('button', { name: 'Cancel' }))
       await user.click(screen.getByRole('button', { name: 'Yes, cancel' }))
-      expect(screen.queryByRole('dialog')).toBeNull()
+      await gone()
       expect(update).not.toHaveBeenCalled()
     })
+  })
+
+  it('Edit options still opens the whole-tab editor for the options', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<VariantsPanel product={PRODUCT} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit options' }))
+    expect(screen.getByRole('heading', { name: 'Edit Variants' })).toBeInTheDocument()
   })
 
   describe('the picture', () => {
@@ -574,56 +596,5 @@ describe('the Variants tab', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(update).not.toHaveBeenCalled()
     })
-  })
-
-  it('Bulk edit opens every variant in a spreadsheet, with an All variants row', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-    await user.click(screen.getByRole('button', { name: 'Bulk edit' }))
-    const bulk = within(screen.getByRole('region', { name: 'Bulk edit variants' }))
-    expect(bulk.getByText('Editing 3 variants')).toBeInTheDocument()
-
-    // The All variants row sets the price of every one; then one SKU is changed on its own.
-    await user.type(bulk.getByLabelText('Price for all variants'), '55')
-    expect(bulk.getByLabelText('Price for Small / Red')).toHaveTextContent('55')
-    expect(bulk.getByLabelText('Price for Medium / Red')).toHaveTextContent('55')
-    // A cell is plain text until it is double-clicked.
-    await user.dblClick(bulk.getByLabelText('SKU for Medium / Red'))
-    await user.clear(bulk.getByLabelText('SKU for Medium / Red'))
-    await user.type(bulk.getByLabelText('SKU for Medium / Red'), 'HM-M')
-
-    await user.click(bulk.getByRole('button', { name: 'Save the variants' }))
-    await confirmUpdate(user)
-
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-    expect(update.mock.calls[0][1].variants).toEqual([
-      { id: 'v1', price: '55' },
-      { id: 'v2', price: '55' },
-      { id: 'v3', price: '55', sku: 'HM-M' },
-    ])
-    await waitFor(() =>
-      expect(screen.queryByRole('region', { name: 'Bulk edit variants' })).toBeNull(),
-    )
-  })
-
-  it('Back from Bulk edit leaves at once when nothing changed, and asks first when it did', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<VariantsPanel product={PRODUCT} />)
-
-    await user.click(screen.getByRole('button', { name: 'Bulk edit' }))
-    await user.click(screen.getByRole('button', { name: 'Back to list' }))
-    expect(
-      screen.getByRole('figure', { name: 'Picture of Small / Red' }),
-    ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Bulk edit' }))
-    const bulk = within(screen.getByRole('region', { name: 'Bulk edit variants' }))
-    await user.dblClick(bulk.getByLabelText('Price for Small / Red'))
-    await user.type(bulk.getByLabelText('Price for Small / Red'), '9')
-    await user.click(bulk.getByRole('button', { name: 'Cancel bulk editing' }))
-    await user.click(screen.getByRole('button', { name: 'Yes, cancel' }))
-    expect(screen.queryByRole('region', { name: 'Bulk edit variants' })).toBeNull()
-    expect(update).not.toHaveBeenCalled()
   })
 })

@@ -186,6 +186,33 @@ const setup = vi.mocked(api.access.setup)
 const productsList = vi.mocked(api.products.list)
 const customersList = vi.mocked(api.customers.list)
 
+/**
+ * The Customer Access tab: search the store's customers, tick each one, press Check. The store's
+ * customer search answers with just these people.
+ */
+async function pickAndCheck(
+  user: ReturnType<typeof userEvent.setup>,
+  people: { name: string; email: string }[],
+) {
+  customersList.mockResolvedValue(
+    pageOf(
+      people.map((person, index) => ({
+        id: `s-${index}`,
+        full_name: person.name,
+        email: person.email,
+        tags: [],
+      })),
+    ) as unknown as CustomerListResponse,
+  )
+  await user.type(screen.getByLabelText('Search customers to check'), people[0].email)
+  for (const person of people) {
+    await user.click(
+      await screen.findByRole('checkbox', { name: person.name }, { timeout: 2000 }),
+    )
+  }
+  await user.click(screen.getByRole('button', { name: 'Check' }))
+}
+
 const WRITE_OK = {
   message: 'Products: 1 updated. 1 new lock(s).',
   createdLocks: 1,
@@ -817,32 +844,24 @@ describe('LocksPage', () => {
         theme_enforces: true,
         message: 'Denied: the customer has none of vans.',
       }
-      /** The list answers a search with just the customers it matches. */
-      const searchable = () =>
-        lockCustomers.mockImplementation(async (_product, params) => {
-          const all = customersAnswer().customers
-          const text = (params.search ?? '').toLowerCase()
-          return customersAnswer(
-            text ? all.filter((customer) => customer.email?.toLowerCase() === text) : all,
-          )
-        })
       const openAccess = async () => {
         const user = await openLock()
-        await tab(user, 'Check access')
+        await tab(user, 'Customer Access')
         await screen.findByText('Ada Buyer')
         return user
       }
-      const check_ = async (user: ReturnType<typeof userEvent.setup>, who: string) => {
-        await user.type(screen.getByLabelText('Customer email or id'), who)
-        await user.click(screen.getByRole('button', { name: 'Check' }))
-      }
+      const check_ = (
+        user: ReturnType<typeof userEvent.setup>,
+        email: string,
+        name = 'Ada Buyer',
+      ) => pickAndCheck(user, [{ name, email }])
 
       it('has no Customers tab: the list is under Check access, asked for only when it is opened', async () => {
         const user = await openLock()
         expect(screen.queryByRole('tab', { name: 'Customers' })).toBeNull()
         expect(lockCustomers).not.toHaveBeenCalled()
 
-        await tab(user, 'Check access')
+        await tab(user, 'Customer Access')
         expect(await screen.findByText('Ada Buyer')).toBeInTheDocument()
         expect(lockCustomers).toHaveBeenCalledWith('locked-product-1', {
           shop: 'polymer-uk',
@@ -851,8 +870,13 @@ describe('LocksPage', () => {
           page_size: 25,
         })
 
-        // Two options beside the box: Check and Add New Customer.
-        expect(screen.getByRole('button', { name: 'Check' })).toBeInTheDocument()
+        // A customer search like Add lock's, listing nothing (and asking nothing) until something
+        // is typed, a Check button (off until a customer is ticked) and Add New Customer.
+        expect(screen.getByLabelText('Search customers to check')).toBeInTheDocument()
+        expect(screen.queryByRole('list', { name: 'Customers to check' })).toBeNull()
+        expect(customersList).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: 'Check' })).toBeDisabled()
+        expect(screen.queryByText(/Would a customer see this product/)).toBeNull()
         expect(
           screen.getByRole('button', { name: 'Add New Customer' }),
         ).toBeInTheDocument()
@@ -871,7 +895,6 @@ describe('LocksPage', () => {
       })
 
       it('Check shows Allowed and highlights the customer in the list', async () => {
-        searchable()
         check.mockResolvedValue(allowed())
         const user = await openAccess()
 
@@ -884,33 +907,65 @@ describe('LocksPage', () => {
             product: 'prod-1',
           }),
         )
-        expect(await screen.findByText('Allowed')).toBeInTheDocument()
-        expect(screen.getByText('Allowed: customer tag vans matches')).toBeInTheDocument()
-        // The list is narrowed to that customer, whose row is highlighted.
-        await waitFor(() =>
-          expect(lockCustomers).toHaveBeenLastCalledWith(
-            'locked-product-1',
-            expect.objectContaining({ search: 'buyer@example.com' }),
-          ),
+        const results = await screen.findByRole('list', { name: 'Access check results' })
+        expect(within(results).getByText('Allowed')).toBeInTheDocument()
+        expect(
+          within(results).getByText('Allowed: customer tag vans matches'),
+        ).toBeInTheDocument()
+        // The customer's row in the list below is highlighted.
+        const row = screen.getByText('Bo Trade').closest('tbody') as HTMLElement
+        const ada = within(row).getByText('Ada Buyer').closest('tr') as HTMLElement
+        await waitFor(() => expect(ada).toHaveAttribute('aria-current', 'true'))
+        expect(within(ada).getByText('Checked')).toBeInTheDocument()
+        // Allowed: it can be removed from here, not given again.
+        expect(
+          within(results).queryByRole('button', { name: 'Give access to Ada Buyer' }),
+        ).toBeNull()
+        expect(
+          within(results).getByRole('button', { name: 'Remove access of Ada Buyer' }),
+        ).toBeInTheDocument()
+      })
+
+      it('checks several customers at once, each with its own answer', async () => {
+        check.mockImplementation(async ({ customer }) =>
+          customer === 'buyer@example.com' ? allowed() : denied,
         )
-        const row = (await screen.findByText('Ada Buyer')).closest('tr') as HTMLElement
-        await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'))
-        expect(within(row).getByText('Checked')).toBeInTheDocument()
-        expect(screen.queryByText('Bo Trade')).toBeNull()
-        // Already in the list: it can be removed from here, not added again.
-        expect(await screen.findByText(/is in the list below/)).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: 'Add this customer' })).toBeNull()
-        expect(screen.getByRole('button', { name: 'Remove access' })).toBeInTheDocument()
+        const user = await openAccess()
+
+        await pickAndCheck(user, [
+          { name: 'Ada Buyer', email: 'buyer@example.com' },
+          { name: 'New Person', email: 'new@example.com' },
+        ])
+
+        // Both stay ticked, as chips that can be taken away.
+        const chips = screen.getByRole('list', { name: 'Selected customers' })
+        expect(within(chips).getAllByRole('listitem')).toHaveLength(2)
+        await waitFor(() => expect(check).toHaveBeenCalledTimes(2))
+        const results = await screen.findByRole('list', { name: 'Access check results' })
+        const items = within(results).getAllByRole('listitem')
+        expect(items).toHaveLength(2)
+        expect(items[0]).toHaveTextContent('Allowed')
+        expect(items[0]).toHaveTextContent('Ada Buyer')
+        expect(items[1]).toHaveTextContent('Not allowed')
+        expect(items[1]).toHaveTextContent('New Person')
+        expect(
+          within(items[1]).getByRole('button', { name: 'Give access to New Person' }),
+        ).toBeInTheDocument()
+
+        // Changing the choice clears the answers.
+        await user.click(within(chips).getByRole('button', { name: 'Remove New Person' }))
+        expect(screen.queryByRole('list', { name: 'Access check results' })).toBeNull()
       })
 
       it('a customer who is not in the list can be added from the check, prefilled', async () => {
-        searchable()
         check.mockResolvedValue(denied)
         const user = await openAccess()
 
-        await check_(user, 'new@example.com')
+        await check_(user, 'new@example.com', 'New Person')
         expect(await screen.findByText('Not allowed')).toBeInTheDocument()
-        await user.click(await screen.findByRole('button', { name: 'Add this customer' }))
+        await user.click(
+          await screen.findByRole('button', { name: 'Give access to New Person' }),
+        )
 
         const dialog = await screen.findByRole('alertdialog')
         expect(within(dialog).getByLabelText('Customers to add')).toHaveValue(
@@ -929,7 +984,6 @@ describe('LocksPage', () => {
       })
 
       it('shows the API’s error when the customer already has the access', async () => {
-        searchable()
         check.mockResolvedValue(denied)
         setLockCustomers.mockRejectedValue(
           new ApiError('buyer@example.com already has this access', { status: 422 }),
@@ -1051,7 +1105,7 @@ describe('LocksPage', () => {
       it('says so when nobody can see the product yet', async () => {
         lockCustomers.mockResolvedValue(customersAnswer([]))
         const user = await openLock()
-        await tab(user, 'Check access')
+        await tab(user, 'Customer Access')
         expect(
           await screen.findByText('No customer can see this product yet.'),
         ).toBeInTheDocument()
@@ -1109,7 +1163,7 @@ describe('LocksPage', () => {
           customersAnswer(undefined, { login_only: true, tags: [] }),
         )
         const user = await openLock()
-        await tab(user, 'Check access')
+        await tab(user, 'Customer Access')
         await screen.findByText('Ada Buyer')
 
         expect(
@@ -1151,7 +1205,7 @@ describe('LocksPage', () => {
     it('never writes: opening a lock sends no lock or tag update', async () => {
       const user = await openLock()
       await tab(user, 'Settings')
-      await tab(user, 'Check access')
+      await tab(user, 'Customer Access')
 
       expect(lock).not.toHaveBeenCalled()
       expect(updateTags).not.toHaveBeenCalled()
@@ -1159,7 +1213,7 @@ describe('LocksPage', () => {
 
     it('tells whether a customer would see the product', async () => {
       const user = await openLock()
-      await tab(user, 'Check access')
+      await tab(user, 'Customer Access')
       check.mockResolvedValue({
         allowed: false,
         reason: 'no_matching_tag',
@@ -1169,8 +1223,9 @@ describe('LocksPage', () => {
         message: 'Denied: the customer has none of vans.',
       })
 
-      await user.type(screen.getByLabelText('Customer email or id'), 'jane@example.com')
-      await user.click(screen.getByRole('button', { name: 'Check' }))
+      // Nothing is asked before Check is pressed.
+      expect(check).not.toHaveBeenCalled()
+      await pickAndCheck(user, [{ name: 'Jane Buyer', email: 'jane@example.com' }])
 
       await waitFor(() =>
         expect(check).toHaveBeenCalledWith({
@@ -1179,6 +1234,7 @@ describe('LocksPage', () => {
           product: 'prod-1',
         }),
       )
+      expect(check).toHaveBeenCalledTimes(1)
       expect(await screen.findByText('Not allowed')).toBeInTheDocument()
       // The backend's own explanation, as it sent it.
       expect(
@@ -1188,9 +1244,30 @@ describe('LocksPage', () => {
       expect(screen.queryByText(/Manual locking is on/)).not.toBeInTheDocument()
     })
 
+    it('searches the store’s customers only once something is typed', async () => {
+      const user = await openLock()
+      await tab(user, 'Customer Access')
+      expect(customersList).not.toHaveBeenCalled()
+
+      await user.type(screen.getByLabelText('Search customers to check'), 'jane')
+      await waitFor(() =>
+        expect(customersList).toHaveBeenCalledWith(
+          expect.objectContaining({ shop: 'polymer-uk', role: 'all', search: 'jane' }),
+        ),
+      )
+      const list = await screen.findByRole('list', { name: 'Customers to check' })
+      expect(within(list).getByText('Jane Buyer')).toBeInTheDocument()
+
+      // Clearing the search puts the list away again.
+      await user.click(screen.getByRole('button', { name: 'Clear search' }))
+      await waitFor(() =>
+        expect(screen.queryByRole('list', { name: 'Customers to check' })).toBeNull(),
+      )
+    })
+
     it('warns when the website does not enforce the lock, and opens its settings', async () => {
       const user = await openLock()
-      await tab(user, 'Check access')
+      await tab(user, 'Customer Access')
       check.mockResolvedValue({
         allowed: false,
         reason: 'no_matching_tag',
@@ -1201,8 +1278,7 @@ describe('LocksPage', () => {
           'Denied: the customer has none of vans. But Manual locking is on for this product, so the theme shows it to everyone',
       })
 
-      await user.type(screen.getByLabelText('Customer email or id'), 'jane@example.com')
-      await user.click(screen.getByRole('button', { name: 'Check' }))
+      await pickAndCheck(user, [{ name: 'Jane Buyer', email: 'jane@example.com' }])
 
       const warning = await screen.findByRole('alert')
       expect(warning).toHaveTextContent(

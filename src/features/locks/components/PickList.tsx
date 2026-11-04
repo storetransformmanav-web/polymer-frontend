@@ -29,6 +29,10 @@ interface PickListProps {
   search: string
   onSearch: (search: string) => void
   searchPlaceholder: string
+  /** The search box's accessible name (default "Search <noun>s"). */
+  searchLabel?: string
+  /** Show the list only once something is searched — nothing is listed (or asked for) before. */
+  listOnlyWhenSearching?: boolean
   /** How many match in all, not just the rows loaded. */
   total: number
   isPending: boolean
@@ -57,6 +61,8 @@ export function PickList({
   search,
   onSearch,
   searchPlaceholder,
+  searchLabel,
+  listOnlyWhenSearching = false,
   total,
   isPending,
   isFetching,
@@ -78,7 +84,7 @@ export function PickList({
         <SearchIcon className="text-text-muted shrink-0" />
         <input
           type="search"
-          aria-label={`Search ${noun}s`}
+          aria-label={searchLabel ?? `Search ${noun}s`}
           placeholder={searchPlaceholder}
           maxLength={200}
           value={text}
@@ -101,130 +107,132 @@ export function PickList({
         )}
       </div>
 
-      <div className="border-border overflow-hidden rounded-lg border">
-        <div className="bg-table-head border-border-strong flex items-center gap-3 border-b px-3.5 py-2">
-          <input
-            type="checkbox"
-            id={headingId}
-            className={CHECKBOX}
-            checked={allTicked}
-            disabled={rows.length === 0}
-            onChange={() => onTogglePage(rows, !allTicked)}
-          />
-          <label
-            htmlFor={headingId}
-            className="text-text cursor-pointer text-[0.7rem] font-bold tracking-wide uppercase"
-          >
-            Select all shown ({rows.length})
-          </label>
-          <span className="text-text-muted ml-auto text-[0.75rem]" aria-live="polite">
-            {isPending ? 'Loading…' : `${total.toLocaleString('en-GB')} found`}
-            {isFetching && !isPending && !isLoadingMore ? ' · updating…' : ''}
-          </span>
-        </div>
+      {(!listOnlyWhenSearching || search.trim() !== '') && (
+        <div className="border-border overflow-hidden rounded-lg border">
+          <div className="bg-table-head border-border-strong flex items-center gap-3 border-b px-3.5 py-2">
+            <input
+              type="checkbox"
+              id={headingId}
+              className={CHECKBOX}
+              checked={allTicked}
+              disabled={rows.length === 0}
+              onChange={() => onTogglePage(rows, !allTicked)}
+            />
+            <label
+              htmlFor={headingId}
+              className="text-text cursor-pointer text-[0.7rem] font-bold tracking-wide uppercase"
+            >
+              Select all shown ({rows.length})
+            </label>
+            <span className="text-text-muted ml-auto text-[0.75rem]" aria-live="polite">
+              {isPending ? 'Loading…' : `${total.toLocaleString('en-GB')} found`}
+              {isFetching && !isPending && !isLoadingMore ? ' · updating…' : ''}
+            </span>
+          </div>
 
-        <ul aria-label={label} className="max-h-80 overflow-auto">
-          {error ? (
-            <li className="text-danger flex flex-col items-center gap-2 px-4 py-8 text-center text-[0.85rem]">
-              {error}
-              <button
-                type="button"
-                onClick={onRetry}
-                className="border-border bg-bg text-text hover:border-accent cursor-pointer rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold"
-              >
-                Try again
-              </button>
-            </li>
-          ) : isPending ? (
-            Array.from({ length: 5 }, (_, index) => (
-              <li
-                key={index}
-                aria-hidden="true"
-                className="border-border border-b px-3.5 py-2.5"
-              >
-                <div className="bg-border/70 h-8 w-2/3 animate-pulse rounded" />
+          <ul aria-label={label} className="max-h-80 overflow-auto">
+            {error ? (
+              <li className="text-danger flex flex-col items-center gap-2 px-4 py-8 text-center text-[0.85rem]">
+                {error}
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="border-border bg-bg text-text hover:border-accent cursor-pointer rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold"
+                >
+                  Try again
+                </button>
               </li>
-            ))
-          ) : rows.length === 0 ? (
-            <li className="text-text-muted px-4 py-8 text-center text-[0.85rem]">
-              {search.trim()
-                ? `No ${noun}s match “${search.trim()}”.`
-                : `No ${noun}s found.`}
-            </li>
-          ) : (
-            rows.map((row) => (
-              <li
-                key={row.id}
-                className="border-border hover:bg-accent-tint/60 border-b transition-colors last:border-b-0"
-              >
-                <label className="flex cursor-pointer items-center gap-3 px-3.5 py-2">
-                  <input
-                    type="checkbox"
-                    className={CHECKBOX}
-                    checked={selectedIds.has(row.id)}
-                    onChange={() => onToggle(row)}
-                    aria-label={row.label}
-                  />
-                  {row.withImage && <LockImage src={row.image} />}
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span
-                      className="truncate text-[0.85rem] font-semibold"
-                      title={row.label}
-                    >
-                      {row.label}
-                    </span>
-                    {row.sub && (
+            ) : isPending ? (
+              Array.from({ length: 5 }, (_, index) => (
+                <li
+                  key={index}
+                  aria-hidden="true"
+                  className="border-border border-b px-3.5 py-2.5"
+                >
+                  <div className="bg-border/70 h-8 w-2/3 animate-pulse rounded" />
+                </li>
+              ))
+            ) : rows.length === 0 ? (
+              <li className="text-text-muted px-4 py-8 text-center text-[0.85rem]">
+                {search.trim()
+                  ? `No ${noun}s match “${search.trim()}”.`
+                  : `No ${noun}s found.`}
+              </li>
+            ) : (
+              rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="border-border hover:bg-accent-tint/60 border-b transition-colors last:border-b-0"
+                >
+                  <label className="flex cursor-pointer items-center gap-3 px-3.5 py-2">
+                    <input
+                      type="checkbox"
+                      className={CHECKBOX}
+                      checked={selectedIds.has(row.id)}
+                      onChange={() => onToggle(row)}
+                      aria-label={row.label}
+                    />
+                    {row.withImage && <LockImage src={row.image} />}
+                    <span className="flex min-w-0 flex-1 flex-col">
                       <span
-                        className="text-text-muted truncate text-[0.75rem]"
-                        title={row.sub}
+                        className="truncate text-[0.85rem] font-semibold"
+                        title={row.label}
                       >
-                        {row.sub}
+                        {row.label}
                       </span>
-                    )}
-                  </span>
-                  {row.chips && row.chips.length > 0 && (
-                    <span className="hidden shrink-0 items-center gap-1 sm:flex">
-                      {row.chips.slice(0, 3).map((chip) => (
+                      {row.sub && (
                         <span
-                          key={chip}
-                          className="bg-surface border-border max-w-28 truncate rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold"
+                          className="text-text-muted truncate text-[0.75rem]"
+                          title={row.sub}
                         >
-                          {chip}
-                        </span>
-                      ))}
-                      {row.chips.length > 3 && (
-                        <span className="text-text-muted text-[0.68rem]">
-                          +{row.chips.length - 3}
+                          {row.sub}
                         </span>
                       )}
                     </span>
-                  )}
-                </label>
-              </li>
-            ))
-          )}
-        </ul>
+                    {row.chips && row.chips.length > 0 && (
+                      <span className="hidden shrink-0 items-center gap-1 sm:flex">
+                        {row.chips.slice(0, 3).map((chip) => (
+                          <span
+                            key={chip}
+                            className="bg-surface border-border max-w-28 truncate rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                        {row.chips.length > 3 && (
+                          <span className="text-text-muted text-[0.68rem]">
+                            +{row.chips.length - 3}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </label>
+                </li>
+              ))
+            )}
+          </ul>
 
-        {hasMore && !error && (
-          <div className="border-border-strong bg-accent-tint/40 flex items-center justify-between gap-3 border-t px-3.5 py-2">
-            <span className="text-text-muted text-[0.75rem]">
-              Showing {rows.length.toLocaleString('en-GB')} of{' '}
-              {total.toLocaleString('en-GB')}
-            </span>
-            <button
-              type="button"
-              disabled={isLoadingMore}
-              onClick={onLoadMore}
-              className="border-border bg-bg text-text hover:border-accent inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-60"
-            >
-              {isLoadingMore && (
-                <SpinnerIcon width={14} height={14} className="animate-spin" />
-              )}
-              Load more
-            </button>
-          </div>
-        )}
-      </div>
+          {hasMore && !error && (
+            <div className="border-border-strong bg-accent-tint/40 flex items-center justify-between gap-3 border-t px-3.5 py-2">
+              <span className="text-text-muted text-[0.75rem]">
+                Showing {rows.length.toLocaleString('en-GB')} of{' '}
+                {total.toLocaleString('en-GB')}
+              </span>
+              <button
+                type="button"
+                disabled={isLoadingMore}
+                onClick={onLoadMore}
+                className="border-border bg-bg text-text hover:border-accent inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-60"
+              >
+                {isLoadingMore && (
+                  <SpinnerIcon width={14} height={14} className="animate-spin" />
+                )}
+                Load more
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
