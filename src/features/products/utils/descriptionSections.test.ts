@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   blankSection,
   buildSectionsMetafield,
+  canAddDescriptionSections,
   draftSections,
   readDescriptionSections,
 } from './descriptionSections.ts'
@@ -178,16 +179,55 @@ describe('editing the sections', () => {
     expect(value.sections[1]).toEqual({ title: 'Delivery', content: '', position: 1 })
   })
 
-  it('uses the metafield’s own type, and does nothing for a product without sections', () => {
+  it('uses the metafield’s own type', () => {
     const p = product(field(SETTINGS, { type: 'json' }))
     const drafts = draftSections(p)
     drafts[0].title = 'X'
     expect(sent(p, drafts)?.type).toBe('json')
+  })
+})
 
+describe('adding sections to a product that has none', () => {
+  const first = () => [
+    { ...blankSection(), title: ' Product Description ', content: '<p>Strong box.</p>' },
+    { ...blankSection(), title: 'Product Information', content: '' },
+  ]
+
+  it('creates the apd metafield, as Add product sends it, for a product without one', () => {
     expect(draftSections(product())).toEqual([])
-    expect(sent(product(), [{ ...blankSection(), title: 'X' }])).toBeNull()
-    expect(
-      sent(product(field('{not json')), [{ ...blankSection(), title: 'X' }]),
-    ).toBeNull()
+    expect(canAddDescriptionSections(product())).toBe(true)
+
+    const metafield = buildSectionsMetafield(product(), first())
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+    expect(JSON.parse(metafield?.value ?? '')).toEqual({
+      accordian_multi: false,
+      sections: [
+        { title: 'Product Description', content: '<p>Strong box.</p>', position: 0 },
+        { title: 'Product Information', content: '', position: 1 },
+      ],
+    })
+    // No sections typed: nothing is sent.
+    expect(buildSectionsMetafield(product(), [])).toBeNull()
+  })
+
+  it('keeps the settings and type of a readable metafield that holds no section', () => {
+    const empty = product(field({ ...SETTINGS, sections: [] }, { type: 'json' }))
+    expect(readDescriptionSections(empty)).toBeNull()
+    expect(canAddDescriptionSections(empty)).toBe(true)
+
+    const metafield = buildSectionsMetafield(empty, first())
+    expect(metafield?.type).toBe('json')
+    const value = JSON.parse(metafield?.value ?? '')
+    expect(value).toMatchObject({ border_color: '#e2e2e2', accordian_open: 2 })
+    expect(value.sections.map((section: { title: string }) => section.title)).toEqual([
+      'Product Description',
+      'Product Information',
+    ])
+  })
+
+  it('never writes over a metafield it cannot read', () => {
+    const damaged = product(field('{not json'))
+    expect(canAddDescriptionSections(damaged)).toBe(false)
+    expect(buildSectionsMetafield(damaged, first())).toBeNull()
   })
 })

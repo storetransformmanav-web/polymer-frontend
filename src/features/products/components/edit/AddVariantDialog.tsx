@@ -448,6 +448,7 @@ export function AddVariantDialog({
               onUrl={(imageUrl) => patch({ imageUrl })}
               error={at('imageUrl')}
               hint="A public https:// link. It is added to the product's pictures."
+              folder={{ productId: product.id, shop: product.shop?.key }}
             />
           </DialogAccordion>
 

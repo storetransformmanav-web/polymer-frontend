@@ -140,19 +140,58 @@ export function draftSections(
   }))
 }
 
+/** The product has an `apd` metafield at all (readable or not). */
+function hasApdField(
+  product: Pick<ProductDetail, 'metafields'> | null | undefined,
+): boolean {
+  return Boolean(
+    product?.metafields.some(
+      (item) => item.namespace === APD_NAMESPACE && item.key === APD_KEY && item.value,
+    ),
+  )
+}
+
 /**
- * The metafield to send so the product's sections become `drafts` — or null when
- * nothing changed, or the product has no sections metafield to edit. Every other
- * setting saved in the metafield is kept as it was.
+ * Sections can be added to a product that has none: it has no `apd` metafield yet, or one that
+ * is readable but holds no section. Not when the metafield is there but can't be read — saving
+ * would write over whatever the description app keeps in it.
+ */
+export function canAddDescriptionSections(
+  product: Pick<ProductDetail, 'metafields'> | null | undefined,
+): boolean {
+  return parseApd(product) !== null || !hasApdField(product)
+}
+
+/**
+ * The metafield to send so the product's sections become `drafts` — or null when nothing
+ * changed. Every other setting saved in the metafield is kept as it was. A product with no
+ * sections yet gets them too: a readable metafield with none keeps its own settings and type;
+ * a product with no metafield at all gets a new one, as Add product sends it
+ * (`buildNewSectionsMetafield`). A metafield that can't be read is never written over.
  */
 export function buildSectionsMetafield(
   product: Pick<ProductDetail, 'metafields'>,
   drafts: SectionDraft[],
 ): ProductMetafieldInput | null {
-  const apd = parseApd(product)
-  if (!apd || apd.sections.length === 0) return null
   // Every section deleted: the metafield is removed instead (see `buildSectionsRemoval`).
   if (drafts.length === 0) return null
+  const apd = parseApd(product)
+  if (!apd) return hasApdField(product) ? null : buildNewSectionsMetafield(drafts)
+  if (apd.sections.length === 0) {
+    return {
+      namespace: APD_NAMESPACE,
+      key: APD_KEY,
+      type: apd.type,
+      value: JSON.stringify({
+        ...apd.settings,
+        sections: drafts.map((draft, index) => ({
+          title: draft.title.trim(),
+          content: draft.content,
+          position: index,
+        })),
+      }),
+    }
+  }
 
   const unchanged =
     drafts.length === apd.sections.length &&

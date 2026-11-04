@@ -126,6 +126,7 @@ export function VariantImageDialog({
             )
           }
           error={edit.errors[`variants.${index}.imageUrl`]}
+          folder={{ productId: product.id, shop: product.shop?.key }}
         />
         {edit.error && <FormMessage tone="error">{edit.error}</FormMessage>}
         {!edit.error && edit.showErrors && edit.hasProblems && (

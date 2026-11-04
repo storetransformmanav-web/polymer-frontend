@@ -24,6 +24,7 @@ import { sameFile } from '../../../app/store/productPatch.ts'
 import {
   APD_KEY,
   APD_NAMESPACE,
+  canAddDescriptionSections,
   readDescriptionSections,
   type DescriptionSections,
 } from '../utils/descriptionSections.ts'
@@ -441,13 +442,22 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
             }
             editor={(section) => <DescriptionField {...section} />}
           />
-          {sections && (
+          {sections ? (
             // The description app's sections (metafield apd): the accordion customers see.
             <DescriptionSectionsBlock
               product={product}
               sections={sections}
               onSaved={onSaved}
             />
+          ) : (
+            // None yet: offer to add them (the save creates the apd metafield).
+            canAddDescriptionSections(product) && (
+              <DescriptionSectionsBlock
+                product={product}
+                sections={null}
+                onSaved={onSaved}
+              />
+            )
           )}
         </div>
       )}
@@ -458,11 +468,49 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
 // --- Description sections ----------------------------------------------------------
 
 /**
+ * A product with no description sections yet: a dashed card saying what they are, with **Add
+ * sections**, which opens the same editor as the pencil (its Add Product Description / Add
+ * Product Information / Add section starts).
+ */
+function NoDescriptionSections({ onAdd }: { onAdd: () => void }) {
+  return (
+    <section
+      aria-label="Product description & information"
+      className="border-border-strong bg-bg flex flex-col items-start gap-3 rounded-2xl border border-dashed p-5 sm:flex-row sm:items-center"
+    >
+      <span className="bg-accent-tint text-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+        <ListChecksIcon width={18} height={18} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <h3 className="m-0 text-[0.95rem] font-semibold">
+          Product description &amp; information
+        </h3>
+        <p className="text-text-muted m-0 text-[0.82rem] leading-snug">
+          No sections yet. Add the accordion customers see on the product page — Product
+          Description, Product Information, or any other heading.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        onPointerEnter={preloadRichTextEditor}
+        onFocus={preloadRichTextEditor}
+        className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border-none px-3.5 text-[0.82rem] font-semibold shadow-sm transition-colors"
+      >
+        <PlusIcon width={16} height={16} />
+        Add sections
+      </button>
+    </section>
+  )
+}
+
+/**
  * The description sections (Product Description, Product Information…) shown on their own
  * as an accordion, closed to begin with — there is no "Description" card around them. A
  * slim row above has just the pencil, which turns all the sections into an editor in place
  * (titles, formatted text, order, add / remove). Saving sends the product's `apd`
- * metafield (`metafields` of `PUT /products/{id}`).
+ * metafield (`metafields` of `PUT /products/{id}`). With no sections yet (`sections` null)
+ * the view is `NoDescriptionSections`, and the first save creates the metafield.
  */
 function DescriptionSectionsBlock({
   product,
@@ -470,30 +518,42 @@ function DescriptionSectionsBlock({
   onSaved,
 }: {
   product: ProductDetail
-  sections: DescriptionSections
+  sections: DescriptionSections | null
   onSaved?: SavedHandler
 }) {
+  // With no sections yet, the product's own Description card is "description" — keep the names
+  // of the two sets of controls apart.
+  const what = sections ? 'description' : 'description sections'
   return (
     <EditableTab
       product={product}
-      what="description"
+      what={what}
       errorPrefixes={SECTIONS_ERRORS}
       onSaved={onSaved}
-      header={(edit) => (
-        <div className="flex min-h-8 items-center justify-end gap-1.5">
-          {edit.editing && (
-            <p className="text-text-muted mr-auto text-[0.82rem] font-medium">
-              Editing description
-            </p>
-          )}
-          <SectionEditControls
-            edit={edit}
-            what="description"
-            onIntent={preloadRichTextEditor}
-          />
-        </div>
-      )}
-      view={<DescriptionAccordion {...sections} />}
+      header={(edit) =>
+        // No sections yet: the card's own "Add sections" starts the edit, so no pencil above it.
+        !sections && !edit.editing ? null : (
+          <div className="flex min-h-8 items-center justify-end gap-1.5">
+            {edit.editing && (
+              <p className="text-text-muted mr-auto text-[0.82rem] font-medium">
+                {sections ? 'Editing description' : 'Adding description sections'}
+              </p>
+            )}
+            <SectionEditControls
+              edit={edit}
+              what={what}
+              onIntent={preloadRichTextEditor}
+            />
+          </div>
+        )
+      }
+      view={(edit) =>
+        sections ? (
+          <DescriptionAccordion {...sections} />
+        ) : (
+          <NoDescriptionSections onAdd={edit.start} />
+        )
+      }
       editor={(section) => (
         <div className={`${CARD} p-5`}>
           <DescriptionSectionsEditor {...section} />

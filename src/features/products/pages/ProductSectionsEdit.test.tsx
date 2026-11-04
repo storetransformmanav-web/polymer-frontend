@@ -214,13 +214,105 @@ describe('editing the description sections (metafield apd)', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the product’s own description instead for a product without sections', async () => {
+  it('shows the product’s own description instead for a product without sections, and offers to add them', async () => {
     details.mockResolvedValue({ ...DETAIL, metafields: [] })
     await openDetails()
 
     // The same Description card, but with the plain description (and no accordion rows).
     expect(screen.getByRole('button', { name: /^Description/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Product Information/ })).toBeNull()
+    // Under it, a card to add the sections — and no second pencil above that card.
+    const empty = screen.getByRole('region', {
+      name: 'Product description & information',
+    })
+    expect(within(empty).getByText(/No sections yet/)).toBeInTheDocument()
+    expect(
+      within(empty).getByRole('button', { name: 'Add sections' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit description sections' })).toBeNull()
+  })
+
+  it('adds the first sections to a product without any: one PUT with a new apd metafield', async () => {
+    details.mockResolvedValue({ ...DETAIL, metafields: [] })
+    update.mockImplementation(async (_id, body) => {
+      details.mockResolvedValue({
+        ...DETAIL,
+        metafields: body.metafields ?? [],
+      } as ProductDetail)
+      return WRITE_OK
+    })
+    const user = await openDetails()
+
+    await user.click(screen.getByRole('button', { name: 'Add sections' }))
+    expect(screen.getByText('Adding description sections')).toBeInTheDocument()
+    // The editor's own starts.
+    await user.click(screen.getByRole('button', { name: 'Add Product Description' }))
+    expect(
+      screen
+        .getAllByLabelText(/^Title/)
+        .map((input) => (input as HTMLInputElement).value),
+    ).toEqual(['Product Description'])
+    await user.click(screen.getByRole('button', { name: 'Add section' }))
+    const titles = screen.getAllByLabelText(/^Title/)
+    await user.type(titles[1], 'Product Information')
+    expect(update).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Save description sections' }))
+    await confirmUpdate(user)
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    const body = update.mock.calls[0][1]
+    expect(Object.keys(body)).toEqual(['metafields'])
+    expect(body.metafields).toHaveLength(1)
+    expect(body.metafields?.[0]).toMatchObject({
+      namespace: 'apd',
+      key: 'apd',
+      type: 'json_string',
+    })
+    expect(JSON.parse(body.metafields?.[0].value ?? '')).toEqual({
+      accordian_multi: false,
+      sections: [
+        { title: 'Product Description', content: '', position: 0 },
+        { title: 'Product Information', content: '', position: 1 },
+      ],
+    })
+
+    // The accordion replaces the empty card at once.
+    expect(
+      await screen.findByRole('button', { name: /^Product Information/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Product description & information' }),
+    ).toBeNull()
+  })
+
+  it('needs a title for a first section too, and Discard puts the empty card back', async () => {
+    details.mockResolvedValue({ ...DETAIL, metafields: [] })
+    const user = await openDetails()
+
+    await user.click(screen.getByRole('button', { name: 'Add sections' }))
+    await user.click(screen.getByRole('button', { name: 'Add section' }))
+    await user.click(screen.getByRole('button', { name: 'Save description sections' }))
+    expect(await screen.findByText('Enter a title')).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Discard description sections changes' }),
+    )
+    expect(
+      screen.getByRole('region', { name: 'Product description & information' }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers nothing over a sections metafield it cannot read', async () => {
+    details.mockResolvedValue({
+      ...DETAIL,
+      metafields: [{ ...DETAIL.metafields[0], value: '{not json' }],
+    } as ProductDetail)
+    await openDetails()
+
+    expect(screen.getByRole('button', { name: /^Description/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add sections' })).toBeNull()
   })
 
   it('edits a title and sends only the apd metafield — the rest of its settings kept', async () => {
