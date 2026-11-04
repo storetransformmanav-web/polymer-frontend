@@ -154,8 +154,6 @@ describe('OrdersPage', () => {
       'Order',
       'Customer name',
       'Email',
-      'Store',
-      'Currency',
       'Financial status',
       'Fulfillment status',
       'Items',
@@ -163,15 +161,13 @@ describe('OrdersPage', () => {
       'Actions',
     ])
 
-    // #3: Customer 3, paid and fulfilled, 4 items, £193.50, GBP, Packaging By Polymer.
+    // #3: Customer 3, paid and fulfilled, 4 items, £193.50.
     const paid = within(row('17003'))
     const cells = paid.getAllByRole('cell').map((cell) => cell.textContent)
-    expect(cells.slice(0, 9)).toEqual([
+    expect(cells.slice(0, 7)).toEqual([
       '17003',
       'Customer 3',
       'buyer3@example.com',
-      'Packaging By Polymer',
-      'GBP',
       'Paid',
       'Fulfilled',
       '4',

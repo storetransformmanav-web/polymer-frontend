@@ -15,7 +15,7 @@ import {
 import { currencySymbol, formatPrice } from '../../../../lib/format.ts'
 import { useSectionEdit, type SavedHandler } from '../../hooks/useSectionEdit.ts'
 import { variantPreviewUrl, type VariantDraft } from '../../utils/editDraft.ts'
-import { countryOptions } from '../../utils/countries.ts'
+import { countryOptions } from '../../../../lib/countries.ts'
 import { variantStock } from '../../utils/stock.ts'
 import { ConfirmUpdateDialog } from '../ConfirmUpdateDialog.tsx'
 import { ProductImage } from '../ProductImage.tsx'

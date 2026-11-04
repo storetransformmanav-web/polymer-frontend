@@ -51,7 +51,7 @@ function IconTile({ name }: { name: string }) {
  * below. A new option (**Add variant** in the page header) is a row
  * of its own with a name box, a tags box for its values (`options_add`) and a pink **Delete**.
  */
-export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) {
+export function VariantOptionsEditor({ product, draft, errors, onChange }: SectionProps) {
   const choices = optionChoices(draft)
   const [open, setOpen] = useState(true)
   // Which existing option's row shows the box for a new value (one at a time).
@@ -116,6 +116,28 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
         return { ...created, optionValues }
       }),
     })
+  /**
+   * The variants of the product that use `value` of the option called `optionName`. The store has
+   * no call for a bare value — a value is gone once no variant uses it — so deleting a value
+   * means deleting these variants (`variants_remove`).
+   */
+  const variantsUsing = (optionName: string, value: string) =>
+    draft.variants.filter((variant) =>
+      product.variants
+        .find((original) => original.id === variant.id)
+        ?.selected_options?.some(
+          (entry) => entry.name === optionName && entry.value === value,
+        ),
+    )
+  /** Marks (or un-marks) those variants for deletion; nothing is sent until Save. */
+  const setValueDeleted = (optionName: string, value: string, removed: boolean) => {
+    const ids = new Set(variantsUsing(optionName, value).map((variant) => variant.id))
+    onChange({
+      variants: draft.variants.map((variant) =>
+        ids.has(variant.id) ? { ...variant, removed } : variant,
+      ),
+    })
+  }
   const dropNewValue = (key: string) =>
     onChange({ newVariants: draft.newVariants.filter((created) => created.key !== key) })
   const patchAdded = (index: number, patch: { name?: string; values?: string[] }) =>
@@ -153,13 +175,40 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
               const pending = draft.newVariants.filter(
                 (created) => valueOf[created.key] === index,
               )
+              const deleting: string[] = []
               const chips: ValueChipData[] = [
-                ...option.values.map((value, valueIndex) => ({
-                  key: `value-${value.from}`,
-                  text: value.to.trim(),
-                  label: `Value “${value.from}” of ${option.name}`,
-                  rename: (to: string) => renameValue(index, valueIndex, to),
-                })),
+                ...option.values.map((value, valueIndex) => {
+                  const using = variantsUsing(option.name, value.from)
+                  const gone =
+                    using.length > 0 && using.every((variant) => variant.removed)
+                  if (gone) {
+                    deleting.push(
+                      `“${value.from}” will be deleted with ${using.length} ${
+                        using.length === 1 ? 'variant' : 'variants'
+                      } when you save (see Current variants).`,
+                    )
+                  }
+                  return {
+                    key: `value-${value.from}`,
+                    text: value.to.trim(),
+                    label: `Value “${value.from}” of ${option.name}`,
+                    removed: gone,
+                    rename: gone
+                      ? undefined
+                      : (to: string) => renameValue(index, valueIndex, to),
+                    remove:
+                      using.length > 0 && !gone
+                        ? () => setValueDeleted(option.name, value.from, true)
+                        : undefined,
+                    removeLabel: `Delete value ${value.from} of ${option.name}`,
+                    removeTitle: `Delete this value (also deletes the ${using.length} ${
+                      using.length === 1 ? 'variant' : 'variants'
+                    } that use it, when you save)`,
+                    restore: gone
+                      ? () => setValueDeleted(option.name, value.from, false)
+                      : undefined,
+                  }
+                }),
                 ...pending.map((created) => ({
                   key: created.key,
                   text: (created.optionValues[index] ?? '').trim(),
@@ -224,6 +273,11 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
                       </button>
                     )}
                   </div>
+                  {deleting.map((note) => (
+                    <p key={note} className="text-danger m-0 text-[0.76rem]">
+                      {note}
+                    </p>
+                  ))}
                   {messages.map((message) => (
                     <p
                       key={message}
@@ -317,9 +371,13 @@ interface ValueChipData {
   isNew?: boolean
   /** Renames it (a draft's value or a value of the product's option). */
   rename?: (to: string) => void
-  /** Takes it away (a value that is only being added). */
+  /** Takes it away: a value only being added, or an existing one (its variants are deleted). */
   remove?: () => void
   removeLabel?: string
+  removeTitle?: string
+  /** An existing value marked for deletion: shown struck through, with an Undo. */
+  removed?: boolean
+  restore?: () => void
 }
 
 /**
@@ -330,7 +388,11 @@ interface ValueChipData {
 function ValueChip({ chip }: { chip: ValueChipData }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(chip.text)
-  const tone = chip.isNew ? 'border-accent/60 bg-accent-tint' : ''
+  const tone = chip.removed
+    ? 'border-danger/60 bg-danger-bg'
+    : chip.isNew
+      ? 'border-accent/60 bg-accent-tint'
+      : ''
 
   function finish(keep: boolean) {
     setEditing(false)
@@ -367,7 +429,7 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
   }
 
   return (
-    <span className={`${PILL} ${tone} ${chip.remove ? 'pr-1' : ''}`}>
+    <span className={`${PILL} ${tone} ${chip.remove || chip.restore ? 'pr-1' : ''}`}>
       <button
         type="button"
         title={chip.rename ? 'Click to rename' : undefined}
@@ -377,14 +439,25 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
           setEditing(true)
         }}
         className={`text-text h-full cursor-text border-none bg-transparent pl-3 text-[0.82rem] font-medium disabled:cursor-default ${
-          chip.remove ? 'pr-1' : 'pr-3'
-        }`}
+          chip.remove || chip.restore ? 'pr-1' : 'pr-3'
+        } ${chip.removed ? 'line-through' : ''}`}
       >
         {chip.text}
       </button>
+      {chip.restore && (
+        <button
+          type="button"
+          aria-label={`Undo delete of value ${chip.text}`}
+          onClick={chip.restore}
+          className="text-accent hover:text-accent-hover h-full cursor-pointer border-none bg-transparent pr-3 text-[0.78rem] font-semibold"
+        >
+          Undo
+        </button>
+      )}
       {chip.remove && (
         <button
           type="button"
+          title={chip.removeTitle}
           aria-label={chip.removeLabel ?? `Remove ${chip.text}`}
           onClick={chip.remove}
           className="text-text-muted hover:text-danger inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors"

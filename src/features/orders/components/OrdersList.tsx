@@ -75,7 +75,7 @@ const MESSAGE_BUTTON =
  * The results area: from `lg` up a table in its own scrolling box — it takes the height
  * the page gives it, scrolls up and down under a sticky header, and sideways when the
  * window is narrower than its columns — and cards below that. The table shows the order
- * number, the customer's name and email, the store, the currency, the financial and
+ * number, the customer's name and email, the financial and
  * fulfillment status, the item count, the total price and a **View** (eye) button. Handles the
  * loading skeleton, error and empty states itself so the page only passes data in.
  */
@@ -186,15 +186,13 @@ export function OrdersList({
       className="relative min-h-0 flex-1 overflow-auto"
     >
       <table
-        className={`w-full min-w-[1180px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[900px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={`${TH} w-24`}>Order</th>
             <th className={TH}>Customer name</th>
             <th className={TH}>Email</th>
-            <th className={`${TH} w-44`}>Store</th>
-            <th className={`${TH_CENTER} w-24`}>Currency</th>
             <th className={`${TH_CENTER} w-40`}>Financial status</th>
             <th className={`${TH_CENTER} w-40`}>Fulfillment status</th>
             <th className={`${TH_RIGHT} w-20`}>Items</th>
@@ -211,7 +209,7 @@ export function OrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 10 }, (_, cell) => (
+                  {Array.from({ length: 8 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -249,12 +247,6 @@ export function OrdersList({
                         <span className="text-text-muted">—</span>
                       )}
                     </td>
-                    <td className={TD}>
-                      <span className="block truncate" title={order.shop?.name ?? ''}>
-                        {order.shop?.name || '—'}
-                      </span>
-                    </td>
-                    <td className={`${TD} text-center`}>{order.currency || '—'}</td>
                     <td className={`${TD} text-center`}>
                       <span className="flex flex-col items-center gap-1">
                         <Badge

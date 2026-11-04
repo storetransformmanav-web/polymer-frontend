@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { OrderFilters, OrdersFacets } from '../../../app/store/ordersSlice.ts'
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import {
@@ -73,6 +73,8 @@ const FIELD_INPUT =
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.72rem] font-semibold'
 
 interface OrdersToolbarProps {
+  /** Buttons at the end of the search row (Add order). */
+  actions?: ReactNode
   filters: OrderFilters
   facets: OrdersFacets
   total: number | null
@@ -89,6 +91,7 @@ interface OrdersToolbarProps {
  * useDebouncedField); selects and the date range apply immediately.
  */
 export function OrdersToolbar({
+  actions,
   filters,
   facets,
   total,
@@ -192,6 +195,7 @@ export function OrdersToolbar({
               <XIcon width={14} height={14} />
               Clear All
             </button>
+            {actions}
           </div>
         </div>
 

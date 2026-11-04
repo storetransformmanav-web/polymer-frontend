@@ -2351,6 +2351,47 @@ describe('the Variants editor is laid out in sections, like Add product', () => 
     await confirmUpdate(user)
   }
 
+  it('deletes an existing option value by deleting the variants that use it', async () => {
+    const SECOND = 'variant-large'
+    details.mockResolvedValue({
+      ...DETAIL,
+      has_only_default_variant: false,
+      options: [{ name: 'Size', position: 1, values: ['M', 'L'] }],
+      variants: [
+        { ...DETAIL.variants[0], selected_options: [{ name: 'Size', value: 'M' }] },
+        {
+          ...DETAIL.variants[0],
+          id: SECOND,
+          title: 'L',
+          sku: 'BAG-L',
+          selected_options: [{ name: 'Size', value: 'L' }],
+        },
+      ],
+    })
+    const user = await editVariants()
+    const options = within(screen.getByRole('region', { name: 'Options' }))
+
+    await user.click(options.getByRole('button', { name: 'Delete value L of Size' }))
+    expect(
+      options.getByText(/“L” will be deleted with 1 variant when you save/),
+    ).toBeVisible()
+
+    // Undo puts the variant back: nothing is left to send.
+    await user.click(options.getByRole('button', { name: 'Undo delete of value L' }))
+    expect(options.queryByText(/will be deleted/)).toBeNull()
+
+    await user.click(options.getByRole('button', { name: 'Delete value L of Size' }))
+    await save(user)
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'id-1',
+        { variants_remove: [SECOND] },
+        'polymer-uk',
+      ),
+    )
+  })
+
   it('has a Price, an Inventory and a Shipping card for the variant', async () => {
     await editVariants()
 

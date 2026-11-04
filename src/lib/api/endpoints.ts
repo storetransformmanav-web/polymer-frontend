@@ -47,6 +47,7 @@ export const ENDPOINTS = {
     actions: '/activity/actions',
   },
   orders: {
+    /** `GET` the list; `POST` creates an order. */
     list: '/orders',
     /** `ref` is the order number (17516) — add `shop` when two stores could share one. */
     detail: (ref: string) => `/orders/${encodeURIComponent(ref)}`,
@@ -658,6 +659,111 @@ const orderDetailResponseSchema = z.preprocess(
 
 export type OrderListItem = z.infer<typeof orderListItemSchema>
 export type OrderDetail = z.infer<typeof orderDetailSchema>
+
+// --- Creating an order (POST /orders) -------------------------------------------------------
+
+/** What `payment.status` can be on a new order: already paid, or still to be paid. */
+export const ORDER_PAYMENT_STATUSES = ['paid', 'pending'] as const
+export type OrderPaymentStatus = (typeof ORDER_PAYMENT_STATUSES)[number]
+
+/** The buyer. Shopify finds the customer by email (or makes one). */
+export interface OrderCreateCustomer {
+  email?: string
+  first_name?: string
+  last_name?: string
+  phone?: string
+}
+
+export interface OrderCreateAddress {
+  first_name?: string
+  last_name?: string
+  company?: string
+  address1: string
+  address2?: string
+  city: string
+  zip?: string
+  /** Two letters, e.g. "GB". */
+  country_code: string
+  phone?: string
+}
+
+/** A line for one of the store's variants (its CRM id); the price is the variant's own. */
+export interface OrderCreateVariantLine {
+  variant_id: string
+  quantity: number
+}
+
+/** A line that is not a product of the store ("Custom printing"), priced here. */
+export interface OrderCreateCustomLine {
+  title: string
+  /** A decimal string, e.g. "25.00". */
+  price: string
+  quantity: number
+  taxable?: boolean
+  requires_shipping?: boolean
+}
+
+export type OrderCreateLineItem = OrderCreateVariantLine | OrderCreateCustomLine
+
+/** `POST /orders`: `shop` and at least one line are required; everything else is optional. */
+export interface OrderCreateBody {
+  shop: string
+  customer?: OrderCreateCustomer
+  shipping_address?: OrderCreateAddress
+  line_items: OrderCreateLineItem[]
+  discount_codes?: string[]
+  shipping?: { title: string; price: string }
+  note?: string
+  tags?: string[]
+  payment?: { status: OrderPaymentStatus; method?: string }
+}
+
+/** What the app keeps of a create answer: enough to open the new order and say so. */
+export interface OrderCreateResult {
+  id: string | null
+  order_number: number | null
+  name: string | null
+  /** The store key, when the answer names it. */
+  shop: string | null
+  message: string
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+
+/**
+ * Reads the create answer leniently — its shape is not documented: the order may be under
+ * `order` or `result`, or the fields may sit at the top. The message is the answer's own.
+ */
+export function readOrderCreate(data: unknown): OrderCreateResult {
+  const root = asRecord(data) ?? {}
+  const order = asRecord(root.order) ?? asRecord(root.result) ?? root
+  const text = (value: unknown) =>
+    typeof value === 'string' && value.trim()
+      ? value.trim()
+      : typeof value === 'number'
+        ? String(value)
+        : null
+  const numberRaw = order.order_number ?? order.number
+  const parsedNumber =
+    typeof numberRaw === 'number'
+      ? numberRaw
+      : typeof numberRaw === 'string' && /^\d+$/.test(numberRaw)
+        ? Number(numberRaw)
+        : null
+  const name = text(order.name)
+  const fromName = name && /^#?\d+$/.test(name) ? Number(name.replace('#', '')) : null
+  const shopRecord = asRecord(order.shop)
+  return {
+    id: text(order.id ?? order.order_id),
+    order_number: parsedNumber ?? fromName,
+    name,
+    shop: text(shopRecord ? shopRecord.key : order.shop) ?? text(root.shop),
+    message: text(root.message) ?? text(order.message) ?? '',
+  }
+}
 export type OrderAddress = z.infer<typeof orderAddressSchema>
 export type OrderLineItem = z.infer<typeof orderLineItemSchema>
 export type OrderTransaction = z.infer<typeof orderTransactionSchema>
@@ -2333,6 +2439,16 @@ export const api = {
         params: { include_raw: false, ...(shop ? { shop } : {}) },
       })
       return orderDetailResponseSchema.parse(data)
+    },
+
+    /**
+     * Creates an order in the store (`POST /orders`): Shopify makes it, and it is then read back
+     * into the CRM. The answer is read leniently (`readOrderCreate`). Never retried — a repeat
+     * would make the order twice.
+     */
+    async create(body: OrderCreateBody): Promise<OrderCreateResult> {
+      const data = await apiClient.post<unknown>(ENDPOINTS.orders.list, body)
+      return readOrderCreate(data)
     },
   },
   customers: {

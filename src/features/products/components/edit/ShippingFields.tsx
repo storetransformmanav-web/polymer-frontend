@@ -15,7 +15,7 @@ import {
   type DimensionUnit,
   type WeightUnit,
 } from '../../../../lib/api/endpoints.ts'
-import { countryName, countryOptions } from '../../utils/countries.ts'
+import { countryName, countryOptions } from '../../../../lib/countries.ts'
 import type { ShippingDetailsDraft, ShippingProblems } from '../../utils/shipping.ts'
 import { Chip } from '../create/CreateCard.tsx'
 import { EditField, FIELD_INPUT } from './fields.tsx'

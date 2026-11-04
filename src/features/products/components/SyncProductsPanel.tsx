@@ -129,7 +129,7 @@ export function SyncProductsPanel({
           </label>
         )}
 
-        <label className="flex cursor-pointer items-center gap-2 text-[0.8rem]">
+        {/* <label className="flex cursor-pointer items-center gap-2 text-[0.8rem]">
           <input
             type="checkbox"
             checked={dryRun}
@@ -141,14 +141,14 @@ export function SyncProductsPanel({
           />
           Only compare
           <span className="text-text-muted text-[0.74rem]">(nothing is saved)</span>
-        </label>
+        </label> */}
 
-        <span className="text-text-muted flex justify-between text-[0.7rem]">
+        {/* <span className="text-text-muted flex justify-between text-[0.7rem]">
           <span>Digits only</span>
           <span aria-live="polite">
             {shopifyId.length}/{SHOPIFY_ID_MAX}
           </span>
-        </span>
+        </span> */}
         {message && (
           <p role="alert" className="text-danger m-0 text-[0.76rem]">
             {message}

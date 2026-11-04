@@ -1,5 +1,11 @@
+import { useEffect, useState } from 'react'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { PlusIcon } from '../../../components/ui/icons.tsx'
+import type { OrderCreateResult } from '../../../lib/api/endpoints.ts'
+import { OrderCreateView } from '../components/create/OrderCreateView.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { OrderDetailsView } from '../components/OrderDetailsView.tsx'
 import { OrderTabsBar } from '../components/OrderTabsBar.tsx'
@@ -18,6 +24,10 @@ import {
 } from '../utils/format.ts'
 
 const LIST_PATH = '/orders'
+// The "Add order" form is a tab of its own, at /orders/new (no order is called that).
+const CREATE_PATH = `${LIST_PATH}/new`
+/** How long the "order created" line stays. */
+const NOTICE_MS = 10_000
 
 /**
  * Orders: the list at `/orders`, and one order's details at `/orders/:number` (with
@@ -40,10 +50,79 @@ export function OrdersPage() {
   const [search] = useSearchParams()
   const { filters, data } = orders
 
-  // `/orders/<number>[/…]` → the order's number; `/orders` → null (the list).
-  const activeRef = splat ? decodeURIComponent(splat.split('/')[0]) || null : null
+  // `/orders/<number>[/…]` → the order's number; `/orders/new` → the Add order form; `/orders`
+  // → null (the list).
+  const first = splat ? decodeURIComponent(splat.split('/')[0]) || null : null
+  const creatingRoute = first === 'new'
+  const activeRef = creatingRoute ? null : first
   const activeShop = search.get('shop')
   const activeId = activeRef ? orderDetailsKey(activeRef, activeShop) : null
+
+  // The "Add order" form is open (as a tab), and whether it holds anything typed. It stays
+  // mounted, with what was typed, while another tab shows.
+  // /orders/new opened directly (a reload, a link) starts the form too.
+  const [openedCreate, setCreating] = useState(creatingRoute)
+  const creating = openedCreate || creatingRoute
+  const [createDirty, setCreateDirty] = useState(false)
+  const showCreate = creatingRoute
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  // Another tab: the form (if open) stays mounted behind it, with what was typed.
+  function leaveTo(path: string) {
+    if (creating) setCreating(true)
+    navigate(path)
+  }
+
+  function openCreate() {
+    setNotice(null)
+    setCreating(true)
+    navigate(CREATE_PATH)
+  }
+
+  // Closes the form for good (created, backed out of, or its tab closed).
+  function closeCreate() {
+    setCreating(false)
+    setCreateDirty(false)
+    if (creatingRoute) navigate(LIST_PATH)
+  }
+
+  // Asks before throwing away what was typed; `then` runs once the form is closed.
+  const [discardAsk, setDiscardAsk] = useState<{ then?: () => void } | null>(null)
+  function discardCreate(then?: () => void) {
+    if (createDirty) {
+      setDiscardAsk({ then })
+      return
+    }
+    closeCreate()
+    then?.()
+  }
+
+  // The store made the order: say so, and open it (in its own tab) when the answer names it.
+  function handleCreated(result: OrderCreateResult, shop: string) {
+    setCreating(false)
+    setCreateDirty(false)
+    const ref =
+      result.order_number != null ? String(result.order_number) : (result.id ?? null)
+    const label = result.name ?? (ref ? `#${ref}` : 'The order')
+    setNotice(result.message || `Order ${label} was created.`)
+    if (!ref) {
+      navigate(LIST_PATH)
+      return
+    }
+    const storeKey = result.shop ?? shop
+    tabs.openTab({
+      ref,
+      shop: storeKey,
+      label: result.order_number != null ? String(result.order_number) : label,
+    })
+    navigate(orderPathFor(ref, storeKey))
+  }
 
   function closeTab(id: string) {
     const index = tabs.tabs.findIndex((tab) => tab.id === id)
@@ -55,8 +134,12 @@ export function OrdersPage() {
   }
 
   function clearTabs() {
-    tabs.clearTabs()
-    if (activeId) navigate(LIST_PATH)
+    const clear = () => {
+      tabs.clearTabs()
+      if (activeId) navigate(LIST_PATH)
+    }
+    if (creating) discardCreate(clear)
+    else clear()
   }
 
   return (
@@ -64,14 +147,51 @@ export function OrdersPage() {
       <OrderTabsBar
         tabs={tabs.tabs}
         activeId={activeId}
-        onShowList={() => navigate(LIST_PATH)}
+        draft={creating ? { active: creatingRoute } : null}
+        onSelectDraft={() => navigate(CREATE_PATH)}
+        onCloseDraft={() => discardCreate()}
+        onShowList={() => leaveTo(LIST_PATH)}
         onSelect={(id) => {
           const tab = tabs.tabs.find((candidate) => candidate.id === id)
-          if (tab) navigate(orderPathFor(tab.ref, tab.shop))
+          if (tab) leaveTo(orderPathFor(tab.ref, tab.shop))
         }}
         onClose={closeTab}
         onClear={clearTabs}
       />
+
+      {notice && !showCreate && <FormMessage tone="success">{notice}</FormMessage>}
+
+      {creating && (
+        <div
+          className={
+            showCreate ? 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto' : 'hidden'
+          }
+        >
+          <OrderCreateView
+            key="create-order"
+            onBack={closeCreate}
+            onCreated={handleCreated}
+            onDirtyChange={setCreateDirty}
+          />
+        </div>
+      )}
+
+      {discardAsk && (
+        <ConfirmCancelDialog
+          title="Discard this new order?"
+          question=""
+          detail="What you entered will be lost."
+          keepLabel="Keep editing"
+          confirmLabel="Yes, discard"
+          onConfirm={() => {
+            const { then } = discardAsk
+            setDiscardAsk(null)
+            closeCreate()
+            then?.()
+          }}
+          onKeep={() => setDiscardAsk(null)}
+        />
+      )}
 
       {activeRef && (
         <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
@@ -86,10 +206,26 @@ export function OrdersPage() {
 
       {/* Kept mounted but hidden while an order is open (display: none also removes it
           from tab order and screen readers). */}
-      <div className={activeRef ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'}>
+      <div
+        className={
+          activeRef || creatingRoute
+            ? 'hidden'
+            : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
+        }
+      >
         <OrdersKpis data={data} />
 
         <OrdersToolbar
+          actions={
+            <button
+              type="button"
+              onClick={openCreate}
+              className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3.5 text-[0.82rem] font-semibold shadow-sm transition-colors"
+            >
+              <PlusIcon width={16} height={16} />
+              Add order
+            </button>
+          }
           filters={filters}
           facets={orders.facets}
           total={data?.total ?? null}

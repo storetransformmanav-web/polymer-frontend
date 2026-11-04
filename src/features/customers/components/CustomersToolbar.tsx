@@ -9,22 +9,16 @@ import {
   SearchIcon,
   SlidersIcon,
   UserCogIcon,
-  UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useCustomerRoleCounts } from '../hooks/useCustomerRoleCounts.ts'
-import {
-  MARKETING_OPTIONS,
-  ORDERS_OPTIONS,
-  STATE_OPTIONS,
-} from '../utils/filterOptions.ts'
+import { MARKETING_OPTIONS, ORDERS_OPTIONS } from '../utils/filterOptions.ts'
 import {
   CUSTOMER_SORTS,
   type CustomerRole,
   type CustomerSort,
-  type CustomerState,
 } from '../../../lib/api/endpoints.ts'
 
 const ROLE_TABS: { value: CustomerRole | ''; label: string }[] = [
@@ -178,15 +172,6 @@ export function CustomersToolbar({
               value={filters.role}
               options={roleOptions}
               onChange={(role) => onChange({ role: role as CustomerRole | '' })}
-            />
-            <SelectField
-              compact
-              id="filter-state"
-              label="Account State"
-              icon={UsersIcon}
-              value={filters.state}
-              options={STATE_OPTIONS}
-              onChange={(state) => onChange({ state: state as CustomerState | '' })}
             />
             <SelectField
               compact

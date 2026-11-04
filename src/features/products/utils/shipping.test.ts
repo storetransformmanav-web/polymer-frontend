@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countryName, countryOptions } from './countries.ts'
+import { countryName, countryOptions } from '../../../lib/countries.ts'
 import {
   blankShippingDetails,
   packedSizeLabel,
