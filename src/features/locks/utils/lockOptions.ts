@@ -11,8 +11,8 @@ export const LOCK_FLAGS = [
 ] as const
 export type LockFlag = (typeof LOCK_FLAGS)[number]
 
-/** What can be changed on a lock after it was created: a flag or the access-denied message. */
-export type LockOptionChange = Partial<Record<LockFlag, boolean>> & { message?: string }
+/** What can be changed on a lock after it was created: its yes/no settings. */
+export type LockOptionChange = Partial<Record<LockFlag, boolean>>
 
 interface FlagInfo {
   /** The setting's name, as the Settings tab shows it. */
@@ -33,9 +33,6 @@ export const FLAG_INFO: Record<LockFlag, FlagInfo> = {
 
 export const flagWord = (flag: LockFlag, value: boolean) =>
   value ? FLAG_INFO[flag].on : FLAG_INFO[flag].off
-
-/** The longest "access denied" message the page lets you type. */
-export const MAX_LOCK_MESSAGE = 500
 
 /**
  * The `POST /access/locks` body that changes one lock's options and nothing else: the shop, this

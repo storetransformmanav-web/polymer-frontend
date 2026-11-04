@@ -219,6 +219,106 @@ describe('api.access', () => {
     expect(result).toMatchObject({ removedLocks: 1, createdLocks: 0, queued: 1 })
   })
 
+  it('lists the customers who can see a product: the path, the query and every field', async () => {
+    get.mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message: '2 customers',
+      customers: [
+        {
+          id: 'c1',
+          name: 'Ada Buyer',
+          email: 'buyer@example.com',
+          phone: '+44 20 7946 0000',
+          company: 'Buyer Ltd',
+          tags: ['b2b', { tag: 'vans' }],
+        },
+        { customer_id: 7, first_name: 'Bo', last_name: 'Trade', email: 'bo@example.com' },
+      ],
+      tags: [{ tag: 'b2b', locked_products: '4' }, { tag: 'vans' }],
+      page: 1,
+      page_size: 50,
+      total: 2,
+    })
+
+    const result = await api.access.lockCustomers('bulk storage/container', {
+      shop: 'polymer-uk',
+      search: 'ada',
+      tag: 'b2b',
+      sort: 'newest',
+      page: 1,
+      page_size: 50,
+    })
+
+    expect(get).toHaveBeenCalledWith(
+      '/access/locks/bulk%20storage%2Fcontainer/customers',
+      {
+        params: {
+          shop: 'polymer-uk',
+          search: 'ada',
+          tag: 'b2b',
+          sort: 'newest',
+          page: 1,
+          page_size: 50,
+        },
+      },
+    )
+    expect(result.customers[0]).toMatchObject({
+      id: 'c1',
+      name: 'Ada Buyer',
+      email: 'buyer@example.com',
+      phone: '+44 20 7946 0000',
+      company: 'Buyer Ltd',
+      tags: ['b2b', 'vans'],
+    })
+    // A name given as first + last, an id given as `customer_id`, missing fields empty.
+    expect(result.customers[1]).toMatchObject({
+      id: '7',
+      name: 'Bo Trade',
+      phone: null,
+      tags: [],
+    })
+    expect(result.tags).toEqual([
+      { tag: 'b2b', label: null, locked_products: 4 },
+      { tag: 'vans', label: null, locked_products: null },
+    ])
+    expect(result).toMatchObject({ total: 2, total_pages: 1, has_next: false })
+  })
+
+  it('says which part of a customers answer is wrong', async () => {
+    get.mockResolvedValue({ customers: [{ id: 'c1', tags: 'b2b' }] })
+
+    await expect(api.access.lockCustomers('p', { shop: 'polymer-uk' })).rejects.toThrow(
+      /lock customers answer was not in the expected form \(customers\.0\.tags/,
+    )
+  })
+
+  it('gives and takes customers’ access with the documented body', async () => {
+    put.mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message: 'Customers: 1 updated, 1 removed.',
+      tags: [{ tag: 'b2b', locked_products: 3 }],
+    })
+    const body = {
+      add: ['buyer@example.com', '7012345678901'],
+      remove: ['old.buyer@example.com'],
+      shop: 'polymer-uk',
+      tag: 'b2b',
+    }
+
+    const result = await api.access.setLockCustomers('bulk-storage-container', body)
+
+    expect(put).toHaveBeenCalledWith(
+      '/access/locks/bulk-storage-container/customers',
+      body,
+    )
+    expect(result).toEqual({
+      message: 'Customers: 1 updated, 1 removed.',
+      tags: [{ tag: 'b2b', label: null, locked_products: 3 }],
+    })
+  })
+
   it('checks whether a customer would see a product', async () => {
     get.mockResolvedValue({
       code: 200,

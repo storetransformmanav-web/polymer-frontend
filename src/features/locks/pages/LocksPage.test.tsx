@@ -8,6 +8,7 @@ import {
   type AccessLock,
   type AccessLockListResponse,
   type AccessTagListResponse,
+  type LockCustomersResponse,
   type CustomerListResponse,
   type ProductListResponse,
   type Shop,
@@ -23,6 +24,8 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       lock: vi.fn(),
       tags: vi.fn(),
       updateTags: vi.fn(),
+      lockCustomers: vi.fn(),
+      setLockCustomers: vi.fn(),
       check: vi.fn(),
       setup: vi.fn(),
       createTag: vi.fn(),
@@ -70,6 +73,43 @@ function makeLock(n: number, patch: Partial<AccessLock> = {}): AccessLock {
     last_pushed_at: null,
     updated_at: '2026-10-29T09:12:38Z',
     shop: null,
+    ...patch,
+  }
+}
+
+function customersAnswer(
+  customers: LockCustomersResponse['customers'] = [
+    {
+      id: 'c1',
+      name: 'Ada Buyer',
+      email: 'buyer@example.com',
+      phone: '+44 20 7946 0000',
+      company: 'Buyer Ltd',
+      tags: ['vans'],
+      created_at: null,
+    },
+    {
+      id: 'c2',
+      name: 'Bo Trade',
+      email: 'bo@example.com',
+      phone: null,
+      company: null,
+      tags: ['vans'],
+      created_at: null,
+    },
+  ],
+  patch: Partial<LockCustomersResponse> = {},
+): LockCustomersResponse {
+  return {
+    message: null,
+    customers,
+    tags: [{ tag: 'vans', label: null, locked_products: 3 }],
+    login_only: false,
+    page: 1,
+    page_size: 25,
+    total: customers.length,
+    total_pages: 1,
+    has_next: false,
     ...patch,
   }
 }
@@ -139,6 +179,8 @@ const locks = vi.mocked(api.access.locks)
 const lock = vi.mocked(api.access.lock)
 const tags = vi.mocked(api.access.tags)
 const updateTags = vi.mocked(api.access.updateTags)
+const lockCustomers = vi.mocked(api.access.lockCustomers)
+const setLockCustomers = vi.mocked(api.access.setLockCustomers)
 const check = vi.mocked(api.access.check)
 const setup = vi.mocked(api.access.setup)
 const productsList = vi.mocked(api.products.list)
@@ -167,6 +209,8 @@ describe('LocksPage', () => {
     tags.mockResolvedValue(TAGS)
     lock.mockResolvedValue(WRITE_OK)
     updateTags.mockResolvedValue({ ...WRITE_OK, createdLocks: 0 })
+    lockCustomers.mockResolvedValue(customersAnswer())
+    setLockCustomers.mockResolvedValue({ message: 'Customers: 1 updated.', tags: [] })
     setup.mockResolvedValue('Metafield definition created. 2 lock(s) pushing to Shopify.')
     productsList.mockResolvedValue(pageOf(PRODUCTS) as unknown as ProductListResponse)
     customersList.mockResolvedValue(pageOf(CUSTOMERS) as unknown as CustomerListResponse)
@@ -582,9 +626,10 @@ describe('LocksPage', () => {
         within(screen.getByRole('list', { name: 'Keys' })).getByText('vans'),
       ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Edit keys' })).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: 'Edit customer access' }),
-      ).toBeInTheDocument()
+      // Who has access is under Check access; the Overview has no customer or message card.
+      expect(screen.queryByRole('tab', { name: 'Customers' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Customer access')).not.toBeInTheDocument()
+      expect(screen.queryByText('Message')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Search or add a tag')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument()
 
@@ -683,29 +728,6 @@ describe('LocksPage', () => {
           }),
         )
       })
-
-      it('the message is double-clicked into a box, then confirmed', async () => {
-        const user = await openLock()
-
-        await user.dblClick(screen.getByRole('button', { name: /default message/ }))
-        const box = screen.getByRole('textbox', { name: 'Message' })
-        await user.type(box, 'Trade accounts only.{Enter}')
-
-        const dialog = await screen.findByRole('alertdialog')
-        expect(lock).not.toHaveBeenCalled()
-        willHold({ message: 'Trade accounts only.' })
-        await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
-
-        await waitFor(() =>
-          expect(lock).toHaveBeenCalledWith({
-            shop: 'polymer-uk',
-            products: ['locked-product-1'],
-            tags: ['vans'],
-            message: 'Trade accounts only.',
-          }),
-        )
-        expect(await screen.findByText('Trade accounts only.')).toBeInTheDocument()
-      })
     })
 
     describe('editing with PUT /access/tags', () => {
@@ -775,64 +797,327 @@ describe('LocksPage', () => {
         expect(await screen.findByText('Tag not allowed')).toBeInTheDocument()
         expect(screen.getByRole('alertdialog')).toBeInTheDocument()
       })
+    })
 
-      it("gives customers access: their emails with the lock's keys as tags_add", async () => {
+    describe('Check access: the customer list and checking, adding, editing (GET / PUT /access/locks/{product}/customers)', () => {
+      const ADA = customersAnswer().customers[0]
+      const allowed = (message = 'Allowed: customer tag vans matches') => ({
+        allowed: true,
+        reason: 'tag_match',
+        matched_tags: ['vans'],
+        customer_tags: ['vans'],
+        theme_enforces: true,
+        message,
+      })
+      const denied = {
+        allowed: false,
+        reason: 'no_matching_tag',
+        matched_tags: [],
+        customer_tags: [],
+        theme_enforces: true,
+        message: 'Denied: the customer has none of vans.',
+      }
+      /** The list answers a search with just the customers it matches. */
+      const searchable = () =>
+        lockCustomers.mockImplementation(async (_product, params) => {
+          const all = customersAnswer().customers
+          const text = (params.search ?? '').toLowerCase()
+          return customersAnswer(
+            text ? all.filter((customer) => customer.email?.toLowerCase() === text) : all,
+          )
+        })
+      const openAccess = async () => {
         const user = await openLock()
-        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
-        await user.type(
-          screen.getByLabelText('Customers'),
-          'buyer@example.com, other@example.com buyer@example.com',
-        )
-        expect(screen.getByText('2 customers')).toBeInTheDocument()
+        await tab(user, 'Check access')
+        await screen.findByText('Ada Buyer')
+        return user
+      }
+      const check_ = async (user: ReturnType<typeof userEvent.setup>, who: string) => {
+        await user.type(screen.getByLabelText('Customer email or id'), who)
+        await user.click(screen.getByRole('button', { name: 'Check' }))
+      }
 
-        await user.click(screen.getByRole('button', { name: 'Save customer access' }))
-        const dialog = await screen.findByRole('alertdialog')
-        expect(updateTags).not.toHaveBeenCalled()
-        await user.click(within(dialog).getByRole('button', { name: 'Yes, give access' }))
+      it('has no Customers tab: the list is under Check access, asked for only when it is opened', async () => {
+        const user = await openLock()
+        expect(screen.queryByRole('tab', { name: 'Customers' })).toBeNull()
+        expect(lockCustomers).not.toHaveBeenCalled()
 
-        await waitFor(() =>
-          expect(updateTags).toHaveBeenCalledWith({
-            shop: 'polymer-uk',
-            customers: ['buyer@example.com', 'other@example.com'],
-            tags_add: ['vans'],
-          }),
+        await tab(user, 'Check access')
+        expect(await screen.findByText('Ada Buyer')).toBeInTheDocument()
+        expect(lockCustomers).toHaveBeenCalledWith('locked-product-1', {
+          shop: 'polymer-uk',
+          sort: 'name',
+          page: 1,
+          page_size: 25,
+        })
+
+        // Two options beside the box: Check and Add New Customer.
+        expect(screen.getByRole('button', { name: 'Check' })).toBeInTheDocument()
+        expect(
+          screen.getByRole('button', { name: 'Add New Customer' }),
+        ).toBeInTheDocument()
+        const headers = within(screen.getByRole('table'))
+          .getAllByRole('columnheader')
+          .map((header) => header.textContent)
+        expect(headers).toEqual(['Name', 'Email', 'Phone', 'Company', 'Tags', 'Actions'])
+        const row = within(screen.getByText('Ada Buyer').closest('tr') as HTMLElement)
+        expect(row.getByText('buyer@example.com')).toBeInTheDocument()
+        expect(row.getByText('+44 20 7946 0000')).toBeInTheDocument()
+        expect(row.getByText('Buyer Ltd')).toBeInTheDocument()
+        expect(row.getByText('vans')).toHaveAttribute(
+          'title',
+          'Shared by 3 locked products',
         )
-        expect(await screen.findByText(WRITE_OK.message)).toBeInTheDocument()
-        expect(screen.queryByLabelText('Customers')).toBeNull()
       })
 
-      it('takes access away: the same customers with the keys as tags_remove', async () => {
+      it('Check shows Allowed and highlights the customer in the list', async () => {
+        searchable()
+        check.mockResolvedValue(allowed())
+        const user = await openAccess()
+
+        await check_(user, 'buyer@example.com')
+
+        await waitFor(() =>
+          expect(check).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            customer: 'buyer@example.com',
+            product: 'prod-1',
+          }),
+        )
+        expect(await screen.findByText('Allowed')).toBeInTheDocument()
+        expect(screen.getByText('Allowed: customer tag vans matches')).toBeInTheDocument()
+        // The list is narrowed to that customer, whose row is highlighted.
+        await waitFor(() =>
+          expect(lockCustomers).toHaveBeenLastCalledWith(
+            'locked-product-1',
+            expect.objectContaining({ search: 'buyer@example.com' }),
+          ),
+        )
+        const row = (await screen.findByText('Ada Buyer')).closest('tr') as HTMLElement
+        await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'))
+        expect(within(row).getByText('Checked')).toBeInTheDocument()
+        expect(screen.queryByText('Bo Trade')).toBeNull()
+        // Already in the list: it can be removed from here, not added again.
+        expect(await screen.findByText(/is in the list below/)).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Add this customer' })).toBeNull()
+        expect(screen.getByRole('button', { name: 'Remove access' })).toBeInTheDocument()
+      })
+
+      it('a customer who is not in the list can be added from the check, prefilled', async () => {
+        searchable()
+        check.mockResolvedValue(denied)
+        const user = await openAccess()
+
+        await check_(user, 'new@example.com')
+        expect(await screen.findByText('Not allowed')).toBeInTheDocument()
+        await user.click(await screen.findByRole('button', { name: 'Add this customer' }))
+
+        const dialog = await screen.findByRole('alertdialog')
+        expect(within(dialog).getByLabelText('Customers to add')).toHaveValue(
+          'new@example.com',
+        )
+        expect(setLockCustomers).not.toHaveBeenCalled()
+        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+
+        await waitFor(() =>
+          expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            add: ['new@example.com'],
+          }),
+        )
+        expect(await screen.findByText('Customers: 1 updated.')).toBeInTheDocument()
+      })
+
+      it('shows the API’s error when the customer already has the access', async () => {
+        searchable()
+        check.mockResolvedValue(denied)
+        setLockCustomers.mockRejectedValue(
+          new ApiError('buyer@example.com already has this access', { status: 422 }),
+        )
+        const user = await openAccess()
+
+        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
+        const dialog = await screen.findByRole('alertdialog')
+        await user.type(
+          within(dialog).getByLabelText('Customers to add'),
+          'buyer@example.com',
+        )
+        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+
+        expect(
+          await within(dialog).findByText('buyer@example.com already has this access'),
+        ).toBeInTheDocument()
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      })
+
+      it('Add New Customer takes any customers; its button is off until something is typed', async () => {
+        const user = await openAccess()
+        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
+        const dialog = await screen.findByRole('alertdialog')
+        const give = within(dialog).getByRole('button', { name: 'Give access' })
+        expect(give).toBeDisabled()
+
+        await user.type(
+          within(dialog).getByLabelText('Customers to add'),
+          'new@example.com, 7012345678901 new@example.com',
+        )
+        expect(within(dialog).getByText('2 customers')).toBeInTheDocument()
+        // The tag is shared with other locked products: the dialog says so.
+        expect(within(dialog).getByRole('note')).toHaveTextContent(
+          'Tags are shared: “vans” (3 locked products)',
+        )
+        expect(setLockCustomers).not.toHaveBeenCalled()
+        await user.click(give)
+
+        await waitFor(() =>
+          expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            add: ['new@example.com', '7012345678901'],
+          }),
+        )
+        expect(screen.queryByRole('alertdialog')).toBeNull()
+      })
+
+      it('a lock with several tags asks which one to give', async () => {
+        locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
+        const user = await openAccess()
+        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
+        const dialog = await screen.findByRole('alertdialog')
+
+        await user.type(
+          within(dialog).getByLabelText('Customers to add'),
+          'new@example.com',
+        )
+        await user.selectOptions(within(dialog).getByLabelText('Tag to give'), 'b2b')
+        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+
+        await waitFor(() =>
+          expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            add: ['new@example.com'],
+            tag: 'b2b',
+          }),
+        )
+      })
+
+      it('Edit gives an existing customer another of the lock’s keys', async () => {
+        locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
+        const user = await openAccess()
+        // Bo Trade holds only “vans”: Edit is offered; with every key held it would not be.
+        await user.click(screen.getByRole('button', { name: 'Edit access of Ada Buyer' }))
+        const dialog = await screen.findByRole('alertdialog')
+
+        expect(within(dialog).getByText('Edit access of Ada Buyer')).toBeInTheDocument()
+        // Only the key she does not hold yet can be given.
+        expect(
+          within(within(dialog).getByLabelText('Tag to give'))
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['b2b'])
+        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+
+        await waitFor(() =>
+          expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            add: ['buyer@example.com'],
+            tag: 'b2b',
+          }),
+        )
+      })
+
+      it('offers no Edit when the lock has one key (there is nothing more to give)', async () => {
+        await openAccess()
+        expect(screen.queryByRole('button', { name: /^Edit access of/ })).toBeNull()
+      })
+
+      it('has no search box; it filters by one of the lock’s tags and sorts — all by the API', async () => {
+        locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
+        const user = await openAccess()
+
+        expect(screen.queryByLabelText('Search customers')).toBeNull()
+        await user.selectOptions(screen.getByLabelText('Tag'), 'b2b')
+        await user.selectOptions(screen.getByLabelText('Sort by'), 'Newest')
+        await waitFor(() =>
+          expect(lockCustomers).toHaveBeenLastCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            tag: 'b2b',
+            sort: 'newest',
+            page: 1,
+            page_size: 25,
+          }),
+        )
+      })
+
+      it('says so when nobody can see the product yet', async () => {
+        lockCustomers.mockResolvedValue(customersAnswer([]))
         const user = await openLock()
-        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
-        await user.click(screen.getByRole('radio', { name: 'Remove access' }))
-        await user.type(screen.getByLabelText('Customers'), 'buyer@example.com')
-        await user.click(screen.getByRole('button', { name: 'Save customer access' }))
+        await tab(user, 'Check access')
+        expect(
+          await screen.findByText('No customer can see this product yet.'),
+        ).toBeInTheDocument()
+      })
+
+      it('removes a customer’s access from the row: asks first, sends remove, the row goes at once', async () => {
+        const user = await openAccess()
+        await user.click(
+          screen.getByRole('button', { name: 'Remove access of Ada Buyer' }),
+        )
+        const dialog = await screen.findByRole('alertdialog')
+        expect(setLockCustomers).not.toHaveBeenCalled()
+        expect(
+          within(dialog).getByText('Remove access of Ada Buyer?'),
+        ).toBeInTheDocument()
+        expect(within(dialog).getByRole('note')).toHaveTextContent('Tags are shared')
+        // What the store will answer once it is done.
+        setLockCustomers.mockImplementation(async () => {
+          lockCustomers.mockResolvedValue(
+            customersAnswer([customersAnswer().customers[1]]),
+          )
+          return { message: 'Customers: 1 removed.', tags: [] }
+        })
+        await user.click(within(dialog).getByRole('button', { name: 'Remove access' }))
+
+        await waitFor(() =>
+          expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
+            shop: 'polymer-uk',
+            remove: ['buyer@example.com'],
+          }),
+        )
+        await waitFor(() => expect(screen.queryByText('Ada Buyer')).toBeNull())
+        expect(screen.getByText('Bo Trade')).toBeInTheDocument()
+        expect(await screen.findByText('Customers: 1 removed.')).toBeInTheDocument()
+      })
+
+      it('sends nothing when the removal is cancelled', async () => {
+        const user = await openAccess()
+        await user.click(
+          screen.getByRole('button', { name: 'Remove access of Bo Trade' }),
+        )
         await user.click(
           within(await screen.findByRole('alertdialog')).getByRole('button', {
-            name: 'Yes, remove access',
+            name: 'Cancel',
           }),
         )
 
-        await waitFor(() =>
-          expect(updateTags).toHaveBeenCalledWith({
-            shop: 'polymer-uk',
-            customers: ['buyer@example.com'],
-            tags_remove: ['vans'],
-          }),
-        )
+        expect(setLockCustomers).not.toHaveBeenCalled()
+        expect(screen.getByText('Bo Trade')).toBeInTheDocument()
       })
 
-      it('needs a key before access can be given, and a customer to give it to', async () => {
+      it('a login-only lock (no keys) lists every customer and has no row actions', async () => {
         locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: [] })]))
+        lockCustomers.mockResolvedValue(
+          customersAnswer(undefined, { login_only: true, tags: [] }),
+        )
         const user = await openLock()
-        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
+        await tab(user, 'Check access')
+        await screen.findByText('Ada Buyer')
 
-        expect(screen.getByText(/Add a key to this lock first/)).toBeInTheDocument()
-        await user.type(screen.getByLabelText('Customers'), 'buyer@example.com')
         expect(
-          screen.getByRole('button', { name: 'Save customer access' }),
-        ).toBeDisabled()
-        expect(updateTags).not.toHaveBeenCalled()
+          screen.getByText(/every customer with an account can see the product/),
+        ).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Remove access of/ })).toBeNull()
+        expect(screen.queryByLabelText('Tag')).toBeNull()
+        expect(ADA.email).toBe('buyer@example.com')
       })
     })
 

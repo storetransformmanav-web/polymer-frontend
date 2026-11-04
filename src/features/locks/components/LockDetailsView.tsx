@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { ChoiceEdit } from '../../../components/ui/ChoiceEdit.tsx'
-import { DoubleClickEdit } from '../../../components/ui/DoubleClickEdit.tsx'
 import {
   DETAIL_CARD,
   DetailSection,
@@ -16,27 +15,19 @@ import {
   AlertTriangleIcon,
   ArrowLeftIcon,
   ExternalLinkIcon,
-  InfoIcon,
   LockIcon,
-  SearchIcon,
   SlidersIcon,
-  SpinnerIcon,
   TagIcon,
   UsersIcon,
 } from '../../../components/ui/icons.tsx'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
-import { useAccessCheck } from '../hooks/useLockWrites.ts'
-import { checkReasonText, syncLabel, syncTone } from '../utils/format.ts'
-import {
-  FLAG_INFO,
-  flagWord,
-  MAX_LOCK_MESSAGE,
-  type LockFlag,
-} from '../utils/lockOptions.ts'
+import { syncLabel, syncTone } from '../utils/format.ts'
+import { FLAG_INFO, flagWord, type LockFlag } from '../utils/lockOptions.ts'
 import { LockChangeConfirm, type PendingLockChange } from './LockChangeConfirm.tsx'
-import { LockCustomersSection, LockKeysSection } from './LockAccessEditors.tsx'
+import { LockKeysSection } from './LockAccessEditors.tsx'
 import { LockImage } from './LockCard.tsx'
+import { LockAccessTab } from './LockAccessTab.tsx'
 
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -60,99 +51,6 @@ interface LockDetailsViewProps {
   shop: string
   shopName: string
   onBack: () => void
-}
-
-/**
- * "Would a customer see this product?": type an email (or id) and the backend says why — its own
- * `message` is shown as is (no reason text is made up here). When the answer says the website
- * does not enforce the lock (`theme_enforces: false`: manual locking is on) an amber warning
- * follows, with a button to the lock's settings.
- */
-function CheckAccessCard({
-  lock,
-  shop,
-  onOpenSettings,
-}: {
-  lock: AccessLock
-  shop: string
-  onOpenSettings: () => void
-}) {
-  const [customer, setCustomer] = useState('')
-  const { check, result, isChecking, error, reset } = useAccessCheck()
-
-  return (
-    <DetailSection title="Check access" icon={SearchIcon}>
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault()
-          const who = customer.trim()
-          if (who) check({ shop, customer: who, product: lock.product_id })
-        }}
-        className="flex flex-col gap-3"
-      >
-        <p className="text-text-muted text-[0.82rem]">
-          Would a customer see this product? Type their email address (or id) to find out.
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            aria-label="Customer email or id"
-            placeholder="buyer@example.com"
-            maxLength={200}
-            value={customer}
-            onChange={(event) => {
-              setCustomer(event.target.value)
-              reset()
-            }}
-            className="border-border bg-surface text-text placeholder:text-text-muted focus:border-accent focus:outline-accent-tint h-10 min-w-0 flex-1 rounded-lg border px-3 text-[0.88rem] outline-none focus:outline-2"
-          />
-          <button
-            type="submit"
-            disabled={isChecking || !customer.trim()}
-            className={SECONDARY}
-          >
-            {isChecking && (
-              <SpinnerIcon width={16} height={16} className="animate-spin" />
-            )}
-            Check
-          </button>
-        </div>
-        {error && <FormMessage tone="error">{error}</FormMessage>}
-        {result && (
-          <div
-            role="status"
-            className={`flex flex-col gap-1 rounded-lg px-3 py-2.5 text-[0.85rem] ${result.allowed ? 'bg-accent-tint text-accent' : 'bg-danger-bg text-danger'}`}
-          >
-            <strong>{result.allowed ? 'Allowed' : 'Not allowed'}</strong>
-            {/* The backend's own explanation; the reason in words only if it sent none. */}
-            <span>{result.message.trim() || checkReasonText(result.reason)}</span>
-            {result.matched_tags.length > 0 && (
-              <span>Matching tags: {result.matched_tags.join(', ')}</span>
-            )}
-          </div>
-        )}
-        {result?.theme_enforces === false && (
-          <div
-            role="alert"
-            className="bg-warning-bg text-warning flex flex-col items-start gap-2 rounded-lg px-3 py-2.5 text-[0.85rem]"
-          >
-            <span>
-              Manual locking is on for this product, so the website shows it to everyone.
-              Switch Manual locking off to enforce the lock.
-            </span>
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="border-warning/40 bg-bg text-text hover:border-warning cursor-pointer rounded-md border px-2.5 py-1 text-[0.8rem] font-semibold transition-colors"
-            >
-              Open lock settings
-            </button>
-          </div>
-        )}
-      </form>
-    </DetailSection>
-  )
 }
 
 /**
@@ -411,43 +309,6 @@ export function LockDetailsView({
                     <LockKeysSection lock={lock} shop={shop} />
                   </div>
                 </DetailSection>
-
-                <LockCustomersSection lock={lock} shop={shop} />
-
-                <DetailSection title="Message" icon={InfoIcon}>
-                  <p className="text-text-muted mb-2 text-[0.8rem]">
-                    Shown to a customer who does not have access. Double-click it to
-                    change it.
-                  </p>
-                  <DoubleClickEdit
-                    label="Message"
-                    value={lock.message?.trim() ?? ''}
-                    maxLength={MAX_LOCK_MESSAGE}
-                    placeholder="The message a customer without access sees"
-                    showIcon
-                    validate={(next) => (next ? null : 'Type the message to show.')}
-                    onCommit={(next) =>
-                      setPending({
-                        lock,
-                        change: { message: next },
-                        label: 'Message',
-                        from: lock.message?.trim() || 'The store’s default message',
-                        to: next,
-                      })
-                    }
-                    display={
-                      lock.message?.trim() ? (
-                        <span className="text-[0.9rem] break-words whitespace-pre-wrap">
-                          {lock.message}
-                        </span>
-                      ) : (
-                        <span className="text-text-muted text-[0.9rem]">
-                          The store’s default message.
-                        </span>
-                      )
-                    }
-                  />
-                </DetailSection>
               </div>
             </div>
           )}
@@ -481,7 +342,7 @@ export function LockDetailsView({
           )}
 
           {tab === 'access' && (
-            <CheckAccessCard
+            <LockAccessTab
               lock={lock}
               shop={shop}
               onOpenSettings={() => {

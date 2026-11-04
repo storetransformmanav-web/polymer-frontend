@@ -10,6 +10,8 @@ import {
   type AccessLock,
   type AccessLockBody,
   type AccessTagsUpdateBody,
+  type LockCustomersBody,
+  type LockCustomersResponse,
 } from '../../../lib/api/endpoints.ts'
 import { applyTagChange } from '../utils/lockDraft.ts'
 import {
@@ -29,6 +31,7 @@ function useRefreshAfterWrite() {
       queryClient.invalidateQueries({ queryKey: ['locks'] }),
       queryClient.invalidateQueries({ queryKey: ['access-tags'] }),
       queryClient.invalidateQueries({ queryKey: ['lock-picker'] }),
+      queryClient.invalidateQueries({ queryKey: ['lock-customers'] }),
     ])
 }
 
@@ -146,6 +149,50 @@ export function useSaveLockOptions() {
   return {
     save: mutation.mutateAsync,
     isSaving: mutation.isPending,
+    error: mutation.isError ? toUserMessage(mutation.error) : null,
+    clearError: mutation.reset,
+  }
+}
+
+/**
+ * `PUT /access/locks/{product}/customers`: gives and/or takes customers' access to one locked
+ * product (`add` / `remove`, plus `tag` when the lock has several). A removed customer leaves
+ * every cached page of the lock's customers at once (the total is corrected); then the lock's
+ * customers, the locks (the "with access" figure) and the tag counts are read again quietly.
+ * Never retried.
+ */
+export function useSetLockCustomers() {
+  const queryClient = useQueryClient()
+  const refresh = useRefreshAfterWrite()
+  const mutation = useMutation({
+    mutationFn: ({ product, body }: { product: string; body: LockCustomersBody }) =>
+      api.access.setLockCustomers(product, body),
+    onSuccess: (_result, { product, body }) => {
+      const gone = new Set((body.remove ?? []).map((ref) => ref.toLowerCase()))
+      if (gone.size > 0) {
+        queryClient.setQueriesData<LockCustomersResponse>(
+          { queryKey: ['lock-customers', body.shop, product] },
+          (data) => {
+            if (!data) return data
+            const customers = data.customers.filter(
+              (customer) =>
+                !gone.has((customer.email ?? '').toLowerCase()) &&
+                !gone.has(customer.id.toLowerCase()),
+            )
+            return {
+              ...data,
+              customers,
+              total: Math.max(0, data.total - (data.customers.length - customers.length)),
+            }
+          },
+        )
+      }
+      return refresh()
+    },
+  })
+  return {
+    set: mutation.mutateAsync,
+    isSetting: mutation.isPending,
     error: mutation.isError ? toUserMessage(mutation.error) : null,
     clearError: mutation.reset,
   }

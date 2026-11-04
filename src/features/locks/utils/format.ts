@@ -1,5 +1,5 @@
 import type { BadgeTone } from '../../../components/ui/Badge.tsx'
-import type { AccessLock } from '../../../lib/api/endpoints.ts'
+import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 
 /** How a lock's push to the store is going, as a word and a pill colour. */
 export function syncLabel(status: string | null | undefined): string {
@@ -44,3 +44,42 @@ export function checkReasonText(reason: string): string {
 
 /** The details page address of a lock — by handle, which is unique within a store. */
 export const lockPath = (handle: string) => `/locks/${encodeURIComponent(handle)}`
+
+/**
+ * A tag is shared when other locked products use it too: giving or taking it changes access to all
+ * of them. The sentence for the tags (of `names`) that more than one locked product uses, from the
+ * customers answer's `tags[].locked_products`; null when none is shared.
+ */
+export function sharedTagsNote(
+  tags: readonly { tag: string; locked_products: number | null }[],
+  names: readonly string[],
+): string | null {
+  const wanted = new Set(names.map((name) => name.toLowerCase()))
+  const shared = tags.filter(
+    (item) => wanted.has(item.tag.toLowerCase()) && (item.locked_products ?? 0) > 1,
+  )
+  if (shared.length === 0) return null
+  const list = shared
+    .map((item) => `“${item.tag}” (${item.locked_products} locked products)`)
+    .join(', ')
+  return `Tags are shared: ${list}. This changes access to every product that uses ${shared.length === 1 ? 'it' : 'them'}, not only this one.`
+}
+
+/** The lock's tags a customer does not hold yet (compared without case). */
+export function missingKeys(
+  lockTags: readonly string[],
+  held: readonly string[],
+): string[] {
+  const has = new Set(held.map((tag) => tag.toLowerCase()))
+  return lockTags.filter((tag) => !has.has(tag.toLowerCase()))
+}
+
+/** A customer is named to the backend by email, else by id. */
+export const customerRef = (customer: LockCustomer) => customer.email ?? customer.id
+
+export const customerName = (customer: LockCustomer) =>
+  customer.name ?? customer.email ?? customer.id
+
+/** Whether Edit (give another of the lock's keys) makes sense for this customer. */
+export const canEditCustomer = (lock: AccessLock, customer: LockCustomer) =>
+  lock.tags.length > 1 && missingKeys(lock.tags, customer.tags).length > 0

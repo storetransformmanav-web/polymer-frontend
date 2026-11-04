@@ -30,8 +30,8 @@ describe('buildOptionsBody', () => {
 
   it('sends no tags for a lock without keys (it stays login-only), and the id without a handle', () => {
     expect(
-      buildOptionsBody(lock({ tags: [], handle: null }), 'polymer-uk', { message: 'Hi' }),
-    ).toEqual({ shop: 'polymer-uk', products: ['p-1'], message: 'Hi' })
+      buildOptionsBody(lock({ tags: [], handle: null }), 'polymer-uk', { noindex: true }),
+    ).toEqual({ shop: 'polymer-uk', products: ['p-1'], noindex: true })
   })
 })
 

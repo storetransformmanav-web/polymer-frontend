@@ -77,6 +77,9 @@ export const ENDPOINTS = {
     check: '/access/check',
     /** `POST` once per store: the metafield definition, and a push of every pending lock. */
     setup: '/access/setup',
+    /** `product` is a CRM id, Shopify id or handle: `GET` who can see it, `PUT` adds / removes customers. */
+    lockCustomers: (product: string) =>
+      `/access/locks/${encodeURIComponent(product)}/customers`,
   },
   collections: {
     /** `GET` one page of collections (search, type, sort, order, shop, page). */
@@ -2053,6 +2056,133 @@ export type AccessCheck = z.infer<typeof accessCheckResponseSchema>['check'] & {
   message: string
 }
 
+/** A lock tag with how many locked products share it (giving it changes access to all of them). */
+const lockCustomerTagSchema = z.object({
+  tag: z.string(),
+  label: z.string().nullish(),
+  locked_products: z.coerce.number().nullish(),
+})
+
+/**
+ * One customer who can see a locked product. Read leniently: the name may come as `name`,
+ * `full_name` or first + last name, and `tags` (the lock tags the customer holds) as words or as
+ * `{ tag }` objects.
+ */
+const lockCustomerSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).nullish(),
+    customer_id: z.union([z.string(), z.number()]).nullish(),
+    shopify_id: z.union([z.string(), z.number()]).nullish(),
+    name: z.string().nullish(),
+    full_name: z.string().nullish(),
+    first_name: z.string().nullish(),
+    last_name: z.string().nullish(),
+    email: z.string().nullish(),
+    phone: z.string().nullish(),
+    company: z.string().nullish(),
+    tags: z.array(z.union([z.string(), z.object({ tag: z.string() })])).nullish(),
+    created_at: z.string().nullish(),
+  })
+  .transform((customer) => ({
+    id: String(
+      customer.id ?? customer.customer_id ?? customer.shopify_id ?? customer.email ?? '',
+    ),
+    name:
+      customer.name?.trim() ||
+      customer.full_name?.trim() ||
+      [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() ||
+      null,
+    email: customer.email ?? null,
+    phone: customer.phone ?? null,
+    company: customer.company ?? null,
+    tags: (customer.tags ?? []).map((tag) => (typeof tag === 'string' ? tag : tag.tag)),
+    created_at: customer.created_at ?? null,
+  }))
+
+const lockCustomersResponseSchema = z
+  .object({
+    message: z.string().nullish(),
+    customers: z.array(lockCustomerSchema).nullish(),
+    items: z.array(lockCustomerSchema).nullish(),
+    /** The lock's tags, each with `locked_products`: how many locked products share it. */
+    tags: z.array(lockCustomerTagSchema).nullish(),
+    /** True for a login-only lock (every customer with an account can see the product). */
+    login_only: z.boolean().nullish(),
+    page: z.coerce.number().nullish(),
+    page_size: z.coerce.number().nullish(),
+    total: z.coerce.number().nullish(),
+    total_pages: z.coerce.number().nullish(),
+    has_next: z.boolean().nullish(),
+  })
+  .transform((answer) => {
+    const customers = answer.customers ?? answer.items ?? []
+    const pageSize = answer.page_size ?? Math.max(customers.length, 1)
+    const total = answer.total ?? customers.length
+    return {
+      message: answer.message ?? null,
+      customers,
+      tags: (answer.tags ?? []).map((tag) => ({
+        tag: tag.tag,
+        label: tag.label ?? null,
+        locked_products: tag.locked_products ?? null,
+      })),
+      login_only: answer.login_only ?? false,
+      page: answer.page ?? 1,
+      page_size: pageSize,
+      total,
+      total_pages: answer.total_pages ?? Math.max(Math.ceil(total / pageSize), 1),
+      has_next: answer.has_next ?? false,
+    }
+  })
+
+export type LockCustomer = z.infer<typeof lockCustomerSchema>
+export type LockCustomersResponse = z.infer<typeof lockCustomersResponseSchema>
+export type LockCustomerTag = LockCustomersResponse['tags'][number]
+
+export const LOCK_CUSTOMER_SORTS = ['name', 'email', 'newest'] as const
+export type LockCustomerSort = (typeof LOCK_CUSTOMER_SORTS)[number]
+
+/** Query parameters of `GET /access/locks/{product}/customers`. `shop` is required. */
+export interface LockCustomersParams {
+  shop: string
+  /** Name, email or company contains this text (≤ 200). */
+  search?: string
+  /** Only customers holding this one of the lock's tags. */
+  tag?: string
+  sort?: LockCustomerSort
+  page?: number
+  /** 1–200 (the API's default is 50). */
+  page_size?: number
+}
+
+/**
+ * The body of `PUT /access/locks/{product}/customers`: customers (emails, CRM ids or Shopify ids)
+ * to give access to and/or to take it from. `tag` is only needed to add when the lock has several
+ * tags; removing takes away every lock tag of this product the customer holds. Tags are shared:
+ * the change applies to every locked product that uses them.
+ */
+export interface LockCustomersBody {
+  shop: string
+  add?: string[]
+  remove?: string[]
+  tag?: string
+}
+
+const lockCustomersWriteSchema = z
+  .object({
+    message: z.string().nullish(),
+    tags: z.array(lockCustomerTagSchema).nullish(),
+    result: z.object({ tags: z.array(lockCustomerTagSchema).nullish() }).nullish(),
+  })
+  .transform((answer) => ({
+    message: answer.message ?? 'Saved.',
+    tags: (answer.tags ?? answer.result?.tags ?? []).map((tag) => ({
+      tag: tag.tag,
+      label: tag.label ?? null,
+      locked_products: tag.locked_products ?? null,
+    })),
+  }))
+
 const accessSetupResponseSchema = z.object({
   message: z.string().nullish(),
   result: z
@@ -2083,11 +2213,12 @@ export type LoginResponse = z.infer<typeof loginResponseSchema>
 // ---------------------------------------------------------------------------
 
 /**
- * Reads an inventory answer. When it is not in the expected form the message says which part
+ * Reads an answer whose exact fields the API's description does not give (the inventory ones and
+ * the lock customers). When it is not in the expected form the message says which part
  * (`items.0.locations.0.available`), instead of the generic "Something went wrong" — the quickest
  * way to see what the real answer looks like.
  */
-function readInventory<T>(schema: z.ZodType<T>, data: unknown, what: string): T {
+function readAnswer<T>(schema: z.ZodType<T>, data: unknown, what: string): T {
   const parsed = schema.safeParse(data)
   if (parsed.success) return parsed.data
   const issue = parsed.error.issues[0]
@@ -2099,7 +2230,7 @@ function readInventory<T>(schema: z.ZodType<T>, data: unknown, what: string): T 
 
 /** The write answers: `result.adjustments[]`, plus the backend's own `message` when it sent one. */
 function readStockWrite(data: unknown): StockWriteResult {
-  const result = readInventory(stockWriteResponseSchema, data, 'stock change')
+  const result = readAnswer(stockWriteResponseSchema, data, 'stock change')
   const message =
     typeof data === 'object' && data !== null && 'message' in data
       ? String((data as { message: unknown }).message ?? '')
@@ -2200,6 +2331,26 @@ export const api = {
       return { ...parsed.check, message: parsed.message ?? '' }
     },
 
+    /** One page of the customers who can see a locked product, with the lock's tags and how many products share each. */
+    async lockCustomers(
+      product: string,
+      params: LockCustomersParams,
+    ): Promise<LockCustomersResponse> {
+      const data = await apiClient.get(ENDPOINTS.access.lockCustomers(product), {
+        params,
+      })
+      return readAnswer(lockCustomersResponseSchema, data, 'lock customers')
+    },
+
+    /** Gives and/or takes customers' access to one locked product. Never retried. */
+    async setLockCustomers(
+      product: string,
+      body: LockCustomersBody,
+    ): Promise<{ message: string; tags: LockCustomerTag[] }> {
+      const data = await apiClient.put(ENDPOINTS.access.lockCustomers(product), body)
+      return readAnswer(lockCustomersWriteSchema, data, 'lock customers change')
+    },
+
     /** Once per store: creates the metafield definition and pushes every pending or failed lock. */
     async setup(shop: string): Promise<string> {
       const data = await apiClient.post(ENDPOINTS.access.setup, undefined, {
@@ -2248,13 +2399,13 @@ export const api = {
     /** Page 1: the stock list, with its `totals` and the `locations` for the dropdown. */
     async list(params: InventoryListParams): Promise<InventoryListResponse> {
       const data = await apiClient.get(ENDPOINTS.inventory.list, { params })
-      return readInventory(inventoryListResponseSchema, data, 'inventory list')
+      return readAnswer(inventoryListResponseSchema, data, 'inventory list')
     },
 
     /** Page 2: one variant with its stock at every location. */
     async detail(ref: string): Promise<InventoryVariant> {
       const data = await apiClient.get(ENDPOINTS.inventory.detail(ref))
-      return readInventory(inventoryVariantResponseSchema, data, 'variant stock').variant
+      return readAnswer(inventoryVariantResponseSchema, data, 'variant stock').variant
     },
 
     /**
@@ -2276,13 +2427,13 @@ export const api = {
     /** Page 4: the stock history (newest first), for everything or one variant / location / status. */
     async history(params: StockHistoryParams): Promise<StockHistoryResponse> {
       const data = await apiClient.get(ENDPOINTS.inventory.history, { params })
-      return readInventory(stockHistoryResponseSchema, data, 'stock history')
+      return readAnswer(stockHistoryResponseSchema, data, 'stock history')
     },
 
     /** One stock change: `pending` until Shopify confirms it, then `synced`, or `error`. */
     async adjustment(id: string): Promise<StockAdjustment> {
       const data = await apiClient.get(ENDPOINTS.inventory.adjustment(id))
-      return readInventory(stockAdjustmentResponseSchema, data, 'stock change status')
+      return readAnswer(stockAdjustmentResponseSchema, data, 'stock change status')
     },
   },
 

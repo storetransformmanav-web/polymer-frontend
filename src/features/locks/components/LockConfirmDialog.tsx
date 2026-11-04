@@ -16,6 +16,8 @@ interface LockConfirmDialogProps {
   onClose: () => void
   /** A destructive confirm button (removing a tag) rather than the accent one. */
   danger?: boolean
+  /** The confirm button is off until the dialog's own form is filled in. */
+  confirmDisabled?: boolean
 }
 
 /**
@@ -29,6 +31,7 @@ export function LockConfirmDialog({
   onConfirm,
   onClose,
   danger = false,
+  confirmDisabled = false,
 }: LockConfirmDialogProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +65,7 @@ export function LockConfirmDialog({
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             onClick={() => void confirm()}
             className={`${BUTTON} border-transparent text-white hover:opacity-90 ${danger ? 'bg-danger' : 'bg-accent'}`}
           >
