@@ -92,6 +92,10 @@ export const ENDPOINTS = {
   sync: {
     /** `POST` starts a background sync of every product of one store. */
     products: '/sync/products',
+    /** `POST` checks one product against Shopify and saves Shopify's version (`dry_run` only compares). */
+    product: (shopifyId: string) => `/sync/products/${encodeURIComponent(shopifyId)}`,
+    /** `POST` starts a background import of orders (`mode` new | refresh, `days`, `query`, `shop`). */
+    orders: '/sync/orders',
     /** `GET` the recent sync runs (progress and result). */
     status: '/sync/status',
   },
@@ -1488,6 +1492,78 @@ const syncRunListSchema = z.union([
 
 export type SyncRun = z.infer<typeof syncRunSchema>
 
+/** Orders sync modes (`POST /sync/orders?mode=`): the API's own default is `new`. */
+export const ORDER_SYNC_MODES = ['new', 'refresh'] as const
+export type OrderSyncMode = (typeof ORDER_SYNC_MODES)[number]
+
+/** `days` of a refresh: whole days, 1 to 3650 (the API's limits; its own default is 10). */
+export const ORDER_SYNC_DAYS_MIN = 1
+export const ORDER_SYNC_DAYS_MAX = 3650
+export const ORDER_SYNC_DAYS_DEFAULT = 10
+
+export interface OrderSyncOptions {
+  /** `new` = orders created or changed in Shopify since the newest one in the CRM; `refresh` = the last `days` days. */
+  mode: OrderSyncMode
+  /** Refresh only. */
+  days?: number
+  /** The store key or domain; empty means the backend's default store. */
+  shop?: string | null
+}
+
+/** What `POST /sync/products/{shopify_product_id}` reported, read leniently (its answer is not documented). */
+export interface ProductSyncResult {
+  message: string
+  /** The differences between Shopify and the CRM, in words (empty when none were listed). */
+  differences: string[]
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const asText = (value: unknown): string =>
+  value === null || value === undefined
+    ? '—'
+    : typeof value === 'string'
+      ? value
+      : typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : JSON.stringify(value)
+
+/** One difference as a line: "price: 9.99 → 10.99", or the text the backend sent. */
+function differenceLine(entry: unknown, key?: string): string {
+  if (!isRecord(entry)) return key ? `${key}: ${asText(entry)}` : asText(entry)
+  const name = entry.field ?? entry.name ?? entry.path ?? entry.key ?? key
+  const from = entry.crm ?? entry.from ?? entry.old ?? entry.before
+  const to = entry.shopify ?? entry.to ?? entry.new ?? entry.after
+  if (from !== undefined || to !== undefined) {
+    return `${name ? `${asText(name)}: ` : ''}${asText(from)} → ${asText(to)}`
+  }
+  const text = entry.message ?? entry.description
+  if (text !== undefined) return `${name ? `${asText(name)}: ` : ''}${asText(text)}`
+  return key ? `${key}: ${JSON.stringify(entry)}` : JSON.stringify(entry)
+}
+
+/** Reads the one-product sync answer: its `message` and any list of differences, flat or in `result`. */
+export function readProductSync(data: unknown): ProductSyncResult {
+  const body = isRecord(data) ? data : {}
+  const inner = isRecord(body.result) ? body.result : isRecord(body.data) ? body.data : {}
+  const message = asText(inner.message ?? body.message ?? '').trim()
+  const list = [
+    inner.differences,
+    inner.diff,
+    inner.changes,
+    body.differences,
+    body.diff,
+    body.changes,
+  ].find((value) => value !== undefined && value !== null)
+  const differences = Array.isArray(list)
+    ? list.map((entry) => differenceLine(entry))
+    : isRecord(list)
+      ? Object.entries(list).map(([key, value]) => differenceLine(value, key))
+      : []
+  return { message: message === '—' ? '' : message, differences }
+}
+
 /** One push of this product to its store. */
 const productPushSchema = z.object({
   id: z.string(),
@@ -2453,6 +2529,50 @@ export const api = {
           ? String((data as { message: unknown }).message ?? '')
           : ''
       return { message }
+    },
+
+    /**
+     * Starts the import of a store's orders (`POST /sync/orders`) — line items, payments,
+     * refunds and fulfilments. It runs in the background — follow it with `status`
+     * (`entity: 'orders'`). `mode=new` (the API's default) brings in what was created or changed
+     * in Shopify since the newest order in the CRM; `mode=refresh` re-reads the last `days` days
+     * and updates the orders already there. `days` is sent only with a refresh. Only success
+     * matters, so the answer is read leniently. Never retried automatically.
+     */
+    async triggerOrders(options: OrderSyncOptions): Promise<{ message: string }> {
+      const { mode, days, shop } = options
+      const data = await apiClient.post<unknown>(ENDPOINTS.sync.orders, undefined, {
+        params: {
+          mode,
+          ...(mode === 'refresh' && days !== undefined ? { days } : {}),
+          ...(shop ? { shop } : {}),
+        },
+      })
+      const message =
+        typeof data === 'object' && data !== null && 'message' in data
+          ? String((data as { message: unknown }).message ?? '')
+          : ''
+      return { message }
+    },
+
+    /**
+     * Checks one product against Shopify and updates the CRM copy (`POST
+     * /sync/products/{shopify_product_id}?shop=&dry_run=`). With `dryRun` it only compares and
+     * lists the differences; nothing is saved. Never retried automatically.
+     */
+    async product(
+      shopifyId: string,
+      shop: string,
+      dryRun: boolean,
+    ): Promise<ProductSyncResult> {
+      const data = await apiClient.post<unknown>(
+        ENDPOINTS.sync.product(shopifyId),
+        undefined,
+        {
+          params: { shop, dry_run: dryRun },
+        },
+      )
+      return readProductSync(data)
     },
 
     /** The most recent sync runs, newest first. */

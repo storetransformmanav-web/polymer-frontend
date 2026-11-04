@@ -29,7 +29,7 @@ export interface NavItem {
    */
   fillHeight?: boolean
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
-  syncs?: 'products'
+  syncs?: 'products' | 'orders'
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -62,6 +62,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: OrdersIcon,
         shopScoped: true,
         fillHeight: true,
+        syncs: 'orders',
       },
       {
         to: '/products',

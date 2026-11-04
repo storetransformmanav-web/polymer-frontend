@@ -1,4 +1,5 @@
 import { AppBarSlot } from '../../components/ui/AppBarSlot.tsx'
+import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
 import { useShops } from '../../hooks/useShops.ts'
 import { ShopSwitcher } from './ShopSwitcher.tsx'
@@ -45,6 +46,7 @@ export function AppBar() {
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-3">
         <AppBarSlot />
+        {activeItem?.syncs === 'orders' && <SyncOrdersButton />}
         {activeItem?.syncs === 'products' && <SyncProductsButton />}
         <UserMenu />
       </div>
