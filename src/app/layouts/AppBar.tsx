@@ -1,4 +1,5 @@
 import { AppBarSlot } from '../../components/ui/AppBarSlot.tsx'
+import { SyncCustomersButton } from '../../features/customers/index.ts'
 import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
 import { useShops } from '../../hooks/useShops.ts'
@@ -48,6 +49,7 @@ export function AppBar() {
         <AppBarSlot />
         {activeItem?.syncs === 'orders' && <SyncOrdersButton />}
         {activeItem?.syncs === 'products' && <SyncProductsButton />}
+        {activeItem?.syncs === 'customers' && <SyncCustomersButton />}
         <UserMenu />
       </div>
     </header>

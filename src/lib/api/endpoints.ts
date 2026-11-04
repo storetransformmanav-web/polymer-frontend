@@ -96,6 +96,8 @@ export const ENDPOINTS = {
     product: (shopifyId: string) => `/sync/products/${encodeURIComponent(shopifyId)}`,
     /** `POST` starts a background import of orders (`mode` new | refresh, `days`, `query`, `shop`). */
     orders: '/sync/orders',
+    /** `POST` starts a background sync of every customer of one store. */
+    customers: '/sync/customers',
     /** `GET` the recent sync runs (progress and result). */
     status: '/sync/status',
   },
@@ -2522,6 +2524,23 @@ export const api = {
      */
     async triggerProducts(shop?: string | null): Promise<{ message: string }> {
       const data = await apiClient.post<unknown>(ENDPOINTS.sync.products, undefined, {
+        params: shop ? { shop } : undefined,
+      })
+      const message =
+        typeof data === 'object' && data !== null && 'message' in data
+          ? String((data as { message: unknown }).message ?? '')
+          : ''
+      return { message }
+    },
+
+    /**
+     * Starts a sync of every customer of a store from Shopify (`POST /sync/customers?shop=`;
+     * `shop` = its key, empty means the backend's default store). It runs in the background —
+     * follow it with `status` (`entity: 'customers'`). Only success matters, so the answer is
+     * read leniently: the backend's message when it sent one. Never retried automatically.
+     */
+    async triggerCustomers(shop?: string | null): Promise<{ message: string }> {
+      const data = await apiClient.post<unknown>(ENDPOINTS.sync.customers, undefined, {
         params: shop ? { shop } : undefined,
       })
       const message =

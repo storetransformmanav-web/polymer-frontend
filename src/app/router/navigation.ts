@@ -29,7 +29,7 @@ export interface NavItem {
    */
   fillHeight?: boolean
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
-  syncs?: 'products' | 'orders'
+  syncs?: 'products' | 'orders' | 'customers'
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -72,7 +72,13 @@ export const NAV_ENTRIES: NavEntry[] = [
         fillHeight: true,
         syncs: 'products',
       },
-      { to: '/customers', label: 'Customers', icon: UsersIcon, shopScoped: true },
+      {
+        to: '/customers',
+        label: 'Customers',
+        icon: UsersIcon,
+        shopScoped: true,
+        syncs: 'customers',
+      },
       { to: '/inventory', label: 'Inventory', icon: InventoryIcon, fillHeight: true },
     ],
   },

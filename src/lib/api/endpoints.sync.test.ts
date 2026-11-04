@@ -104,3 +104,26 @@ describe('POST /sync/orders (api.sync.triggerOrders)', () => {
     expect(await api.sync.triggerOrders({ mode: 'new' })).toEqual({ message: '' })
   })
 })
+
+describe('POST /sync/customers (api.sync.triggerCustomers)', () => {
+  beforeEach(() => {
+    post.mockReset()
+  })
+
+  it('sends the store in the query and no body, and returns the backend’s message', async () => {
+    post.mockResolvedValue({ message: 'Customer sync started.' })
+
+    await expect(api.sync.triggerCustomers('polymer-uk')).resolves.toEqual({
+      message: 'Customer sync started.',
+    })
+    expect(post).toHaveBeenCalledWith('/sync/customers', undefined, {
+      params: { shop: 'polymer-uk' },
+    })
+  })
+
+  it('sends no shop when none is given, and copes with an answer without a message', async () => {
+    post.mockResolvedValue(null)
+    await expect(api.sync.triggerCustomers()).resolves.toEqual({ message: '' })
+    expect(post).toHaveBeenCalledWith('/sync/customers', undefined, { params: undefined })
+  })
+})
