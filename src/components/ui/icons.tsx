@@ -755,3 +755,33 @@ export function PaperclipIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function ShirtIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m7 3-4.5 2.3 1.4 3.2 2.1-.9V17h8V7.6l2.1.9 1.4-3.2L13 3a3 3 0 0 1-6 0Z" />
+    </svg>
+  )
+}
+
+export function PaletteIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 2.5a7.5 7.5 0 1 0 0 15c1.1 0 1.7-.8 1.7-1.6 0-1.4-1.1-1.6-1.1-2.7 0-.8.7-1.4 1.6-1.4h1.9a3.3 3.3 0 0 0 3.4-3.2C17.5 5.2 14.2 2.5 10 2.5Z" />
+      <circle cx="6.4" cy="9.4" r=".9" />
+      <circle cx="8.6" cy="5.9" r=".9" />
+      <circle cx="12.6" cy="6.1" r=".9" />
+    </svg>
+  )
+}
+
+export function GridIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="3" width="5.5" height="5.5" rx="1.3" />
+      <rect x="11.5" y="3" width="5.5" height="5.5" rx="1.3" />
+      <rect x="3" y="11.5" width="5.5" height="5.5" rx="1.3" />
+      <rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.3" />
+    </svg>
+  )
+}

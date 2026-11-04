@@ -530,6 +530,33 @@ describe('the Variants tab', () => {
     })
   })
 
+  it('Edit Variants (options): a row per option, and the + turns that row into a value box', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<VariantsPanel product={PRODUCT} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit options' }))
+    expect(screen.getByRole('heading', { name: 'Edit Variants' })).toBeInTheDocument()
+    expect(screen.getByText('Manage product variants and options')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to variants' })).toBeInTheDocument()
+    const rows = within(screen.getByRole('region', { name: 'Options' }))
+    expect(rows.getByLabelText(/^Variant name \(now .Size.\)/)).toHaveValue('Size')
+    expect(rows.getByLabelText(/^Variant name \(now .Color.\)/)).toHaveValue('Color')
+    // No strip and no note under the options.
+    expect(screen.queryByText(/Changes are saved to Shopify/)).toBeNull()
+    expect(screen.queryByLabelText('Option to add a value to')).toBeNull()
+
+    // The Color row's + becomes a value box in that row; Enter adds the value.
+    await user.click(rows.getByRole('button', { name: 'Add a value to Color' }))
+    await user.type(rows.getByLabelText('New value for Color'), 'Green{Enter}')
+
+    // The value joins the Color pills and opens a new variant to be priced below.
+    expect(
+      within(rows.getByRole('list', { name: 'Values of Color' })).getByText('Green'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /^New variants/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
+  })
+
   it('Edit options still opens the whole-tab editor for the options', async () => {
     const user = userEvent.setup()
     renderWithProviders(<VariantsPanel product={PRODUCT} />)

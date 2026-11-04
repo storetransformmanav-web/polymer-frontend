@@ -1,33 +1,61 @@
 import { useState } from 'react'
 import { Badge } from '../../../../components/ui/Badge.tsx'
-import { PlusIcon, XIcon } from '../../../../components/ui/icons.tsx'
-import { blankNewVariant, LIMITS, optionChoices } from '../../utils/editDraft.ts'
 import {
-  DELETE_PILL,
-  EditField,
-  FIELD_INPUT,
-  FIELD_LABEL,
-  type SectionProps,
-} from './fields.tsx'
+  ChevronDownIcon,
+  GridIcon,
+  PaletteIcon,
+  PlusIcon,
+  ShirtIcon,
+  TagIcon,
+  XIcon,
+} from '../../../../components/ui/icons.tsx'
+import { blankNewVariant, LIMITS, optionChoices } from '../../utils/editDraft.ts'
+import { DELETE_PILL, type SectionProps } from './fields.tsx'
 import { TagsInput } from './TagsSection.tsx'
 
-// A value inside the values box: the same chip as a tag.
+// A value inside an option's row: a rounded pill.
 const PILL =
-  'border-border bg-surface inline-flex h-8 items-center rounded-md border text-[0.82rem] font-medium'
+  'border-border-strong bg-accent-tint/50 inline-flex h-8 items-center rounded-full border text-[0.82rem] font-medium'
+
+/** The name box of an option row: reads as plain text until the pointer or the cursor is in it. */
+const NAME_BOX =
+  'text-text hover:border-border focus:border-accent focus:outline-accent-tint h-8 w-28 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[0.85rem] font-semibold outline-none focus:outline-2'
+
+const ROUND_PLUS =
+  'bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-colors'
+
+/** The round tile at the start of an option row: a shirt for Size, a palette for Colour. */
+function IconTile({ name }: { name: string }) {
+  const key = name.trim().toLowerCase()
+  return (
+    <span className="bg-accent-tint text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+      {key === 'size' ? (
+        <ShirtIcon width={18} height={18} />
+      ) : key === 'color' || key === 'colour' ? (
+        <PaletteIcon width={18} height={18} />
+      ) : (
+        <TagIcon width={18} height={18} />
+      )}
+    </span>
+  )
+}
 
 /**
- * The product's options (Size, Colour…) in the Variants editor, laid out plainly — no cards, no
- * accordions. Each option is a block: its name in a box (rename it), then a tag with the option's
- * name over its values as pills and **a box to type the next one** ("Add a size here" — Enter or
- * the +). Click a pill and it becomes a box to rename that value (`options_update`). The API has
- * no call for a bare value — the store only has a value once a variant uses it — so a new value
- * opens a new variant with that value filled in, to be priced below. A new option (**Add variant**
- * in the tab's bar) has its own name box and a tags box for its values (`options_add`), and a pink
- * **Delete** while it is only a draft; it only gives the variants added in the same edit a value
- * to choose.
+ * The product's options (Size, Colour…) as the **Variant Options** card of the Edit Variants page:
+ * a header you can fold, then a row per option — a round icon tile, the option's name (a box that
+ * reads as text: type to rename it) and its values as pills (click a pill to rename that value,
+ * `options_update`), and a round **+**: clicking it turns the end of that row into a value box
+ * ("Value (e.g. Red)"); Enter (or its round **+**) adds the value and the box stays for the next
+ * one, Escape or its ✕ closes it. The API has no call for a bare value — the store only has one
+ * once a variant uses it — so a new value opens a new variant with it filled in, to be priced
+ * below. A new option (**Add variant** in the page header) is a row
+ * of its own with a name box, a tags box for its values (`options_add`) and a pink **Delete**.
  */
 export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) {
   const choices = optionChoices(draft)
+  const [open, setOpen] = useState(true)
+  // Which existing option's row shows the box for a new value (one at a time).
+  const [addingTo, setAddingTo] = useState<number | null>(null)
   const firstUnit =
     draft.variants.find((variant) => !variant.removed)?.weightUnit ?? 'GRAMS'
   // The new variants opened by a new value, and which option each one's value belongs to — their
@@ -98,166 +126,185 @@ export function VariantOptionsEditor({ draft, errors, onChange }: SectionProps) 
     })
 
   return (
-    <section aria-label="Options" className="flex flex-col">
-      {draft.options.map((option, index) => {
-        const name = option.newName.trim() || option.name
-        const pending = draft.newVariants.filter(
-          (created) => valueOf[created.key] === index,
-        )
-        const chips: ValueChipData[] = [
-          ...option.values.map((value, valueIndex) => ({
-            key: `value-${value.from}`,
-            text: value.to.trim(),
-            label: `Value “${value.from}” of ${option.name}`,
-            rename: (to: string) => renameValue(index, valueIndex, to),
-          })),
-          ...pending.map((created) => ({
-            key: created.key,
-            text: (created.optionValues[index] ?? '').trim(),
-            label: `New value of ${option.name}`,
-            isNew: true,
-            rename: (to: string) => renameNewValue(created.key, index, to),
-            remove: () => dropNewValue(created.key),
-            removeLabel:
-              `Remove new value ${(created.optionValues[index] ?? '').trim()}`.trim(),
-          })),
-        ]
-        const valueErrors = option.values
-          .map((_, valueIndex) => errors[`options.${index}.values.${valueIndex}`])
-          .filter(Boolean)
-        return (
-          <div
-            key={option.key}
-            className="border-border flex flex-col gap-4 border-b py-5 first:pt-0 last:border-b-0 last:pb-0"
-          >
-            <div className="max-w-md">
-              <EditField
-                id={`option-${index}-name`}
-                label={`Variant name (now “${option.name}”)`}
-                error={errors[`options.${index}.name`]}
-              >
-                <input
-                  id={`option-${index}-name`}
-                  autoComplete="off"
-                  value={option.newName}
-                  maxLength={LIMITS.optionName}
-                  aria-invalid={errors[`options.${index}.name`] ? true : undefined}
-                  onChange={(event) => renameOption(index, event.target.value)}
-                  className={FIELD_INPUT}
-                />
-              </EditField>
-            </div>
-            <div className="flex max-w-3xl flex-col gap-1.5">
-              <p className={FIELD_LABEL} id={`option-${index}-values-label`}>
-                Variant values
-              </p>
-              {/* One box, like the tags box: every value as a chip, then a place to type the next. */}
-              <div
-                onClick={(event) => {
-                  if (event.target === event.currentTarget) {
-                    document.getElementById(`new-value-${option.key}`)?.focus()
-                  }
-                }}
-                className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex cursor-text flex-wrap items-center gap-1.5 rounded-xl border p-2.5 transition-colors focus-within:outline-2"
-              >
-                <ul aria-labelledby={`option-${index}-values-label`} className="contents">
-                  {chips
-                    .filter((chip) => chip.text)
-                    .map((chip) => (
-                      <li key={chip.key} className="flex">
-                        <ValueChip chip={chip} />
-                      </li>
-                    ))}
-                </ul>
-                <AddValueBox
-                  id={`new-value-${option.key}`}
-                  name={name}
-                  onAdd={(value) => addValue(index, value)}
-                />
-              </div>
-              <p className="text-text-muted text-[0.75rem]">
-                Click a value to rename it. Type a new one and press Enter or a comma to
-                add it — it comes with a new variant, which you price below.
-              </p>
-              {valueErrors.map((message) => (
-                <p key={message} role="alert" className="text-danger text-[0.76rem]">
-                  {message}
-                </p>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-
-      {draft.addedOptions.map((option, index) => (
-        <div
-          key={option.key}
-          className="border-border bg-accent-tint/20 -mx-5 flex flex-col gap-4 border-b px-5 py-5 last:border-b-0"
+    <>
+      <section
+        aria-label="Variant options"
+        className="border-border-strong bg-bg overflow-hidden rounded-xl border"
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="bg-accent-tint/60 hover:bg-accent-tint flex w-full cursor-pointer items-center gap-3 border-none px-4 py-3 text-left transition-colors"
         >
-          <div className="flex items-center gap-2">
-            <Badge tone="success">New</Badge>
-            <span className="text-[0.82rem] font-semibold">
-              {option.name.trim() || 'New option'}
-            </span>
-          </div>
-          <div className="max-w-md">
-            <EditField
-              id={`added-option-${index}-name`}
-              label="New variant name"
-              error={errors[`addedOptions.${index}.name`]}
-            >
-              <input
-                id={`added-option-${index}-name`}
-                autoComplete="off"
-                value={option.name}
-                maxLength={LIMITS.optionName}
-                placeholder="e.g. Colour"
-                aria-invalid={errors[`addedOptions.${index}.name`] ? true : undefined}
-                onChange={(event) => patchAdded(index, { name: event.target.value })}
-                className={FIELD_INPUT}
-              />
-            </EditField>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p className={FIELD_LABEL}>Variant values</p>
-            <TagsInput
-              id={`added-option-${index}-values`}
-              ariaLabel={`Values of ${option.name || 'the new option'}`}
-              listLabel="Values"
-              removeLabel={(value) => `Remove value ${value}`}
-              placeholder="Type a value and press Enter"
-              tags={option.values}
-              onChange={(values) => patchAdded(index, { values })}
-            />
-            {errors[`addedOptions.${index}.values`] && (
-              <p role="alert" className="text-danger text-[0.78rem]">
-                {errors[`addedOptions.${index}.values`]}
+          <GridIcon width={18} height={18} className="text-accent shrink-0" />
+          <span className="text-[0.9rem] font-semibold">Variant Options</span>
+          <ChevronDownIcon
+            width={16}
+            height={16}
+            className={`text-text-muted ml-auto shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {open && (
+          <section aria-label="Options" className="flex flex-col">
+            {draft.options.map((option, index) => {
+              const name = option.newName.trim() || option.name
+              const pending = draft.newVariants.filter(
+                (created) => valueOf[created.key] === index,
+              )
+              const chips: ValueChipData[] = [
+                ...option.values.map((value, valueIndex) => ({
+                  key: `value-${value.from}`,
+                  text: value.to.trim(),
+                  label: `Value “${value.from}” of ${option.name}`,
+                  rename: (to: string) => renameValue(index, valueIndex, to),
+                })),
+                ...pending.map((created) => ({
+                  key: created.key,
+                  text: (created.optionValues[index] ?? '').trim(),
+                  label: `New value of ${option.name}`,
+                  isNew: true,
+                  rename: (to: string) => renameNewValue(created.key, index, to),
+                  remove: () => dropNewValue(created.key),
+                  removeLabel:
+                    `Remove new value ${(created.optionValues[index] ?? '').trim()}`.trim(),
+                })),
+              ]
+              const messages = [
+                errors[`options.${index}.name`],
+                ...option.values.map(
+                  (_, valueIndex) => errors[`options.${index}.values.${valueIndex}`],
+                ),
+              ].filter(Boolean)
+              return (
+                <div
+                  key={option.key}
+                  className="border-border flex flex-col gap-1 border-b px-4 py-3 last:border-b-0"
+                >
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <IconTile name={name} />
+                    <input
+                      id={`option-${index}-name`}
+                      aria-label={`Variant name (now “${option.name}”)`}
+                      autoComplete="off"
+                      value={option.newName}
+                      maxLength={LIMITS.optionName}
+                      aria-invalid={errors[`options.${index}.name`] ? true : undefined}
+                      onChange={(event) => renameOption(index, event.target.value)}
+                      className={NAME_BOX}
+                    />
+                    <ul
+                      aria-label={`Values of ${name}`}
+                      className="m-0 flex min-w-0 flex-1 list-none flex-wrap gap-2 p-0"
+                    >
+                      {chips
+                        .filter((chip) => chip.text)
+                        .map((chip) => (
+                          <li key={chip.key} className="flex">
+                            <ValueChip chip={chip} />
+                          </li>
+                        ))}
+                    </ul>
+                    {addingTo === index ? (
+                      <AddValueBox
+                        name={name}
+                        onAdd={(value) => addValue(index, value)}
+                        onClose={() => setAddingTo(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label={`Add a value to ${name}`}
+                        title={`Add a value to ${name}`}
+                        onClick={() => setAddingTo(index)}
+                        className={ROUND_PLUS}
+                      >
+                        <PlusIcon width={16} height={16} />
+                      </button>
+                    )}
+                  </div>
+                  {messages.map((message) => (
+                    <p
+                      key={message}
+                      role="alert"
+                      className="text-danger m-0 text-[0.76rem]"
+                    >
+                      {message}
+                    </p>
+                  ))}
+                </div>
+              )
+            })}
+
+            {draft.addedOptions.map((option, index) => (
+              <div
+                key={option.key}
+                className="border-border bg-accent-tint/20 flex flex-col gap-2 border-b px-4 py-3 last:border-b-0"
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <IconTile name={option.name} />
+                  <Badge tone="success">New</Badge>
+                  <input
+                    id={`added-option-${index}-name`}
+                    aria-label="New variant name"
+                    autoComplete="off"
+                    value={option.name}
+                    maxLength={LIMITS.optionName}
+                    placeholder="e.g. Colour"
+                    aria-invalid={errors[`addedOptions.${index}.name`] ? true : undefined}
+                    onChange={(event) => patchAdded(index, { name: event.target.value })}
+                    className={`${NAME_BOX} border-border bg-bg`}
+                  />
+                  <div className="min-w-48 flex-1">
+                    <TagsInput
+                      id={`added-option-${index}-values`}
+                      ariaLabel={`Values of ${option.name || 'the new option'}`}
+                      listLabel="Values"
+                      removeLabel={(value) => `Remove value ${value}`}
+                      placeholder="Type a value and press Enter"
+                      tags={option.values}
+                      onChange={(values) => patchAdded(index, { values })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove new option ${option.name || index + 1}`}
+                    onClick={() =>
+                      onChange({
+                        addedOptions: draft.addedOptions.filter((_, i) => i !== index),
+                      })
+                    }
+                    className={DELETE_PILL}
+                  >
+                    Delete
+                  </button>
+                </div>
+                {errors[`addedOptions.${index}.name`] && (
+                  <p role="alert" className="text-danger m-0 text-[0.76rem]">
+                    {errors[`addedOptions.${index}.name`]}
+                  </p>
+                )}
+                {errors[`addedOptions.${index}.values`] && (
+                  <p role="alert" className="text-danger m-0 text-[0.76rem]">
+                    {errors[`addedOptions.${index}.values`]}
+                  </p>
+                )}
+              </div>
+            ))}
+
+            {errors.addedOptions && (
+              <p
+                role="alert"
+                className="text-danger px-4 py-3 text-[0.82rem] font-medium"
+              >
+                {errors.addedOptions}
               </p>
             )}
-          </div>
-          <div>
-            <button
-              type="button"
-              aria-label={`Remove new option ${option.name || index + 1}`}
-              onClick={() =>
-                onChange({
-                  addedOptions: draft.addedOptions.filter((_, i) => i !== index),
-                })
-              }
-              className={DELETE_PILL}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      ))}
-
-      {errors.addedOptions && (
-        <p role="alert" className="text-danger pt-3 text-[0.82rem] font-medium">
-          {errors.addedOptions}
-        </p>
-      )}
-    </section>
+          </section>
+        )}
+      </section>
+    </>
   )
 }
 
@@ -283,7 +330,7 @@ interface ValueChipData {
 function ValueChip({ chip }: { chip: ValueChipData }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(chip.text)
-  const tone = chip.isNew ? 'border-accent/60 bg-accent-tint/40' : ''
+  const tone = chip.isNew ? 'border-accent/60 bg-accent-tint' : ''
 
   function finish(keep: boolean) {
     setEditing(false)
@@ -309,12 +356,12 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
             event.stopPropagation()
             finish(true)
           } else if (event.key === 'Escape') {
-            // Only this box: the section's own Escape would discard the whole edit.
+            // Only this box: the page's own Escape would discard the whole edit.
             event.stopPropagation()
             finish(false)
           }
         }}
-        className={`${PILL} border-accent bg-bg text-text focus:outline-accent-tint w-32 px-2.5 outline-none focus:outline-2 ${tone}`}
+        className={`${PILL} border-accent bg-bg text-text focus:outline-accent-tint w-32 px-3 outline-none focus:outline-2 ${tone}`}
       />
     )
   }
@@ -329,8 +376,8 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
           setText(chip.text)
           setEditing(true)
         }}
-        className={`text-text h-full cursor-text border-none bg-transparent pl-2.5 text-[0.82rem] font-medium disabled:cursor-default ${
-          chip.remove ? 'pr-1' : 'pr-2.5'
+        className={`text-text h-full cursor-text border-none bg-transparent pl-3 text-[0.82rem] font-medium disabled:cursor-default ${
+          chip.remove ? 'pr-1' : 'pr-3'
         }`}
       >
         {chip.text}
@@ -350,18 +397,19 @@ function ValueChip({ chip }: { chip: ValueChipData }) {
 }
 
 /**
- * The box beside an option's pills where the next value is typed — "Add a size here" — Enter or
- * the small +. A new value comes with a new variant, which is then priced below. The box stays
- * for the next value.
+ * The box a row's **+** turns into: "Value (e.g. Red)", a round **+** and a ✕. Enter (or the +)
+ * adds the value — commas separate several — and empties the box for the next one; a refused value
+ * stays in the box with its reason. Escape or the ✕ closes it. A new value comes with a new
+ * variant, which is then priced below.
  */
 function AddValueBox({
-  id,
   name,
   onAdd,
+  onClose,
 }: {
-  id: string
   name: string
   onAdd: (value: string) => string | null
+  onClose: () => void
 }) {
   const [text, setText] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -389,48 +437,67 @@ function AddValueBox({
   }
 
   return (
-    <span className="flex min-w-40 flex-1 flex-col gap-1">
-      <span className="flex items-center gap-1.5">
-        <input
-          id={id}
-          aria-label={`New value for ${name}`}
-          autoComplete="off"
-          value={text}
-          maxLength={LIMITS.optionValue * 4}
-          placeholder={`Add a ${name.toLowerCase()} (e.g. Small) and press Enter`}
-          title="A new value comes with a new variant, which you price below."
-          aria-invalid={problem ? true : undefined}
-          onChange={(event) => {
-            const next = event.target.value
-            setProblem(null)
-            // A comma finishes a value, as in the tags box.
-            if (next.includes(',')) submit(next)
-            else setText(next)
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
-            // Enter adds the value; it must not save the section.
-            event.preventDefault()
-            event.stopPropagation()
-            submit(text)
-          }}
-          className="text-text placeholder:text-text-muted/70 h-8 min-w-0 flex-1 border-none bg-transparent px-1 text-[0.85rem] outline-none"
-        />
+    <div className="flex min-w-56 flex-1 basis-full flex-col gap-1 sm:basis-auto">
+      <div className="flex items-center gap-2">
+        <div className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 transition-colors focus-within:outline-2">
+          <span aria-hidden="true" className="text-text-muted text-[0.78rem] font-bold">
+            Aa
+          </span>
+          <input
+            autoFocus
+            aria-label={`New value for ${name}`}
+            autoComplete="off"
+            value={text}
+            maxLength={LIMITS.optionValue * 4}
+            placeholder="Value (e.g. Red)"
+            title="A new value comes with a new variant, which you price below."
+            aria-invalid={problem ? true : undefined}
+            onChange={(event) => {
+              const next = event.target.value
+              setProblem(null)
+              // A comma finishes a value, as in the tags box.
+              if (next.includes(',')) submit(next)
+              else setText(next)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                // Enter adds the value; it must not save the page.
+                event.preventDefault()
+                event.stopPropagation()
+                submit(text)
+              } else if (event.key === 'Escape') {
+                // Only this box: the page's own Escape would discard the whole edit.
+                event.stopPropagation()
+                onClose()
+              }
+            }}
+            className="text-text placeholder:text-text-muted/70 h-full! min-w-0 flex-1 border-none bg-transparent text-[0.85rem]! outline-none"
+          />
+        </div>
         <button
           type="button"
           aria-label={`Add value to ${name}`}
           title="Add this value"
           onClick={() => submit(text)}
-          className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full border-none transition-colors"
+          className={ROUND_PLUS}
         >
-          <PlusIcon width={12} height={12} />
+          <PlusIcon width={16} height={16} />
         </button>
-      </span>
+        <button
+          type="button"
+          aria-label={`Stop adding values to ${name}`}
+          title="Close"
+          onClick={onClose}
+          className="text-text-muted hover:text-text hover:bg-accent-tint inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors"
+        >
+          <XIcon width={14} height={14} />
+        </button>
+      </div>
       {problem && (
         <p role="alert" className="text-danger m-0 text-[0.78rem]">
           {problem}
         </p>
       )}
-    </span>
+    </div>
   )
 }

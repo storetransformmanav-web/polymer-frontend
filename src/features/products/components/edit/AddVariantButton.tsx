@@ -25,7 +25,7 @@ export function AddVariantButton({
       }}
       disabled={full}
       title={full ? `A product can have at most ${LIMITS.options} options.` : undefined}
-      className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border-none px-3.5 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+      className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-none px-4 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
     >
       <PlusIcon width={14} height={14} />
       Add variant

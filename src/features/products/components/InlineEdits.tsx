@@ -334,6 +334,106 @@ export function VariantFieldCell({
   )
 }
 
+/** The product's own text fields that can be changed where they are shown (the SEO card). */
+export type ProductTextField = 'seoTitle' | 'seoDescription' | 'templateSuffix'
+
+const PRODUCT_TEXT_NAMES: Record<ProductTextField, string> = {
+  seoTitle: 'SEO title',
+  seoDescription: 'SEO description',
+  templateSuffix: 'Template suffix',
+}
+
+const productText = (product: ProductDetail, field: ProductTextField) =>
+  (field === 'seoTitle'
+    ? product.seo?.title
+    : field === 'seoDescription'
+      ? product.seo?.description
+      : product.template_suffix) ?? ''
+
+/**
+ * A product's SEO title, SEO description or template suffix, changed where it is shown: the small
+ * pencil (or a double-click, or Enter on it) turns it into a box; Enter or leaving it asks "Are you
+ * sure?" with old → new, and only "Yes, update" sends it — `seo: { title, description }` (the
+ * other one kept as it is, as the SEO editor sends both) or `template_suffix`. Blank clears it.
+ */
+export function ProductTextCell({
+  product,
+  field,
+  onSaved,
+}: {
+  product: ProductDetail
+  field: ProductTextField
+  onSaved?: SavedHandler
+}) {
+  const { save, error, clearError } = useSaveProduct()
+  const [asking, setAsking] = useState<string | null>(null)
+  const [sending, setSending] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const saved = productText(product, field)
+  const what = PRODUCT_TEXT_NAMES[field]
+  const shown = sending ?? saved
+  const show = (value: string) => (value === '' ? '—' : value)
+
+  async function confirm() {
+    const next = asking
+    if (next === null) return
+    setAsking(null)
+    setSending(next)
+    setFailed(false)
+    clearError()
+    const body: ProductUpdateBody =
+      field === 'templateSuffix'
+        ? { template_suffix: next }
+        : {
+            seo: {
+              title: field === 'seoTitle' ? next : productText(product, 'seoTitle'),
+              description:
+                field === 'seoDescription'
+                  ? next
+                  : productText(product, 'seoDescription'),
+            },
+          }
+    const result = await save({ id: product.id, body, shop: product.shop?.key })
+    setSending(null)
+    if (result) onSaved?.(result, product, body)
+    else setFailed(true)
+  }
+
+  return (
+    <>
+      <DoubleClickEdit
+        value={saved}
+        label={what}
+        showIcon
+        maxLength={LIMITS[field]}
+        busy={sending !== null}
+        onCommit={(next) => {
+          const trimmed = next.trim()
+          if (trimmed !== saved) setAsking(trimmed)
+        }}
+        display={
+          <span className={`break-words ${shown === '' ? 'text-text-muted' : ''}`}>
+            {show(shown)}
+          </span>
+        }
+      />
+      {failed && error && (
+        <span role="alert" className="text-danger block text-[0.72rem] font-normal">
+          {error}
+        </span>
+      )}
+      {asking !== null && (
+        <ConfirmUpdateDialog
+          title={`Update “${product.title}”?`}
+          change={{ label: what, from: show(saved), to: show(asking) }}
+          onConfirm={() => void confirm()}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+    </>
+  )
+}
+
 /**
  * An image's alt text under its picture on the Media tab, changed where it is shown: double-click
  * it, edit, Enter. It asks "Are you sure?" first, then sends just that image's alt text (the same

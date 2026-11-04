@@ -91,7 +91,7 @@ export function SelectField({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          className={`border-border bg-bg text-text focus:border-accent focus:outline-accent-tint w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${SELECT_THEME} ${
+          className={`border-border bg-bg focus:border-accent focus:outline-accent-tint w-full min-w-0 cursor-pointer appearance-none truncate rounded-lg border font-medium text-transparent transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${SELECT_THEME} ${
             compact ? 'h-8 pr-7 pl-2.5 text-[0.76rem]' : 'h-10 pr-9 pl-3 text-[0.85rem]'
           }`}
         >
@@ -101,6 +101,18 @@ export function SelectField({
             </option>
           ))}
         </select>
+        {/* The chosen label, drawn over the select's own (transparent) text so a long one ends in
+            "…" before the chevron — a customisable select is a flex box and never shows an ellipsis. */}
+        <span
+          aria-hidden="true"
+          className={`text-text pointer-events-none absolute inset-y-0 left-0 flex min-w-0 items-center font-medium ${
+            disabled ? 'opacity-60' : ''
+          } ${compact ? 'right-7 pl-2.5 text-[0.76rem]' : 'right-9 pl-3 text-[0.85rem]'}`}
+        >
+          <span className="truncate">
+            {options.find((option) => option.value === value)?.label ?? ''}
+          </span>
+        </span>
         <ChevronDownIcon
           width={compact ? 14 : 16}
           height={compact ? 14 : 16}

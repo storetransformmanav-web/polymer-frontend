@@ -657,6 +657,76 @@ describe('editing a section in place', () => {
     expect(update).toHaveBeenCalledTimes(2)
   })
 
+  it('changes the template suffix from the SEO card’s pencil', async () => {
+    const user = await openDetails()
+    await user.click(screen.getByRole('tab', { name: /^SEO & Online/ }))
+    await user.click(pencil('search listing'))
+
+    const suffix = screen.getByLabelText(/^Template suffix/)
+    await user.type(suffix, 'gift')
+    await user.click(saveButton('search listing'))
+    await confirmUpdate(user)
+    await waitFor(() =>
+      expect(update).toHaveBeenLastCalledWith(
+        'id-1',
+        { template_suffix: 'gift' },
+        'polymer-uk',
+      ),
+    )
+  })
+
+  it('edits each SEO value from its own small pencil, after "Are you sure?"', async () => {
+    const user = await openDetails()
+    await user.click(screen.getByRole('tab', { name: /^SEO & Online/ }))
+    const pencilOf = (label: string) => {
+      const field = screen.getByText(label, { selector: 'dt' })
+        .parentElement as HTMLElement
+      return field.querySelector('[data-edit-icon]') as HTMLElement
+    }
+
+    // The template suffix: pencil → box → Enter → question → only then the PUT.
+    await user.click(pencilOf('Template suffix'))
+    await user.type(
+      screen.getByRole('textbox', { name: 'Template suffix' }),
+      'gift{Enter}',
+    )
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Template suffix')
+    expect(update).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+    await waitFor(() =>
+      expect(update).toHaveBeenLastCalledWith(
+        'id-1',
+        { template_suffix: 'gift' },
+        'polymer-uk',
+      ),
+    )
+
+    // The SEO title goes with the description as it is.
+    await user.click(pencilOf('SEO title'))
+    const title = screen.getByRole('textbox', { name: 'SEO title' })
+    await user.clear(title)
+    await user.type(title, 'Hippo bag{Enter}')
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Yes, update',
+      }),
+    )
+    await waitFor(() =>
+      expect(update).toHaveBeenLastCalledWith(
+        'id-1',
+        { seo: { title: 'Hippo bag', description: '' } },
+        'polymer-uk',
+      ),
+    )
+
+    // Escape sends nothing.
+    await user.click(pencilOf('SEO description'))
+    await user.type(screen.getByRole('textbox', { name: 'SEO description' }), 'x{Escape}')
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(update).toHaveBeenCalledTimes(2)
+  })
+
   it('links the SEO card to the product in the Shopify admin and on the public store', async () => {
     const user = await openDetails()
     await user.click(screen.getByRole('tab', { name: /^SEO & Online/ }))
@@ -772,6 +842,13 @@ describe('editing a section in place', () => {
       await user.click(screen.getByRole('tab', { name: /^Variants/ }))
       await user.click(pencil('options'))
       return user
+    }
+    /** The box for a new value: the option row's + turns into it (it stays open after a value). */
+    const valueBox = async (user: ReturnType<typeof userEvent.setup>, name = 'Size') => {
+      const open = screen.queryByLabelText(`New value for ${name}`)
+      if (open) return open
+      await user.click(screen.getByRole('button', { name: `Add a value to ${name}` }))
+      return screen.getByLabelText(`New value for ${name}`)
     }
 
     it('sets the stock at a location, sending only the locations that changed', async () => {
@@ -1087,7 +1164,7 @@ describe('editing a section in place', () => {
     it('a new variant picks each option from a dropdown of the values it has', async () => {
       withOptions()
       const user = await editVariants()
-      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      await user.type(await valueBox(user), 'XL{Enter}')
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       // Another value is chosen from the dropdown: a list of the option's values, not the browser's.
@@ -1108,11 +1185,11 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.type(screen.getByLabelText('New value for Size'), 'm')
+      await user.type(await valueBox(user), 'm')
       await user.click(screen.getByRole('button', { name: 'Add value to Size' }))
       expect(screen.getByRole('alert')).toHaveTextContent('already has that value')
 
-      const box = screen.getByLabelText('New value for Size')
+      const box = await valueBox(user)
       await user.clear(box)
       await user.type(box, 'Large{Enter}')
 
@@ -1152,23 +1229,27 @@ describe('editing a section in place', () => {
       )
     })
 
-    it('shows each option plainly: its name, a box for it, a pill per value and a box for the next one', async () => {
+    it('shows each option as a row: its name, a pill per value and a +; the strip below adds the next value', async () => {
       withOptions()
       const user = await editVariants()
 
       const options = within(screen.getByRole('region', { name: 'Options' }))
-      // No card to open: the name box, the pills and the add box are all there.
       expect(options.getByLabelText(/^Variant name/)).toHaveValue('Size')
       expect(options.getByText('M')).toBeInTheDocument()
-      const box = options.getByLabelText('New value for Size')
-      expect(box).toHaveAttribute(
-        'placeholder',
-        'Add a size (e.g. Small) and press Enter',
-      )
+      expect(
+        options.getByRole('button', { name: 'Add a value to Size' }),
+      ).toBeInTheDocument()
+
+      // No strip below the options: the row's + turns into the value box, in that row.
+      expect(screen.queryByLabelText('Option to add a value to')).toBeNull()
+      expect(screen.queryByText(/Changes are saved to Shopify/)).toBeNull()
+      expect(options.queryByLabelText('New value for Size')).toBeNull()
+      const box = await valueBox(user)
+      expect(options.getByLabelText('New value for Size')).toBe(box)
+      expect(box).toHaveFocus()
+      expect(box).toHaveAttribute('placeholder', 'Value (e.g. Red)')
+      expect(options.queryByRole('button', { name: 'Add a value to Size' })).toBeNull()
       expect(options.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument()
-      // One box, like the tags box: the values and the typing box sit in it together.
-      const values = options.getByRole('list', { name: 'Variant values' })
-      expect(values.parentElement).toContainElement(box)
 
       // Enter adds the value as a chip, and the box stays for the next one.
       await user.type(box, 'Large{Enter}')
@@ -1179,6 +1260,14 @@ describe('editing a section in place', () => {
       await user.type(box, 'XL,')
       expect(options.getByText('XL')).toBeInTheDocument()
       expect(box).toHaveValue('')
+
+      // Escape closes the box and gives the row its + back (the edit stays open).
+      await user.type(box, '{Escape}')
+      expect(options.queryByLabelText('New value for Size')).toBeNull()
+      expect(
+        options.getByRole('button', { name: 'Add a value to Size' }),
+      ).toBeInTheDocument()
+      expect(options.getByText('XL')).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Remove new value XL' }))
 
       // Clicking a value turns it into a box: Enter renames it, Escape keeps the old name.
@@ -1212,7 +1301,7 @@ describe('editing a section in place', () => {
       expect(screen.queryByRole('region', { name: /^New variants/ })).toBeNull()
 
       // A new variant (from a new value) gets its own card so it is never hidden.
-      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      await user.type(await valueBox(user), 'XL{Enter}')
       expect(screen.getByRole('region', { name: /^New variants/ })).toBeInTheDocument()
       expect(screen.getByText(/Will be added when you save/)).toBeInTheDocument()
       expect(screen.getByText('+ XL')).toBeInTheDocument()
@@ -1242,7 +1331,7 @@ describe('editing a section in place', () => {
         screen.queryByRole('button', { name: 'Discard variants changes' }),
       ).toBeNull()
 
-      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      await user.type(await valueBox(user), 'XL{Enter}')
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       await user.type(created.getByLabelText(/^Price/), '9.99')
 
@@ -1335,7 +1424,7 @@ describe('editing a section in place', () => {
       await user.type(screen.getByLabelText('New variant name'), 'Colour')
       await user.type(screen.getByLabelText('Values of Colour'), 'Clear{Enter}')
       // A variant for the new size, with a colour, is made from the size's Add value.
-      await user.type(screen.getByLabelText('New value for Size'), 'L{Enter}')
+      await user.type(await valueBox(user), 'L{Enter}')
 
       const created = within(screen.getByRole('list', { name: 'New variants' }))
       expect(created.getByLabelText('Size')).toHaveValue('L')
@@ -1380,7 +1469,7 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      await user.type(await valueBox(user), 'XL{Enter}')
       // The price box is where the person is taken; leave it empty.
       await user.click(screen.getByRole('button', { name: 'Save Changes' }))
       await confirmUpdate(user)
@@ -1393,7 +1482,7 @@ describe('editing a section in place', () => {
       withOptions()
       const user = await editVariants()
 
-      await user.type(screen.getByLabelText('New value for Size'), 'XL{Enter}')
+      await user.type(await valueBox(user), 'XL{Enter}')
       // Renaming the new value to one the product already has is refused on save.
       await user.click(
         within(screen.getByRole('region', { name: 'Options' })).getByRole('button', {

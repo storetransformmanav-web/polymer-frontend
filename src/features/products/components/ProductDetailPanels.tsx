@@ -101,6 +101,7 @@ import {
   AltCaption,
   ContinueSellingBox,
   LocationCell,
+  ProductTextCell,
   StockCell,
 } from './InlineEdits.tsx'
 import { ProductImage } from './ProductImage.tsx'
@@ -118,7 +119,7 @@ const SPEC_ERRORS = [
   'category',
 ] as const
 const NO_ERRORS = [] as const
-const SEO_ERRORS = ['seoTitle', 'seoDescription'] as const
+const SEO_ERRORS = ['seoTitle', 'seoDescription', 'templateSuffix'] as const
 const SECTIONS_ERRORS = ['descriptionSections'] as const
 const VARIANT_ERRORS = ['variants', 'options', 'addedOptions', 'newVariants'] as const
 const MEDIA_ERRORS = ['images'] as const
@@ -1048,9 +1049,16 @@ export function SeoPanel({
       onSaved={onSaved}
       view={
         <FieldGrid>
-          <Field label="SEO title">{product.seo?.title}</Field>
-          <Field label="SEO description">{product.seo?.description}</Field>
-          <Field label="Template suffix">{product.template_suffix}</Field>
+          {/* Each value has its own pencil (or double-click it); the card's pencil edits them all. */}
+          <Field label="SEO title">
+            <ProductTextCell product={product} field="seoTitle" onSaved={onSaved} />
+          </Field>
+          <Field label="SEO description">
+            <ProductTextCell product={product} field="seoDescription" onSaved={onSaved} />
+          </Field>
+          <Field label="Template suffix">
+            <ProductTextCell product={product} field="templateSuffix" onSaved={onSaved} />
+          </Field>
           <Field label="Online store">
             <ExternalLink href={shopifyAdminProductUrl(product.shop, product.shopify_id)}>
               Open live page
@@ -1063,7 +1071,13 @@ export function SeoPanel({
           </Field>
         </FieldGrid>
       }
-      editor={(section) => <SeoEditor {...section} />}
+      editor={(section) => (
+        <div className="flex flex-col gap-4">
+          <SeoEditor {...section} />
+          {/* Shown on this card, so it is changed here too (also in Product Specifications). */}
+          <TemplateSuffixField {...section} />
+        </div>
+      )}
     />
   )
 }

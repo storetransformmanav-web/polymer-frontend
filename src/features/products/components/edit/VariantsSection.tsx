@@ -58,9 +58,7 @@ export function VariantsSection(props: SectionProps) {
       )}
 
       {/* The page's cards: the options (Size, Colour…), then every variant, then the new ones. */}
-      <PageCard title="Variant options" problem={problemIn('options', 'addedOptions')}>
-        <VariantOptionsEditor {...props} />
-      </PageCard>
+      <VariantOptionsEditor {...props} />
 
       <PageCard
         title="Current variants"
