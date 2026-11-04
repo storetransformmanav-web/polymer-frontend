@@ -8,16 +8,23 @@ import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime } from '../../../lib/format.ts'
 import { hiddenFrom, syncLabel, syncTone } from '../utils/format.ts'
 import { LockImage } from './LockCard.tsx'
+import { LockStatusSelect } from './LockStatusSelect.tsx'
 
+// No alignment in the header or cell base: each column sets its own, the same for its header and
+// its cells (a `text-left` here would fight the `text-center` added next to it).
 const TH_BASE =
-  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
-// No alignment in the cell base: a `text-left` here would fight any `text-center` added later.
-const TD = 'px-3.5 py-2.5 whitespace-nowrap'
+  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 align-middle text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+const TD = 'px-3.5 py-2.5 align-middle whitespace-nowrap'
+// Every column but Product (a picture and a name) is centred — header and cells alike.
+const TH_CENTER = `${TH_BASE} text-center`
+const TD_CENTER = `${TD} text-center`
 const FROM_XL = 'hidden xl:table-cell'
 const SKELETON_ROWS = 8
 
 interface LocksListProps {
   items: AccessLock[]
+  /** The store the locks belong to (a status change is sent for it). */
+  shop: string
   isPending: boolean
   error: string | null
   hasFilters: boolean
@@ -33,7 +40,7 @@ interface LocksListProps {
 function Chips({ values, empty }: { values: string[]; empty: string }) {
   if (values.length === 0) return <span className="text-text-muted">{empty}</span>
   return (
-    <span className="flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       {values.slice(0, 2).map((value) => (
         <span
           key={value}
@@ -56,15 +63,15 @@ function Chips({ values, empty }: { values: string[]; empty: string }) {
 }
 
 /**
- * Enabled / Disabled, and an amber "Manual" when the lock has manual locking on — the website
- * then shows the product to everyone and leaves the lock to custom theme code.
+ * The lock's status, read from the API's `enabled` flag — true is **Enabled**, false is **Disabled** —
+ * as a dropdown pill (see `LockStatusSelect`), and an amber "Manual" when the lock has manual
+ * locking on — the website then shows the product to everyone and leaves the lock to custom theme
+ * code.
  */
-function StatusBadges({ lock }: { lock: AccessLock }) {
+function StatusBadges({ lock, shop }: { lock: AccessLock; shop: string }) {
   return (
     <span className="inline-flex flex-wrap items-center justify-center gap-1">
-      <Badge tone={lock.enabled ? 'success' : 'neutral'} className="w-24 justify-center">
-        {lock.enabled ? 'Enabled' : 'Disabled'}
-      </Badge>
+      <LockStatusSelect lock={lock} shop={shop} />
       {lock.manual_locking && (
         <span title="Manual locking is on: the website shows this product to everyone">
           <Badge tone="warning">Manual</Badge>
@@ -127,6 +134,7 @@ const MESSAGE_BUTTON =
  */
 export function LocksList({
   items,
+  shop,
   isPending,
   error,
   hasFilters,
@@ -214,7 +222,7 @@ export function LocksList({
                     <Highlight text={lock.handle ?? ''} />
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                    <StatusBadges lock={lock} />
+                    <StatusBadges lock={lock} shop={shop} />
                     <SyncBadge lock={lock} />
                   </span>
                   <span className="text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem]">
@@ -238,14 +246,14 @@ export function LocksList({
       >
         <thead>
           <tr>
-            <th className={TH_BASE}>Product</th>
-            <th className={TH_BASE}>Keys (tags)</th>
-            <th className={`${TH_BASE} text-right`}>With access</th>
-            <th className={`${TH_BASE} ${FROM_XL}`}>Hidden from</th>
-            <th className={`${TH_BASE} text-center`}>Status</th>
-            <th className={`${TH_BASE} text-center`}>Shopify</th>
-            <th className={`${TH_BASE} ${FROM_XL}`}>Updated</th>
-            <th className={`${TH_BASE} w-24 text-center`}>Actions</th>
+            <th className={`${TH_BASE} text-left`}>Product</th>
+            <th className={TH_CENTER}>Keys (tags)</th>
+            <th className={TH_CENTER}>With access</th>
+            <th className={`${TH_CENTER} ${FROM_XL}`}>Hidden from</th>
+            <th className={TH_CENTER}>Status</th>
+            <th className={TH_CENTER}>Shopify</th>
+            <th className={`${TH_CENTER} ${FROM_XL}`}>Updated</th>
+            <th className={`${TH_CENTER} w-24`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -269,7 +277,7 @@ export function LocksList({
                   key={lock.product_id}
                   className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                 >
-                  <td className={TD}>
+                  <td className={`${TD} text-left`}>
                     <span className="flex items-center gap-3">
                       <LockImage src={lock.image_url} />
                       <span className="flex min-w-0 flex-col">
@@ -290,23 +298,23 @@ export function LocksList({
                       </span>
                     </span>
                   </td>
-                  <td className={TD}>
+                  <td className={TD_CENTER}>
                     <Chips values={lock.tags} empty="Signed-in customers" />
                   </td>
-                  <td className={`${TD} text-right`}>
-                    {count(lock.customers_with_access)}
-                  </td>
-                  <td className={`${TD} ${FROM_XL}`}>
+                  <td className={TD_CENTER}>{count(lock.customers_with_access)}</td>
+                  <td className={`${TD_CENTER} ${FROM_XL}`}>
                     <Chips values={hiddenFrom(lock)} empty="—" />
                   </td>
-                  <td className={`${TD} text-center`}>
-                    <StatusBadges lock={lock} />
+                  <td className={TD_CENTER}>
+                    <StatusBadges lock={lock} shop={shop} />
                   </td>
-                  <td className={`${TD} text-center`}>
+                  <td className={TD_CENTER}>
                     <SyncBadge lock={lock} />
                   </td>
-                  <td className={`${TD} ${FROM_XL}`}>{updated(lock.updated_at)}</td>
-                  <td className={`${TD} text-center`}>
+                  <td className={`${TD_CENTER} ${FROM_XL}`}>
+                    {updated(lock.updated_at)}
+                  </td>
+                  <td className={TD_CENTER}>
                     <ViewButton lock={lock} onOpen={onOpen} />
                   </td>
                 </tr>

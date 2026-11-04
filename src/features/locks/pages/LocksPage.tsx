@@ -238,6 +238,7 @@ export function LocksPage() {
         <HighlightQuery query={filters.search}>
           <LocksList
             items={locks.items}
+            shop={shop}
             isPending={locks.isPending}
             error={locks.error}
             hasFilters={locks.hasFilters}

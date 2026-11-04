@@ -146,7 +146,7 @@ export function LocksToolbar({
             <SelectField
               compact
               id="filter-lock-status"
-              label="Lock status"
+              label="Status"
               icon={ListChecksIcon}
               value={filters.status}
               options={STATUS_OPTIONS}

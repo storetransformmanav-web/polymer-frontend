@@ -79,6 +79,8 @@ export function InventoryPage() {
         <InventoryKpis
           totals={inventory.baseTotals ?? inventory.totals}
           variants={data?.total ?? null}
+          status={filters.status}
+          onStatusChange={(status) => inventory.setFilters({ status })}
         />
       </div>
 

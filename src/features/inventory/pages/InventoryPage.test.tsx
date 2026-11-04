@@ -205,10 +205,12 @@ describe('the inventory list', () => {
       expect(screen.queryByText(gone, { selector: 'span' })).toBeNull()
 
     const table = screen.getByRole('table')
+    // There is no Barcode column.
+    expect(within(table).queryByRole('columnheader', { name: /Barcode/ })).toBeNull()
+    expect(within(table).queryByText('5012345678900')).toBeNull()
     const hippo = within(within(table).getByText('HB-S').closest('tr') as HTMLElement)
     expect(hippo.getByText('Hippo Bag')).toBeInTheDocument()
     expect(hippo.getByText('Small')).toBeInTheDocument()
-    expect(hippo.getByText('5012345678900')).toBeInTheDocument()
     expect(hippo.getByText('Active')).toBeInTheDocument()
     // A variant Shopify does not track has no numbers and no edit button.
     const lid = within(within(table).getByText('FL-1').closest('tr') as HTMLElement)
@@ -271,6 +273,51 @@ describe('the inventory list', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['All variants (2)', 'In stock (1)', 'Low stock (0)', 'Out of stock (1)'])
+  })
+
+  it('filters by stock status from the cards: each card is a filter, pressing it again shows all', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+    const card = (label: string) =>
+      screen.getByRole('button', { name: new RegExp(`^${label}`) })
+
+    // Every variant to begin with.
+    expect(card('Variants')).toHaveAttribute('aria-pressed', 'true')
+    expect(card('Out of stock')).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(card('Out of stock'))
+    await waitFor(() =>
+      expect(list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'out', page: 1 }),
+      ),
+    )
+    expect(card('Out of stock')).toHaveAttribute('aria-pressed', 'true')
+    expect(card('Variants')).toHaveAttribute('aria-pressed', 'false')
+    // The Stock status dropdown in Filters follows along, and the figures stay as they were.
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.getByLabelText('Stock status')).toHaveValue('out')
+    expect(within(kpi('In stock')).getByText('1')).toBeInTheDocument()
+
+    // Another card switches the filter over.
+    await user.click(card('Low stock'))
+    await waitFor(() =>
+      expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'low' })),
+    )
+    expect(screen.getByLabelText('Stock status')).toHaveValue('low')
+
+    // Pressing the one that is on again shows all; so does Variants.
+    await user.click(card('Low stock'))
+    await waitFor(() => expect(screen.getByLabelText('Stock status')).toHaveValue(''))
+    // (All variants was seen before, so it shows at once from the cache — no new request.)
+
+    await user.click(card('In stock'))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Stock status')).toHaveValue('in_stock'),
+    )
+    await user.click(card('Variants'))
+    await waitFor(() => expect(screen.getByLabelText('Stock status')).toHaveValue(''))
+    expect(card('Variants')).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('opens a row to one line per location', async () => {

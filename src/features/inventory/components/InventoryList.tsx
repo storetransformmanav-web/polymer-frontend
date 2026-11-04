@@ -88,7 +88,7 @@ interface InventoryListProps {
 
 /**
  * The results area: a sticky-header table from `md` up (stacked cards below it). A row shows the
- * variant (picture, product with the variant under it, SKU, barcode, product status) and its
+ * variant (picture, product with the variant under it, SKU, product status — no barcode column) and its
  * totals — Available, On hand, Committed, Incoming, Unavailable; a **chevron opens the row** to
  * one line per location, where Available and On hand change by double-clicking and **Set** /
  * **Adjust** open the edit window. A variant Shopify does not track says "Not tracked" and has no
@@ -237,7 +237,7 @@ export function InventoryList({
       className="max-h-[min(68svh,760px)] min-h-0 flex-1 overflow-auto lg:max-h-none"
     >
       <table
-        className={`w-full min-w-[1240px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1100px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
@@ -246,9 +246,6 @@ export function InventoryList({
             </th>
             {head('Product', 'title')}
             {head('SKU', 'sku')}
-            <th scope="col" className={TH}>
-              Barcode
-            </th>
             <th scope="col" className={TH_CENTER}>
               Status
             </th>
@@ -266,7 +263,7 @@ export function InventoryList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 11 }, (_, cell) => (
+                  {Array.from({ length: 10 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <span className="bg-surface block h-4 animate-pulse rounded" />
                     </td>
@@ -331,9 +328,6 @@ export function InventoryList({
                         ) : (
                           <span className="text-text-muted">—</span>
                         )}
-                      </td>
-                      <td className={`${TD} text-text-muted`}>
-                        {item.barcode ? <Highlight text={item.barcode} /> : '—'}
                       </td>
                       <td className={`${TD} text-center`}>
                         <Badge
@@ -408,7 +402,7 @@ export function InventoryList({
                     {open && (
                       <tr className="border-border bg-surface/60 border-b">
                         <td />
-                        <td colSpan={10} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                           <StockTable
                             item={item}
                             lines={item.locations}

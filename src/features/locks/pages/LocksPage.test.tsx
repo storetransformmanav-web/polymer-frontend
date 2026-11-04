@@ -207,7 +207,9 @@ describe('LocksPage', () => {
       )
       expect(row.getByText('vans')).toBeInTheDocument()
       expect(row.getByText('12')).toBeInTheDocument()
-      expect(row.getByText('Enabled')).toBeInTheDocument()
+      expect(
+        row.getByRole('button', { name: /^Status of .*: Enabled$/ }),
+      ).toBeInTheDocument()
       expect(row.getByText('Synced')).toBeInTheDocument()
       expect(screen.getByText(/2 locked products/)).toBeInTheDocument()
     })
@@ -226,6 +228,120 @@ describe('LocksPage', () => {
         screen.getByText('Locked Product 2').closest('tr') as HTMLElement,
       )
       expect(second.queryByText('Manual')).not.toBeInTheDocument()
+    })
+
+    it('lines every header up with its cells: Product on the left, every other column centred', async () => {
+      renderPage()
+      await screen.findByText('Locked Product 1')
+
+      const table = screen.getByRole('table')
+      const headers = within(table).getAllByRole('columnheader')
+      const cells = within(
+        screen.getByText('Locked Product 1').closest('tr') as HTMLElement,
+      ).getAllByRole('cell')
+      expect(headers).toHaveLength(cells.length)
+      headers.forEach((header, index) => {
+        const side = index === 0 ? 'text-left' : 'text-center'
+        expect(header).toHaveClass(side)
+        expect(cells[index]).toHaveClass(side)
+      })
+    })
+
+    it('shows the status from the API’s enabled flag: true is Enabled, false is Disabled', async () => {
+      locks.mockResolvedValue(
+        locksAnswer([makeLock(1, { enabled: true }), makeLock(2, { enabled: false })]),
+      )
+      renderPage()
+      await screen.findByText('Locked Product 1')
+
+      expect(
+        screen
+          .getAllByRole('button', { name: /^Status of Locked Product/ })
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual([
+        'Status of Locked Product 1: Enabled',
+        'Status of Locked Product 2: Disabled',
+      ])
+      // The product's own status (Active / Draft / Archived) is not what the column shows.
+      expect(screen.queryByText(/^(Draft|Archived)$/)).toBeNull()
+    })
+
+    it('the status is a dropdown: choose, confirm, and the row changes at once', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await user.click(
+        await screen.findByRole('button', {
+          name: 'Status of Locked Product 2: Disabled',
+        }),
+      )
+      const menu = await screen.findByRole('listbox', {
+        name: 'Status of Locked Product 2',
+      })
+      expect(
+        within(menu)
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['Enabled', 'Disabled'])
+      await user.click(within(menu).getByRole('option', { name: 'Enabled' }))
+
+      // Nothing is sent until "Yes, update"; the question says what changes.
+      const dialog = await screen.findByRole('alertdialog')
+      expect(lock).not.toHaveBeenCalled()
+      expect(within(dialog).getByText('Status')).toBeInTheDocument()
+      expect(within(dialog).getByText('Disabled')).toBeInTheDocument()
+      lock.mockImplementation(async () => {
+        locks.mockResolvedValue(
+          locksAnswer([makeLock(1), makeLock(2, { enabled: true })]),
+        )
+        return { ...WRITE_OK, createdLocks: 0, message: 'Products: 1 updated.' }
+      })
+      await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
+      await waitFor(() =>
+        expect(lock).toHaveBeenCalledWith({
+          shop: 'polymer-uk',
+          products: ['locked-product-2'],
+          tags: ['vans'],
+          enabled: true,
+        }),
+      )
+      expect(
+        await screen.findByRole('button', {
+          name: 'Status of Locked Product 2: Enabled',
+        }),
+      ).toBeInTheDocument()
+    })
+
+    it('sends nothing on Cancel, and puts the old status back when the backend refuses', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Locked Product 1')
+      const pick = async (name: string) => {
+        await user.click(
+          screen.getByRole('button', { name: 'Status of Locked Product 1: Enabled' }),
+        )
+        await user.click(
+          within(screen.getByRole('listbox')).getByRole('option', { name }),
+        )
+      }
+
+      await pick('Disabled')
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Cancel',
+        }),
+      )
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      expect(lock).not.toHaveBeenCalled()
+
+      lock.mockRejectedValueOnce(new ApiError('Shop is read only', { status: 403 }))
+      await pick('Disabled')
+      const dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+      expect(await within(dialog).findByText('Shop is read only')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Status of Locked Product 1: Enabled' }),
+      ).toBeInTheDocument()
     })
 
     it('asks for no tags and no products until they are needed', async () => {
@@ -248,7 +364,7 @@ describe('LocksPage', () => {
           expect.objectContaining({ shop: 'polymer-uk', lock_only: true }),
         ),
       )
-      await user.selectOptions(screen.getByLabelText('Lock status'), 'Enabled')
+      await user.selectOptions(screen.getByLabelText('Status'), 'Enabled')
 
       await waitFor(() =>
         expect(locks).toHaveBeenLastCalledWith(
@@ -478,6 +594,118 @@ describe('LocksPage', () => {
       expect(screen.queryByRole('switch')).not.toBeInTheDocument()
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
+    })
+
+    describe('changing settings with POST /access/locks', () => {
+      /** What the store will answer once the change is confirmed. */
+      const willHold = (patch: Partial<AccessLock>, n = 1) =>
+        lock.mockImplementation(async () => {
+          locks.mockResolvedValue(
+            locksAnswer([makeLock(n, patch), makeLock(2, { enabled: false })]),
+          )
+          return { ...WRITE_OK, createdLocks: 0, message: 'Products: 1 updated.' }
+        })
+
+      it('a setting is double-clicked into a Yes / No dropdown, then confirmed', async () => {
+        const user = await openLock()
+        await tab(user, 'Settings')
+
+        // A single click only shows the value; the double-click opens the choice.
+        const value = screen.getByRole('button', { name: 'Hidden from lists: No' })
+        expect(screen.queryByRole('combobox')).toBeNull()
+        await user.dblClick(value)
+        await user.selectOptions(
+          screen.getByRole('combobox', { name: 'Hidden from lists' }),
+          'Yes',
+        )
+
+        const dialog = await screen.findByRole('alertdialog')
+        expect(lock).not.toHaveBeenCalled()
+        expect(within(dialog).getByText('Hidden from lists')).toBeInTheDocument()
+        willHold({ hide_from_lists: true })
+        await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
+        await waitFor(() =>
+          expect(lock).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            products: ['locked-product-1'],
+            tags: ['vans'],
+            hide_from_lists: true,
+          }),
+        )
+        expect(
+          await screen.findByRole('button', { name: 'Hidden from lists: Yes' }),
+        ).toBeInTheDocument()
+      })
+
+      it('Status is Enabled / Disabled, and Escape leaves the value as it was', async () => {
+        const user = await openLock()
+        await tab(user, 'Settings')
+
+        await user.dblClick(screen.getByRole('button', { name: 'Status: Enabled' }))
+        expect(
+          within(screen.getByRole('combobox', { name: 'Status' }))
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['Enabled', 'Disabled'])
+        await user.keyboard('{Escape}')
+
+        expect(
+          screen.getByRole('button', { name: 'Status: Enabled' }),
+        ).toBeInTheDocument()
+        expect(lock).not.toHaveBeenCalled()
+      })
+
+      it('the advanced settings change the same way', async () => {
+        const user = await openLock()
+        await tab(user, 'Settings')
+        await user.click(screen.getByRole('button', { name: /^Advanced settings/ }))
+
+        await user.dblClick(
+          await screen.findByRole('button', { name: 'Manual locking: No' }),
+        )
+        await user.selectOptions(
+          screen.getByRole('combobox', { name: 'Manual locking' }),
+          'Yes',
+        )
+        await user.click(
+          within(await screen.findByRole('alertdialog')).getByRole('button', {
+            name: 'Yes, update',
+          }),
+        )
+
+        await waitFor(() =>
+          expect(lock).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            products: ['locked-product-1'],
+            tags: ['vans'],
+            manual_locking: true,
+          }),
+        )
+      })
+
+      it('the message is double-clicked into a box, then confirmed', async () => {
+        const user = await openLock()
+
+        await user.dblClick(screen.getByRole('button', { name: /default message/ }))
+        const box = screen.getByRole('textbox', { name: 'Message' })
+        await user.type(box, 'Trade accounts only.{Enter}')
+
+        const dialog = await screen.findByRole('alertdialog')
+        expect(lock).not.toHaveBeenCalled()
+        willHold({ message: 'Trade accounts only.' })
+        await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
+        await waitFor(() =>
+          expect(lock).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            products: ['locked-product-1'],
+            tags: ['vans'],
+            message: 'Trade accounts only.',
+          }),
+        )
+        expect(await screen.findByText('Trade accounts only.')).toBeInTheDocument()
+      })
     })
 
     describe('editing with PUT /access/tags', () => {
@@ -723,7 +951,7 @@ describe('LocksPage', () => {
       expect(locks).toHaveBeenCalledWith(
         expect.objectContaining({ shop: 'polymer-uk', search: 'locked-product-2' }),
       )
-      // A disabled lock says so in its header.
+      // An inactive lock says so in its header.
       expect(screen.getByText('Disabled')).toBeInTheDocument()
     })
 

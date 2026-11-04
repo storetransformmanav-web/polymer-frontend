@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
+import { ChoiceEdit } from '../../../components/ui/ChoiceEdit.tsx'
+import { DoubleClickEdit } from '../../../components/ui/DoubleClickEdit.tsx'
 import {
   DETAIL_CARD,
   DetailSection,
@@ -25,6 +28,13 @@ import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
 import { useAccessCheck } from '../hooks/useLockWrites.ts'
 import { checkReasonText, syncLabel, syncTone } from '../utils/format.ts'
+import {
+  FLAG_INFO,
+  flagWord,
+  MAX_LOCK_MESSAGE,
+  type LockFlag,
+} from '../utils/lockOptions.ts'
+import { LockChangeConfirm, type PendingLockChange } from './LockChangeConfirm.tsx'
 import { LockCustomersSection, LockKeysSection } from './LockAccessEditors.tsx'
 import { LockImage } from './LockCard.tsx'
 
@@ -39,8 +49,6 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'settings', label: 'Settings' },
   { id: 'access', label: 'Check access' },
 ]
-
-const yesNo = (value: boolean) => (value ? 'Yes' : 'No')
 
 interface LockDetailsViewProps {
   lock: AccessLock | null
@@ -149,10 +157,13 @@ function CheckAccessCard({
 
 /**
  * One lock's page, in place of the list — laid out like a product's page: a header (picture,
- * name, status pills, Back to list), a row of tabs and collapsible cards. **The keys and who has
- * access are editable** (each with a pencil — `LockAccessEditors.tsx`, one `PUT /access/tags`
- * after an "Are you sure?"); the settings and message are only shown, since the API has no call
- * to change them. "Check access" (`GET /access/check`) changes nothing.
+ * name, status pills, Back to list), a row of tabs and collapsible cards. **Everything about the
+ * lock can be changed here**: the keys and who has access have a pencil (`LockAccessEditors.tsx`,
+ * `PUT /access/tags`), and every setting — Lock (Enabled / Disabled), hidden from menus / lists /
+ * sitemaps, no-index, manual locking — and the access-denied message is **double-clicked** to
+ * change it (a dropdown of Yes / No or Enabled / Disabled, a box for the message), then asked
+ * "Are you sure?" (`LockChangeConfirm`) and sent with `POST /access/locks`; the page changes at
+ * once. "Check access" (`GET /access/check`) changes nothing.
  */
 export function LockDetailsView({
   lock,
@@ -167,6 +178,8 @@ export function LockDetailsView({
   const [tab, setTab] = useState<TabId>('overview')
   // The Settings tab was opened from Check access's manual-locking warning.
   const [showAdvanced, setShowAdvanced] = useState(false)
+  // The setting being changed, waiting for "Yes, update".
+  const [pending, setPending] = useState<PendingLockChange | null>(null)
 
   if (error || notFound) {
     return (
@@ -199,6 +212,34 @@ export function LockDetailsView({
   if (!lock) return <DetailSkeleton />
 
   const hasKeys = lock.tags.length > 0
+
+  /** A yes/no (or Enabled/Disabled) setting: double-click it, choose, then confirm. */
+  function flagField(flag: LockFlag) {
+    const info = FLAG_INFO[flag]
+    const value = lock![flag]
+    return (
+      <Field label={info.label}>
+        <ChoiceEdit
+          label={info.label}
+          value={value ? 'on' : 'off'}
+          options={[
+            { value: 'on', label: info.on },
+            { value: 'off', label: info.off },
+          ]}
+          display={<span>{flagWord(flag, value)}</span>}
+          onCommit={(next) =>
+            setPending({
+              lock: lock!,
+              change: { [flag]: next === 'on' },
+              label: info.label,
+              from: flagWord(flag, value),
+              to: flagWord(flag, next === 'on'),
+            })
+          }
+        />
+      </Field>
+    )
+  }
 
   return (
     <article className="border-border bg-bg overflow-hidden rounded-2xl border">
@@ -249,7 +290,7 @@ export function LockDetailsView({
                   aria-hidden="true"
                   className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"
                 />
-                {lock.enabled ? 'Active' : 'Disabled'}
+                {flagWord('enabled', lock.enabled)}
               </Badge>
               <span title={lock.sync_error ?? undefined}>
                 <Badge tone={syncTone(lock.sync_status)}>
@@ -375,17 +416,37 @@ export function LockDetailsView({
 
                 <DetailSection title="Message" icon={InfoIcon}>
                   <p className="text-text-muted mb-2 text-[0.8rem]">
-                    Shown to a customer who does not have access.
+                    Shown to a customer who does not have access. Double-click it to
+                    change it.
                   </p>
-                  {lock.message?.trim() ? (
-                    <p className="text-[0.9rem] break-words whitespace-pre-wrap">
-                      {lock.message}
-                    </p>
-                  ) : (
-                    <p className="text-text-muted text-[0.9rem]">
-                      The store’s default message.
-                    </p>
-                  )}
+                  <DoubleClickEdit
+                    label="Message"
+                    value={lock.message?.trim() ?? ''}
+                    maxLength={MAX_LOCK_MESSAGE}
+                    placeholder="The message a customer without access sees"
+                    showIcon
+                    validate={(next) => (next ? null : 'Type the message to show.')}
+                    onCommit={(next) =>
+                      setPending({
+                        lock,
+                        change: { message: next },
+                        label: 'Message',
+                        from: lock.message?.trim() || 'The store’s default message',
+                        to: next,
+                      })
+                    }
+                    display={
+                      lock.message?.trim() ? (
+                        <span className="text-[0.9rem] break-words whitespace-pre-wrap">
+                          {lock.message}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted text-[0.9rem]">
+                          The store’s default message.
+                        </span>
+                      )
+                    }
+                  />
                 </DetailSection>
               </div>
             </div>
@@ -394,12 +455,13 @@ export function LockDetailsView({
           {tab === 'settings' && (
             <>
               <DetailSection title="Settings" icon={SlidersIcon}>
+                <p className="text-text-muted mb-3 text-[0.8rem]">
+                  Double-click a value to change it.
+                </p>
                 <FieldGrid>
-                  <Field label="Lock">{lock.enabled ? 'Enabled' : 'Disabled'}</Field>
-                  <Field label="Hidden from navigation menus">
-                    {yesNo(lock.hide_from_nav)}
-                  </Field>
-                  <Field label="Hidden from lists">{yesNo(lock.hide_from_lists)}</Field>
+                  {flagField('enabled')}
+                  {flagField('hide_from_nav')}
+                  {flagField('hide_from_lists')}
                 </FieldGrid>
               </DetailSection>
               <DetailSection
@@ -410,13 +472,9 @@ export function LockDetailsView({
                 forceOpen={showAdvanced}
               >
                 <FieldGrid>
-                  <Field label="Manual locking">{yesNo(lock.manual_locking)}</Field>
-                  <Field label="Hidden from sitemaps">
-                    {yesNo(lock.hide_from_sitemap)}
-                  </Field>
-                  <Field label="Search engines told not to index">
-                    {yesNo(lock.noindex)}
-                  </Field>
+                  {flagField('manual_locking')}
+                  {flagField('hide_from_sitemap')}
+                  {flagField('noindex')}
                 </FieldGrid>
               </DetailSection>
             </>
@@ -434,6 +492,15 @@ export function LockDetailsView({
           )}
         </div>
       </div>
+      {pending &&
+        createPortal(
+          <LockChangeConfirm
+            pending={pending}
+            shop={shop}
+            onClose={() => setPending(null)}
+          />,
+          document.body,
+        )}
     </article>
   )
 }

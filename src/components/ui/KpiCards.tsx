@@ -14,6 +14,8 @@ export interface Kpi {
   onClick?: () => void
   /** For a clickable card: the filter it stands for is on. */
   active?: boolean
+  /** For a clickable card: its tooltip, instead of "Show only: <label>". */
+  title?: string
 }
 
 const VALUE_TONE = {
@@ -72,9 +74,10 @@ export function KpiCards({ items }: { items: Kpi[] }) {
             type="button"
             aria-pressed={kpi.active ?? false}
             title={
-              kpi.active
+              kpi.title ??
+              (kpi.active
                 ? `Showing only: ${kpi.label}. Click to show all.`
-                : `Show only: ${kpi.label}`
+                : `Show only: ${kpi.label}`)
             }
             onClick={kpi.onClick}
             className={card}
