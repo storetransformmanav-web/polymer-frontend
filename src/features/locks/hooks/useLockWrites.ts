@@ -1,6 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
-import { api, type AccessLockBody } from '../../../lib/api/endpoints.ts'
+import {
+  api,
+  type AccessLock,
+  type AccessLockBody,
+  type AccessTagsUpdateBody,
+} from '../../../lib/api/endpoints.ts'
+import { applyTagChange } from '../utils/lockDraft.ts'
 
 /**
  * After any write the locks, the tag counts and the pickers' rows (a customer's tags changed)
@@ -26,6 +32,62 @@ export function useSaveLock() {
   return {
     save: mutation.mutateAsync,
     isSaving: mutation.isPending,
+    error: mutation.isError ? toUserMessage(mutation.error) : null,
+    clearError: mutation.reset,
+  }
+}
+
+/** True for a cached lock query (the list or one lock) of this store. */
+function isLockQueryOf(shop: string, key: QueryKey): boolean {
+  if (key[0] !== 'locks') return false
+  if (key[1] === 'one') return key[2] === shop
+  return (key[2] as { shop?: string } | undefined)?.shop === shop
+}
+
+/**
+ * `PUT /access/tags`: adds and/or removes tags on products and customers. Changing a lock's keys
+ * sends the product's handle with `tags_add` / `tags_remove`; giving or taking access sends the
+ * customers with the lock's keys. When the backend confirms, the keys change in every cached copy
+ * of the lock at once (the list row, the lock's page, its tab), then the locks, tag counts and
+ * pickers are read again quietly (the "with access" figure comes from that). Never retried.
+ */
+export function useUpdateAccessTags() {
+  const queryClient = useQueryClient()
+  const refresh = useRefreshAfterWrite()
+  const mutation = useMutation({
+    mutationFn: (body: AccessTagsUpdateBody) => api.access.updateTags(body),
+    onSuccess: (_result, body) => {
+      const handles = new Set((body.products ?? []).map((handle) => handle.toLowerCase()))
+      if (handles.size > 0) {
+        const patch = (lock: AccessLock): AccessLock =>
+          lock.handle && handles.has(lock.handle.toLowerCase())
+            ? {
+                ...lock,
+                tags: applyTagChange(
+                  lock.tags,
+                  body.tags_add ?? [],
+                  body.tags_remove ?? [],
+                ),
+              }
+            : lock
+        queryClient.setQueriesData<unknown>(
+          { predicate: (query) => isLockQueryOf(body.shop, query.queryKey) },
+          (data: unknown) => {
+            if (!data || typeof data !== 'object') return data
+            if ('locks' in data && Array.isArray((data as { locks: unknown }).locks)) {
+              const list = data as { locks: AccessLock[] }
+              return { ...list, locks: list.locks.map(patch) }
+            }
+            return 'tags' in data ? patch(data as AccessLock) : data
+          },
+        )
+      }
+      return refresh()
+    },
+  })
+  return {
+    update: mutation.mutateAsync,
+    isUpdating: mutation.isPending,
     error: mutation.isError ? toUserMessage(mutation.error) : null,
     clearError: mutation.reset,
   }

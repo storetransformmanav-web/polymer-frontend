@@ -448,7 +448,7 @@ describe('LocksPage', () => {
     const tab = async (user: ReturnType<typeof userEvent.setup>, name: string) =>
       user.click(screen.getByRole('tab', { name }))
 
-    it('opens like a product page: a header, tabs, and cards that can only be read', async () => {
+    it('opens like a product page: a header, tabs, and cards (keys and access have a pencil)', async () => {
       const user = await openLock()
 
       expect(screen.getByRole('tablist', { name: 'Lock sections' })).toBeInTheDocument()
@@ -461,12 +461,15 @@ describe('LocksPage', () => {
         'href',
         expect.stringMatching(/^\/products\//),
       )
-      // The keys are plain chips: no add box, no pencil, no Save.
+      // The keys are chips with a pencil: no add box and no Save until the pencil is used.
       expect(
         within(screen.getByRole('list', { name: 'Keys' })).getByText('vans'),
       ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit keys' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Edit customer access' }),
+      ).toBeInTheDocument()
       expect(screen.queryByLabelText('Search or add a tag')).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument()
 
       // Nor on the Settings tab: the values are shown, with no switch or box to change.
@@ -475,6 +478,134 @@ describe('LocksPage', () => {
       expect(screen.queryByRole('switch')).not.toBeInTheDocument()
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
+    })
+
+    describe('editing with PUT /access/tags', () => {
+      it('changes the keys of the product: Save asks first, then sends tags_add and tags_remove', async () => {
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit keys' }))
+        await user.click(await screen.findByRole('button', { name: 'Remove tag vans' }))
+        await user.type(screen.getByLabelText('Search or add a tag'), 'blue{Enter}')
+        // Shopify will hold the new keys once the change is confirmed.
+        updateTags.mockImplementation(async () => {
+          locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['blue'] })]))
+          return { ...WRITE_OK, createdLocks: 0, message: 'Products: 1 updated.' }
+        })
+
+        await user.click(screen.getByRole('button', { name: 'Save keys' }))
+        const dialog = await screen.findByRole('alertdialog')
+        expect(updateTags).not.toHaveBeenCalled()
+        expect(within(dialog).getByText('Keys to add')).toBeInTheDocument()
+        expect(within(dialog).getByText('Keys to remove')).toBeInTheDocument()
+        await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
+
+        await waitFor(() =>
+          expect(updateTags).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            products: ['locked-product-1'],
+            tags_add: ['blue'],
+            tags_remove: ['vans'],
+          }),
+        )
+        const keys = await screen.findByRole('list', { name: 'Keys' })
+        expect(within(keys).getByText('blue')).toBeInTheDocument()
+        expect(within(keys).queryByText('vans')).toBeNull()
+        expect(screen.getByText('Products: 1 updated.')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Edit keys' })).toBeInTheDocument()
+      })
+
+      it('sends nothing when the keys are discarded, or when nothing changed', async () => {
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit keys' }))
+        await user.click(await screen.findByRole('button', { name: 'Remove tag vans' }))
+        await user.click(screen.getByRole('button', { name: 'Discard keys' }))
+        expect(
+          within(screen.getByRole('list', { name: 'Keys' })).getByText('vans'),
+        ).toBeInTheDocument()
+
+        await user.click(screen.getByRole('button', { name: 'Edit keys' }))
+        expect(screen.getByRole('button', { name: 'Save keys' })).toBeDisabled()
+        expect(updateTags).not.toHaveBeenCalled()
+      })
+
+      it("keeps the question open with the backend's message when the change is refused", async () => {
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit keys' }))
+        await user.type(
+          await screen.findByLabelText('Search or add a tag'),
+          'blue{Enter}',
+        )
+        updateTags.mockRejectedValue(new ApiError('Tag not allowed', { status: 422 }))
+
+        await user.click(screen.getByRole('button', { name: 'Save keys' }))
+        await user.click(
+          within(await screen.findByRole('alertdialog')).getByRole('button', {
+            name: 'Yes, update',
+          }),
+        )
+
+        expect(await screen.findByText('Tag not allowed')).toBeInTheDocument()
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      })
+
+      it("gives customers access: their emails with the lock's keys as tags_add", async () => {
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
+        await user.type(
+          screen.getByLabelText('Customers'),
+          'buyer@example.com, other@example.com buyer@example.com',
+        )
+        expect(screen.getByText('2 customers')).toBeInTheDocument()
+
+        await user.click(screen.getByRole('button', { name: 'Save customer access' }))
+        const dialog = await screen.findByRole('alertdialog')
+        expect(updateTags).not.toHaveBeenCalled()
+        await user.click(within(dialog).getByRole('button', { name: 'Yes, give access' }))
+
+        await waitFor(() =>
+          expect(updateTags).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            customers: ['buyer@example.com', 'other@example.com'],
+            tags_add: ['vans'],
+          }),
+        )
+        expect(await screen.findByText(WRITE_OK.message)).toBeInTheDocument()
+        expect(screen.queryByLabelText('Customers')).toBeNull()
+      })
+
+      it('takes access away: the same customers with the keys as tags_remove', async () => {
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
+        await user.click(screen.getByRole('radio', { name: 'Remove access' }))
+        await user.type(screen.getByLabelText('Customers'), 'buyer@example.com')
+        await user.click(screen.getByRole('button', { name: 'Save customer access' }))
+        await user.click(
+          within(await screen.findByRole('alertdialog')).getByRole('button', {
+            name: 'Yes, remove access',
+          }),
+        )
+
+        await waitFor(() =>
+          expect(updateTags).toHaveBeenCalledWith({
+            shop: 'polymer-uk',
+            customers: ['buyer@example.com'],
+            tags_remove: ['vans'],
+          }),
+        )
+      })
+
+      it('needs a key before access can be given, and a customer to give it to', async () => {
+        locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: [] })]))
+        const user = await openLock()
+        await user.click(screen.getByRole('button', { name: 'Edit customer access' }))
+
+        expect(screen.getByText(/Add a key to this lock first/)).toBeInTheDocument()
+        await user.type(screen.getByLabelText('Customers'), 'buyer@example.com')
+        expect(
+          screen.getByRole('button', { name: 'Save customer access' }),
+        ).toBeDisabled()
+        expect(updateTags).not.toHaveBeenCalled()
+      })
     })
 
     it('keeps a strip of opened locks, as the products page does', async () => {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyTagChange,
   DEFAULT_OPTIONS,
+  diffTags,
+  parseCustomerRefs,
   blankLockDraft,
   buildLockBody,
   isLockDraftDirty,
@@ -105,5 +108,38 @@ describe('isLockDraftDirty', () => {
         options: { ...DEFAULT_OPTIONS, enabled: false },
       }),
     ).toBe(true)
+  })
+})
+
+describe('diffTags / applyTagChange', () => {
+  it('names what was added and removed, ignoring case', () => {
+    expect(diffTags(['vans', 'Boxes'], ['boxes', 'blue'])).toEqual({
+      add: ['blue'],
+      remove: ['vans'],
+    })
+    expect(diffTags(['a'], ['A'])).toEqual({ add: [], remove: [] })
+  })
+
+  it('puts the change into a tag list: removals first, no repeats', () => {
+    expect(applyTagChange(['vans', 'boxes'], ['Blue', 'BOXES'], ['Vans'])).toEqual([
+      'boxes',
+      'Blue',
+    ])
+    expect(applyTagChange(['a'], [], [])).toEqual(['a'])
+  })
+})
+
+describe('parseCustomerRefs', () => {
+  it('splits on commas, semicolons, spaces and new lines, and drops repeats (any case)', () => {
+    expect(
+      parseCustomerRefs(
+        'Buyer@example.com, other@example.com;\nthird@example.com  buyer@EXAMPLE.com',
+      ),
+    ).toEqual(['Buyer@example.com', 'other@example.com', 'third@example.com'])
+    expect(parseCustomerRefs('  ,, ')).toEqual([])
+  })
+
+  it('leaves out what is already listed', () => {
+    expect(parseCustomerRefs('a@x.com b@x.com', ['A@x.com'])).toEqual(['b@x.com'])
   })
 })

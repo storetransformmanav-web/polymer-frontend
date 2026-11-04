@@ -25,15 +25,12 @@ import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
 import { useAccessCheck } from '../hooks/useLockWrites.ts'
 import { checkReasonText, syncLabel, syncTone } from '../utils/format.ts'
+import { LockCustomersSection, LockKeysSection } from './LockAccessEditors.tsx'
 import { LockImage } from './LockCard.tsx'
 
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 const SECONDARY = `${BUTTON} border-border bg-bg text-text hover:border-accent`
-
-/** A tag chip: the same pill as a product's tags. */
-const TAG_CHIP =
-  'bg-surface text-text border-border rounded-md border px-2.5 py-1 text-[0.8rem] font-medium'
 
 type TabId = 'overview' | 'settings' | 'access'
 
@@ -152,9 +149,10 @@ function CheckAccessCard({
 
 /**
  * One lock's page, in place of the list — laid out like a product's page: a header (picture,
- * name, status pills, Back to list), a row of tabs and collapsible cards. **It is read-only**:
- * the keys, settings and message are only shown. The one thing it asks the backend is
- * "Check access" (`GET /access/check`), which changes nothing; a lock is created from Add lock.
+ * name, status pills, Back to list), a row of tabs and collapsible cards. **The keys and who has
+ * access are editable** (each with a pencil — `LockAccessEditors.tsx`, one `PUT /access/tags`
+ * after an "Are you sure?"); the settings and message are only shown, since the API has no call
+ * to change them. "Check access" (`GET /access/check`) changes nothing.
  */
 export function LockDetailsView({
   lock,
@@ -368,33 +366,12 @@ export function LockDetailsView({
                         {lock.last_pushed_at ? formatDateTime(lock.last_pushed_at) : null}
                       </Field>
                     </FieldGrid>
-                    {/* The keys under the fields, drawn like a product's tags. */}
-                    <section
-                      aria-labelledby="lock-keys-heading"
-                      className="flex flex-col gap-2.5"
-                    >
-                      <h3 id="lock-keys-heading" className="text-[0.95rem] font-semibold">
-                        Keys (tags)
-                      </h3>
-                      {hasKeys ? (
-                        <ul
-                          aria-label="Keys"
-                          className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5"
-                        >
-                          {lock.tags.map((tag) => (
-                            <li key={tag} className={TAG_CHIP}>
-                              {tag}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">
-                          No keys: any signed-in customer can open this product.
-                        </p>
-                      )}
-                    </section>
+                    {/* The keys under the fields, drawn like a product's tags — with a pencil. */}
+                    <LockKeysSection lock={lock} shop={shop} />
                   </div>
                 </DetailSection>
+
+                <LockCustomersSection lock={lock} shop={shop} />
 
                 <DetailSection title="Message" icon={InfoIcon}>
                   <p className="text-text-muted mb-2 text-[0.8rem]">

@@ -77,6 +77,58 @@ export function parseTags(text: string, existing: readonly string[] = []): strin
   return out
 }
 
+/** What changed between a lock's keys and an edited list (a tag compares without case). */
+export function diffTags(
+  original: readonly string[],
+  edited: readonly string[],
+): { add: string[]; remove: string[] } {
+  const had = new Set(original.map((tag) => tag.toLowerCase()))
+  const has = new Set(edited.map((tag) => tag.toLowerCase()))
+  return {
+    add: edited.filter((tag) => !had.has(tag.toLowerCase())),
+    remove: original.filter((tag) => !has.has(tag.toLowerCase())),
+  }
+}
+
+/** A tag list with `add` put in and `remove` taken out (what the store will hold after `PUT /access/tags`). */
+export function applyTagChange(
+  tags: readonly string[],
+  add: readonly string[],
+  remove: readonly string[],
+): string[] {
+  const gone = new Set(remove.map((tag) => tag.toLowerCase()))
+  const kept = tags.filter((tag) => !gone.has(tag.toLowerCase()))
+  const seen = new Set(kept.map((tag) => tag.toLowerCase()))
+  for (const tag of add) {
+    if (seen.has(tag.toLowerCase())) continue
+    seen.add(tag.toLowerCase())
+    kept.push(tag)
+  }
+  return kept
+}
+
+/** The longest customer email / id the API is asked about. */
+export const MAX_CUSTOMER_REF_LENGTH = 200
+
+/**
+ * The customers typed into a box — emails or ids split on commas, semicolons, spaces or new
+ * lines, a repeat (without case) dropped. `existing` are already in the list.
+ */
+export function parseCustomerRefs(
+  text: string,
+  existing: readonly string[] = [],
+): string[] {
+  const seen = new Set(existing.map((ref) => ref.toLowerCase()))
+  const out: string[] = []
+  for (const piece of text.split(/[\s,;]+/)) {
+    const ref = piece.trim().slice(0, MAX_CUSTOMER_REF_LENGTH)
+    if (!ref || seen.has(ref.toLowerCase())) continue
+    seen.add(ref.toLowerCase())
+    out.push(ref)
+  }
+  return out
+}
+
 export interface LockProblems {
   /** About the whole form (nothing chosen). */
   form?: string
