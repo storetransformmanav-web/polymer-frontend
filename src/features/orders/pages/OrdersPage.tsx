@@ -74,7 +74,7 @@ export function OrdersPage() {
       />
 
       {activeRef && (
-        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <OrderDetailsView
             key={`${activeShop ?? ''}|${activeRef}`}
             reference={activeRef}

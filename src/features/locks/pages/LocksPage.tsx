@@ -22,7 +22,7 @@ const NOTICE_MS = 10_000
 
 // The page itself does not scroll from `lg` up (`fillHeight` in navigation.ts): the table has
 // its own scrollbar, and the Add lock form and a lock's page scroll inside this box.
-const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 
 const LIST_PATH = '/locks'
 const NEW_PATH = '/locks/new'

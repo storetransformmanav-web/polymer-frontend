@@ -56,7 +56,7 @@ const plural = (count: number, word: string) =>
 const LIST_PATH = '/products'
 // An open product / the bulk editor / the create form scroll inside the page (from `lg` up the
 // page itself does not scroll — see `fillHeight` in navigation.ts).
-const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 // The "Add product" form is a tab of its own, at /products/new (no product has that id).
 const CREATE_PATH = `${LIST_PATH}/new`

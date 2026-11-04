@@ -5,7 +5,7 @@ import { SidePanel } from '../../../components/ui/SidePanel.tsx'
 import type { ActivityItem } from '../../../lib/api/endpoints.ts'
 import { formatTimestamp } from '../../../lib/format.ts'
 import {
-  actionLabel,
+  readableSummary,
   actorName,
   formatDuration,
   hasEntries,
@@ -67,7 +67,7 @@ export function ActivityDetailsPanel({ item, onClose }: ActivityDetailsPanelProp
       <div className="flex flex-col gap-5 p-5">
         <div className="flex flex-col gap-2">
           <h3 className="text-lg leading-snug font-semibold break-words">
-            {item.summary || actionLabel(item.action)}
+            {readableSummary(item.summary, item.action)}
           </h3>
           <div className="flex flex-wrap items-center gap-2">
             {item.method && (

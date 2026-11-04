@@ -181,7 +181,10 @@ export function OrdersList({
   }
 
   return (
-    <div aria-busy={isPending || isStale} className="min-h-0 flex-1 overflow-auto">
+    <div
+      aria-busy={isPending || isStale}
+      className="relative min-h-0 flex-1 overflow-auto"
+    >
       <table
         className={`w-full min-w-[1180px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >

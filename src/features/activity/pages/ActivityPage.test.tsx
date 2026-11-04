@@ -155,7 +155,7 @@ describe('ActivityPage', () => {
       )
     })
 
-    it('shows time, user, action, summary, path, method, status and duration', async () => {
+    it('shows time, user, action, summary, method, status and duration — not the API path', async () => {
       renderWithProviders(<ActivityPage />)
       await screen.findByText('Manav viewed product 1')
 
@@ -180,7 +180,7 @@ describe('ActivityPage', () => {
           .closest('tr') as HTMLElement,
       )
       expect(created.getByText('Create user')).toBeInTheDocument()
-      expect(created.getByText('/api/users')).toBeInTheDocument()
+      expect(created.queryByText('/api/users')).toBeNull()
       expect(created.getByText('POST')).toBeInTheDocument()
       expect(created.getByText('201')).toBeInTheDocument()
       expect(created.getByText('1.3 s')).toBeInTheDocument()

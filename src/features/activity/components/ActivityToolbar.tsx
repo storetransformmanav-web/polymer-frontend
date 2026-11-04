@@ -91,7 +91,7 @@ export function ActivityToolbar({
           <input
             type="search"
             aria-label="Search activity"
-            placeholder="Search the summary or path…"
+            placeholder="Search activity…"
             maxLength={200}
             value={search}
             onChange={(event) => setSearch(event.target.value)}

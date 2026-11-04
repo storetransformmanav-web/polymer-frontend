@@ -18,16 +18,19 @@ export function DashboardLayout() {
   useSessionGuard()
   const fill = useActiveNavItem()?.fillHeight === true
 
+  // `relative` + `overflow-clip`: a visually hidden helper (`sr-only`, absolutely positioned)
+  // deep inside a page's own scroll box would otherwise be placed against the window and
+  // stretch the document, so the window scrolled on past the app into empty space.
   return (
     <div
-      className={`bg-bg flex min-h-svh ${fill ? 'lg:h-svh lg:min-h-0 lg:overflow-hidden' : ''}`}
+      className={`bg-bg relative flex min-h-svh ${fill ? 'lg:h-svh lg:min-h-0 lg:overflow-clip' : ''}`}
     >
       <Navbar />
       <div className={`flex min-w-0 flex-1 flex-col ${fill ? 'lg:min-h-0' : ''}`}>
         <AppBar />
         <main
           className={`bg-page flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
-            fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden lg:pb-6' : ''
+            fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-clip lg:pb-6' : ''
           }`}
         >
           <Outlet />

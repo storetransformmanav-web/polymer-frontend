@@ -7,6 +7,7 @@ import type { ActivityItem } from '../../../lib/api/endpoints.ts'
 import { formatTimestamp, initials } from '../../../lib/format.ts'
 import {
   actionLabel,
+  readableSummary,
   actorName,
   formatDuration,
   methodTone,
@@ -158,7 +159,7 @@ export function ActivityList({
                     <Avatar name={name} />
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="line-clamp-2 text-[0.88rem] font-semibold">
-                        <Highlight text={item.summary || actionLabel(item.action)} />
+                        <Highlight text={readableSummary(item.summary, item.action)} />
                       </span>
                       <span className="text-text-muted truncate text-[0.78rem]">
                         {name} · {formatTimestamp(item.time)}
@@ -245,21 +246,11 @@ export function ActivityList({
                       </span>
                     </td>
                     <td className={TD}>
-                      <span className="flex min-w-0 flex-col">
-                        <span
-                          className="max-w-72 truncate 2xl:max-w-md"
-                          title={item.summary}
-                        >
-                          <Highlight text={item.summary || '—'} />
-                        </span>
-                        {item.path && (
-                          <span
-                            className="text-text-muted max-w-72 truncate font-mono text-[0.74rem] 2xl:max-w-md"
-                            title={item.path}
-                          >
-                            <Highlight text={item.path} />
-                          </span>
-                        )}
+                      <span
+                        className="block max-w-72 truncate 2xl:max-w-md"
+                        title={readableSummary(item.summary, item.action)}
+                      >
+                        <Highlight text={readableSummary(item.summary, item.action)} />
                       </span>
                     </td>
                     <td className={TD}>

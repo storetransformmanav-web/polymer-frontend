@@ -7,6 +7,42 @@ export function actionLabel(action: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : action
 }
 
+// Record identifiers a person can't read: UUIDs, Shopify GIDs, "#17516" and long numbers.
+const ID_PATTERNS = [
+  /gid:\/\/shopify\/\S+/gi,
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+  /#\d+\b/g,
+  /\b\d{5,}\b/g,
+]
+
+/**
+ * The summary as a sentence for people: record IDs are dropped ("Kairav viewed inventory
+ * 1228e801-…" → "Kairav viewed inventory", "viewed order 17516" → "viewed an order") — the
+ * details panel still has the full request. Falls back to the action's name.
+ */
+export function readableSummary(
+  summary: string | null | undefined,
+  action: string,
+): string {
+  let text = summary ?? ''
+  for (const pattern of ID_PATTERNS) text = text.replace(pattern, ' ')
+  text = text
+    .replace(/\s+([,.;:)])/g, '$1')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[\s,:;-]+$/, '')
+    .trim()
+  // "viewed order" (its ID removed) reads better as "viewed an order".
+  if (text !== (summary ?? '').trim()) {
+    text = text.replace(
+      /\b(viewed|updated|deleted|created|synced|pushed|checked|opened|edited) (order|product|customer|user|inventory item|variant|lock|collection|image)$/i,
+      (_, verb: string, noun: string) =>
+        `${verb} ${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`,
+    )
+  }
+  return text || actionLabel(action)
+}
+
 /** The acting user's name for a log row: name, else email, else "System" (no user). */
 export function actorName(user: ActivityItem['user']): string {
   return user?.full_name?.trim() || user?.email || 'System'

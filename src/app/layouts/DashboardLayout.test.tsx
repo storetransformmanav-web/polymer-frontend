@@ -64,11 +64,11 @@ describe('DashboardLayout', () => {
 
     const layout = container.firstElementChild as HTMLElement
     expect(layout.className).toContain('lg:h-svh')
-    expect(layout.className).toContain('lg:overflow-hidden')
+    expect(layout.className).toContain('lg:overflow-clip')
     const main = screen.getByRole('main')
     expect(main.className).toContain('lg:flex-col')
     expect(main.className).toContain('lg:min-h-0')
-    expect(main.className).toContain('lg:overflow-hidden')
+    expect(main.className).toContain('lg:overflow-clip')
     expect(screen.getByText('the orders page')).toBeInTheDocument()
   })
 
@@ -78,8 +78,8 @@ describe('DashboardLayout', () => {
 
       const layout = container.firstElementChild as HTMLElement
       expect(layout.className).not.toContain('lg:h-svh')
-      expect(layout.className).not.toContain('overflow-hidden')
-      expect(screen.getByRole('main').className).not.toContain('lg:overflow-hidden')
+      expect(layout.className).not.toContain('overflow-clip')
+      expect(screen.getByRole('main').className).not.toContain('lg:overflow-clip')
       unmount()
     }
   })

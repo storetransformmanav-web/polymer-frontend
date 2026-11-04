@@ -250,7 +250,7 @@ export function ProductsList({
   return (
     <div
       aria-busy={isPending || isStale}
-      className="max-h-[min(68svh,760px)] min-h-0 flex-1 overflow-auto lg:max-h-none"
+      className="relative max-h-[min(68svh,760px)] min-h-0 flex-1 overflow-auto lg:max-h-none"
     >
       <table
         className={`w-full min-w-[1100px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}

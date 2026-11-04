@@ -99,6 +99,10 @@ export const activityListOptions = (params: ActivityListParams) =>
     queryKey: ['activity', 'list', params],
     queryFn: () => api.activity.list(params),
     staleTime: ACTIVITY_STALE_MS,
+    // The backend logs every request into this very log, so no automatic re-reads: switching
+    // back to the browser tab or reconnecting would add entries the person never asked for.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
 export const activityActionsOptions = () =>
@@ -106,4 +110,6 @@ export const activityActionsOptions = () =>
     queryKey: ['activity', 'actions'],
     queryFn: api.activity.actions,
     staleTime: ACTIVITY_OPTIONS_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })

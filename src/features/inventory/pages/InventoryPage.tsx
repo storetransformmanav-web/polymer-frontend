@@ -19,7 +19,7 @@ import { HISTORY_PATH, LIST_PATH, variantPath } from '../utils/format.ts'
 
 // An open variant / the history scroll inside the page (from `lg` up the page itself does not
 // scroll — see `fillHeight` in navigation.ts).
-const SCROLL_VIEW = 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 
 /**
  * Inventory: the stock list at `/inventory`, one variant's stock at `/inventory/:variantId` and

@@ -111,10 +111,13 @@ describe('the Sync orders button', () => {
 
     expect(button).toHaveAttribute('aria-expanded', 'true')
     expect(screen.queryByRole('dialog')).toBeNull()
+    // Like the products panel: the box is focused, with the two actions in it.
+    expect(panel.getByLabelText(/Last days/)).toHaveFocus()
+    expect(panel.getByLabelText(/Last days/)).toHaveValue('10')
+    expect(panel.getByRole('button', { name: 'Refresh' })).toBeInTheDocument()
     expect(
       panel.getByRole('button', { name: /^Sync new and changed orders/ }),
-    ).toHaveFocus()
-    expect(panel.getByLabelText('Refresh the last days')).toHaveValue('10')
+    ).toBeInTheDocument()
     expect(trigger).not.toHaveBeenCalled()
 
     // Escape (or a click outside) closes it.
@@ -149,19 +152,14 @@ describe('the Sync orders button', () => {
     expect(screen.queryByRole('group', { name: 'Sync orders' })).toBeNull()
   })
 
-  it('refreshes a typed number of days (Enter works) and has quick choices', async () => {
+  it('refreshes a typed number of days (Enter works)', async () => {
     const { user, panel } = await openPanel('polymer-uk')
 
-    await user.click(panel.getByRole('button', { name: '90 days' }))
-    expect(panel.getByLabelText('Refresh the last days')).toHaveValue('90')
-    expect(panel.getByRole('button', { name: '90 days' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-
-    const box = panel.getByLabelText('Refresh the last days')
+    const box = panel.getByLabelText(/Last days/)
     await user.clear(box)
-    await user.type(box, '3650{Enter}')
+    await user.type(box, '3650')
+    expect(panel.getByText('4/4')).toBeInTheDocument()
+    await user.keyboard('{Enter}')
     await waitFor(() =>
       expect(trigger).toHaveBeenCalledWith({
         mode: 'refresh',
@@ -173,7 +171,7 @@ describe('the Sync orders button', () => {
 
   it('takes whole days from 1 to 3650 and says why before sending', async () => {
     const { user, panel } = await openPanel('polymer-uk')
-    const box = panel.getByLabelText('Refresh the last days')
+    const box = panel.getByLabelText(/Last days/)
 
     await user.clear(box)
     await user.click(panel.getByRole('button', { name: 'Refresh' }))
