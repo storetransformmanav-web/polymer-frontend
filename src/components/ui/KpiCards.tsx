@@ -23,10 +23,14 @@ const VALUE_TONE = {
   danger: 'text-danger',
 }
 
-/** A row of four headline figures above a list (label, big value, icon) — generic. */
+/** A row of four (or five) headline figures above a list (label, big value, icon) — generic. */
 export function KpiCards({ items }: { items: Kpi[] }) {
   return (
-    <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={`grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 ${
+        items.length === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+      }`}
+    >
       {items.map((kpi) => {
         const card = `border-border bg-bg flex items-center justify-between gap-3 rounded-2xl border px-5 py-4 ${
           kpi.onClick

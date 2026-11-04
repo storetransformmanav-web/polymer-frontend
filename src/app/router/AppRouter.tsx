@@ -40,7 +40,7 @@ const router = createBrowserRouter([
           { path: 'products/*', element: <ProductsPage /> },
           // `*` lets CustomersPage also serve /customers/:id (the details page).
           { path: 'customers/*', element: <CustomersPage /> },
-          { path: 'inventory', element: <InventoryPage /> },
+          { path: 'inventory/*', element: <InventoryPage /> },
           // `*` lets UsersPage also serve /users/new (the Add user form).
           { path: 'users/*', element: <UsersPage /> },
           // `*` lets LocksPage also serve /locks/new (Add lock) and /locks/:handle (one lock).

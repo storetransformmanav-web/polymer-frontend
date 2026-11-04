@@ -3,6 +3,7 @@ import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
 import { queryClient } from '../queryClient.ts'
 import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
 import { customersReducer } from './customersSlice.ts'
+import { inventoryReducer } from './inventorySlice.ts'
 import { ordersReducer } from './ordersSlice.ts'
 import { loadProductMedia, saveProductMedia } from './productMediaStorage.ts'
 import { productMediaRestored, productsReducer } from './productsSlice.ts'
@@ -52,6 +53,7 @@ export function createAppStore() {
       auth: authReducer,
       products: productsReducer,
       customers: customersReducer,
+      inventory: inventoryReducer,
       orders: ordersReducer,
       shop: shopReducer,
     },

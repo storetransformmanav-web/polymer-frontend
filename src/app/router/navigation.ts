@@ -72,7 +72,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         syncs: 'products',
       },
       { to: '/customers', label: 'Customers', icon: UsersIcon, shopScoped: true },
-      { to: '/inventory', label: 'Inventory', icon: InventoryIcon },
+      { to: '/inventory', label: 'Inventory', icon: InventoryIcon, fillHeight: true },
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon },

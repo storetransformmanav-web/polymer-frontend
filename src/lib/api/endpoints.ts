@@ -57,8 +57,16 @@ export const ENDPOINTS = {
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
   },
   inventory: {
-    /** `GET` the stock list — also names the stores' stock locations. */
+    /** `GET` the stock list (paged, with `totals` and the stores' `locations`). */
     list: '/inventory',
+    /** `GET` the stock history (paged). */
+    history: '/inventory/history',
+    /** `ref` is a variant's id: `GET` its stock by location, `PUT` sets quantities ("Set to"). */
+    detail: (ref: string) => `/inventory/${encodeURIComponent(ref)}`,
+    /** `POST` adds or removes an amount ("Adjust by"). */
+    adjust: (ref: string) => `/inventory/${encodeURIComponent(ref)}/adjust`,
+    /** `GET` the state of one stock change on its way to Shopify. */
+    adjustment: (id: string) => `/inventory/adjustments/${encodeURIComponent(id)}`,
   },
   access: {
     /** `GET` the locked products (paged); `POST` locks products / gives customers the tags / sets the options. */
@@ -1137,6 +1145,322 @@ const stockLocationsResponseSchema = z.object({
 
 export type StockLocation = z.infer<typeof stockLocationSchema>
 
+// --- Inventory ---------------------------------------------------------------
+// The six inventory APIs (list, one variant, set, adjust, history, one change's status).
+
+/** The quantities Shopify keeps, with the labels of its inventory screen. */
+export const STOCK_QUANTITY_NAMES = [
+  'available',
+  'on_hand',
+  'committed',
+  'incoming',
+  'reserved',
+  'safety_stock',
+  'damaged',
+  'quality_control',
+  'unavailable',
+] as const
+export type StockQuantityName = (typeof STOCK_QUANTITY_NAMES)[number]
+
+/** The ones that can be set or adjusted (committed and incoming come from Shopify; unavailable is worked out). */
+export const EDITABLE_STOCK_QUANTITIES = [
+  'available',
+  'on_hand',
+  'reserved',
+  'safety_stock',
+  'damaged',
+  'quality_control',
+] as const
+export type EditableStockQuantity = (typeof EDITABLE_STOCK_QUANTITIES)[number]
+
+/** Why stock changed (the dropdown on the edit window; the default is `correction`). */
+export const STOCK_REASONS = [
+  'correction',
+  'cycle_count_available',
+  'damaged',
+  'movement_created',
+  'movement_updated',
+  'movement_received',
+  'movement_canceled',
+  'other',
+  'promotion',
+  'quality_control',
+  'received',
+  'reservation_created',
+  'reservation_deleted',
+  'reservation_updated',
+  'restock',
+  'safety_stock',
+  'shrinkage',
+] as const
+export type StockReason = (typeof STOCK_REASONS)[number]
+
+export const INVENTORY_SORTS = [
+  'title',
+  'sku',
+  'available',
+  'on_hand',
+  'committed',
+  'incoming',
+  'unavailable',
+  'updated',
+] as const
+export type InventorySort = (typeof INVENTORY_SORTS)[number]
+
+/** The stock filter chips: in stock, low (below `low_threshold`) or out. */
+export type InventoryStatus = 'in_stock' | 'low' | 'out'
+
+// A quantity may arrive as a number or as text ("12"); nothing else is accepted.
+const stockNumber = z.coerce.number().nullish()
+
+const stockQuantitiesSchema = z.object({
+  available: stockNumber,
+  on_hand: stockNumber,
+  committed: stockNumber,
+  incoming: stockNumber,
+  reserved: stockNumber,
+  safety_stock: stockNumber,
+  damaged: stockNumber,
+  quality_control: stockNumber,
+  unavailable: stockNumber,
+})
+
+export type StockQuantities = z.infer<typeof stockQuantitiesSchema>
+
+/** A location id is a Shopify number; the API may send it as text. */
+const locationIdSchema = z.union([z.number(), z.string()]).transform(Number)
+
+/**
+ * One variant's stock at one location. The location's id is `location_id` — or, as a product's
+ * inventory levels name it, `location_shopify_id`: either is read, and the line carries it as
+ * `location_id`.
+ */
+const stockLineSchema = stockQuantitiesSchema
+  .extend({
+    location_id: locationIdSchema.nullish(),
+    location_shopify_id: locationIdSchema.nullish(),
+    location_name: z.string().nullish(),
+    updated_at: z.string().nullish(),
+  })
+  .transform((line) => ({
+    ...line,
+    location_id: line.location_id ?? line.location_shopify_id ?? 0,
+  }))
+
+export type StockLine = z.infer<typeof stockLineSchema>
+
+const inventoryItemBase = z.object({
+  /** The variant's id (`variant_id`, or `id` when the answer calls it that). */
+  variant_id: z.string().nullish(),
+  id: z.string().nullish(),
+  product_id: z.string().nullish(),
+  title: z.string().nullish(),
+  product_title: z.string().nullish(),
+  variant_title: z.string().nullish(),
+  sku: z.string().nullish(),
+  barcode: z.string().nullish(),
+  /** The product's status (ACTIVE, DRAFT, ARCHIVED). */
+  status: z.string().nullish(),
+  /** False: Shopify does not track this variant's stock (no editing). */
+  tracked: z.boolean().nullish(),
+  image_url: z.string().nullish(),
+  totals: stockQuantitiesSchema.nullish(),
+  locations: z.array(stockLineSchema).nullish(),
+})
+
+/** Fills in what an answer may leave out, so the rest of the app can rely on it. */
+function normalizeInventoryItem<T extends z.infer<typeof inventoryItemBase>>(item: T) {
+  return {
+    ...item,
+    variant_id: item.variant_id ?? item.id ?? '',
+    title: item.title ?? item.product_title ?? '',
+    totals: item.totals ?? ({} as z.infer<typeof stockQuantitiesSchema>),
+    locations: item.locations ?? [],
+  }
+}
+
+const inventoryItemSchema = inventoryItemBase.transform(normalizeInventoryItem)
+
+export type InventoryItem = z.infer<typeof inventoryItemSchema>
+
+const inventoryTotalsSchema = z.object({
+  variants: stockNumber,
+  available: stockNumber,
+  on_hand: stockNumber,
+  committed: stockNumber,
+  incoming: stockNumber,
+  unavailable: stockNumber,
+  in_stock: stockNumber,
+  low_stock: stockNumber,
+  out_of_stock: stockNumber,
+})
+
+export type InventoryTotals = z.infer<typeof inventoryTotalsSchema>
+
+const inventoryListResponseSchema = z.object({
+  items: z.array(inventoryItemSchema).default([]),
+  totals: inventoryTotalsSchema.default({}),
+  locations: z.array(stockLocationSchema).default([]),
+  page: z.number().default(1),
+  page_size: z.number().default(25),
+  total: z.number().default(0),
+  total_pages: z.number().default(1),
+  has_next: z.boolean().default(false),
+})
+
+export type InventoryListResponse = z.infer<typeof inventoryListResponseSchema>
+
+export interface InventoryListParams {
+  search?: string
+  /** A Shopify location id: the totals then count that location only. */
+  location?: string | number
+  status?: InventoryStatus
+  /** What counts as "low" (the API's default is 10). */
+  low_threshold?: number
+  product_status?: 'ACTIVE' | 'DRAFT' | 'ARCHIVED'
+  vendor?: string
+  product_type?: string
+  collection_id?: string
+  tracked?: boolean
+  sort?: InventorySort
+  order?: 'asc' | 'desc'
+  page?: number
+  /** At most 100. */
+  page_size?: number
+}
+
+/** `GET /inventory/{variant_ref}`: a variant with its stock at every location. */
+const inventoryVariantSchema = inventoryItemBase
+  .extend({
+    price: z.string().nullish(),
+    currency: z.string().nullish(),
+    /** DENY = stop selling at 0, CONTINUE = keep selling. */
+    inventory_policy: z.string().nullish(),
+    shop: shopRefSchema.nullish(),
+  })
+  .transform(normalizeInventoryItem)
+
+export type InventoryVariant = z.infer<typeof inventoryVariantSchema>
+
+const inventoryVariantResponseSchema = z.object({ variant: inventoryVariantSchema })
+
+/** The state of one stock change on its way to Shopify. */
+const stockAdjustmentSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).transform(String),
+    /** `pending`, `synced` or `error`. */
+    status: z.string().default('pending'),
+    error: z.string().nullish(),
+    variant_id: z.string().nullish(),
+    location_id: locationIdSchema.nullish(),
+    location_name: z.string().nullish(),
+    quantity_name: z.string().nullish(),
+    mode: z.string().nullish(),
+    quantity_before: z.number().nullish(),
+    quantity_after: z.number().nullish(),
+    delta: z.number().nullish(),
+    reason: z.string().nullish(),
+    note: z.string().nullish(),
+    created_at: z.string().nullish(),
+    synced_at: z.string().nullish(),
+  })
+  .passthrough()
+
+export type StockAdjustment = z.infer<typeof stockAdjustmentSchema>
+
+const stockWriteResultSchema = z.object({
+  adjustments: z.array(stockAdjustmentSchema).default([]),
+})
+
+/** The write answers carry `result.adjustments[]` (a bare `adjustments` is read too). */
+const stockWriteResponseSchema = z.union([
+  z
+    .object({ result: stockWriteResultSchema })
+    .passthrough()
+    .transform((body) => body.result),
+  stockWriteResultSchema,
+])
+
+export type StockWriteResult = z.infer<typeof stockWriteResultSchema> & {
+  message?: string
+}
+
+const stockAdjustmentResponseSchema = z.union([
+  z.object({ adjustment: stockAdjustmentSchema }).transform((body) => body.adjustment),
+  stockAdjustmentSchema,
+])
+
+/** "Set to": new numbers for one or more quantities at one location (each 0 or more). */
+export interface StockSetBody {
+  location_id: number
+  quantities: Partial<Record<EditableStockQuantity, number>>
+  reason?: StockReason
+  /** At most 500 characters. */
+  note?: string
+}
+
+/** "Adjust by": add (positive) or remove (negative) an amount of one quantity. */
+export interface StockAdjustBody {
+  location_id: number
+  name: EditableStockQuantity
+  /** Not 0, between -100000 and 100000, and never below 0 in the end. */
+  delta: number
+  reason?: StockReason
+  note?: string
+}
+
+const stockHistoryItemSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  created_at: z.string().nullish(),
+  /** Who did it: a name, or an object with a name / email. */
+  user: z
+    .union([
+      z.string(),
+      z.object({ name: z.string().nullish(), email: z.string().nullish() }),
+    ])
+    .nullish(),
+  variant_id: z.string().nullish(),
+  title: z.string().nullish(),
+  variant_title: z.string().nullish(),
+  sku: z.string().nullish(),
+  location_id: locationIdSchema.nullish(),
+  location_name: z.string().nullish(),
+  quantity_name: z.string().nullish(),
+  /** `set` or `adjust`. */
+  mode: z.string().nullish(),
+  quantity_before: z.number().nullish(),
+  quantity_after: z.number().nullish(),
+  delta: z.number().nullish(),
+  reason: z.string().nullish(),
+  note: z.string().nullish(),
+  /** `pending`, `synced` or `error`. */
+  status: z.string().nullish(),
+  error: z.string().nullish(),
+  synced_at: z.string().nullish(),
+})
+
+export type StockHistoryItem = z.infer<typeof stockHistoryItemSchema>
+
+const stockHistoryResponseSchema = z.object({
+  items: z.array(stockHistoryItemSchema).default([]),
+  page: z.number().default(1),
+  page_size: z.number().default(50),
+  total: z.number().default(0),
+  total_pages: z.number().default(1),
+  has_next: z.boolean().default(false),
+})
+
+export type StockHistoryResponse = z.infer<typeof stockHistoryResponseSchema>
+
+export interface StockHistoryParams {
+  variant_id?: string
+  location?: string | number
+  status?: 'pending' | 'synced' | 'error'
+  page?: number
+  /** At most 200. */
+  page_size?: number
+}
+
 /** One run of a sync (what `GET /sync/status` lists, newest first). */
 const syncRunSchema = z.object({
   id: z.string(),
@@ -1758,6 +2082,31 @@ export type LoginResponse = z.infer<typeof loginResponseSchema>
 // Requests
 // ---------------------------------------------------------------------------
 
+/**
+ * Reads an inventory answer. When it is not in the expected form the message says which part
+ * (`items.0.locations.0.available`), instead of the generic "Something went wrong" — the quickest
+ * way to see what the real answer looks like.
+ */
+function readInventory<T>(schema: z.ZodType<T>, data: unknown, what: string): T {
+  const parsed = schema.safeParse(data)
+  if (parsed.success) return parsed.data
+  const issue = parsed.error.issues[0]
+  const where = issue?.path.join('.') ?? ''
+  throw new ApiError(
+    `The ${what} answer was not in the expected form${where ? ` (${where}: ${issue?.message})` : ''}.`,
+  )
+}
+
+/** The write answers: `result.adjustments[]`, plus the backend's own `message` when it sent one. */
+function readStockWrite(data: unknown): StockWriteResult {
+  const result = readInventory(stockWriteResponseSchema, data, 'stock change')
+  const message =
+    typeof data === 'object' && data !== null && 'message' in data
+      ? String((data as { message: unknown }).message ?? '')
+      : ''
+  return message ? { ...result, message } : result
+}
+
 export const api = {
   orders: {
     /** One page of orders, filtered/sorted server-side. Needs a signed-in session. */
@@ -1894,6 +2243,46 @@ export const api = {
         params: { page_size: 1, ...(shop ? { shop } : {}) },
       })
       return stockLocationsResponseSchema.parse(data).locations
+    },
+
+    /** Page 1: the stock list, with its `totals` and the `locations` for the dropdown. */
+    async list(params: InventoryListParams): Promise<InventoryListResponse> {
+      const data = await apiClient.get(ENDPOINTS.inventory.list, { params })
+      return readInventory(inventoryListResponseSchema, data, 'inventory list')
+    },
+
+    /** Page 2: one variant with its stock at every location. */
+    async detail(ref: string): Promise<InventoryVariant> {
+      const data = await apiClient.get(ENDPOINTS.inventory.detail(ref))
+      return readInventory(inventoryVariantResponseSchema, data, 'variant stock').variant
+    },
+
+    /**
+     * Page 3, "Set to": gives one or more quantities a new value at a location. The answer's
+     * `adjustments[]` are `pending` until Shopify confirms (follow each with `adjustment`).
+     * Never retried automatically — a repeat could be applied twice.
+     */
+    async set(ref: string, body: StockSetBody): Promise<StockWriteResult> {
+      const data = await apiClient.put(ENDPOINTS.inventory.detail(ref), body)
+      return readStockWrite(data)
+    },
+
+    /** Page 3, "Adjust by": adds or removes an amount. Never retried automatically. */
+    async adjust(ref: string, body: StockAdjustBody): Promise<StockWriteResult> {
+      const data = await apiClient.post(ENDPOINTS.inventory.adjust(ref), body)
+      return readStockWrite(data)
+    },
+
+    /** Page 4: the stock history (newest first), for everything or one variant / location / status. */
+    async history(params: StockHistoryParams): Promise<StockHistoryResponse> {
+      const data = await apiClient.get(ENDPOINTS.inventory.history, { params })
+      return readInventory(stockHistoryResponseSchema, data, 'stock history')
+    },
+
+    /** One stock change: `pending` until Shopify confirms it, then `synced`, or `error`. */
+    async adjustment(id: string): Promise<StockAdjustment> {
+      const data = await apiClient.get(ENDPOINTS.inventory.adjustment(id))
+      return readInventory(stockAdjustmentResponseSchema, data, 'stock change status')
     },
   },
 
