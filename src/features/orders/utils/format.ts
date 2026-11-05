@@ -71,6 +71,15 @@ export function orderCustomer(
   return name ? { name, email } : { name: email, email: '' }
 }
 
+/**
+ * The address of the order's customer in the CRM (`/customers/<id>`), or null for a guest
+ * checkout that has no customer there.
+ */
+export function customerPath(order: Pick<OrderListItem, 'customer'>): string | null {
+  const id = order.customer?.id?.trim()
+  return id ? `/customers/${encodeURIComponent(id)}` : null
+}
+
 /** Has a refund been made (a total above zero)? */
 export function hasRefund(order: Pick<OrderListItem, 'total_refunded'>): boolean {
   return Number.parseFloat(order.total_refunded ?? '0') > 0

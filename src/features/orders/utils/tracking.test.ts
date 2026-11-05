@@ -24,6 +24,8 @@ describe('fulfillmentTracking', () => {
         company: 'DPD',
         number: '123',
         url: 'https://t.example/123',
+        status: null,
+        date: null,
       },
     ])
   })

@@ -1,5 +1,6 @@
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
@@ -7,6 +8,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
 import {
+  customerPath,
   financialTone,
   fulfillmentTone,
   humanize,
@@ -231,9 +233,20 @@ export function OrdersList({
                     </td>
                     <td className={TD}>
                       {name ? (
-                        <span className="block truncate" title={name}>
-                          <Highlight text={name} />
-                        </span>
+                        customerPath(order) ? (
+                          // A customer in the CRM: their name opens their own page.
+                          <Link
+                            to={customerPath(order) as string}
+                            title={`Open ${name}`}
+                            className="text-text hover:text-accent block truncate font-medium hover:underline"
+                          >
+                            <Highlight text={name} />
+                          </Link>
+                        ) : (
+                          <span className="block truncate" title={name}>
+                            <Highlight text={name} />
+                          </span>
+                        )
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}

@@ -2,7 +2,7 @@ import type { OrderDetail } from '../../../lib/api/endpoints.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { humanize } from './format.ts'
 
-/** One parcel's tracking: who carries it, its number and a page to follow it on. */
+/** One parcel's tracking: who carries it, its number, a page to follow it on, and how it is going. */
 export interface TrackingEntry {
   key: string
   /** What it belongs to ("#17516.1", "Tracking number"). */
@@ -11,6 +11,10 @@ export interface TrackingEntry {
   number: string | null
   /** Any address; only an http(s) one is ever made a link (`safeUrl`). */
   url: string | null
+  /** The delivery status, when the fulfillment says one ("in_transit"). */
+  status: string | null
+  /** When the fulfillment was made (an ISO date). */
+  date: string | null
 }
 
 type NoteAttribute = OrderDetail['note_attributes'][number]
@@ -29,6 +33,16 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null
 
+/** The date a fulfillment was made: Shopify's own creation time, else the CRM's, else its last change. */
+export function fulfillmentDate(record: Record<string, unknown>): string | null {
+  return text(record.shopify_created_at ?? record.created_at ?? record.updated_at)
+}
+
+/** How a fulfillment's delivery is going: its shipment status, else its status. */
+export function fulfillmentStatus(record: Record<string, unknown>): string | null {
+  return text(record.shipment_status ?? record.status)
+}
+
 /**
  * The tracking of an order's fulfillments. Their shape is not documented, so this reads what
  * Shopify's own fulfillment has — `tracking_company`, `tracking_number(s)`, `tracking_url(s)`,
@@ -41,6 +55,8 @@ export function fulfillmentTracking(
   fulfillments.forEach((record, index) => {
     const label = text(record.name) ?? `Fulfillment ${index + 1}`
     const company = text(record.tracking_company ?? record.company ?? record.carrier)
+    const status = fulfillmentStatus(record)
+    const date = fulfillmentDate(record)
     const add = (
       parts: { company?: string | null; number?: string | null; url?: string | null },
       at: number,
@@ -54,6 +70,8 @@ export function fulfillmentTracking(
         company: parts.company ?? company,
         number,
         url,
+        status,
+        date,
       })
     }
 
@@ -109,6 +127,8 @@ export function splitAttributes(attributes: NoteAttribute[]): {
         company: null,
         number: link ? null : value,
         url: link ? value : null,
+        status: null,
+        date: null,
       })
     } else {
       details.push(attribute)
@@ -134,4 +154,11 @@ export function notesCount(
 ): number {
   const { tracking, details } = orderTracking(order)
   return (order.note?.trim() ? 1 : 0) + tracking.length + details.length
+}
+
+/** How many items still need shipping: the quantities of the lines that are shipped. */
+export function itemsToShip(order: Pick<OrderDetail, 'line_items'>): number {
+  return order.line_items
+    .filter((item) => item.requires_shipping !== false)
+    .reduce((sum, item) => sum + (item.quantity ?? 0), 0)
 }

@@ -6,18 +6,22 @@ import {
   ArrowLeftIcon,
   OrdersIcon,
 } from '../../../components/ui/icons.tsx'
-import { formatDateTime, formatPrice } from '../../../lib/format.ts'
+import { formatDateTime } from '../../../lib/format.ts'
 import { useOrderDetails } from '../hooks/useOrderDetails.ts'
-import { financialTone, fulfillmentTone, humanize, orderLabel } from '../utils/format.ts'
-import { notesCount } from '../utils/tracking.ts'
 import {
-  OrderEventsPanel,
-  OrderItemsPanel,
-  OrderOverviewPanel,
-  OrderPaymentsPanel,
-  OrderShippingPanel,
-} from './OrderDetailPanels.tsx'
+  financialTone,
+  fulfillmentTone,
+  humanize,
+  orderCustomer,
+  orderLabel,
+} from '../utils/format.ts'
+import { notesCount } from '../utils/tracking.ts'
+import { OrderEventsPanel } from './OrderDetailPanels.tsx'
+import { OrderItemsPanel } from './OrderItemsPanel.tsx'
 import { OrderNotesPanel } from './OrderNotesPanel.tsx'
+import { OrderOverviewPanel } from './OrderOverviewPanel.tsx'
+import { OrderPaymentsPanel } from './OrderPaymentsPanel.tsx'
+import { OrderShippingPanel } from './OrderShippingPanel.tsx'
 
 type TabId = 'overview' | 'items' | 'payments' | 'shipping' | 'attributes' | 'events'
 
@@ -43,6 +47,13 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
   const created = known?.shopify_created_at
+  // Who it is for: the customer's name and, when the addresses name one, their company.
+  const who = [
+    known ? orderCustomer(known)?.name : null,
+    order?.shipping_address?.company?.trim() || order?.billing_address?.company?.trim(),
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
@@ -92,19 +103,19 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="flex items-start gap-4 p-4 sm:p-6">
+    <article className="border-border bg-bg overflow-hidden rounded-xl border">
+      <header className="flex items-center gap-3 px-4 py-3">
         <span
           aria-hidden="true"
-          className="bg-accent-tint text-accent inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+          className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
         >
-          <OrdersIcon width={26} height={26} />
+          <OrdersIcon width={18} height={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-            Order {title}
+          <h1 className="m-0 text-base leading-snug font-bold break-words sm:text-lg">
+            Order #{title}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem]">
             {known && (
               <>
                 {known.financial_status && (
@@ -118,19 +129,17 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
                   </Badge>
                 )}
                 {known.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
-                <span className="font-semibold">
-                  {formatPrice(known.total_price, known.currency)}
-                </span>
                 {created && (
                   <span className="text-text-muted">{formatDateTime(created)}</span>
                 )}
+                {who && <span className="text-text font-medium">{who}</span>}
                 {known.shop?.name && (
                   <span className="text-text-muted">{known.shop.name}</span>
                 )}
               </>
             )}
             {details.isRefreshing && (
-              <span className="text-text-muted text-[0.75rem]" role="status">
+              <span className="text-text-muted text-[0.72rem]" role="status">
                 Updating…
               </span>
             )}
@@ -140,9 +149,9 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
           type="button"
           onClick={onBack}
           aria-label="Back to list"
-          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
+          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-semibold transition-colors"
         >
-          <ArrowLeftIcon width={16} height={16} />
+          <ArrowLeftIcon width={14} height={14} />
           <span className="hidden sm:inline" aria-hidden="true">
             Back to list
           </span>
@@ -152,7 +161,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
       <div
         role="tablist"
         aria-label="Order sections"
-        className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
+        className="border-border flex [scrollbar-width:none] gap-0.5 overflow-x-auto border-y px-2 [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((item) => {
           const selected = item.id === tab
@@ -165,7 +174,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
               aria-selected={selected}
               aria-controls="order-tabpanel"
               onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 text-[0.8rem] font-semibold whitespace-nowrap transition-colors ${
                 selected
                   ? 'border-accent text-text'
                   : 'text-text-muted hover:text-text border-transparent'
@@ -173,7 +182,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
             >
               {item.label}
               {item.count !== undefined && (
-                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
+                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 text-[0.62rem] leading-4 font-bold">
                   {item.count}
                 </span>
               )}
@@ -186,7 +195,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         id="order-tabpanel"
         role="tabpanel"
         aria-labelledby={`order-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        className="bg-surface p-3"
       >
         {tab === 'overview' && <OrderOverviewPanel order={order} preview={preview} />}
         {tab !== 'overview' && !order && <DetailSkeleton />}
