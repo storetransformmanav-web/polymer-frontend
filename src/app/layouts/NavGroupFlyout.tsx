@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, matchPath, useLocation } from 'react-router-dom'
-import { withChildren, type NavGroup } from '../router/navigation.ts'
+import type { NavGroup } from '../router/navigation.ts'
 
 /** Space between the rail and the menu. */
 const GAP = 12
@@ -19,10 +19,7 @@ const CHROME_HEIGHT = 64
  * chosen, and on scroll or resize (a card fixed to the screen would drift from its icon).
  */
 export function NavGroupFlyout({ group }: { group: NavGroup }) {
-  const { label, icon: Icon } = group
-  // A link's sub-links (Lock Management under Inventory) follow it, indented.
-  const items = group.items.flatMap(withChildren)
-  const subLinks = new Set(group.items.flatMap((item) => item.children ?? []))
+  const { label, icon: Icon, items } = group
   const { pathname } = useLocation()
   const hasActiveItem = items.some((item) =>
     matchPath({ path: item.to, end: item.end ?? false }, pathname),
@@ -120,9 +117,9 @@ export function NavGroupFlyout({ group }: { group: NavGroup }) {
                       end={item.end}
                       onClick={() => setOpen(false)}
                       className={({ isActive }) =>
-                        `hover:bg-accent-tint/60 flex items-center gap-3 rounded-lg py-2.5 pr-3 text-[0.9rem] font-semibold no-underline transition-colors ${
-                          subLinks.has(item) ? 'pl-7' : 'pl-3'
-                        } ${isActive ? 'bg-accent-tint text-accent' : 'text-text'}`
+                        `hover:bg-accent-tint/60 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.9rem] font-semibold no-underline transition-colors ${
+                          isActive ? 'bg-accent-tint text-accent' : 'text-text'
+                        }`
                       }
                     >
                       <ItemIcon className="shrink-0" />

@@ -16,6 +16,7 @@ const SECTIONS = [
   ['Products', '/products'],
   ['Customers', '/customers'],
   ['Inventory', '/inventory'],
+  ['Lock Management', '/locks'],
 ] as const
 
 describe('Navbar', () => {
@@ -43,30 +44,6 @@ describe('Navbar', () => {
         href,
       )
     }
-  })
-
-  it('shows Lock Management under Inventory once Inventory is clicked', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<Navbar />, { route: '/' })
-
-    const toggle = screen.getByRole('button', { name: /Lock Management/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-
-    await user.click(screen.getByRole('button', GROUP))
-    await user.click(screen.getByRole('link', { name: 'Inventory' }))
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('link', { name: 'Lock Management' })).toHaveAttribute(
-      'href',
-      '/locks',
-    )
-  })
-
-  it('starts with the Inventory sub-links open on the Lock Management page', () => {
-    renderWithProviders(<Navbar />, { route: '/locks' })
-    expect(screen.getByRole('link', { name: 'Lock Management' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
   })
 
   it('links User Management at the top level, outside the Shopify group', () => {

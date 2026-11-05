@@ -37,16 +37,6 @@ export interface NavItem {
   badge?: string
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
   syncs?: 'products' | 'orders' | 'customers'
-  /**
-   * Sub-links opened beneath this link in the sidebar when it is clicked (e.g. Lock Management
-   * under Inventory). They are routes of their own: `NAV_ITEMS` lists them after their parent.
-   */
-  children?: NavItem[]
-}
-
-/** An item followed by its sub-links, in sidebar order. */
-export function withChildren(item: NavItem): NavItem[] {
-  return [item, ...(item.children ?? [])]
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -107,17 +97,14 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: InventoryIcon,
         shopScoped: true,
         fillHeight: true,
-        // Opens beneath Inventory when it is clicked (a sub-link, not a page of its own in the group).
-        children: [
-          {
-            to: '/locks',
-            label: 'Lock Management',
-            area: 'locks',
-            icon: LockIcon,
-            shopScoped: true,
-            fillHeight: true,
-          },
-        ],
+      },
+      {
+        to: '/locks',
+        label: 'Lock Management',
+        area: 'locks',
+        icon: LockIcon,
+        shopScoped: true,
+        fillHeight: true,
       },
     ],
   },
@@ -129,7 +116,7 @@ export const NAV_ENTRIES: NavEntry[] = [
 export const SHOPIFY_PATHS: ReadonlySet<string> = new Set(
   NAV_ENTRIES.flatMap((entry) =>
     isNavGroup(entry) && entry.label === 'Shopify Management'
-      ? entry.items.flatMap(withChildren).map((item) => item.to)
+      ? entry.items.map((item) => item.to)
       : [],
   ),
 )
@@ -142,5 +129,5 @@ export const SHOPIFY_HOME = '/orders'
  * active one's `label` as the page heading.
  */
 export const NAV_ITEMS: NavItem[] = NAV_ENTRIES.flatMap((entry) =>
-  isNavGroup(entry) ? entry.items.flatMap(withChildren) : withChildren(entry),
+  isNavGroup(entry) ? entry.items : [entry],
 )

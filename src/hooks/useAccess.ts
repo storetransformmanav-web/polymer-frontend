@@ -39,14 +39,9 @@ export function visibleNavEntries(
     if (!isNavGroup(entry)) {
       return roleAllows(role, entry) && mayView(permissions, entry.area) ? [entry] : []
     }
-    const allowed = (item: NavItem) =>
-      roleAllows(role, item) && mayView(permissions, item.area)
-    const items = entry.items.flatMap((item: NavItem): NavItem[] => {
-      const children = (item.children ?? []).filter(allowed)
-      // A page that is hidden keeps its allowed sub-links, which move up into the group.
-      if (!allowed(item)) return children
-      return [{ ...item, children: children.length > 0 ? children : undefined }]
-    })
+    const items = entry.items.filter(
+      (item: NavItem) => roleAllows(role, item) && mayView(permissions, item.area),
+    )
     return items.length > 0 ? [{ ...entry, items }] : []
   })
 }
