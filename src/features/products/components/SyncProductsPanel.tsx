@@ -50,7 +50,8 @@ export function SyncProductsPanel({
   const ids = useId()
   const [shopifyId, setShopifyId] = useState('')
   const [shop, setShop] = useState(targets[0]?.key ?? '')
-  const [dryRun, setDryRun] = useState(false)
+  // "Only compare" is switched off for now (its box is commented out below): always a real sync.
+  const [dryRun] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const names = targets.map((target) => target.label).join(', ')
 
