@@ -1,9 +1,13 @@
-import { act } from '@testing-library/react'
+import { act, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { googleSignIn, SESSION_STORAGE_KEY } from '../app/store/authSlice.ts'
+import {
+  googleSignIn,
+  SESSION_ACTIVITY_KEY,
+  SESSION_STORAGE_KEY,
+} from '../app/store/authSlice.ts'
 import { api, type AuthUser } from '../lib/api/endpoints.ts'
 import { renderWithProviders } from '../test/renderWithProviders.tsx'
-import { useSessionGuard } from './useSessionGuard.ts'
+import { IDLE_LIMIT_MS, useSessionGuard } from './useSessionGuard.ts'
 
 vi.mock('../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/api/endpoints.ts')>()),
@@ -63,25 +67,96 @@ describe('useSessionGuard', () => {
     window.localStorage.clear()
   })
 
-  it('never signs you out for inactivity — you stay signed in for the whole 30 days', async () => {
+  it('signs out after 30 minutes with no activity, even in a 30-day session, and revokes the token', async () => {
     const store = setup(30 * DAY)
 
-    await advance(2 * 60 * MINUTE) // two hours, no interaction at all
+    await advance(IDLE_LIMIT_MS - MINUTE)
     expect(auth(store).session).not.toBeNull()
 
-    await advance(15 * DAY) // two weeks later, still no interaction
-    expect(auth(store).session).not.toBeNull()
-    expect(auth(store).signedOutReason).toBeNull()
-    expect(api.auth.logout).not.toHaveBeenCalled()
+    await advance(2 * MINUTE)
+    expect(auth(store).session).toBeNull()
+    expect(auth(store).signedOutReason).toBe('idle')
+    expect(api.auth.logout).toHaveBeenCalledWith('session-token')
   })
 
-  it('signs out, and revokes the token, when the 30 days are over', async () => {
+  it.each(['pointerDown', 'pointerMove', 'keyDown', 'wheel', 'scroll'] as const)(
+    'counts %s as activity, wherever it happens',
+    async (eventName) => {
+      const store = setup(30 * DAY)
+
+      await advance(20 * MINUTE)
+      fireEvent[eventName](document.body)
+      await advance(20 * MINUTE)
+      expect(auth(store).session).not.toBeNull()
+
+      await advance(11 * MINUTE)
+      expect(auth(store).signedOutReason).toBe('idle')
+    },
+  )
+
+  it('background work does not keep a session alive; activity in another tab does', async () => {
     const store = setup(30 * DAY)
 
-    await advance(29 * DAY)
+    await advance(20 * MINUTE)
+    // What another tab writes down.
+    window.localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()))
+    await advance(20 * MINUTE)
     expect(auth(store).session).not.toBeNull()
 
-    await advance(2 * DAY)
+    await advance(11 * MINUTE)
+    expect(auth(store).session).toBeNull()
+  })
+
+  it('signs out at once when the app opens again after the limit', () => {
+    const { store, rerender } = renderWithProviders(<Probe />)
+    act(() => {
+      store.dispatch(
+        googleSignIn.fulfilled(
+          {
+            accessToken: 'session-token',
+            expiresAt: new Date(Date.now() + 30 * DAY).toISOString(),
+            user: USER,
+          },
+          'request-id',
+          'credential',
+        ),
+      )
+    })
+    rerender(<></>) // closed
+    window.localStorage.setItem(
+      SESSION_ACTIVITY_KEY,
+      String(Date.now() - IDLE_LIMIT_MS - MINUTE),
+    )
+
+    rerender(<Probe />) // opened again
+    expect(auth(store).session).toBeNull()
+    expect(auth(store).signedOutReason).toBe('idle')
+  })
+
+  it('a new sign-in starts the idle clock afresh, whatever an old session left behind', () => {
+    window.localStorage.setItem(SESSION_ACTIVITY_KEY, '1')
+    const store = setup(30 * DAY)
+    expect(auth(store).session).not.toBeNull()
+  })
+
+  it('forgets the idle clock when the session ends', async () => {
+    setup(30 * DAY)
+    expect(window.localStorage.getItem(SESSION_ACTIVITY_KEY)).not.toBeNull()
+
+    await advance(IDLE_LIMIT_MS + MINUTE)
+    expect(window.localStorage.getItem(SESSION_ACTIVITY_KEY)).toBeNull()
+  })
+
+  it('signs out, and revokes the token, when the session is over even though it is in use', async () => {
+    const store = setup(50 * MINUTE)
+
+    await advance(25 * MINUTE)
+    fireEvent.pointerDown(document.body)
+    await advance(20 * MINUTE)
+    expect(auth(store).session).not.toBeNull()
+    fireEvent.pointerDown(document.body)
+
+    await advance(6 * MINUTE)
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBe('expired')
     expect(api.auth.logout).toHaveBeenCalledWith('session-token')

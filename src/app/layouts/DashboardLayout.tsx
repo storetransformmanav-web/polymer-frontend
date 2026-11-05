@@ -1,7 +1,9 @@
 import { Outlet } from 'react-router-dom'
+import { useAccess } from '../../hooks/useAccess.ts'
 import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
+import { NoAccessPage } from './NoAccessPage.tsx'
 import { useActiveNavItem } from './useActiveNavItem.ts'
 
 /**
@@ -16,7 +18,10 @@ export function DashboardLayout() {
   // warms a page's data when the pointer reaches its link — see Navbar).
   // Idle timeout, token expiry and cross-tab logout for the signed-in session.
   useSessionGuard()
-  const fill = useActiveNavItem()?.fillHeight === true
+  const activeItem = useActiveNavItem()
+  const fill = activeItem?.fillHeight === true
+  // Opened from an old link or a bookmark: the sidebar hides the page, this stops the address.
+  const { canView } = useAccess(activeItem?.area)
 
   // `relative` + `overflow-clip`: a visually hidden helper (`sr-only`, absolutely positioned)
   // deep inside a page's own scroll box would otherwise be placed against the window and
@@ -33,7 +38,7 @@ export function DashboardLayout() {
             fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-clip lg:pb-6' : ''
           }`}
         >
-          <Outlet />
+          {canView ? <Outlet /> : <NoAccessPage />}
         </main>
       </div>
     </div>

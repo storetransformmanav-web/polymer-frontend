@@ -303,6 +303,42 @@ describe('RichTextEditor', () => {
       ).toBeInTheDocument()
     })
 
+    it('never passes on a script typed there, and says it will be removed', async () => {
+      const { user, last } = await setup('<p>Before</p>')
+      await user.click(tool('Edit HTML'))
+
+      const source = screen.getByLabelText('Description (HTML)')
+      await user.clear(source)
+      await user.click(source)
+      await user.paste(
+        '<p onclick="steal()">Hello</p><script>steal()</script><img src="x" onerror="steal()">',
+      )
+
+      expect(last()).not.toMatch(/script|onclick|onerror|steal/)
+      expect(last()).toContain('Hello')
+      // What was typed stays in the box, so the person can see what the warning is about.
+      expect(source).toHaveValue(
+        '<p onclick="steal()">Hello</p><script>steal()</script><img src="x" onerror="steal()">',
+      )
+      expect(screen.getByRole('status')).toHaveTextContent(/unsafe code/)
+
+      await user.clear(source)
+      await user.paste('<p class="keep">Safe again</p>')
+      expect(last()).toBe('<p class="keep">Safe again</p>')
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('does not touch unsafe HTML already saved unless the person changes it', async () => {
+      const { user, onChange } = await setup('<p>Old</p><style>p { color: red }</style>')
+      await user.click(tool('Edit HTML'))
+      expect(screen.getByLabelText('Description (HTML)')).toHaveValue(
+        '<p>Old</p><style>p { color: red }</style>',
+      )
+      await user.click(tool('Edit HTML'))
+
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
     it('going back to the visual editor is not itself an edit', async () => {
       const { user, onChange } = await setup('<p>Same</p>')
       await user.click(tool('Edit HTML'))

@@ -1,8 +1,42 @@
 import { useEffect } from 'react'
-import { logout, sessionCleared, SESSION_STORAGE_KEY } from '../app/store/authSlice.ts'
+import {
+  logout,
+  sessionCleared,
+  SESSION_ACTIVITY_KEY,
+  SESSION_STORAGE_KEY,
+} from '../app/store/authSlice.ts'
 import { useAppDispatch, useAppSelector } from '../app/store/hooks.ts'
 
 const CHECK_INTERVAL_MS = 30_000
+/** Signed out after this long with nothing done, in any tab, whatever the session's own length. */
+export const IDLE_LIMIT_MS = 30 * 60_000
+/** How often activity is written down for the other tabs (it can come many times a second). */
+const RECORD_EVERY_MS = 15_000
+/** What counts as the person being there. Background requests and polling do not. */
+const ACTIVITY_EVENTS = [
+  'pointerdown',
+  'pointermove',
+  'keydown',
+  'wheel',
+  'scroll',
+] as const
+
+function readLastActivity(): number | null {
+  try {
+    const stored = Number(window.localStorage.getItem(SESSION_ACTIVITY_KEY))
+    return Number.isFinite(stored) && stored > 0 ? stored : null
+  } catch {
+    return null
+  }
+}
+
+function writeLastActivity(time: number) {
+  try {
+    window.localStorage.setItem(SESSION_ACTIVITY_KEY, String(time))
+  } catch {
+    // localStorage unavailable — this tab's own clock still counts.
+  }
+}
 
 /**
  * Keeps a signed-in session honest while the app is open:
@@ -10,9 +44,11 @@ const CHECK_INTERVAL_MS = 30_000
  *    instead of waiting for the next request to fail — and revokes the token;
  *  - when the session is removed in another tab (logout there), signs out
  *    here too, so one logout really ends the session everywhere.
- * There is no inactivity sign-out: you stay signed in for the 30 days unless you
- * log out. The expiry check also runs the moment a hidden/sleeping tab becomes
- * visible, since browsers throttle timers in background tabs.
+ *  - signs out after 30 minutes with no activity in any tab, with or without "Remember me", and
+ *    revokes the token. The time is kept in localStorage, so it also catches a browser that was
+ *    closed and reopened later, and activity in one tab keeps the others signed in.
+ * The checks also run the moment a hidden/sleeping tab becomes visible, since browsers throttle
+ * timers in background tabs. This is a browser-side limit: the backend should enforce its own.
  */
 export function useSessionGuard() {
   const dispatch = useAppDispatch()
@@ -22,11 +58,30 @@ export function useSessionGuard() {
     if (!session) return undefined
 
     const expiresAt = Date.parse(session.expiresAt)
+    let lastActivity = readLastActivity()
+    if (lastActivity === null) {
+      lastActivity = Date.now()
+      writeLastActivity(lastActivity)
+    }
+    let lastWritten = lastActivity
+
+    function recordActivity() {
+      lastActivity = Date.now()
+      if (lastActivity - lastWritten >= RECORD_EVERY_MS) {
+        lastWritten = lastActivity
+        writeLastActivity(lastActivity)
+      }
+    }
 
     function check() {
-      if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) {
+      const now = Date.now()
+      if (Number.isFinite(expiresAt) && now >= expiresAt) {
         dispatch(logout('expired'))
+        return
       }
+      // The latest of this tab's activity and what the other tabs wrote down.
+      const latest = Math.max(lastActivity ?? 0, readLastActivity() ?? 0)
+      if (now - latest >= IDLE_LIMIT_MS) dispatch(logout('idle'))
     }
 
     function handleStorage(event: StorageEvent) {
@@ -43,11 +98,20 @@ export function useSessionGuard() {
 
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('storage', handleStorage)
+    // `capture`: a component that stops an event, or scrolls its own box, still counts.
+    for (const name of ACTIVITY_EVENTS) {
+      window.addEventListener(name, recordActivity, { capture: true, passive: true })
+    }
     const timer = window.setInterval(check, CHECK_INTERVAL_MS)
+    // A browser reopened after the limit is signed out straight away.
+    check()
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('storage', handleStorage)
+      for (const name of ACTIVITY_EVENTS) {
+        window.removeEventListener(name, recordActivity, { capture: true })
+      }
       window.clearInterval(timer)
     }
   }, [dispatch, session])

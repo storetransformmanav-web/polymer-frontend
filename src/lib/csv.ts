@@ -88,3 +88,26 @@ export function parseCsv(text: string): string[][] {
   endRow()
   return rows
 }
+
+/** "CSV for Excel…" gets a byte-order mark so accents and £ read correctly; "plain" is the file as sent. */
+export type ExportFileFormat = 'excel' | 'plain'
+
+/** The file to save: the text as sent, with a UTF-8 byte-order mark first for Excel. */
+export function csvFile(text: string, format: ExportFileFormat): Blob {
+  const body = text.startsWith('\ufeff') ? text.slice(1) : text
+  return new Blob(format === 'excel' ? ['\ufeff', body] : [body], {
+    type: 'text/csv;charset=utf-8',
+  })
+}
+
+/** `customers_export_all-stores_20261027-1240.csv` — the name the backend's own files have. */
+export function csvExportFilename(
+  noun: string,
+  shop: string | undefined,
+  now: Date = new Date(),
+): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
+  const store = (shop ?? '').replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '')
+  return `${noun}_export_${store || 'all-stores'}_${stamp}.csv`
+}

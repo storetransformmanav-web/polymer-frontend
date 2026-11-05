@@ -1,12 +1,14 @@
-import { Dialog } from '../../../../components/ui/Dialog.tsx'
-import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
-import { SpinnerIcon } from '../../../../components/ui/icons.tsx'
-import type { ProductImportProgress } from '../../../../lib/api/productImport.ts'
-import type { ImportOutcome } from '../../hooks/useProductsImport.ts'
+import { Dialog } from '../Dialog.tsx'
+import { FormMessage } from '../FormMessage.tsx'
+import { SpinnerIcon } from '../icons.tsx'
+import type { ImportOutcome } from '../../../hooks/useCsvImport.ts'
+import type { ProductImportProgress } from '../../../lib/api/productImport.ts'
 import { CountChips, ImportProblems } from './importUi.tsx'
 import { BUTTON_PRIMARY, formatNumber } from './importFormat.ts'
 
 interface ImportProgressStepProps {
+  /** What is being imported, in the plural: "products", "customers". */
+  noun: string
   /** null while the import is still going; how it ended once it has. */
   outcome: ImportOutcome | null
   /** The latest progress answer (null before the first). */
@@ -23,11 +25,12 @@ const TITLES: Record<ImportOutcome['kind'], string> = {
 
 /**
  * The third screen: while the import runs on the server, how far it is (the bar and figures
- * from `GET /products/import/{import_id}`); when it has ended, how it went — and the rows that
+ * from the import's status call); when it has ended, how it went — and the rows that
  * were skipped, with the reason for each. The window can be closed at any time: the import
- * carries on, and the products list re-reads itself when it ends.
+ * carries on, and the list re-reads itself when it ends.
  */
 export function ImportProgressStep({
+  noun,
   outcome,
   progress,
   onClose,
@@ -41,7 +44,7 @@ export function ImportProgressStep({
 
   return (
     <Dialog
-      title={outcome ? TITLES[outcome.kind] : 'Importing products'}
+      title={outcome ? TITLES[outcome.kind] : `Importing ${noun}`}
       role="dialog"
       wide
       closeButton
@@ -57,7 +60,7 @@ export function ImportProgressStep({
           <div role="status" className="text-text flex items-center gap-3 text-[0.9rem]">
             <SpinnerIcon width={18} height={18} className="text-accent animate-spin" />
             <p>
-              Importing your products…
+              Importing your {noun}…
               {processed !== null &&
                 total !== null &&
                 ` ${formatNumber(processed)} of ${formatNumber(total)}`}
@@ -81,7 +84,7 @@ export function ImportProgressStep({
           {progress && <CountChips counts={progress.counts} />}
           <p className="text-[0.82rem]">
             You can close this window. The import carries on in the background, and the
-            products list refreshes when it finishes.
+            {noun} list refreshes when it finishes.
           </p>
         </>
       ) : (

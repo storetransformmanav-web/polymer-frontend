@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
+import { DEFAULT_APD_SETTINGS } from './descriptionSections.ts'
 import {
   blankCreateDraft,
   blankMetafield,
@@ -915,16 +916,24 @@ describe('the description & information sections', () => {
 
     expect(body.metafields).toHaveLength(1)
     const field = body.metafields![0]
-    expect([field.namespace, field.key, field.type]).toEqual([
-      'apd',
-      'apd',
-      'json_string',
-    ])
+    expect([field.namespace, field.key, field.type]).toEqual(['apd', 'apd', 'json'])
     expect(JSON.parse(field.value)).toEqual({
-      accordian_multi: false,
+      ...DEFAULT_APD_SETTINGS,
       sections: [
-        { title: 'Product Description', content: '<p>Text</p>', position: 0 },
-        { title: 'Product Information', content: '<table></table>', position: 1 },
+        {
+          title: 'Product Description',
+          content: '<p>Text</p>',
+          position: 0,
+          chosen: false,
+          selected: false,
+        },
+        {
+          title: 'Product Information',
+          content: '<table></table>',
+          position: 1,
+          chosen: false,
+          selected: false,
+        },
       ],
     })
   })

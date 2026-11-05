@@ -2,6 +2,7 @@ import { AppBarSlot } from '../../components/ui/AppBarSlot.tsx'
 import { SyncCustomersButton } from '../../features/customers/index.ts'
 import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
+import { useAccess } from '../../hooks/useAccess.ts'
 import { useShops } from '../../hooks/useShops.ts'
 import { ShopSwitcher } from './ShopSwitcher.tsx'
 import { useActiveNavItem } from './useActiveNavItem.ts'
@@ -31,6 +32,7 @@ function ShopScope() {
  */
 export function AppBar() {
   const activeItem = useActiveNavItem()
+  const { canManage } = useAccess(activeItem?.area)
 
   return (
     <header className="border-border bg-bg sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b px-4 sm:px-6">
@@ -47,9 +49,9 @@ export function AppBar() {
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-3">
         <AppBarSlot />
-        {activeItem?.syncs === 'orders' && <SyncOrdersButton />}
-        {activeItem?.syncs === 'products' && <SyncProductsButton />}
-        {activeItem?.syncs === 'customers' && <SyncCustomersButton />}
+        {canManage && activeItem?.syncs === 'orders' && <SyncOrdersButton />}
+        {canManage && activeItem?.syncs === 'products' && <SyncProductsButton />}
+        {canManage && activeItem?.syncs === 'customers' && <SyncCustomersButton />}
         <UserMenu />
       </div>
     </header>

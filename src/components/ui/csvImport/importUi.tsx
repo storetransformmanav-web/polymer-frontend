@@ -1,4 +1,4 @@
-import type { ImportProblem } from '../../../../lib/api/productImport.ts'
+import type { ImportProblem } from '../../../lib/api/productImport.ts'
 import { countLabel, formatNumber } from './importFormat.ts'
 
 /** Small rounded figures: "To create 1", "To update 3". */

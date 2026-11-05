@@ -27,6 +27,7 @@ import {
   VideoIcon,
   type IconProps,
 } from './icons.tsx'
+import { hasUnsafeHtml } from '../../lib/htmlSafety.ts'
 import { PopoverButton } from './PopoverButton.tsx'
 
 export interface RichTextEditorProps {
@@ -432,6 +433,10 @@ export default function RichTextEditorView({
   onChange,
 }: RichTextEditorProps) {
   const [source, setSource] = useState(false)
+  // What is typed in the HTML view. What the form gets (`onChange`) is the same text, unless it
+  // holds something unsafe (see `changeSource`).
+  const [sourceText, setSourceText] = useState('')
+  const [sourceCleaned, setSourceCleaned] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -469,8 +474,28 @@ export default function RichTextEditorView({
     if (source && editor) {
       // Back to the visual editor: show what the HTML says (without counting that as an edit).
       editor.commands.setContent(value, { emitUpdate: false })
+    } else {
+      setSourceText(value)
+      setSourceCleaned(false)
     }
     setSource(!source)
+  }
+
+  /**
+   * The HTML view would otherwise send whatever is typed, skipping the editor's schema, and a
+   * script saved here runs for shoppers on the store. Safe HTML is passed on exactly as typed;
+   * anything unsafe goes through the schema, the same filter as the visual editor.
+   */
+  function changeSource(text: string) {
+    setSourceText(text)
+    const unsafe = hasUnsafeHtml(text)
+    setSourceCleaned(unsafe)
+    if (!unsafe) {
+      onChange(text)
+    } else if (editor) {
+      editor.commands.setContent(text, { emitUpdate: false })
+      onChange(editor.isEmpty ? '' : editor.getHTML())
+    }
   }
 
   const blockLabel = state?.heading ? `Heading ${state.heading}` : 'Paragraph'
@@ -697,10 +722,20 @@ export default function RichTextEditorView({
         <textarea
           aria-label={`${label} (HTML)`}
           spellCheck={false}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          value={sourceText}
+          onChange={(event) => changeSource(event.target.value)}
           className="text-text block min-h-44 w-full resize-y border-none bg-transparent px-4 py-3 font-mono text-[0.82rem] leading-relaxed outline-none"
         />
+      )}
+      {source && sourceCleaned && (
+        <p
+          role="status"
+          className="bg-warning-bg text-warning m-0 px-4 py-2 text-[0.78rem] font-medium"
+        >
+          This HTML has unsafe code (such as a script, form or embedded page). It will be
+          removed when you save, along with any formatting the editor doesn&apos;t
+          support.
+        </p>
       )}
     </div>
   )

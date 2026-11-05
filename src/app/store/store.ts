@@ -1,7 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { env } from '../../config/env.ts'
 import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
 import { queryClient } from '../queryClient.ts'
-import { authReducer, sessionCleared, SESSION_STORAGE_KEY } from './authSlice.ts'
+import {
+  authReducer,
+  sessionCleared,
+  SESSION_ACTIVITY_KEY,
+  SESSION_STORAGE_KEY,
+} from './authSlice.ts'
 import { customersReducer } from './customersSlice.ts'
 import { inventoryReducer } from './inventorySlice.ts'
 import { ordersReducer } from './ordersSlice.ts'
@@ -48,6 +54,9 @@ function waitingMedia(products: ProductsState): ProductsState['pendingMedia'] {
  */
 export function createAppStore() {
   const appStore = configureStore({
+    // The extension can read the whole state — the session token and customers included — so it
+    // is only connected while developing.
+    devTools: env.isDev,
     reducer: {
       ui: uiReducer,
       auth: authReducer,
@@ -98,6 +107,7 @@ export function createAppStore() {
     const { ui, auth, products } = appStore.getState()
 
     if (auth.session !== previousSession) {
+      const signedIn = previousSession === null
       previousSession = auth.session
       setAccessToken(auth.session?.accessToken ?? null)
       // Signing out (or an expired session) must not leave anything the last
@@ -107,8 +117,13 @@ export function createAppStore() {
       try {
         if (auth.session) {
           window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(auth.session))
+          // A new sign-in starts the idle clock afresh (see useSessionGuard).
+          if (signedIn) {
+            window.localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()))
+          }
         } else {
           window.localStorage.removeItem(SESSION_STORAGE_KEY)
+          window.localStorage.removeItem(SESSION_ACTIVITY_KEY)
         }
       } catch {
         // localStorage unavailable — the session just won't survive a reload.

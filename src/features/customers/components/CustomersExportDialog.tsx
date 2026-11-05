@@ -1,218 +1,154 @@
-import { useId, useMemo, useState } from 'react'
-import type {
-  CustomerFilters,
-  CustomersFacets,
-} from '../../../app/store/customersSlice.ts'
-import { ExportDialog, type ExportScope } from '../../../components/ui/ExportDialog.tsx'
+import { useId, useState } from 'react'
+import type { CustomerFilters } from '../../../app/store/customersSlice.ts'
+import { UploadIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { Modal } from '../../../components/ui/Modal.tsx'
+import { RadioChoice as Choice } from '../../../components/ui/RadioChoice.tsx'
+import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
+import type { ExportFileFormat } from '../../../lib/csv.ts'
 import {
-  ExportFilterGrid,
-  ExportNumberField,
-} from '../../../components/ui/ExportFilterFields.tsx'
-import {
-  DollarSignIcon,
-  MailIcon,
-  OrdersIcon,
-  SearchIcon,
-  TagIcon,
-  UsersIcon,
-} from '../../../components/ui/icons.tsx'
-import { withAll } from '../../../components/ui/selectOptions.ts'
-import { SelectField } from '../../../components/ui/SelectField.tsx'
-import { useMatchingCount } from '../../../hooks/useMatchingCount.ts'
-import { pickColumns, type ExportFormat } from '../../../lib/tableExport.ts'
-import {
-  CUSTOMER_EXPORT_COLUMNS,
-  type CustomerExportColumn,
-} from '../utils/exportColumns.ts'
-import { CUSTOMERS_COUNT } from '../utils/exportSource.ts'
-import {
-  MARKETING_OPTIONS,
-  ORDERS_OPTIONS,
-  ROLE_OPTIONS,
-  STATE_OPTIONS,
-} from '../utils/filterOptions.ts'
-
-/** What the dialog asks for. */
-export interface CustomersExportRequest {
-  scope: ExportScope
-  format: ExportFormat
-  columns: CustomerExportColumn[]
-  /** The list's filters with the dialog's changes. */
-  filters: CustomerFilters
-  /** Are they different from the list's own (so the rows on screen are not the ones wanted)? */
-  filtersChanged: boolean
-}
+  buildCustomerExportParams,
+  hasExportableFilters,
+  type CustomerExportScope,
+  type CustomersExportRequest,
+} from '../utils/exportRequest.ts'
 
 interface CustomersExportDialogProps {
-  /** Customers on the page being shown. */
-  pageCount: number
-  /** Its page number. */
-  page: number
-  /** The list's own search, filters and sort — what the dialog starts from. */
+  /** The customers on the page being shown. */
+  items: readonly CustomerListItem[]
+  /** The list's search and filters. */
   filters: CustomerFilters
   /** How many customers match them, across every page. */
   total: number
-  facets: CustomersFacets
   onClose: () => void
   onExport: (request: CustomersExportRequest) => void
 }
 
-type DialogFilters = Pick<
-  CustomerFilters,
-  'role' | 'state' | 'marketing' | 'orders' | 'tag' | 'country' | 'minSpent' | 'maxSpent'
->
+const number = (value: number) => value.toLocaleString('en-GB')
+const plural = (count: number) =>
+  `${number(count)} ${count === 1 ? 'customer' : 'customers'}`
 
-const pickFilters = (filters: CustomerFilters): DialogFilters => ({
-  role: filters.role,
-  state: filters.state,
-  marketing: filters.marketing,
-  orders: filters.orders,
-  tag: filters.tag,
-  country: filters.country,
-  minSpent: filters.minSpent,
-  maxSpent: filters.maxSpent,
-})
-
-/** Do the dialog's filters differ from the list's own? */
-function filtersDiffer(listFilters: CustomerFilters, values: DialogFilters): boolean {
-  const own = pickFilters(listFilters)
-  return (Object.keys(own) as (keyof DialogFilters)[]).some(
-    (key) => own[key] !== values[key],
-  )
-}
+const GROUP_TITLE = 'text-[0.95rem] font-semibold'
 
 /**
- * The customers export dialog: the shared export layout (format, columns, rows) with the
- * customer filters — role, state, marketing, orders, country, tag and spend — in
- * its "Advanced filters", starting from the list's own.
+ * The customers export dialog, laid out like the products one: which customers (this page,
+ * all, or those matching the search) and the kind of CSV. "Export customers" sends nothing
+ * itself — it hands the request to `CustomersExport`, which calls `GET /customer/export`.
  */
 export function CustomersExportDialog({
-  pageCount,
-  page,
+  items,
   filters,
   total,
-  facets,
   onClose,
   onExport,
 }: CustomersExportDialogProps) {
   const base = useId()
-  const [values, setValues] = useState<DialogFilters>(() => pickFilters(filters))
-  const setFilter = (changes: Partial<DialogFilters>) =>
-    setValues((current) => ({ ...current, ...changes }))
+  const canMatch = hasExportableFilters(filters) && total > 0
 
-  const exportFilters = useMemo<CustomerFilters>(
-    () => ({ ...filters, ...values }),
-    [filters, values],
-  )
-  // How many customers match the filters (the list's own total until they are changed).
-  const matching = useMatchingCount(exportFilters, filters, total, CUSTOMERS_COUNT)
-  const filtersChanged = filtersDiffer(filters, values)
-  // The current page: the rows shown, or — with other filters — that page of the matches.
-  const pageRows = filtersChanged
-    ? matching === null
-      ? null
-      : Math.max(0, Math.min(filters.pageSize, matching - (page - 1) * filters.pageSize))
-    : pageCount
-  const appliedFilters = (Object.keys(values) as (keyof DialogFilters)[]).filter(
-    (key) => values[key].trim() !== '',
-  ).length
+  const [scope, setScope] = useState<CustomerExportScope>('page')
+  const [format, setFormat] = useState<ExportFileFormat>('excel')
+
+  const count = scope === 'page' ? items.length : scope === 'matching' ? total : null
+  const canExport =
+    scope === 'page' ? items.length > 0 : scope === 'matching' ? canMatch : true
+
+  function submit() {
+    if (!canExport) return
+    onExport({
+      params: buildCustomerExportParams(scope, items, filters),
+      format,
+      summary: count === null ? 'all customers' : plural(count),
+    })
+  }
 
   return (
-    <ExportDialog
-      title="Export customers"
-      noun={{ one: 'customer', many: 'customers' }}
-      columns={CUSTOMER_EXPORT_COLUMNS}
-      pageCount={pageCount}
-      page={page}
-      total={total}
-      pageRows={pageRows}
-      matching={matching}
-      filtersChanged={filtersChanged}
-      appliedFilters={appliedFilters}
-      filtersHint="Filter by role, state, marketing, orders, country, tag and spend."
-      onResetFilters={() => setValues(pickFilters(filters))}
-      onClose={onClose}
-      onExport={(choice) =>
-        onExport({
-          scope: choice.scope,
-          format: choice.format,
-          columns: pickColumns(CUSTOMER_EXPORT_COLUMNS, choice.columnIds),
-          filters: exportFilters,
-          filtersChanged,
-        })
-      }
-      filters={
-        <ExportFilterGrid>
-          <SelectField
-            id={`${base}-role`}
-            label="Role"
-            icon={UsersIcon}
-            value={values.role}
-            options={ROLE_OPTIONS}
-            onChange={(role) => setFilter({ role: role as DialogFilters['role'] })}
-          />
-          <SelectField
-            id={`${base}-state`}
-            label="Account State"
-            icon={UsersIcon}
-            value={values.state}
-            options={STATE_OPTIONS}
-            onChange={(state) => setFilter({ state: state as DialogFilters['state'] })}
-          />
-          <SelectField
-            id={`${base}-marketing`}
-            label="Marketing"
-            icon={MailIcon}
-            value={values.marketing}
-            options={MARKETING_OPTIONS}
-            onChange={(marketing) =>
-              setFilter({ marketing: marketing as DialogFilters['marketing'] })
-            }
-          />
-          <SelectField
-            id={`${base}-orders`}
-            label="Orders"
-            icon={OrdersIcon}
-            value={values.orders}
-            options={ORDERS_OPTIONS}
-            onChange={(orders) =>
-              setFilter({ orders: orders as DialogFilters['orders'] })
-            }
-          />
-          <SelectField
-            id={`${base}-country`}
-            label="Country"
-            icon={SearchIcon}
-            value={values.country}
-            options={withAll('All countries', facets.countries, values.country)}
-            onChange={(country) => setFilter({ country })}
-          />
-          <SelectField
-            id={`${base}-tag`}
-            label="Tag"
-            icon={TagIcon}
-            value={values.tag}
-            options={withAll('All tags', facets.tags, values.tag)}
-            onChange={(tag) => setFilter({ tag })}
-          />
-          <ExportNumberField
-            id={`${base}-min`}
-            label="Min spent"
-            icon={DollarSignIcon}
-            placeholder="0.00"
-            value={values.minSpent}
-            onChange={(minSpent) => setFilter({ minSpent })}
-          />
-          <ExportNumberField
-            id={`${base}-max`}
-            label="Max spent"
-            icon={DollarSignIcon}
-            placeholder="Any"
-            value={values.maxSpent}
-            onChange={(maxSpent) => setFilter({ maxSpent })}
-          />
-        </ExportFilterGrid>
-      }
-    />
+    <Modal label="Export customers" onClose={onClose}>
+      <div className="flex flex-col gap-5 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-[1.15rem] leading-tight font-semibold">Export customers</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="border-border text-text-muted hover:border-accent hover:text-text -mt-1 -mr-1 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border bg-transparent transition-colors"
+          >
+            <XIcon width={16} height={16} />
+          </button>
+        </div>
+
+        <p className="text-text-muted text-[0.9rem] leading-relaxed">
+          This CSV file can be opened in a spreadsheet or imported back into the store.
+        </p>
+
+        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-none p-0">
+          <legend className={`${GROUP_TITLE} mb-1.5`}>Export</legend>
+          <Choice
+            name={`${base}-scope`}
+            value="page"
+            checked={scope === 'page'}
+            disabled={items.length === 0}
+            onSelect={() => setScope('page')}
+          >
+            Current page
+          </Choice>
+          <Choice
+            name={`${base}-scope`}
+            value="all"
+            checked={scope === 'all'}
+            onSelect={() => setScope('all')}
+            hint={filters.shop ? 'From the store chosen at the top' : 'From every store'}
+          >
+            All customers
+          </Choice>
+          <Choice
+            name={`${base}-scope`}
+            value="matching"
+            checked={scope === 'matching'}
+            disabled={!canMatch}
+            onSelect={() => setScope('matching')}
+          >
+            {plural(total)} matching your search
+          </Choice>
+        </fieldset>
+
+        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-none p-0">
+          <legend className={`${GROUP_TITLE} mb-1.5`}>Export as</legend>
+          <Choice
+            name={`${base}-format`}
+            value="excel"
+            checked={format === 'excel'}
+            onSelect={() => setFormat('excel')}
+          >
+            CSV for Excel, Numbers, or other spreadsheet programs
+          </Choice>
+          <Choice
+            name={`${base}-format`}
+            value="plain"
+            checked={format === 'plain'}
+            onSelect={() => setFormat('plain')}
+          >
+            Plain CSV file
+          </Choice>
+        </fieldset>
+
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="border-border bg-bg text-text hover:border-accent h-10 cursor-pointer rounded-full border px-5 text-[0.88rem] font-semibold transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canExport}
+            onClick={submit}
+            className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border-none px-5 text-[0.88rem] font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-50"
+          >
+            <UploadIcon width={16} height={16} />
+            Export customers
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

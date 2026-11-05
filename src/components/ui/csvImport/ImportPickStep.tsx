@@ -1,22 +1,33 @@
 import { useRef, useState, type DragEvent } from 'react'
-import { Dialog } from '../../../../components/ui/Dialog.tsx'
-import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
-import { PaperclipIcon, SpinnerIcon } from '../../../../components/ui/icons.tsx'
-import { SelectField, type SelectOption } from '../../../../components/ui/SelectField.tsx'
-import type { ImportChoice } from '../../hooks/useProductsImport.ts'
-import type { ImportSummary } from '../../utils/importCsv.ts'
-import { CheckField } from '../edit/fields.tsx'
-import {
-  BUTTON_PLAIN,
-  BUTTON_PRIMARY,
-  formatBytes,
-  formatNumber,
-} from './importFormat.ts'
+import type { ImportChoice } from '../../../hooks/useCsvImport.ts'
+import { CheckField } from '../CheckField.tsx'
+import { Dialog } from '../Dialog.tsx'
+import { FormMessage } from '../FormMessage.tsx'
+import { PaperclipIcon, SpinnerIcon } from '../icons.tsx'
+import { SelectField, type SelectOption } from '../SelectField.tsx'
+import { BUTTON_PLAIN, BUTTON_PRIMARY, formatBytes } from './importFormat.ts'
+
+/** What this screen says about the records being imported. */
+export interface ImportPickWording {
+  /** The window's title: "Import products". */
+  title: string
+  /** The line above the file box, before the sample link. */
+  intro: string
+  /** The small line in the drop area. */
+  dropHint: string
+  overwriteLabel: string
+  overwriteHint: string
+  createLabel: string
+  createHint: string
+  /** Shown when neither choice is ticked. */
+  nothingToDo: string
+}
 
 interface ImportPickStepProps {
+  wording: ImportPickWording
   file: File | null
-  /** The file's preview once it has been read (null while it is being read). */
-  summary: ImportSummary | null
+  /** What the file holds once it has been read ("12 products"); null while it is being read. */
+  fileSummary: string | null
   /** Why the file can't be used. */
   fileError: string | null
   /** A failed check's message (the backend's). */
@@ -34,14 +45,15 @@ interface ImportPickStepProps {
 }
 
 /**
- * The first screen, **Import products**: where the file comes from (an "Add file" button or a
- * drop), the store it is for, and two choices — overwrite the products whose handle already
- * exists, and create the ones that don't. Nothing is sent until "Upload file", which asks the
- * store to check the file (`dry_run`) before the preview is shown.
+ * The first screen: where the file comes from (an "Add file" button or a drop), the store it
+ * is for, and two choices — overwrite the records that already exist, and create the ones that
+ * don't. Nothing is sent until "Upload file", which asks the store to check the file
+ * (`dry_run`) before the preview is shown.
  */
 export function ImportPickStep({
+  wording,
   file,
-  summary,
+  fileSummary,
   fileError,
   error,
   shopOptions,
@@ -71,7 +83,7 @@ export function ImportPickStep({
 
   return (
     <Dialog
-      title="Import products"
+      title={wording.title}
       role="dialog"
       wide
       closeButton
@@ -102,7 +114,7 @@ export function ImportPickStep({
       <div className="flex flex-col gap-1">
         <h3 className="text-text text-[1rem] font-semibold">Bulk import via CSV</h3>
         <p className="text-[0.85rem]">
-          Import a CSV file that’s already formatted to fit Shopify’s template.{' '}
+          {wording.intro}{' '}
           <button
             type="button"
             onClick={onDownloadSample}
@@ -141,11 +153,7 @@ export function ImportPickStep({
             </p>
             <p className="text-[0.78rem]">
               {formatBytes(file.size)}
-              {summary
-                ? ` · ${formatNumber(summary.products)} ${
-                    summary.products === 1 ? 'product' : 'products'
-                  }`
-                : ' · reading…'}
+              {fileSummary ? ` · ${fileSummary}` : ' · reading…'}
             </p>
           </div>
           <div className="flex items-center pr-3">
@@ -183,9 +191,7 @@ export function ImportPickStep({
             Add file
           </button>
           <p className="text-[0.8rem]">or drop a CSV file here</p>
-          <p className="text-[0.74rem]">
-            A CSV in Shopify’s product layout (one row per variant), up to 25 MB.
-          </p>
+          <p className="text-[0.74rem]">{wording.dropHint}</p>
         </div>
       )}
 
@@ -206,20 +212,20 @@ export function ImportPickStep({
 
       <div className="text-text flex flex-col gap-3">
         <CheckField
-          label="Overwrite products with matching handles."
-          hint="Existing values will be replaced for all columns included in the CSV."
+          label={wording.overwriteLabel}
+          hint={wording.overwriteHint}
           checked={choice.updateExisting}
           onChange={(updateExisting) => onChoice({ updateExisting })}
         />
         <CheckField
-          label="Create new products."
-          hint="Products whose handle isn’t in the store yet will be added."
+          label={wording.createLabel}
+          hint={wording.createHint}
           checked={choice.createNew}
           onChange={(createNew) => onChoice({ createNew })}
         />
         {nothingToDo && (
           <p role="alert" className="text-danger text-[0.8rem]">
-            Choose at least one: overwrite existing products, or create new ones.
+            {wording.nothingToDo}
           </p>
         )}
       </div>

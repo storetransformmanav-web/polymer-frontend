@@ -289,7 +289,10 @@ describe('adding a product', () => {
 
     // Basics: title, description, category, gift card (pictures are uploaded after creating).
     await type('Title', 'Hippo Bag')
-    await user.click(await within(form).findByRole('button', { name: 'Edit HTML' }))
+    // The product's own description comes first (the sections' editors follow it).
+    await user.click(
+      (await within(form).findAllByRole('button', { name: 'Edit HTML' }))[0],
+    )
     await type('Description (HTML)', '<p>A roomy bag</p>')
     await type('Product category', 'gid://shopify/TaxonomyCategory/aa-1')
     await user.click(
@@ -410,78 +413,81 @@ describe('adding a product', () => {
         within(form).getByRole('region', { name: 'Product description & information' }),
       )
 
-    it('has a card for them, empty to begin with, with a quick button for each', async () => {
+    /** Types into a section's raw-HTML view (the plain box tests type into). */
+    async function typeInto(
+      user: ReturnType<typeof userEvent.setup>,
+      form: HTMLElement,
+      title: 'Product Description' | 'Product Information',
+      text: string,
+    ) {
+      const group = await card(form).findByRole('group', { name: title })
+      await user.click(await within(group).findByRole('button', { name: 'Edit HTML' }))
+      await user.type(await within(group).findByLabelText(`${title} text (HTML)`), text)
+    }
+
+    const sentSections = () =>
+      JSON.parse(create.mock.calls[0][0].metafields?.[0]?.value ?? '{}').sections as {
+        title: string
+        content: string
+        position: number
+      }[]
+
+    it('is two text editors with fixed titles from the start — nothing to title, add or delete', async () => {
       const { form } = await openForm()
 
-      expect(card(form).getByText(/No sections yet/)).toBeInTheDocument()
       expect(
-        card(form).getByRole('button', { name: 'Add Product Description' }),
+        card(form).getByRole('group', { name: 'Product Description' }),
       ).toBeInTheDocument()
       expect(
-        card(form).getByRole('button', { name: 'Add Product Information' }),
+        card(form).getByRole('group', { name: 'Product Information' }),
       ).toBeInTheDocument()
-      expect(card(form).queryByRole('button', { name: 'Delete all' })).toBeNull()
+      expect(card(form).queryAllByLabelText(/^Title/)).toHaveLength(0)
+      for (const name of [
+        /^Add section/,
+        /^Add Product/,
+        /^Delete all/,
+        /^Remove /,
+        /^Move /,
+      ]) {
+        expect(card(form).queryByRole('button', { name })).toBeNull()
+      }
     })
 
-    it('adds, edits and sends them with the new product as the apd metafield', async () => {
+    it('sends both, Description first, with the new product as the apd metafield', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
 
-      await user.click(
-        card(form).getByRole('button', { name: 'Add Product Description' }),
-      )
-      await user.click(card(form).getByRole('button', { name: 'Add section' }))
-      const titles = card(form).getAllByLabelText(/^Title/)
-      expect(titles[0]).toHaveValue('Product Description')
-      await user.type(titles[1], 'Product Information')
+      await typeInto(user, form, 'Product Information', '<p>100 x 75 mm</p>')
+      await typeInto(user, form, 'Product Description', '<p>Strong box.</p>')
       await user.click(submit(form))
 
       await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
       const field = create.mock.calls[0][0].metafields?.[0]
-      expect([field?.namespace, field?.key, field?.type]).toEqual([
-        'apd',
-        'apd',
-        'json_string',
-      ])
-      expect(
-        JSON.parse(field?.value ?? '{}').sections.map(
-          (section: { title: string; position: number }) => [
-            section.title,
-            section.position,
-          ],
-        ),
-      ).toEqual([
-        ['Product Description', 0],
-        ['Product Information', 1],
+      expect([field?.namespace, field?.key, field?.type]).toEqual(['apd', 'apd', 'json'])
+      // Description first, whichever was typed first; each under its own fixed title.
+      expect(sentSections().map((s) => [s.title, s.content, s.position])).toEqual([
+        ['Product Description', '<p>Strong box.</p>', 0],
+        ['Product Information', '<p>100 x 75 mm</p>', 1],
       ])
     })
 
-    it('Delete all asks first, then leaves none — and nothing about them is sent', async () => {
+    it('sends only the one that has text', async () => {
       const { user, form } = await openForm()
       await fillBasics(user, form)
-      await user.click(
-        card(form).getByRole('button', { name: 'Add Product Description' }),
-      )
-      await user.click(card(form).getByRole('button', { name: 'Add section' }))
-
-      await user.click(card(form).getByRole('button', { name: 'Delete all' }))
-      expect(card(form).getByText(/Delete all 2 sections\?/)).toBeInTheDocument()
-      await user.click(card(form).getByRole('button', { name: 'Yes, delete all' }))
-      expect(card(form).queryAllByLabelText(/^Title/)).toHaveLength(0)
-
+      await typeInto(user, form, 'Product Description', '<p>Strong box.</p>')
       await user.click(submit(form))
+
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+      expect(sentSections().map((s) => s.title)).toEqual(['Product Description'])
+    })
+
+    it('sends nothing about them when neither has text', async () => {
+      const { user, form } = await openForm()
+      await fillBasics(user, form)
+      await user.click(submit(form))
+
       await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
       expect(create.mock.calls[0][0].metafields).toBeUndefined()
-    })
-
-    it('needs a title for every section before anything is sent', async () => {
-      const { user, form } = await openForm()
-      await fillBasics(user, form)
-      await user.click(card(form).getByRole('button', { name: 'Add section' }))
-      await user.click(submit(form))
-
-      expect(await card(form).findByText('Enter a title')).toBeInTheDocument()
-      expect(create).not.toHaveBeenCalled()
     })
   })
 
@@ -744,7 +750,10 @@ describe('adding a product', () => {
   it('sends the description from the rich-text editor’s HTML view', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
-    await user.click(await within(form).findByRole('button', { name: 'Edit HTML' }))
+    // The product's own description comes first (the sections' editors follow it).
+    await user.click(
+      (await within(form).findAllByRole('button', { name: 'Edit HTML' }))[0],
+    )
     await user.type(within(form).getByLabelText('Description (HTML)'), 'Brand new copy')
     await user.click(submit(form))
 

@@ -365,7 +365,6 @@ describe('CustomersPage', () => {
 
     expect(screen.queryByLabelText('Source')).not.toBeInTheDocument()
     expect(screen.queryByText('All Sources')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Account State')).toBeInTheDocument()
   })
 
   it('has no Tag, Min spent or Max spent filter', async () => {
@@ -377,20 +376,20 @@ describe('CustomersPage', () => {
     expect(screen.queryByLabelText('Tag')).toBeNull()
     expect(screen.queryByLabelText('Min spent')).toBeNull()
     expect(screen.queryByLabelText('Max spent')).toBeNull()
+    expect(screen.queryByLabelText('Account State')).toBeNull()
     expect(
-      ['Account State', 'Marketing', 'Orders', 'Sort by', 'Order'].every((name) =>
+      ['Marketing', 'Orders', 'Sort by', 'Order'].every((name) =>
         screen.queryByLabelText(name),
       ),
     ).toBe(true)
   })
 
-  it('sends state, marketing, orders and sort filters', async () => {
+  it('sends marketing, orders and sort filters', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
     await user.click(screen.getByRole('button', { name: 'Filters' }))
-    await user.selectOptions(screen.getByLabelText('Account State'), 'INVITED')
     await user.selectOptions(screen.getByLabelText('Marketing'), 'yes')
     await user.selectOptions(screen.getByLabelText('Orders'), 'no')
     await user.selectOptions(screen.getByLabelText('Sort by'), 'total_spent')
@@ -399,7 +398,6 @@ describe('CustomersPage', () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
-          state: 'INVITED',
           accepts_marketing: true,
           has_orders: false,
           sort: 'total_spent',

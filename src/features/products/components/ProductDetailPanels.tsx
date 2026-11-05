@@ -469,8 +469,8 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
 
 /**
  * A product with no description sections yet: a dashed card saying what they are, with **Add
- * sections**, which opens the same editor as the pencil (its Add Product Description / Add
- * Product Information / Add section starts).
+ * sections**, which opens the same editor as the pencil (a text editor each for Product
+ * Description and Product Information).
  */
 function NoDescriptionSections({ onAdd }: { onAdd: () => void }) {
   return (
@@ -487,7 +487,7 @@ function NoDescriptionSections({ onAdd }: { onAdd: () => void }) {
         </h3>
         <p className="text-text-muted m-0 text-[0.82rem] leading-snug">
           No sections yet. Add the accordion customers see on the product page — Product
-          Description, Product Information, or any other heading.
+          Description and Product Information.
         </p>
       </div>
       <button
@@ -508,7 +508,7 @@ function NoDescriptionSections({ onAdd }: { onAdd: () => void }) {
  * The description sections (Product Description, Product Information…) shown on their own
  * as an accordion, closed to begin with — there is no "Description" card around them. A
  * slim row above has just the pencil, which turns all the sections into an editor in place
- * (titles, formatted text, order, add / remove). Saving sends the product's `apd`
+ * (a text editor each for Product Description and Product Information). Saving sends the product's `apd`
  * metafield (`metafields` of `PUT /products/{id}`). With no sections yet (`sections` null)
  * the view is `NoDescriptionSections`, and the first save creates the metafield.
  */

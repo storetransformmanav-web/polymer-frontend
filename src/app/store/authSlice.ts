@@ -9,6 +9,8 @@ import { ApiError, toUserMessage } from '../../lib/api/ApiError.ts'
 import { api, type AuthUser } from '../../lib/api/endpoints.ts'
 
 export const SESSION_STORAGE_KEY = 'polymer-crm:session'
+/** When the signed-in person last did something, shared by every tab (see useSessionGuard). */
+export const SESSION_ACTIVITY_KEY = 'polymer-crm:last-activity'
 
 export interface Session {
   accessToken: string
@@ -80,8 +82,11 @@ export interface AuthState {
   signedOutReason: SignOutReason | null
 }
 
-/** 'expired' = the session ran out or the token was rejected. */
-export type SignOutReason = 'expired'
+/**
+ * 'expired' = the session ran out or the token was rejected; 'idle' = nothing was done for the
+ * idle limit.
+ */
+export type SignOutReason = 'expired' | 'idle'
 
 type AuthRootState = { auth: AuthState }
 

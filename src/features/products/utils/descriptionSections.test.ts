@@ -3,6 +3,7 @@ import {
   blankSection,
   buildSectionsMetafield,
   canAddDescriptionSections,
+  DEFAULT_APD_SETTINGS,
   draftSections,
   readDescriptionSections,
 } from './descriptionSections.ts'
@@ -138,7 +139,8 @@ describe('editing the sections', () => {
     drafts[1].content = '<p>New</p>'
 
     const metafield = sent(p, drafts)!
-    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+    // The old REST label `json_string` is written as Shopify's `json`.
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
     expect(JSON.parse(metafield.value)).toEqual({
       ...SETTINGS,
       sections: [
@@ -168,7 +170,7 @@ describe('editing the sections', () => {
     const p = product(field(SETTINGS))
     const drafts = [
       ...draftSections(p).slice(0, 1),
-      { ...blankSection(), title: 'Delivery' },
+      { ...blankSection(), title: 'Delivery', content: '<p>2 days</p>' },
     ]
 
     const value = JSON.parse(sent(p, drafts)!.value)
@@ -176,7 +178,13 @@ describe('editing the sections', () => {
       'Product Description',
       'Delivery',
     ])
-    expect(value.sections[1]).toEqual({ title: 'Delivery', content: '', position: 1 })
+    expect(value.sections[1]).toEqual({
+      title: 'Delivery',
+      content: '<p>2 days</p>',
+      position: 1,
+      chosen: false,
+      selected: false,
+    })
   })
 
   it('uses the metafield’s own type', () => {
@@ -190,7 +198,7 @@ describe('editing the sections', () => {
 describe('adding sections to a product that has none', () => {
   const first = () => [
     { ...blankSection(), title: ' Product Description ', content: '<p>Strong box.</p>' },
-    { ...blankSection(), title: 'Product Information', content: '' },
+    { ...blankSection(), title: 'Product Information', content: '<p>Sizes</p>' },
   ]
 
   it('creates the apd metafield, as Add product sends it, for a product without one', () => {
@@ -198,16 +206,40 @@ describe('adding sections to a product that has none', () => {
     expect(canAddDescriptionSections(product())).toBe(true)
 
     const metafield = buildSectionsMetafield(product(), first())
-    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
     expect(JSON.parse(metafield?.value ?? '')).toEqual({
-      accordian_multi: false,
+      ...DEFAULT_APD_SETTINGS,
       sections: [
-        { title: 'Product Description', content: '<p>Strong box.</p>', position: 0 },
-        { title: 'Product Information', content: '', position: 1 },
+        {
+          title: 'Product Description',
+          content: '<p>Strong box.</p>',
+          position: 0,
+          chosen: false,
+          selected: false,
+        },
+        {
+          title: 'Product Information',
+          content: '<p>Sizes</p>',
+          position: 1,
+          chosen: false,
+          selected: false,
+        },
       ],
     })
     // No sections typed: nothing is sent.
     expect(buildSectionsMetafield(product(), [])).toBeNull()
+  })
+
+  it('leaves out a new section that has no text yet', () => {
+    const drafts = [
+      { ...blankSection(), title: 'Product Description', content: '<p>Strong box.</p>' },
+      { ...blankSection(), title: 'Product Information', content: '<p>&nbsp;</p>' },
+    ]
+    const value = JSON.parse(buildSectionsMetafield(product(), drafts)?.value ?? '')
+    expect(value.sections.map((section: { title: string }) => section.title)).toEqual([
+      'Product Description',
+    ])
+    expect(buildSectionsMetafield(product(), [drafts[1]])).toBeNull()
   })
 
   it('keeps the settings and type of a readable metafield that holds no section', () => {

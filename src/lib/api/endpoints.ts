@@ -56,6 +56,12 @@ export const ENDPOINTS = {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
+    /** `GET` the customers as a CSV file. Singular `/customer`, unlike the rest of this group. */
+    export: '/customer/export',
+    /** `POST` a customers CSV (multipart): checks it (`dry_run`) or starts the import. */
+    import: '/customer/import',
+    /** `GET` how a started import is going; `id` is the `import_id` its plan answered with. */
+    importStatus: (id: string) => `/customer/import/${encodeURIComponent(id)}`,
   },
   inventory: {
     /** `GET` the stock list (paged, with `totals` and the stores' `locations`). */
@@ -898,6 +904,18 @@ export interface CustomerListParams {
   order?: 'asc' | 'desc'
   page?: number
   page_size?: number
+}
+
+/**
+ * Query parameters of `GET /customer/export` (all optional): the list's own filters, plus
+ * `ids` for particular customers. The answer is a CSV file, with no paging.
+ */
+export interface CustomerExportParams extends Omit<
+  CustomerListParams,
+  'source' | 'sort' | 'order' | 'page' | 'page_size'
+> {
+  /** Customer ids, comma-separated. */
+  ids?: string
 }
 
 // --- Customer details (GET /customers/{ref}) ---------------------------------
@@ -2424,6 +2442,34 @@ function readStockWrite(data: unknown): StockWriteResult {
   return message ? { ...result, message } : result
 }
 
+/**
+ * Asks for an export and returns the file's text. The body is a file, not JSON: anything else
+ * (a JSON error with a 200, an empty answer) is refused with a readable message instead of
+ * being saved as a broken download. Failures with a status already arrive as an `ApiError`
+ * carrying the backend's message.
+ */
+async function readCsvFile(
+  path: string,
+  params: object,
+  signal?: AbortSignal,
+): Promise<string> {
+  const data = await apiClient.get<unknown>(path, {
+    params,
+    signal,
+    timeout: PRODUCT_EXPORT_TIMEOUT_MS,
+    headers: { Accept: 'text/csv, application/json;q=0.5' },
+  })
+  if (typeof data === 'string' && data.trim() !== '') return data
+  const message =
+    typeof data === 'object' && data !== null && 'message' in data
+      ? String((data as { message: unknown }).message)
+      : ''
+  throw new ApiError(
+    message || 'The server did not send a file. Nothing was downloaded.',
+    {},
+  )
+}
+
 export const api = {
   orders: {
     /** One page of orders, filtered/sorted server-side. Needs a signed-in session. */
@@ -2483,6 +2529,34 @@ export const api = {
         params: { include_raw: includeRaw },
       })
       return customerDetailResponseSchema.parse(data).customer
+    },
+
+    /** The customers matching `params` as the text of a CSV file (`GET /customer/export`). */
+    async export(params: CustomerExportParams, signal?: AbortSignal): Promise<string> {
+      return readCsvFile(ENDPOINTS.customers.export, params, signal)
+    },
+
+    /**
+     * Sends a customers CSV (`POST /customer/import`), as `products.import` does for products:
+     * multipart `file`, `shop`, `dry_run`, `create_new`, `update_existing`. With `dryRun` the
+     * file is only checked. Never retried — a repeat could import everything twice. The answer
+     * is read leniently (`readImportPlan`).
+     */
+    async import(file: File, options: ProductImportOptions): Promise<ProductImportPlan> {
+      const data = await apiClient.post<unknown>(
+        ENDPOINTS.customers.import,
+        buildImportForm(file, options),
+        { timeout: PRODUCT_IMPORT_TIMEOUT_MS },
+      )
+      return readImportPlan(data)
+    },
+
+    /** How a started import is going (`GET /customer/import/{import_id}`), read leniently. */
+    async importStatus(importId: string): Promise<ProductImportProgress> {
+      const data = await apiClient.get<unknown>(
+        ENDPOINTS.customers.importStatus(importId),
+      )
+      return readImportProgress(data)
     },
   },
 
@@ -2763,21 +2837,7 @@ export const api = {
     },
 
     async export(params: ProductExportParams, signal?: AbortSignal): Promise<string> {
-      const data = await apiClient.get<unknown>(ENDPOINTS.products.export, {
-        params,
-        signal,
-        timeout: PRODUCT_EXPORT_TIMEOUT_MS,
-        headers: { Accept: 'text/csv, application/json;q=0.5' },
-      })
-      if (typeof data === 'string' && data.trim() !== '') return data
-      const message =
-        typeof data === 'object' && data !== null && 'message' in data
-          ? String((data as { message: unknown }).message)
-          : ''
-      throw new ApiError(
-        message || 'The server did not send a file. Nothing was downloaded.',
-        {},
-      )
+      return readCsvFile(ENDPOINTS.products.export, params, signal)
     },
 
     /**

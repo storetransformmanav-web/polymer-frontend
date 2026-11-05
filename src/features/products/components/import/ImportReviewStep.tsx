@@ -4,10 +4,17 @@ import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
 import { InfoIcon, SpinnerIcon } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import type { ProductImportPlan } from '../../../../lib/api/productImport.ts'
-import type { ImportChoice } from '../../hooks/useProductsImport.ts'
+import type { ImportChoice } from '../../../../hooks/useCsvImport.ts'
 import type { ImportSummary } from '../../utils/importCsv.ts'
-import { CountChips, ImportProblems } from './importUi.tsx'
-import { BUTTON_PLAIN, BUTTON_PRIMARY, formatNumber } from './importFormat.ts'
+import {
+  CountChips,
+  ImportProblems,
+} from '../../../../components/ui/csvImport/importUi.tsx'
+import {
+  BUTTON_PLAIN,
+  BUTTON_PRIMARY,
+  formatNumber,
+} from '../../../../components/ui/csvImport/importFormat.ts'
 
 /** How many variants the preview table lists before "and N more". */
 const VARIANTS_SHOWN = 8

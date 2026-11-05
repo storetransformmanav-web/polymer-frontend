@@ -83,10 +83,14 @@ describe('vercel.json security headers', () => {
       "'self'",
       'https://polymeruk-api.vercel.app',
       'https://accounts.google.com/gsi/',
-      // Shopify's file storage, where a file chosen from the computer is uploaded to.
-      'https://*.storage.googleapis.com',
-      'https://*.s3.amazonaws.com',
+      // Shopify's own upload buckets (pictures, videos, 3D models), where a file chosen from the
+      // computer goes. Exact names: `*.storage.googleapis.com` would also allow a bucket anybody
+      // can create, so injected code could post the session token to it.
+      'https://shopify-staged-uploads.storage.googleapis.com',
+      'https://shopify-video-production-core-originals.storage.googleapis.com',
+      'https://storage.googleapis.com/threed-models-production/',
     ])
+    expect((csp['connect-src'] ?? []).join(' ')).not.toContain('*')
     expect(csp['frame-src']).toEqual([
       'https://accounts.google.com/gsi/',
       'https://www.youtube-nocookie.com',
@@ -113,6 +117,19 @@ describe('vercel.json security headers', () => {
     ].filter(([, attributes, body]) => !/\bsrc=/.test(attributes) && body.trim() !== '')
 
     expect(inlineScripts).toHaveLength(0)
+  })
+
+  it('isolates the window from other sites, while Google’s sign-in popup keeps working', () => {
+    expect(everyPage['Cross-Origin-Opener-Policy']).toBe('same-origin-allow-popups')
+    expect(everyPage['Cross-Origin-Resource-Policy']).toBe('same-origin')
+    expect(everyPage['X-Permitted-Cross-Domain-Policies']).toBe('none')
+    expect(csp['upgrade-insecure-requests']).toEqual([])
+  })
+
+  it('tries the next tightening in report-only mode first: nothing it reports is blocked', () => {
+    const trial = parseCsp(everyPage['Content-Security-Policy-Report-Only'] ?? '')
+    expect(trial['require-trusted-types-for']).toEqual(["'script'"])
+    expect(trial['img-src']).toContain('https://cdn.shopify.com')
   })
 
   it('keeps API responses out of shared caches', () => {

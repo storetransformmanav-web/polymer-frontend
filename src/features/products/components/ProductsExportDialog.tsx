@@ -1,7 +1,8 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useState } from 'react'
 import type { ProductFilters } from '../../../app/store/productsSlice.ts'
 import { UploadIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { Modal } from '../../../components/ui/Modal.tsx'
+import { RadioChoice as Choice } from '../../../components/ui/RadioChoice.tsx'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import {
   buildExportParams,
@@ -30,50 +31,6 @@ const plural = (count: number) =>
   `${number(count)} ${count === 1 ? 'product' : 'products'}`
 
 const GROUP_TITLE = 'text-[0.95rem] font-semibold'
-
-interface ChoiceProps {
-  name: string
-  value: string
-  checked: boolean
-  disabled?: boolean
-  onSelect: () => void
-  children: ReactNode
-  /** A smaller line under the label. */
-  hint?: string
-}
-
-/** One radio of a group: the circle, its label and an optional hint. */
-function Choice({
-  name,
-  value,
-  checked,
-  disabled,
-  onSelect,
-  children,
-  hint,
-}: ChoiceProps) {
-  return (
-    <label
-      className={`flex items-start gap-3 py-1 text-[0.92rem] ${
-        disabled ? 'text-text-muted/60 cursor-not-allowed' : 'cursor-pointer'
-      }`}
-    >
-      <input
-        type="radio"
-        name={name}
-        value={value}
-        checked={checked}
-        disabled={disabled}
-        onChange={onSelect}
-        className="accent-accent mt-[0.2rem] h-4 w-4 shrink-0 cursor-[inherit]"
-      />
-      <span className="flex flex-col">
-        <span>{children}</span>
-        {hint && <span className="text-text-muted text-[0.78rem]">{hint}</span>}
-      </span>
-    </label>
-  )
-}
 
 /**
  * The products export dialog, laid out like the store admin's: which products (this

@@ -1,0 +1,29 @@
+# The checks CLAUDE.md asks for, on every push and pull request, plus a dependency audit. The
+# security tests (src/config, lib/api/client.test.ts, ...) run as part of `npm test`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      # What ships to the browser only; fails on a high or critical advisory.
+      - run: npm audit --omit=dev --audit-level=high

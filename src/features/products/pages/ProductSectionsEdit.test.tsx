@@ -13,6 +13,7 @@ import {
 } from '../../../lib/api/endpoints.ts'
 import { confirmUpdate } from '../../../test/confirmUpdate.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
+import { DEFAULT_APD_SETTINGS } from '../utils/descriptionSections.ts'
 import { ProductsPage } from './ProductsPage.tsx'
 
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
@@ -160,8 +161,27 @@ function sentSettings() {
   expect(body.metafields).toHaveLength(1)
   expect(Object.keys(body)).toEqual(['metafields'])
   const [field] = body.metafields!
-  expect(field).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+  expect(field).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
   return JSON.parse(field.value) as typeof SETTINGS
+}
+
+/** Opens a section's raw-HTML view (the plain box tests type into) and returns that box. */
+async function openHtml(
+  user: ReturnType<typeof userEvent.setup>,
+  title: 'Product Description' | 'Product Information',
+) {
+  const group = await screen.findByRole('group', { name: title })
+  await user.click(await within(group).findByRole('button', { name: 'Edit HTML' }))
+  return screen.findByLabelText(`${title} text (HTML)`)
+}
+
+/** Types into a section's raw-HTML view. */
+async function typeInto(
+  user: ReturnType<typeof userEvent.setup>,
+  title: 'Product Description' | 'Product Information',
+  text: string,
+) {
+  await user.type(await openHtml(user, title), text)
 }
 
 async function openDetails() {
@@ -245,16 +265,10 @@ describe('editing the description sections (metafield apd)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add sections' }))
     expect(screen.getByText('Adding description sections')).toBeInTheDocument()
-    // The editor's own starts.
-    await user.click(screen.getByRole('button', { name: 'Add Product Description' }))
-    expect(
-      screen
-        .getAllByLabelText(/^Title/)
-        .map((input) => (input as HTMLInputElement).value),
-    ).toEqual(['Product Description'])
-    await user.click(screen.getByRole('button', { name: 'Add section' }))
-    const titles = screen.getAllByLabelText(/^Title/)
-    await user.type(titles[1], 'Product Information')
+    // Two fixed editors, nothing to title, add or remove.
+    expect(screen.queryAllByLabelText(/^Title/)).toHaveLength(0)
+    await typeInto(user, 'Product Description', '<p>Strong box.</p>')
+    await typeInto(user, 'Product Information', '<p>100 x 75 mm</p>')
     expect(update).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Save description sections' }))
@@ -267,13 +281,25 @@ describe('editing the description sections (metafield apd)', () => {
     expect(body.metafields?.[0]).toMatchObject({
       namespace: 'apd',
       key: 'apd',
-      type: 'json_string',
+      type: 'json',
     })
     expect(JSON.parse(body.metafields?.[0].value ?? '')).toEqual({
-      accordian_multi: false,
+      ...DEFAULT_APD_SETTINGS,
       sections: [
-        { title: 'Product Description', content: '', position: 0 },
-        { title: 'Product Information', content: '', position: 1 },
+        {
+          title: 'Product Description',
+          content: '<p>Strong box.</p>',
+          position: 0,
+          chosen: false,
+          selected: false,
+        },
+        {
+          title: 'Product Information',
+          content: '<p>100 x 75 mm</p>',
+          position: 1,
+          chosen: false,
+          selected: false,
+        },
       ],
     })
 
@@ -286,19 +312,16 @@ describe('editing the description sections (metafield apd)', () => {
     ).toBeNull()
   })
 
-  it('needs a title for a first section too, and Discard puts the empty card back', async () => {
+  it('Discard puts the empty card back, and nothing is sent', async () => {
     details.mockResolvedValue({ ...DETAIL, metafields: [] })
     const user = await openDetails()
 
     await user.click(screen.getByRole('button', { name: 'Add sections' }))
-    await user.click(screen.getByRole('button', { name: 'Add section' }))
-    await user.click(screen.getByRole('button', { name: 'Save description sections' }))
-    expect(await screen.findByText('Enter a title')).toBeInTheDocument()
-    expect(update).not.toHaveBeenCalled()
-
+    await typeInto(user, 'Product Description', 'Some text')
     await user.click(
       screen.getByRole('button', { name: 'Discard description sections changes' }),
     )
+    expect(update).not.toHaveBeenCalled()
     expect(
       screen.getByRole('region', { name: 'Product description & information' }),
     ).toBeInTheDocument()
@@ -315,142 +338,70 @@ describe('editing the description sections (metafield apd)', () => {
     expect(screen.queryByRole('button', { name: 'Add sections' })).toBeNull()
   })
 
-  it('edits a title and sends only the apd metafield — the rest of its settings kept', async () => {
-    // Once saved, the backend answers with the new metafield.
-    update.mockImplementation(async (_id, body) => {
-      details.mockResolvedValue({
-        ...DETAIL,
-        metafields: body.metafields ?? [],
-      } as ProductDetail)
-      return WRITE_OK
-    })
+  it('is just two text editors with fixed titles: no title boxes, no add, move or remove', async () => {
     const user = await openDetails()
     await user.click(pencil())
 
-    const titles = screen.getAllByLabelText(/^Title/)
-    expect(titles.map((input) => (input as HTMLInputElement).value)).toEqual([
-      'Product Description',
-      'Product Information',
-    ])
-    await user.clear(titles[1])
-    await user.type(titles[1], 'Specifications')
-    expect(update).not.toHaveBeenCalled()
-
-    await user.click(save())
-    await confirmUpdate(user)
-
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-    expect(update.mock.calls[0][0]).toBe('id-1')
-    expect(update.mock.calls[0][2]).toBe('polymer-uk')
-    const settings = sentSettings()
-    expect(settings).toEqual({
-      ...SETTINGS,
-      sections: [
-        SETTINGS.sections[0],
-        { ...SETTINGS.sections[1], title: 'Specifications', position: 1 },
-      ],
-    })
-    // Back to the accordion, with the new title at once.
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: `Save ${WHAT}` })).toBeNull(),
-    )
-    expect(
-      await screen.findByRole('button', { name: /^Specifications/ }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Product Description' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Product Information' })).toBeInTheDocument()
+    expect(screen.queryAllByLabelText(/^Title/)).toHaveLength(0)
+    for (const name of [/^Add section/, /^Move /, /^Remove /, /^Delete all/]) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
   })
 
   it('edits a section’s text in the rich-text editor, through its HTML view', async () => {
     const user = await openDetails()
     await user.click(pencil())
 
-    const editButtons = await screen.findAllByRole('button', { name: 'Edit HTML' })
-    await user.click(editButtons[0])
-    const html = await screen.findByLabelText('Product Description text (HTML)')
+    const html = await openHtml(user, 'Product Description')
     await user.clear(html)
     await user.type(html, 'Brand new copy')
     await user.click(save())
     await confirmUpdate(user)
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-    const settings = sentSettings()
-    expect(settings.sections[0].content).toBe('Brand new copy')
-    // The untouched section's HTML goes back exactly as it was.
-    expect(settings.sections[1].content).toBe(SETTINGS.sections[1].content)
-  })
-
-  it('moves, adds and removes sections, and numbers the order', async () => {
-    const user = await openDetails()
-    await user.click(pencil())
-
-    await user.click(screen.getByRole('button', { name: 'Move Product Information up' }))
-    await user.click(screen.getByRole('button', { name: 'Add section' }))
-    const titles = screen.getAllByLabelText(/^Title/)
-    expect(titles).toHaveLength(3)
-    await user.type(titles[2], 'Delivery')
-    await user.click(screen.getByRole('button', { name: 'Remove Product Description' }))
-    await user.click(save())
-    await confirmUpdate(user)
-
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-    expect(
-      sentSettings().sections.map((section) => [section.title, section.position]),
-    ).toEqual([
-      ['Product Information', 0],
-      ['Delivery', 1],
-    ])
-  })
-
-  it('the move buttons stop at the ends, and every section can be removed', async () => {
-    const user = await openDetails()
-    await user.click(pencil())
-
-    expect(
-      screen.getByRole('button', { name: 'Move Product Description up' }),
-    ).toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Move Product Information down' }),
-    ).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Remove Product Description' }))
-    // The last one can go too: nothing forces a section to stay.
-    expect(
-      screen.getByRole('button', { name: 'Remove Product Information' }),
-    ).toBeEnabled()
-  })
-
-  it('Delete all asks first, then removes every section — and sends the apd metafield removal', async () => {
-    const user = await openDetails()
-    await user.click(pencil())
-
-    await user.click(screen.getByRole('button', { name: 'Delete all' }))
-    // Nothing is gone until it is confirmed; "Keep them" puts it away.
-    expect(screen.getByText(/Delete all 2 sections\?/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Keep them' }))
-    expect(screen.getAllByLabelText(/^Title/)).toHaveLength(2)
-
-    await user.click(screen.getByRole('button', { name: 'Delete all' }))
-    await user.click(screen.getByRole('button', { name: 'Yes, delete all' }))
-    expect(screen.queryAllByLabelText(/^Title/)).toHaveLength(0)
-    expect(screen.getByText(/No sections yet/)).toBeInTheDocument()
-
-    await user.click(save())
-    await confirmUpdate(user)
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
-    expect(update.mock.calls[0][1]).toEqual({
-      metafields_remove: [{ namespace: 'apd', key: 'apd' }],
+    // Everything else of the metafield — its settings, the titles, the other section's HTML and
+    // each section's own keys — goes back exactly as it was.
+    expect(sentSettings()).toEqual({
+      ...SETTINGS,
+      sections: [
+        { ...SETTINGS.sections[0], content: 'Brand new copy' },
+        SETTINGS.sections[1],
+      ],
     })
   })
 
-  it('needs a title for every section, and sends nothing until it has them', async () => {
+  it('keeps a section it does not show, and adds a missing one at the end', async () => {
+    const withDelivery = {
+      ...SETTINGS,
+      sections: [
+        SETTINGS.sections[0],
+        { title: 'Delivery', content: '<p>2 days</p>', position: 1, chosen: false },
+      ],
+    }
+    details.mockResolvedValue({
+      ...DETAIL,
+      metafields: [{ ...DETAIL.metafields[0], value: JSON.stringify(withDelivery) }],
+    } as ProductDetail)
     const user = await openDetails()
     await user.click(pencil())
-    await user.click(screen.getByRole('button', { name: 'Add section' }))
-    // Something changed, but the new section has no title.
+    expect(
+      screen.getByText('1 other section on this product is kept as it is.'),
+    ).toBeInTheDocument()
+
+    await typeInto(user, 'Product Information', '<p>Sizes</p>')
     await user.click(save())
     await confirmUpdate(user)
 
-    expect(screen.getByText('Enter a title')).toBeInTheDocument()
-    expect(screen.getByText('Fix the highlighted fields to save.')).toBeInTheDocument()
-    expect(update).not.toHaveBeenCalled()
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    const sent = sentSettings()
+    expect(sent.sections.map((section) => [section.title, section.position])).toEqual([
+      ['Product Description', 0],
+      ['Delivery', 1],
+      ['Product Information', 2],
+    ])
+    expect(sent.sections[1]).toEqual({ ...withDelivery.sections[1], position: 1 })
   })
 
   it('does not offer Save until something changed, and Discard leaves everything as it was', async () => {
@@ -458,7 +409,7 @@ describe('editing the description sections (metafield apd)', () => {
     await user.click(pencil())
     expect(save()).toBeDisabled()
 
-    await user.type(screen.getAllByLabelText(/^Title/)[0], ' (new)')
+    await typeInto(user, 'Product Description', ' (new)')
     expect(save()).toBeEnabled()
     await user.click(discard())
 
@@ -471,7 +422,8 @@ describe('editing the description sections (metafield apd)', () => {
   it('asks first, and does nothing on Cancel', async () => {
     const user = await openDetails()
     await user.click(pencil())
-    await user.type(screen.getAllByLabelText(/^Title/)[0], ' (new)')
+    const html = await openHtml(user, 'Product Description')
+    await user.type(html, ' (new)')
     await user.click(save())
 
     const dialog = await screen.findByRole('alertdialog')
@@ -480,7 +432,7 @@ describe('editing the description sections (metafield apd)', () => {
 
     expect(update).not.toHaveBeenCalled()
     // The edit is still open with what was typed.
-    expect(screen.getAllByLabelText(/^Title/)[0]).toHaveValue('Product Description (new)')
+    expect((html as HTMLTextAreaElement).value).toContain('(new)')
   })
 
   it('shows the backend’s message and keeps the edit when the save fails', async () => {
@@ -489,11 +441,12 @@ describe('editing the description sections (metafield apd)', () => {
     )
     const user = await openDetails()
     await user.click(pencil())
-    await user.type(screen.getAllByLabelText(/^Title/)[0], ' (new)')
+    const html = await openHtml(user, 'Product Description')
+    await user.type(html, ' (new)')
     await user.click(save())
     await confirmUpdate(user)
 
     expect(await screen.findByText('Shopify refused the metafield.')).toBeInTheDocument()
-    expect(screen.getAllByLabelText(/^Title/)[0]).toHaveValue('Product Description (new)')
+    expect((html as HTMLTextAreaElement).value).toContain('(new)')
   })
 })

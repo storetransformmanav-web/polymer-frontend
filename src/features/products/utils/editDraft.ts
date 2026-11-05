@@ -17,6 +17,7 @@ import {
 } from '../../../lib/api/endpoints.ts'
 import { sameFile } from '../../../app/store/productPatch.ts'
 import { collectionKey } from './collectionSuggestions.ts'
+import { writableMetafieldType } from './metafields.ts'
 import {
   APD_KEY,
   APD_MAX_LENGTH,
@@ -705,7 +706,7 @@ export function buildUpdateBody(
         sets.push({
           namespace: field.namespace,
           key: field.metaKey,
-          type: original.type || field.type,
+          type: writableMetafieldType(original.type || field.type),
           value: field.value,
         })
       }

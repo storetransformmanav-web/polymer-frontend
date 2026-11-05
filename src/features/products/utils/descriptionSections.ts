@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ProductDetail, ProductMetafieldInput } from '../../../lib/api/endpoints.ts'
+import { writableMetafieldType } from './metafields.ts'
 
 /**
  * Some stores keep the description as sections (Product Description, Product
@@ -14,6 +15,64 @@ export const APD_KEY = 'apd'
 /** Shopify's limit for a JSON metafield value. */
 export const APD_MAX_LENGTH = 2_000_000
 export const SECTION_TITLE_MAX = 255
+
+/**
+ * Every setting of the `apd` metafield the description app saves, as it saves it (everything in
+ * the JSON but `sections`). A new metafield is written with all of them, so it has the same
+ * format the app itself produces; an existing one keeps its own.
+ */
+export const DEFAULT_APD_SETTINGS = {
+  saved: true,
+  kind: 1,
+  overwrite_styles: false,
+  inherit_fonts: true,
+  rounded_corners: true,
+  disable: false,
+  font_size: 1,
+  spacing: 1,
+  bold_section_titles: true,
+  border_color: '#e2e2e2',
+  text_color: '#5e5e5e',
+  heading_color: '#121212',
+  accent_color: '#557b97',
+  accordian_open: 2,
+  accordian_heading_color: '#121212',
+  accordian_icon_color: '#5e5e5e',
+  accordian_side_borders: false,
+  accordian_multi: false,
+  accordian_border_color: '#e2e2e2',
+  accordian_bg_color: 'rgba(255,255,255,0)',
+  accordian_icon: 1,
+  switcher_style: 2,
+  tabs_bordered: false,
+  switcher_swipe: false,
+  bottom_line_text_color: '#121212',
+  bottom_line_color: '#e2e2e2',
+  bottom_line_active_color: '#557b97',
+  bottom_line_inactive_text_color: '#848484',
+  tabs_border_color: '#e2e2e2',
+  tabs_color: '#121212',
+  tabs_bg_color: 'rgba(255,255,255,0)',
+  tabs_inactive_color: '#848484',
+  tabs_hover_bg_color: '#f5f5f5',
+  ios_active_bg_color: '#557b97',
+  ios_bg_color: 'rgba(255,255,255,0)',
+  ios_active_color: '#fff',
+  ios_color: '#557b97',
+  buttons_active_bg_color: '#557b97',
+  buttons_bg_color: '#f1f1f1',
+  buttons_active_color: '#fff',
+  buttons_color: '#5e5e5e',
+}
+
+/** A section as the app saves a new one: title, HTML, position, and the two flags it keeps. */
+const newSection = (draft: SectionDraft, index: number) => ({
+  title: draft.title.trim(),
+  content: draft.content,
+  position: index,
+  chosen: false,
+  selected: false,
+})
 
 const settingsSchema = z.looseObject({
   /** false: opening one section closes the others. */
@@ -120,6 +179,21 @@ export interface SectionDraft {
 let keyCounter = 0
 const nextKey = () => `section-${(keyCounter += 1)}`
 
+/** True when formatted text has nothing a customer would see (no words, picture, table or video). */
+export function isBlankHtml(html: string): boolean {
+  if (/<(img|table|iframe|video|oembed)/i.test(html)) return false
+  return (
+    html
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .trim() === ''
+  )
+}
+
+/** A section that was never saved and still has no text: it is left out when saving. */
+const worthSaving = (draft: SectionDraft) =>
+  draft.source !== null || !isBlankHtml(draft.content)
+
 /** A new, empty section. */
 export const blankSection = (): SectionDraft => ({
   key: nextKey(),
@@ -171,8 +245,9 @@ export function canAddDescriptionSections(
  */
 export function buildSectionsMetafield(
   product: Pick<ProductDetail, 'metafields'>,
-  drafts: SectionDraft[],
+  allDrafts: SectionDraft[],
 ): ProductMetafieldInput | null {
+  const drafts = allDrafts.filter(worthSaving)
   // Every section deleted: the metafield is removed instead (see `buildSectionsRemoval`).
   if (drafts.length === 0) return null
   const apd = parseApd(product)
@@ -181,14 +256,10 @@ export function buildSectionsMetafield(
     return {
       namespace: APD_NAMESPACE,
       key: APD_KEY,
-      type: apd.type,
+      type: writableMetafieldType(apd.type),
       value: JSON.stringify({
         ...apd.settings,
-        sections: drafts.map((draft, index) => ({
-          title: draft.title.trim(),
-          content: draft.content,
-          position: index,
-        })),
+        sections: drafts.map(newSection),
       }),
     }
   }
@@ -205,11 +276,12 @@ export function buildSectionsMetafield(
   return {
     namespace: APD_NAMESPACE,
     key: APD_KEY,
-    type: apd.type,
+    type: writableMetafieldType(apd.type),
     value: JSON.stringify({
       ...apd.settings,
       sections: drafts.map((draft, index) => ({
-        ...draft.source,
+        // A section that was there keeps everything of its own; a new one gets the app's flags.
+        ...(draft.source ?? { chosen: false, selected: false }),
         title: draft.title.trim(),
         content: draft.content,
         position: index,
@@ -220,24 +292,22 @@ export function buildSectionsMetafield(
 
 /**
  * The `apd` metafield for a product that is being **created** with sections — null when there are
- * none. Same JSON the description app saves: `{ accordian_multi, sections: [{ title, content,
- * position }] }`, one section open at a time.
+ * none. Same JSON the description app saves: `{ ...settings, sections: [{ title, content,
+ * position, chosen, selected }] }` with all of the app's settings (`DEFAULT_APD_SETTINGS`), one
+ * section open at a time.
  */
 export function buildNewSectionsMetafield(
-  drafts: SectionDraft[],
+  allDrafts: SectionDraft[],
 ): { namespace: string; key: string; type: string; value: string } | null {
+  const drafts = allDrafts.filter(worthSaving)
   if (drafts.length === 0) return null
   return {
     namespace: APD_NAMESPACE,
     key: APD_KEY,
-    type: 'json_string',
+    type: 'json',
     value: JSON.stringify({
-      accordian_multi: false,
-      sections: drafts.map((draft, index) => ({
-        title: draft.title.trim(),
-        content: draft.content,
-        position: index,
-      })),
+      ...DEFAULT_APD_SETTINGS,
+      sections: drafts.map(newSection),
     }),
   }
 }

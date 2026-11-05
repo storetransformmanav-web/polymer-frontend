@@ -1,11 +1,12 @@
 import type { ProductFilters } from '../../../app/store/productsSlice.ts'
 import type { ProductExportParams, ProductListItem } from '../../../lib/api/endpoints.ts'
+import { csvExportFilename, csvFile, type ExportFileFormat } from '../../../lib/csv.ts'
 
 /** Which products an export covers. */
 export type ExportScope = 'page' | 'selected' | 'all' | 'matching'
 
-/** "CSV for Excel…" gets a byte-order mark so accents and £ read correctly; "plain" is the file as sent. */
-export type ExportFileFormat = 'excel' | 'plain'
+export type { ExportFileFormat }
+export { csvFile }
 
 /** What the export dialog hands over. */
 export interface ProductsExportRequest {
@@ -73,16 +74,5 @@ export function buildExportParams(
 
 /** `products_export_all-stores_20261027-1240.csv` — the name the backend's own file has. */
 export function exportFilename(shop: string | undefined, now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
-  const store = (shop ?? '').replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '')
-  return `products_export_${store || 'all-stores'}_${stamp}.csv`
-}
-
-/** The file to save: the text as sent, with a UTF-8 byte-order mark first for Excel. */
-export function csvFile(text: string, format: ExportFileFormat): Blob {
-  const body = text.startsWith('﻿') ? text.slice(1) : text
-  return new Blob(format === 'excel' ? ['﻿', body] : [body], {
-    type: 'text/csv;charset=utf-8',
-  })
+  return csvExportFilename('products', shop, now)
 }

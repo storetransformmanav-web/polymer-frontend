@@ -1,6 +1,6 @@
 /**
  * `POST /products/import` (a Shopify-format CSV) and `GET /products/import/{import_id}`: the
- * request's form and how the answers are read.
+ * request's form and how the answers are read. `POST /customer/import` uses the same.
  *
  * The API's description says what the calls do but not the exact fields of their answers, so
  * the answers are read **leniently**: the plan and the progress can be flat or wrapped in
@@ -147,7 +147,11 @@ function problemOf(item: unknown): ImportProblem | null {
   if (isText(item)) return { row: null, handle: null, message: item.trim() }
   if (!isRecord(item)) return null
   const row = pick([item], ['row', 'line', 'row_number', 'line_number', 'index'], isCount)
-  const handle = pick([item], ['handle', 'product_handle'], isText)
+  const handle = pick(
+    [item],
+    ['handle', 'product_handle', 'email', 'customer_email'],
+    isText,
+  )
   let message = pick(
     [item],
     ['message', 'error', 'reason', 'detail', 'problem', 'description'],

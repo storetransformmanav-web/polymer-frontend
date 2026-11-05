@@ -4,7 +4,8 @@ import { ChevronsLeftIcon, LogoutIcon } from '../../components/ui/icons.tsx'
 import { useAuth } from '../../hooks/useAuth.ts'
 import { useMediaQuery } from '../../hooks/useMediaQuery.ts'
 import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed.ts'
-import { NAV_ENTRIES, isNavGroup } from '../router/navigation.ts'
+import { useVisibleNavEntries } from '../../hooks/useAccess.ts'
+import { isNavGroup } from '../router/navigation.ts'
 import { initials, useCurrentUser } from './currentUser.ts'
 import { NavAccordion } from './NavAccordion.tsx'
 import { NavGroupFlyout } from './NavGroupFlyout.tsx'
@@ -23,6 +24,7 @@ export function Navbar() {
   const collapsed = preferCollapsed || !isWide
   const { logout } = useAuth()
   const currentUser = useCurrentUser()
+  const entries = useVisibleNavEntries()
 
   return (
     <nav
@@ -49,7 +51,7 @@ export function Navbar() {
       </div>
 
       <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-        {NAV_ENTRIES.map((entry) =>
+        {entries.map((entry) =>
           isNavGroup(entry) ? (
             <li key={entry.label}>
               {/* In the icon rail a group is one icon that opens a card of its pages. */}

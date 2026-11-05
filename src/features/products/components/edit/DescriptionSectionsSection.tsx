@@ -1,49 +1,31 @@
-import { useState } from 'react'
 import { RichTextEditor } from '../../../../components/ui/RichTextEditor.tsx'
-import {
-  ChevronDownIcon,
-  InfoIcon,
-  ListChecksIcon,
-  PlusIcon,
-  TrashIcon,
-} from '../../../../components/ui/icons.tsx'
-import {
-  blankSection,
-  SECTION_TITLE_MAX,
-  type SectionDraft,
-} from '../../utils/descriptionSections.ts'
-import { EditField, FIELD_INPUT, ICON_BUTTON, type SectionProps } from './fields.tsx'
+import { blankSection, type SectionDraft } from '../../utils/descriptionSections.ts'
+import { EditField, type SectionProps } from './fields.tsx'
 
-/** The ready-made starts offered while there are no sections: two named ones and a blank. */
-const STARTS = [
+/**
+ * The two sections every product has, with their titles fixed: only their text is edited. Each is
+ * saved in the `apd` metafield under exactly this title, which is what the store's product page
+ * shows as the accordion's headings.
+ */
+const FIXED_SECTIONS = [
   {
-    label: 'Add Product Description',
     title: 'Product Description',
     hint: 'What the product is, and why customers will want it.',
-    icon: InfoIcon,
   },
   {
-    label: 'Add Product Information',
     title: 'Product Information',
     hint: 'Sizes, materials, specifications and care.',
-    icon: ListChecksIcon,
-  },
-  {
-    label: 'Add section',
-    title: '',
-    hint: 'Any other heading, such as Delivery or Returns.',
-    icon: PlusIcon,
   },
 ] as const
 
-const OUTLINE_BUTTON =
-  'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.8rem] font-semibold transition-colors'
-
 /**
- * The description sections (Product Description, Product Information…) being edited: each has a
- * title and formatted text, and they can be reordered, removed one by one, **all deleted at once**
- * and added. Used by the details page (saved as the product's `apd` metafield) and by the Add
- * product form (sent with the new product).
+ * The description sections being edited, simplified to **two fixed ones — Product Description and
+ * Product Information —, each just a text editor**: the titles can't be changed, and nothing is
+ * added, moved or removed. A section is created when its text is first typed (one that is still
+ * empty when saved is simply left out); a section the product already has keeps its own settings. Any
+ * other section a product happens to have (a "Delivery" section, say) is not shown and is kept as
+ * it is. Used by the details page (saved as the product's `apd` metafield) and by the Add product
+ * form (sent with the new product).
  */
 export function SectionsEditor({
   sections,
@@ -52,206 +34,75 @@ export function SectionsEditor({
   idPrefix,
 }: {
   sections: SectionDraft[]
-  /** `descriptionSections.<i>.title` problems, and `descriptionSections` for the whole. */
+  /** `descriptionSections` — a problem with the whole. */
   errors: Record<string, string>
   onChange: (next: SectionDraft[]) => void
   /** Keeps element ids apart when two editors are on a page. */
   idPrefix: string
 }) {
-  const [deletingAll, setDeletingAll] = useState(false)
-  const change = (index: number, patch: Partial<SectionDraft>) =>
-    onChange(sections.map((item, at) => (at === index ? { ...item, ...patch } : item)))
+  const indexOf = (title: string) =>
+    sections.findIndex((section) => section.title.trim() === title)
+  const others = sections.filter(
+    (section) => !FIXED_SECTIONS.some((fixed) => fixed.title === section.title.trim()),
+  ).length
 
-  function move(index: number, by: -1 | 1) {
-    const target = index + by
-    if (target < 0 || target >= sections.length) return
-    const next = [...sections]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    onChange(next)
+  function setContent(title: string, content: string) {
+    const at = indexOf(title)
+    if (at >= 0) {
+      onChange(sections.map((item, i) => (i === at ? { ...item, content } : item)))
+    } else if (content !== '') {
+      // Product Description goes in front of Product Information, whichever is typed first.
+      const created = { ...blankSection(), title, content }
+      const before = FIXED_SECTIONS.findIndex((fixed) => fixed.title === title)
+      const later = sections.findIndex((section) =>
+        FIXED_SECTIONS.slice(before + 1).some(
+          (fixed) => fixed.title === section.title.trim(),
+        ),
+      )
+      onChange(
+        later < 0
+          ? [...sections, created]
+          : [...sections.slice(0, later), created, ...sections.slice(later)],
+      )
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {sections.length === 0 && (
-        <div className="flex flex-col gap-2.5">
-          <p className="text-text-muted m-0 text-[0.82rem]">
-            No sections yet. Start with one:
-          </p>
-          <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-3">
-            {STARTS.map((start) => (
-              <button
-                key={start.label}
-                type="button"
-                aria-label={start.label}
-                onClick={() =>
-                  onChange([...sections, { ...blankSection(), title: start.title }])
-                }
-                className="border-border-strong bg-bg hover:border-accent hover:bg-accent-tint/40 flex cursor-pointer flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-colors"
-              >
-                <span className="bg-accent-tint text-accent flex h-8 w-8 items-center justify-center rounded-lg">
-                  <start.icon width={16} height={16} />
-                </span>
-                <span className="text-text text-[0.88rem] font-semibold">
-                  {start.title || 'Another section'}
-                </span>
-                <span className="text-text-muted text-[0.78rem] leading-snug">
-                  {start.hint}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {sections.map((section, index) => {
-        const titleId = `${idPrefix}-section-title-${section.key}`
-        const contentId = `${idPrefix}-section-content-${section.key}`
-        const titleError = errors[`descriptionSections.${index}.title`]
-        const name = section.title.trim() || `section ${index + 1}`
+      {FIXED_SECTIONS.map((fixed) => {
+        const contentId = `${idPrefix}-section-content-${fixed.title.replace(/\s+/g, '-').toLowerCase()}`
+        const current = sections[indexOf(fixed.title)]
         return (
           <fieldset
-            key={section.key}
+            key={fixed.title}
             className="border-border bg-bg flex min-w-0 flex-col gap-3 rounded-xl border p-3.5"
           >
-            <legend className="sr-only">Section {index + 1}</legend>
-            <div className="flex items-end gap-2">
-              <div className="min-w-0 flex-1">
-                <EditField
-                  id={titleId}
-                  label="Title"
-                  error={titleError}
-                  counter={{ value: section.title.trim().length, max: SECTION_TITLE_MAX }}
-                >
-                  <input
-                    id={titleId}
-                    autoComplete="off"
-                    value={section.title}
-                    aria-invalid={titleError ? true : undefined}
-                    onChange={(event) => change(index, { title: event.target.value })}
-                    className={FIELD_INPUT}
-                  />
-                </EditField>
-              </div>
-              <div className="flex shrink-0 items-center pb-1">
-                <button
-                  type="button"
-                  aria-label={`Move ${name} up`}
-                  title="Move up"
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                  className={ICON_BUTTON}
-                >
-                  <ChevronDownIcon width={16} height={16} className="rotate-180" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Move ${name} down`}
-                  title="Move down"
-                  disabled={index === sections.length - 1}
-                  onClick={() => move(index, 1)}
-                  className={ICON_BUTTON}
-                >
-                  <ChevronDownIcon width={16} height={16} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Remove ${name}`}
-                  title="Remove section"
-                  onClick={() => onChange(sections.filter((_, at) => at !== index))}
-                  className={`${ICON_BUTTON} hover:text-danger`}
-                >
-                  <TrashIcon width={16} height={16} />
-                </button>
-              </div>
-            </div>
-
-            <EditField
-              id={contentId}
-              label="Text"
-              hint="Formatted text, saved as HTML for the store."
-            >
+            <legend className="sr-only">{fixed.title}</legend>
+            <h4 className="text-text m-0 text-[0.92rem] font-semibold">{fixed.title}</h4>
+            <EditField id={contentId} label="Text" hint={fixed.hint}>
               <RichTextEditor
                 id={contentId}
-                label={`${section.title.trim() || `Section ${index + 1}`} text`}
-                value={section.content}
-                onChange={(content) => change(index, { content })}
+                label={`${fixed.title} text`}
+                value={current?.content ?? ''}
+                onChange={(content) => setContent(fixed.title, content)}
               />
             </EditField>
           </fieldset>
         )
       })}
 
+      {others > 0 && (
+        <p className="text-text-muted m-0 text-[0.8rem]">
+          {others === 1
+            ? '1 other section on this product is kept as it is.'
+            : `${others} other sections on this product are kept as they are.`}
+        </p>
+      )}
+
       {errors.descriptionSections && (
         <p role="alert" className="text-danger text-[0.78rem]">
           {errors.descriptionSections}
         </p>
-      )}
-
-      {sections.length > 0 && (
-        <div className="border-border flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onChange([...sections, blankSection()])}
-              className={OUTLINE_BUTTON}
-            >
-              <PlusIcon width={13} height={13} />
-              Add section
-            </button>
-            {/* The named ones that are not there yet, one click each. */}
-            {STARTS.filter(
-              (start) =>
-                start.title !== '' &&
-                !sections.some((section) => section.title.trim() === start.title),
-            ).map((start) => (
-              <button
-                key={start.label}
-                type="button"
-                aria-label={start.label}
-                onClick={() =>
-                  onChange([...sections, { ...blankSection(), title: start.title }])
-                }
-                className={OUTLINE_BUTTON}
-              >
-                <PlusIcon width={13} height={13} />
-                {start.title}
-              </button>
-            ))}
-          </div>
-
-          {deletingAll ? (
-            <span className="text-text flex flex-wrap items-center gap-2 text-[0.82rem]">
-              Delete all {sections.length}{' '}
-              {sections.length === 1 ? 'section' : 'sections'}?
-              <button
-                type="button"
-                onClick={() => {
-                  setDeletingAll(false)
-                  onChange([])
-                }}
-                className="bg-danger text-bg inline-flex h-7 cursor-pointer items-center rounded-md border-none px-2.5 text-[0.78rem] font-semibold"
-              >
-                Yes, delete all
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeletingAll(false)}
-                className="border-border bg-bg text-text hover:border-accent inline-flex h-7 cursor-pointer items-center rounded-md border px-2.5 text-[0.78rem] font-semibold"
-              >
-                Keep them
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setDeletingAll(true)}
-              className="text-danger hover:text-danger/80 inline-flex cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 text-[0.82rem] font-semibold"
-            >
-              <TrashIcon width={14} height={14} />
-              Delete all
-            </button>
-          )}
-        </div>
       )}
     </div>
   )

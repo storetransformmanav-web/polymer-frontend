@@ -236,13 +236,13 @@ describe('what a page requests when a filter is used', () => {
     expect(callsTo('customers.list').every((call) => isOneRow(call.params))).toBe(true)
 
     log.calls = []
-    await user.selectOptions(screen.getByLabelText('Account State'), 'ENABLED')
+    await user.selectOptions(screen.getByLabelText('Marketing'), 'yes')
     await waitFor(() =>
       expect(
         callsTo('customers.list').some(
           (call) =>
             !isOneRow(call.params) &&
-            (call.params as { state?: string }).state === 'ENABLED',
+            (call.params as { accepts_marketing?: boolean }).accepts_marketing === true,
         ),
       ).toBe(true),
     )

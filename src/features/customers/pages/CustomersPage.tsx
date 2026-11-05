@@ -10,9 +10,11 @@ import {
 import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
+import { CustomersImport } from '../components/CustomersImport.tsx'
 import { CustomersKpis } from '../components/CustomersKpis.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
+import { useAccess } from '../../../hooks/useAccess.ts'
 import { useCustomers } from '../hooks/useCustomers.ts'
 import { useCustomerTabs } from '../hooks/useCustomerTabs.ts'
 import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
@@ -32,6 +34,7 @@ const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
  */
 export function CustomersPage() {
   const customers = useCustomers()
+  const { canManage } = useAccess('customers')
   const tabs = useCustomerTabs()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
@@ -119,14 +122,15 @@ export function CustomersPage() {
           onReset={customers.resetFilters}
         />
 
-        {/* The Export button sits in the top bar; it is only shown while the list is. */}
+        {/* The Import and Export buttons sit in the top bar; they only show while the list is. */}
+        <CustomersImport visible={!activeId} />
+
         <CustomersExport
           items={customers.items}
-          page={data?.page ?? filters.page}
           filters={filters}
           total={data?.total ?? 0}
-          facets={customers.facets}
-          visible={!activeId}
+          // The whole list of people's details: only for those who may manage customers.
+          visible={!activeId && canManage}
         />
 
         <section

@@ -28,6 +28,11 @@ export interface NavItem {
    * whole): the page lays itself out in that height and its list scrolls inside its own box.
    */
   fillHeight?: boolean
+  /**
+   * The name of this page's area in the signed-in user's `permissions`. An area the answer
+   * doesn't name is allowed: the backend is what really decides (see `hooks/useAccess.ts`).
+   */
+  area?: string
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
   syncs?: 'products' | 'orders' | 'customers'
 }
@@ -59,6 +64,7 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/orders',
         label: 'Orders',
+        area: 'orders',
         icon: OrdersIcon,
         shopScoped: true,
         fillHeight: true,
@@ -67,6 +73,7 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/products',
         label: 'Products',
+        area: 'products',
         icon: ProductsIcon,
         shopScoped: true,
         fillHeight: true,
@@ -75,6 +82,7 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/customers',
         label: 'Customers',
+        area: 'customers',
         icon: UsersIcon,
         shopScoped: true,
         syncs: 'customers',
@@ -82,21 +90,23 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/inventory',
         label: 'Inventory',
+        area: 'inventory',
         icon: InventoryIcon,
         shopScoped: true,
         fillHeight: true,
       },
     ],
   },
-  { to: '/users', label: 'User Management', icon: UserCogIcon },
+  { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },
   {
     to: '/locks',
     label: 'Lock Management',
+    area: 'locks',
     icon: LockIcon,
     shopScoped: true,
     fillHeight: true,
   },
-  { to: '/activity', label: 'Activity Management', icon: ActivityIcon },
+  { to: '/activity', label: 'Activity Management', icon: ActivityIcon, area: 'activity' },
 ]
 
 /**

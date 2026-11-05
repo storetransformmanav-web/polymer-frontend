@@ -3,10 +3,9 @@ import { CreateCard, type CreateSectionProps } from './CreateCard.tsx'
 
 /**
  * **Product description & information** on the Add product form: the sections the product page
- * shows — a Product Description, the Product Information… — each with a title and formatted text.
- * They can be added, reordered, removed one by one, all deleted at once and edited here; they are
- * sent with the new product as its `apd` metafield (one section open at a time), and read back and
- * edited the same way on the product's page afterwards.
+ * shows — a Product Description and the Product Information, two fixed titles each with a text
+ * editor. They are sent with the new product as its `apd` metafield (one section open at a time),
+ * and read back and edited the same way on the product's page afterwards.
  */
 export function CreateSectionsCard({ draft, errors, update }: CreateSectionProps) {
   return (
