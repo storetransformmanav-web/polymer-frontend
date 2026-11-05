@@ -33,6 +33,8 @@ export interface NavItem {
    * doesn't name is allowed: the backend is what really decides (see `hooks/useAccess.ts`).
    */
   area?: string
+  /** A small status note shown beside the link in the sidebar (e.g. "In Progress"). */
+  badge?: string
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
   syncs?: 'products' | 'orders' | 'customers'
 }
@@ -66,6 +68,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         label: 'Orders',
         area: 'orders',
         icon: OrdersIcon,
+        badge: 'In Progress',
         shopScoped: true,
         fillHeight: true,
         syncs: 'orders',
@@ -97,7 +100,6 @@ export const NAV_ENTRIES: NavEntry[] = [
       },
     ],
   },
-  { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },
   {
     to: '/locks',
     label: 'Lock Management',
@@ -106,6 +108,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     shopScoped: true,
     fillHeight: true,
   },
+  { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },
   { to: '/activity', label: 'Activity Management', icon: ActivityIcon, area: 'activity' },
 ]
 

@@ -9,7 +9,7 @@ interface NavItemLinkProps {
 
 /** One sidebar link — used for top-level entries and inside accordions. */
 export function NavItemLink({ item, collapsed }: NavItemLinkProps) {
-  const { to, label, end, icon: Icon } = item
+  const { to, label, end, icon: Icon, badge } = item
 
   return (
     <NavLink
@@ -24,6 +24,11 @@ export function NavItemLink({ item, collapsed }: NavItemLinkProps) {
     >
       <Icon className="shrink-0" />
       <span className={collapsed ? 'sr-only' : ''}>{label}</span>
+      {badge && !collapsed && (
+        <span className="text-danger ml-auto text-[0.65rem] font-semibold whitespace-nowrap">
+          {badge}
+        </span>
+      )}
     </NavLink>
   )
 }
