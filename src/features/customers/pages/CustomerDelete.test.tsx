@@ -200,7 +200,7 @@ describe('deleting a customer', () => {
     await waitFor(() => expect(remove).toHaveBeenCalledWith('cust-1', null))
   })
 
-  it('reads the list and the role counts again afterwards, quietly', async () => {
+  it('reads the list again afterwards, quietly, and nothing else', async () => {
     const { user, dialog } = await askToDelete('Customer 3')
     list.mockClear()
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
@@ -208,11 +208,7 @@ describe('deleting a customer', () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ page_size: 25 })),
     )
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ page_size: 1, role: 'administrator' }),
-      ),
-    )
+    expect(list).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Customer 3')).not.toBeInTheDocument()
   })
 

@@ -4,45 +4,24 @@ import {
   ArrowUpDownIcon,
   ChevronDownIcon,
   FilterIcon,
-  MailIcon,
   OrdersIcon,
   SearchIcon,
   SlidersIcon,
-  UserCogIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import { useCustomerRoleCounts } from '../hooks/useCustomerRoleCounts.ts'
-import { MARKETING_OPTIONS, ORDERS_OPTIONS } from '../utils/filterOptions.ts'
-import {
-  CUSTOMER_SORTS,
-  type CustomerRole,
-  type CustomerSort,
-} from '../../../lib/api/endpoints.ts'
+import { ORDERS_OPTIONS } from '../utils/filterOptions.ts'
+import type { CustomerSort } from '../../../lib/api/endpoints.ts'
 
-const ROLE_TABS: { value: CustomerRole | ''; label: string }[] = [
-  { value: '', label: 'All Customers' },
-  { value: 'administrator', label: 'Administrators' },
-  { value: 'subscriber', label: 'Subscribers' },
+const SORT_CHOICES: { value: CustomerSort; label: string }[] = [
+  { value: 'created_at', label: 'Date created' },
+  { value: 'updated_at', label: 'Last updated' },
+  { value: 'name', label: 'Name' },
+  { value: 'email', label: 'Email' },
+  { value: 'orders_count', label: 'Orders' },
 ]
-
-const ROLE_VALUES = ROLE_TABS.map((tab) => tab.value)
-
-const SORT_LABELS: Record<CustomerSort, string> = {
-  created_at: 'Date created',
-  updated_at: 'Last updated',
-  name: 'Name',
-  email: 'Email',
-  orders_count: 'Orders',
-  total_spent: 'Total spent',
-  last_login: 'Last login',
-}
-
-const SORT_OPTIONS: SelectOption[] = CUSTOMER_SORTS.map((value) => ({
-  value,
-  label: SORT_LABELS[value],
-}))
+const SORT_OPTIONS: SelectOption[] = SORT_CHOICES
 const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
@@ -50,7 +29,6 @@ const ORDER_OPTIONS: SelectOption[] = [
 
 interface CustomersToolbarProps {
   filters: CustomerFilters
-  total: number | null
   hasFilters: boolean
   onChange: (changes: Partial<CustomerFilters>) => void
   onReset: () => void
@@ -58,33 +36,17 @@ interface CustomersToolbarProps {
 
 /**
  * Search, the Filters button and Clear All in one row, and the collapsible
- * filter grid under it (its first field is the role, with a count on every choice). Typing in the
- * search box is instant locally and sent to the API once the user
- * pauses (see useDebouncedField); selects apply immediately.
+ * filter grid under it. Typing in the search box is instant locally and sent to the API once
+ * the user pauses (see useDebouncedField); selects apply immediately.
  */
 export function CustomersToolbar({
   filters,
-  total,
   hasFilters,
   onChange,
   onReset,
 }: CustomersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  // The counts are only shown in the dropdown, so they are requested once the grid is open.
-  const counts = useCustomerRoleCounts(filters, ROLE_VALUES, filtersOpen)
-
-  // The role choices, each with its count ("Subscribers (9,760)"). The open one can fall
-  // back to the list's own total while its count loads.
-  const roleOptions: SelectOption[] = ROLE_TABS.map((tab) => {
-    const count = counts[tab.value] ?? (filters.role === tab.value ? total : null)
-    return {
-      value: tab.value,
-      label:
-        count === null ? tab.label : `${tab.label} (${count.toLocaleString('en-GB')})`,
-    }
-  })
-
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
   )
@@ -164,26 +126,6 @@ export function CustomersToolbar({
       >
         <div className="-m-1 overflow-hidden p-1">
           <div className="grid grid-cols-2 gap-3 min-[560px]:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-9">
-            <SelectField
-              compact
-              id="filter-role"
-              label="Customer role"
-              icon={UserCogIcon}
-              value={filters.role}
-              options={roleOptions}
-              onChange={(role) => onChange({ role: role as CustomerRole | '' })}
-            />
-            <SelectField
-              compact
-              id="filter-marketing"
-              label="Marketing"
-              icon={MailIcon}
-              value={filters.marketing}
-              options={MARKETING_OPTIONS}
-              onChange={(marketing) =>
-                onChange({ marketing: marketing as CustomerFilters['marketing'] })
-              }
-            />
             <SelectField
               compact
               id="filter-orders"

@@ -201,7 +201,7 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows every column by default: Customer name, Email verified, Orders, Amount spent, Role, Joined, Last login, Actions', async () => {
+  it('shows every column by default: Customer name, Email verified, Orders, Amount spent, Role, Joined, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
@@ -214,7 +214,6 @@ describe('CustomersPage', () => {
       'Amount spent',
       'Role',
       'Joined',
-      'Last login',
       'Actions',
     ])
     expect(table.queryByRole('checkbox')).toBeNull()
@@ -248,7 +247,7 @@ describe('CustomersPage', () => {
     const table = within(screen.getByRole('table'))
     const crmRow = table.getByText('Customer 1').closest('tr')!
     expect(within(crmRow).getByText('Administrator')).toBeInTheDocument()
-    expect(table.getByRole('columnheader', { name: 'Last login' })).toBeInTheDocument()
+    expect(table.queryByRole('columnheader', { name: 'Last login' })).toBeNull()
   })
 
   it('falls back to first + last name, then the email, when there is no full name', async () => {
@@ -292,25 +291,6 @@ describe('CustomersPage', () => {
     expect(screen.getByRole('searchbox', { name: 'Search customers' })).toHaveValue('')
   })
 
-  it('filters by role, from the Customer role dropdown in the filters', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
-    // There are no role tabs any more.
-    expect(screen.queryByRole('group', { name: 'Filter by role' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Administrators/ })).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: 'Filters' }))
-    await user.selectOptions(screen.getByLabelText('Customer role'), 'administrator')
-
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'administrator', page_size: 25 }),
-      ),
-    )
-    expect(screen.getByLabelText('Customer role')).toHaveValue('administrator')
-  })
-
   it('starts with the filter grid collapsed and reveals it from the Filters button', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
@@ -328,33 +308,30 @@ describe('CustomersPage', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('asks for every role on "All Customers", and for just one on the other choices', async () => {
-    const user = userEvent.setup()
+  it('asks for every role: the API would otherwise answer subscribers only', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ role: 'all', page: 1 }))
-    // Never an un-roled request for the list itself (the API would default to subscribers).
     expect(list.mock.calls.filter(([params]) => params.role === undefined)).toHaveLength(
       0,
     )
+  })
+
+  it('offers only Orders, Sort by and Order, and asks for no counts', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CustomersPage />)
+    await screen.findByText('Customer 2')
+    list.mockClear()
 
     await user.click(screen.getByRole('button', { name: 'Filters' }))
-    const role = screen.getByLabelText('Customer role')
-    await user.selectOptions(role, 'administrator')
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'administrator', page: 1, page_size: 25 }),
-      ),
-    )
-    await user.selectOptions(role, 'subscriber')
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ role: 'subscriber', page: 1, page_size: 25 }),
-      ),
-    )
-    // Back to "All Customers": shown at once from the cache.
-    await user.selectOptions(role, '')
-    expect(role).toHaveValue('')
+
+    expect(screen.queryByLabelText('Customer role')).toBeNull()
+    expect(screen.queryByLabelText('Marketing')).toBeNull()
+    const sort = within(screen.getByLabelText('Sort by'))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+    expect(sort).toEqual(['Date created', 'Last updated', 'Name', 'Email', 'Orders'])
+    expect(list).not.toHaveBeenCalled()
   })
 
   it('has no Source filter', async () => {
@@ -378,29 +355,25 @@ describe('CustomersPage', () => {
     expect(screen.queryByLabelText('Max spent')).toBeNull()
     expect(screen.queryByLabelText('Account State')).toBeNull()
     expect(
-      ['Marketing', 'Orders', 'Sort by', 'Order'].every((name) =>
-        screen.queryByLabelText(name),
-      ),
+      ['Orders', 'Sort by', 'Order'].every((name) => screen.queryByLabelText(name)),
     ).toBe(true)
   })
 
-  it('sends marketing, orders and sort filters', async () => {
+  it('sends orders and sort filters', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
     await user.click(screen.getByRole('button', { name: 'Filters' }))
-    await user.selectOptions(screen.getByLabelText('Marketing'), 'yes')
     await user.selectOptions(screen.getByLabelText('Orders'), 'no')
-    await user.selectOptions(screen.getByLabelText('Sort by'), 'total_spent')
+    await user.selectOptions(screen.getByLabelText('Sort by'), 'orders_count')
     await user.selectOptions(screen.getByLabelText('Order'), 'asc')
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
-          accepts_marketing: true,
           has_orders: false,
-          sort: 'total_spent',
+          sort: 'orders_count',
           order: 'asc',
           page: 1,
         }),
@@ -474,36 +447,5 @@ describe('CustomersPage', () => {
     failList = false
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Customer 2')).toBeInTheDocument()
-  })
-
-  it('shows a count on every role choice, honouring the other filters', async () => {
-    list.mockImplementation((params) => {
-      const byRole = { administrator: 7, subscriber: 53, all: 60 }
-      const total = params.role ? byRole[params.role] : 53
-      return Promise.resolve({ ...respond(params), total })
-    })
-    const user = userEvent.setup()
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
-
-    await user.click(screen.getByRole('button', { name: 'Filters' }))
-    const role = screen.getByLabelText('Customer role')
-    expect(
-      await within(role).findByRole('option', { name: 'All Customers (60)' }),
-    ).toBeInTheDocument()
-    expect(
-      within(role).getByRole('option', { name: 'Administrators (7)' }),
-    ).toBeInTheDocument()
-    expect(
-      within(role).getByRole('option', { name: 'Subscribers (53)' }),
-    ).toBeInTheDocument()
-
-    // The search narrows every choice's count (the count queries carry it).
-    await user.type(screen.getByRole('searchbox', { name: 'Search customers' }), 'ian')
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ search: 'ian', role: 'administrator', page_size: 1 }),
-      ),
-    )
   })
 })

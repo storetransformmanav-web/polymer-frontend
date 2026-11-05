@@ -38,16 +38,6 @@ function humanise(text: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-/**
- * The type to send when a metafield is written. Shopify's API only knows `json`; `json_string` is
- * the old REST label the backend reports for older metafields (the description app's `apd` one),
- * and sending it back is refused by the store — so a write says `json` instead. Any other type is
- * sent as it is.
- */
-export function writableMetafieldType(type: string): string {
-  return type === 'json_string' ? 'json' : type
-}
-
 export function metafieldName(namespace: string, key: string): string {
   return FIELD_LABELS[`${namespace}.${key}`] ?? humanise(key)
 }

@@ -50,8 +50,8 @@ describe('Orders, Products and Customers lists look alike', () => {
     const widths = [
       ...header.matchAll(/<th className=\{`\$\{TH_(?:CENTER|RIGHT)\} (w-\d+)`\}>/g),
     ].map((match) => match[1])
-    // Seven columns after the name; every one is w-36 except the narrower Actions.
-    expect(widths).toEqual(['w-36', 'w-36', 'w-36', 'w-36', 'w-36', 'w-36', 'w-28'])
+    // Six columns after the name; every one is w-36 except the narrower Actions.
+    expect(widths).toEqual(['w-36', 'w-36', 'w-36', 'w-36', 'w-36', 'w-28'])
   })
 
   it('use the shared row-action buttons (one size, one icon size) and no bare icon buttons', () => {

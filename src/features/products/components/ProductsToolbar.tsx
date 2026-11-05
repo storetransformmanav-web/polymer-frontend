@@ -20,11 +20,7 @@ import { useProductStatusCounts } from '../hooks/useProductStatusCounts.ts'
 import { useStoreTags } from '../hooks/useStoreTags.ts'
 import { STOCK_OPTIONS } from '../utils/filterOptions.ts'
 import { mergeTags } from '../utils/tagSuggestions.ts'
-import {
-  PRODUCT_SORTS,
-  type ProductSort,
-  type ProductStatus,
-} from '../../../lib/api/endpoints.ts'
+import type { ProductSort, ProductStatus } from '../../../lib/api/endpoints.ts'
 
 const STATUS_TABS: { value: ProductStatus | ''; label: string }[] = [
   { value: '', label: 'All Products' },
@@ -34,19 +30,15 @@ const STATUS_TABS: { value: ProductStatus | ''; label: string }[] = [
 ]
 const STATUS_VALUES = STATUS_TABS.map((tab) => tab.value)
 
-const SORT_LABELS: Record<ProductSort, string> = {
-  created_at: 'Date created',
-  updated_at: 'Last updated',
-  title: 'Name',
-  price: 'Price',
-  inventory: 'Inventory',
-  synced_at: 'Last synced',
-}
-
-const SORT_OPTIONS: SelectOption[] = PRODUCT_SORTS.map((value) => ({
-  value,
-  label: SORT_LABELS[value],
-}))
+const SORT_CHOICES: { value: ProductSort; label: string }[] = [
+  { value: 'created_at', label: 'Date created' },
+  { value: 'updated_at', label: 'Last updated' },
+  { value: 'title', label: 'Name' },
+  { value: 'price', label: 'Price' },
+]
+const SORT_OPTIONS: SelectOption[] = SORT_CHOICES
+/** Not offered in the dropdown, but the Inventory column's header sorts by it: then it is named. */
+const INVENTORY_SORT: SelectOption = { value: 'inventory', label: 'Inventory' }
 const ORDER_OPTIONS: SelectOption[] = [
   { value: 'desc', label: 'Descending' },
   { value: 'asc', label: 'Ascending' },
@@ -204,15 +196,6 @@ export function ProductsToolbar({
             />
             <SelectField
               compact
-              id="filter-type"
-              label="Product Type"
-              icon={BoxesIcon}
-              value={filters.productType}
-              options={withAll('All Types', facets.productTypes, filters.productType)}
-              onChange={(productType) => onChange({ productType })}
-            />
-            <SelectField
-              compact
               id="filter-tag"
               label="Tag"
               icon={TagIcon}
@@ -268,7 +251,11 @@ export function ProductsToolbar({
                 label="Sort by"
                 icon={ArrowUpDownIcon}
                 value={filters.sort}
-                options={SORT_OPTIONS}
+                options={
+                  filters.sort === 'inventory'
+                    ? [...SORT_OPTIONS, INVENTORY_SORT]
+                    : SORT_OPTIONS
+                }
                 onChange={(sort) => onChange({ sort: sort as ProductSort })}
               />
               <SelectField

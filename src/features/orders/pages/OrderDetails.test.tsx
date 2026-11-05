@@ -303,7 +303,7 @@ describe('an order’s details page', () => {
       'Items2',
       'Payments1',
       'Shipping',
-      'Notes & Tracking3',
+      'Notes & Tracking4',
     ])
   })
 
@@ -316,6 +316,10 @@ describe('an order’s details page', () => {
     expect(summary.getByText('£9.58')).toBeInTheDocument() // shipping
     expect(summary.getByText('£4.42')).toBeInTheDocument() // tax
     expect(summary.getByText('£26.50')).toBeInTheDocument() // total
+    // The order's Shopify ID is in the summary, with a copy button.
+    expect(summary.getByText('Shopify ID')).toBeInTheDocument()
+    expect(summary.getByText('14000000000001')).toBeInTheDocument()
+    expect(summary.getByRole('button', { name: 'Copy Shopify ID' })).toBeInTheDocument()
 
     // The customer card: a guest checkout has no customer name or email, but the order's
     // own email is there, labelled as such.
@@ -331,6 +335,53 @@ describe('an order’s details page', () => {
     expect(
       screen.getAllByText('Expected Delivery Day: Wednesday').length,
     ).toBeGreaterThan(0)
+
+    // The status & dates and store & source cards are gone.
+    expect(screen.queryByText('Status & Dates')).toBeNull()
+    expect(screen.queryByText('Store & Source')).toBeNull()
+  })
+
+  it('shows the shipping and billing addresses on the Overview, as two cards', async () => {
+    await openFirst()
+    await screen.findByText('Order Summary')
+
+    expect(screen.getByRole('heading', { name: 'Addresses' })).toBeInTheDocument()
+    const shipping = within(screen.getByRole('region', { name: 'Shipping address' }))
+    expect(shipping.getByText('jane doe')).toBeInTheDocument()
+    expect(shipping.getByText('Example Co')).toBeInTheDocument()
+    expect(shipping.getByText('1 Example Street')).toBeInTheDocument()
+    expect(shipping.getByText('Exampletown AB1 2CD')).toBeInTheDocument()
+    expect(shipping.getByText('United Kingdom')).toBeInTheDocument()
+    expect(shipping.getByText('07700900123')).toBeInTheDocument()
+    expect(
+      shipping.getByRole('button', { name: 'Copy shipping address' }),
+    ).toBeInTheDocument()
+
+    // The fixture's billing address is the same place, and says so.
+    const billing = within(screen.getByRole('region', { name: 'Billing address' }))
+    expect(billing.getByText('1 Example Street')).toBeInTheDocument()
+    expect(billing.getByText('Same as the shipping address.')).toBeInTheDocument()
+  })
+
+  it('says so when an address is missing, and does not call two different ones the same', async () => {
+    details.mockImplementation((ref) =>
+      Promise.resolve({
+        ...makeDetail(Number(ref) - 17500),
+        shipping_address: null,
+        billing_address: { name: 'Sam Roe', address1: '2 Other Road', country: 'France' },
+      }),
+    )
+    await openFirst()
+    await screen.findByText('Order Summary')
+
+    expect(
+      within(screen.getByRole('region', { name: 'Shipping address' })).getByText(
+        'No address.',
+      ),
+    ).toBeInTheDocument()
+    const billing = within(screen.getByRole('region', { name: 'Billing address' }))
+    expect(billing.getByText('2 Other Road')).toBeInTheDocument()
+    expect(billing.queryByText('Same as the shipping address.')).toBeNull()
   })
 
   it('lists the items on the Items tab, each linking to its product, with safe pictures only', async () => {
@@ -374,17 +425,13 @@ describe('an order’s details page', () => {
     expect(screen.getByText('(20%)')).toBeInTheDocument()
   })
 
-  it('shows the shipping: both addresses, the method and what was fulfilled', async () => {
+  it('shows the shipping: the method and what was fulfilled (the addresses are on the Overview)', async () => {
     const user = await openFirst()
     await screen.findByText('Order Summary')
     await user.click(screen.getByRole('tab', { name: 'Shipping' }))
 
-    const shipping = within(screen.getByText('Shipping address').closest('section')!)
-    expect(shipping.getByText('jane doe')).toBeInTheDocument()
-    expect(shipping.getByText('1 Example Street')).toBeInTheDocument()
-    expect(shipping.getByText('Exampletown AB1 2CD')).toBeInTheDocument()
-    expect(shipping.getByText('United Kingdom')).toBeInTheDocument()
-    expect(screen.getByText('Billing address')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Shipping address' })).toBeNull()
+    expect(screen.queryByText('Billing address')).toBeNull()
     expect(
       screen.getByText('DPD Next Working Day Delivery - Orders Placed By 2pm'),
     ).toBeInTheDocument()
@@ -396,6 +443,15 @@ describe('an order’s details page', () => {
     await screen.findByText('Order Summary')
     await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
 
+    // The order's note, then (none yet) the tracking, then the other details saved with it.
+    expect(screen.getByRole('heading', { name: 'Order note' })).toBeInTheDocument()
+    expect(screen.getByText('Leave with the neighbour')).toBeInTheDocument()
+    expect(screen.getByText('No tracking details yet.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Additional details' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Landing page')).toBeInTheDocument()
+
     const link = screen.getByRole('link', {
       name: 'https://polymeruk.com/products/pizza-box',
     })
@@ -404,6 +460,53 @@ describe('an order’s details page', () => {
     expect(screen.getByText('google')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /javascript/ })).toBeNull()
     expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument()
+  })
+
+  it('shows each parcel’s tracking — from the fulfillments and a tracking detail — with a safe link', async () => {
+    details.mockImplementation((ref) =>
+      Promise.resolve({
+        ...makeDetail(Number(ref) - 17500),
+        note: null,
+        fulfillments: [
+          {
+            name: '#17501.1',
+            tracking_company: 'DPD',
+            tracking_number: '15501234567890',
+            tracking_url: 'https://track.dpd.co.uk/parcels/15501234567890',
+          },
+          {
+            name: '#17501.2',
+            tracking_number: 'BAD1',
+            tracking_url: 'javascript:alert(1)',
+          },
+        ],
+        note_attributes: [{ key: 'tracking_number', value: 'ABC-123' }],
+      }),
+    )
+    const user = await openFirst()
+    await screen.findByText('Order Summary')
+    await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
+
+    expect(screen.getByText('No note on this order.')).toBeInTheDocument()
+    expect(screen.getByText('DPD')).toBeInTheDocument()
+    expect(screen.getByText('15501234567890')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Copy tracking number' })).toHaveLength(
+      3,
+    )
+    const track = screen.getAllByRole('link', { name: /Track parcel/ })
+    expect(track).toHaveLength(1)
+    expect(track[0]).toHaveAttribute(
+      'href',
+      'https://track.dpd.co.uk/parcels/15501234567890',
+    )
+    expect(track[0]).toHaveAttribute('rel', 'noopener noreferrer')
+    // A hostile address is never a link, but its number still shows.
+    expect(screen.getByText('BAD1')).toBeInTheDocument()
+    // The tracking detail saved with the order is a tracking card, not an "additional" one.
+    expect(screen.getByText('ABC-123')).toBeInTheDocument()
+    expect(
+      screen.getByText('Nothing else was saved with this order.'),
+    ).toBeInTheDocument()
   })
 
   it('goes back to the list, which kept its page and filters', async () => {

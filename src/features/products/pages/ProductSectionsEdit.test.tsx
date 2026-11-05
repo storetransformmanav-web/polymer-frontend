@@ -161,7 +161,7 @@ function sentSettings() {
   expect(body.metafields).toHaveLength(1)
   expect(Object.keys(body)).toEqual(['metafields'])
   const [field] = body.metafields!
-  expect(field).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
+  expect(field).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
   return JSON.parse(field.value) as typeof SETTINGS
 }
 
@@ -281,7 +281,7 @@ describe('editing the description sections (metafield apd)', () => {
     expect(body.metafields?.[0]).toMatchObject({
       namespace: 'apd',
       key: 'apd',
-      type: 'json',
+      type: 'json_string',
     })
     expect(JSON.parse(body.metafields?.[0].value ?? '')).toEqual({
       ...DEFAULT_APD_SETTINGS,

@@ -648,6 +648,20 @@ describe('ProductsPage list', () => {
     )
   })
 
+  it('has no Product Type filter, and sorts only by date, name or price', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+
+    expect(screen.queryByLabelText('Product Type')).toBeNull()
+    const sort = within(screen.getByLabelText('Sort by'))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+    expect(sort).toEqual(['Date created', 'Last updated', 'Name', 'Price'])
+  })
+
   it('sends sort, order and stock filters', async () => {
     const user = userEvent.setup()
     renderPage()

@@ -140,7 +140,7 @@ describe('editing the sections', () => {
 
     const metafield = sent(p, drafts)!
     // The old REST label `json_string` is written as Shopify's `json`.
-    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
     expect(JSON.parse(metafield.value)).toEqual({
       ...SETTINGS,
       sections: [
@@ -195,6 +195,47 @@ describe('editing the sections', () => {
   })
 })
 
+/**
+ * The metafield the description app saves, as the backend shows it (every setting, then the two
+ * sections). A product created or given its first sections must carry exactly this text.
+ */
+const APP_VALUE =
+  '{"saved":true,"kind":1,"overwrite_styles":false,"inherit_fonts":true,"rounded_corners":true,"disable":false,"font_size":1,"spacing":1,"bold_section_titles":true,"border_color":"#e2e2e2","text_color":"#5e5e5e","heading_color":"#121212","accent_color":"#557b97","accordian_open":2,"accordian_heading_color":"#121212","accordian_icon_color":"#5e5e5e","accordian_side_borders":false,"accordian_multi":false,"accordian_border_color":"#e2e2e2","accordian_bg_color":"rgba(255,255,255,0)","accordian_icon":1,"switcher_style":2,"tabs_bordered":false,"switcher_swipe":false,"bottom_line_text_color":"#121212","bottom_line_color":"#e2e2e2","bottom_line_active_color":"#557b97","bottom_line_inactive_text_color":"#848484","tabs_border_color":"#e2e2e2","tabs_color":"#121212","tabs_bg_color":"rgba(255,255,255,0)","tabs_inactive_color":"#848484","tabs_hover_bg_color":"#f5f5f5","ios_active_bg_color":"#557b97","ios_bg_color":"rgba(255,255,255,0)","ios_active_color":"#fff","ios_color":"#557b97","buttons_active_bg_color":"#557b97","buttons_bg_color":"#f1f1f1","buttons_active_color":"#fff","buttons_color":"#5e5e5e","sections":[{"title":"Product Description","content":"<p>First&nbsp;text</p>","position":0,"chosen":false,"selected":false},{"title":"Product Information","content":"<p><strong>Specifications:</strong></p><table><tbody><tr><td>FT001</td></tr></tbody></table>","position":1,"chosen":false,"selected":false}]}'
+
+describe('the exact text of the apd metafield', () => {
+  const drafts = () => [
+    {
+      ...blankSection(),
+      title: 'Product Description',
+      content: '<p>First&nbsp;text</p>',
+    },
+    {
+      ...blankSection(),
+      title: 'Product Information',
+      content:
+        '<p><strong>Specifications:</strong></p><table><tbody><tr><td>FT001</td></tr></tbody></table>',
+    },
+  ]
+
+  it('a new metafield is character for character what the description app saves', () => {
+    const metafield = buildSectionsMetafield(product(), drafts())
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
+    expect(metafield?.value).toBe(APP_VALUE)
+  })
+
+  it('editing a product that has it writes the same text back, only the section text changed', () => {
+    const p = product(field(APP_VALUE))
+    const edited = draftSections(p)
+    edited[0].content = '<p>Second text</p>'
+
+    const metafield = buildSectionsMetafield(p, edited)
+    expect(metafield?.type).toBe('json_string')
+    expect(metafield?.value).toBe(
+      APP_VALUE.replace('<p>First&nbsp;text</p>', '<p>Second text</p>'),
+    )
+  })
+})
+
 describe('adding sections to a product that has none', () => {
   const first = () => [
     { ...blankSection(), title: ' Product Description ', content: '<p>Strong box.</p>' },
@@ -206,7 +247,7 @@ describe('adding sections to a product that has none', () => {
     expect(canAddDescriptionSections(product())).toBe(true)
 
     const metafield = buildSectionsMetafield(product(), first())
-    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json' })
+    expect(metafield).toMatchObject({ namespace: 'apd', key: 'apd', type: 'json_string' })
     expect(JSON.parse(metafield?.value ?? '')).toEqual({
       ...DEFAULT_APD_SETTINGS,
       sections: [

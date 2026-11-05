@@ -117,7 +117,7 @@ export function CustomersList({
 }: CustomersListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // name, subscription, orders, spent, role, joined, last login, actions.
-  const columnCount = 8
+  const columnCount = 7
 
   if (error) {
     return (
@@ -224,7 +224,7 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[1200px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1060px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
@@ -234,7 +234,6 @@ export function CustomersList({
             <th className={`${TH_RIGHT} w-36`}>Amount spent</th>
             <th className={`${TH_CENTER} w-36`}>Role</th>
             <th className={`${TH_CENTER} w-36`}>Joined</th>
-            <th className={`${TH_CENTER} w-36`}>Last login</th>
             <th className={`${TH_CENTER} w-28`}>Actions</th>
           </tr>
         </thead>
@@ -293,9 +292,6 @@ export function CustomersList({
                     </td>
                     <td className={`${TD} text-center`}>
                       {dateOrDash(customer.shopify_created_at)}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      {dateOrDash(customer.last_login_at)}
                     </td>
                     <td className={`${TD} text-center`}>
                       <span className="inline-flex items-center justify-center gap-0.5">

@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import type { ProductDetail, ProductMetafieldInput } from '../../../lib/api/endpoints.ts'
-import { writableMetafieldType } from './metafields.ts'
 
 /**
  * Some stores keep the description as sections (Product Description, Product
@@ -128,12 +127,15 @@ function parseApd(
   const parsed = settingsSchema.safeParse(json)
   if (!parsed.success) return null
 
+  // The checked copy puts the keys it knows first; what is written back is the saved text's own
+  // object, so every key stays where it was.
+  const saved = json as { sections: Record<string, unknown>[] } & Record<string, unknown>
   return {
     type: field.type || 'json_string',
-    settings: parsed.data,
+    settings: saved,
     sections: parsed.data.sections
       .map((section, index) => ({
-        source: section,
+        source: saved.sections[index] ?? section,
         index,
         position: section.position ?? index,
         title: (section.title ?? '').trim(),
@@ -256,7 +258,7 @@ export function buildSectionsMetafield(
     return {
       namespace: APD_NAMESPACE,
       key: APD_KEY,
-      type: writableMetafieldType(apd.type),
+      type: apd.type,
       value: JSON.stringify({
         ...apd.settings,
         sections: drafts.map(newSection),
@@ -276,7 +278,7 @@ export function buildSectionsMetafield(
   return {
     namespace: APD_NAMESPACE,
     key: APD_KEY,
-    type: writableMetafieldType(apd.type),
+    type: apd.type,
     value: JSON.stringify({
       ...apd.settings,
       sections: drafts.map((draft, index) => ({
@@ -304,7 +306,7 @@ export function buildNewSectionsMetafield(
   return {
     namespace: APD_NAMESPACE,
     key: APD_KEY,
-    type: 'json',
+    type: 'json_string',
     value: JSON.stringify({
       ...DEFAULT_APD_SETTINGS,
       sections: drafts.map(newSection),

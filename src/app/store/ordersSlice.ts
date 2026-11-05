@@ -16,6 +16,7 @@ import {
   type OrderSort,
   type OrderSource,
 } from '../../lib/api/endpoints.ts'
+import { RANGE_PRESETS } from '../../components/ui/dateRange.ts'
 import { sessionCleared } from './authSlice.ts'
 import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
 
@@ -53,6 +54,12 @@ export interface OrderFilters {
   pageSize: number
 }
 
+/** The date range the page starts on (and "Clear All" returns to): the last 30 days. */
+function defaultDateRange(): { from: string; to: string } {
+  const preset = RANGE_PRESETS.find((item) => item.label === 'Last 30 Days')
+  return preset ? preset.range(new Date()) : { from: '', to: '' }
+}
+
 export const DEFAULT_ORDER_FILTERS: OrderFilters = {
   search: '',
   shop: '',
@@ -64,8 +71,7 @@ export const DEFAULT_ORDER_FILTERS: OrderFilters = {
   cancelled: '',
   minTotal: '',
   maxTotal: '',
-  from: '',
-  to: '',
+  ...defaultDateRange(),
   sort: 'created_at',
   order: 'desc',
   page: 1,
@@ -137,6 +143,7 @@ export function fulfillmentCountFilters(
 
 /** True when any narrowing filter (not sort/paging) is applied. */
 export function hasActiveOrderFilters(filters: OrderFilters): boolean {
+  const defaultRange = defaultDateRange()
   return (
     filters.search.trim() !== '' ||
     filters.financial !== '' ||
@@ -147,8 +154,9 @@ export function hasActiveOrderFilters(filters: OrderFilters): boolean {
     filters.cancelled !== '' ||
     filters.minTotal !== '' ||
     filters.maxTotal !== '' ||
-    filters.from !== '' ||
-    filters.to !== ''
+    // The last 30 days is the starting range, so it isn't a narrowing filter.
+    filters.from !== defaultRange.from ||
+    filters.to !== defaultRange.to
   )
 }
 
@@ -319,7 +327,14 @@ const ordersSlice = createSlice({
     filtersReset(state) {
       // The top-bar store isn't one of this page's filters, so it survives "Clear all".
       const { sort, order, pageSize, shop } = state.filters
-      state.filters = { ...DEFAULT_ORDER_FILTERS, sort, order, pageSize, shop }
+      state.filters = {
+        ...DEFAULT_ORDER_FILTERS,
+        ...defaultDateRange(),
+        sort,
+        order,
+        pageSize,
+        shop,
+      }
       const cached = state.entries[ordersCacheKey(state.filters)]?.data
       if (cached) state.lastData = cached
     },

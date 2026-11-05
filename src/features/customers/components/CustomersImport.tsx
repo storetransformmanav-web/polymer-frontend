@@ -55,7 +55,7 @@ export function CustomersImport({ visible = true }: { visible?: boolean }) {
   const importer = useCsvImport({
     source: CUSTOMERS_IMPORT,
     defaultShop,
-    onFinished: () => refreshList(true),
+    onFinished: () => refreshList(),
   })
   const { phase, choice, outcome, progress, summary } = importer
   const chosenShop = shopOptions.find((option) => option.value === choice.shop)

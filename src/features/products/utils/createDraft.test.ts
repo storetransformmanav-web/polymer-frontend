@@ -916,7 +916,11 @@ describe('the description & information sections', () => {
 
     expect(body.metafields).toHaveLength(1)
     const field = body.metafields![0]
-    expect([field.namespace, field.key, field.type]).toEqual(['apd', 'apd', 'json'])
+    expect([field.namespace, field.key, field.type]).toEqual([
+      'apd',
+      'apd',
+      'json_string',
+    ])
     expect(JSON.parse(field.value)).toEqual({
       ...DEFAULT_APD_SETTINGS,
       sections: [

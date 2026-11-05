@@ -9,14 +9,15 @@ import {
 import { formatDateTime, formatPrice } from '../../../lib/format.ts'
 import { useOrderDetails } from '../hooks/useOrderDetails.ts'
 import { financialTone, fulfillmentTone, humanize, orderLabel } from '../utils/format.ts'
+import { notesCount } from '../utils/tracking.ts'
 import {
-  OrderAttributesPanel,
   OrderEventsPanel,
   OrderItemsPanel,
   OrderOverviewPanel,
   OrderPaymentsPanel,
   OrderShippingPanel,
 } from './OrderDetailPanels.tsx'
+import { OrderNotesPanel } from './OrderNotesPanel.tsx'
 
 type TabId = 'overview' | 'items' | 'payments' | 'shipping' | 'attributes' | 'events'
 
@@ -48,12 +49,12 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
     { id: 'items', label: 'Items', count: order?.line_items.length },
     { id: 'payments', label: 'Payments', count: order?.transactions.length },
     { id: 'shipping', label: 'Shipping' },
-    ...(order && order.note_attributes.length > 0
+    ...(order
       ? [
           {
             id: 'attributes' as const,
             label: 'Notes & Tracking',
-            count: order.note_attributes.length,
+            count: notesCount(order) || undefined,
           },
         ]
       : []),
@@ -192,7 +193,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         {order && tab === 'items' && <OrderItemsPanel order={order} />}
         {order && tab === 'payments' && <OrderPaymentsPanel order={order} />}
         {order && tab === 'shipping' && <OrderShippingPanel order={order} />}
-        {order && tab === 'attributes' && <OrderAttributesPanel order={order} />}
+        {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
         {order && tab === 'events' && <OrderEventsPanel order={order} />}
       </div>
     </article>

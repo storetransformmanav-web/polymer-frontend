@@ -463,7 +463,11 @@ describe('adding a product', () => {
 
       await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
       const field = create.mock.calls[0][0].metafields?.[0]
-      expect([field?.namespace, field?.key, field?.type]).toEqual(['apd', 'apd', 'json'])
+      expect([field?.namespace, field?.key, field?.type]).toEqual([
+        'apd',
+        'apd',
+        'json_string',
+      ])
       // Description first, whichever was typed first; each under its own fixed title.
       expect(sentSections().map((s) => [s.title, s.content, s.position])).toEqual([
         ['Product Description', '<p>Strong box.</p>', 0],

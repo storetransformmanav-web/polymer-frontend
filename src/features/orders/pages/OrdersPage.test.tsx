@@ -613,7 +613,7 @@ describe('OrdersPage', () => {
     expect(box.className).toContain('flex-1')
     expect(box.className).toContain('min-h-0')
     // Wider than a narrow window: it scrolls sideways instead of squeezing.
-    expect(table.className).toContain('min-w-[1180px]')
+    expect(table.className).toContain('min-w-[900px]')
     // The header stays put while the rows scroll.
     for (const header of within(table).getAllByRole('columnheader')) {
       expect(header.className).toContain('sticky')
@@ -674,7 +674,7 @@ describe('OrdersPage', () => {
     // Every pill in the two columns has the same width and is centred in its cell.
     const widths = new Set<string>()
     for (const row of table.getAllByRole('row').slice(1)) {
-      for (const index of [5, 6]) {
+      for (const index of [3, 4]) {
         const cell = within(row).getAllByRole('cell')[index]
         expect(cell.className).toContain('text-center')
         for (const pill of cell.querySelectorAll('span.rounded-full')) {

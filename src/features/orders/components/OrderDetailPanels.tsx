@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
-  DETAIL_CARD,
   DETAIL_TD as TD,
   DETAIL_TH as TH,
   DetailEmpty,
@@ -18,30 +17,21 @@ import {
   ClockIcon,
   DollarSignIcon,
   ListChecksIcon,
-  MapPinIcon,
   OrdersIcon,
   TagIcon,
   UsersIcon,
 } from '../../../components/ui/icons.tsx'
-import type {
-  OrderAddress,
-  OrderDetail,
-  OrderListItem,
-} from '../../../lib/api/endpoints.ts'
+import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatDateTime, formatPrice } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import {
-  financialTone,
-  formatAddressLines,
   fulfillmentTone,
   humanize,
   orderCustomer,
   recordFields,
-  sourceLabel,
 } from '../utils/format.ts'
+import { OrderAddresses } from './OrderAddressCards.tsx'
 
-const yesNo = (value: boolean | null | undefined) =>
-  value === null || value === undefined ? null : value ? 'Yes' : 'No'
 const time = (value: string | null | undefined) => (value ? formatDateTime(value) : null)
 
 const SUMMARY_CARD = 'border-border bg-accent-tint/50 rounded-xl border p-5'
@@ -60,17 +50,6 @@ function Chips({ items }: { items: string[] }) {
       ))}
     </ul>
   )
-}
-
-/** A status as its pill (nothing when the order has none). */
-function Status({
-  value,
-  tone,
-}: {
-  value: string | null | undefined
-  tone: ReturnType<typeof financialTone>
-}) {
-  return value ? <Badge tone={tone}>{humanize(value)}</Badge> : null
 }
 
 // --- Overview -----------------------------------------------------------------
@@ -120,8 +99,19 @@ export function OrderOverviewPanel({ order, preview }: OverviewProps) {
         <DetailSkeleton />
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
-          <DetailSection title="Order Summary" count={9} icon={DollarSignIcon}>
+          <DetailSection title="Order Summary" count={10} icon={DollarSignIcon}>
             <FieldGrid>
+              <Field label="Shopify ID">
+                {order.shopify_id !== null && order.shopify_id !== undefined && (
+                  <span className="flex items-center gap-1.5 font-mono text-[0.88rem] break-all">
+                    {String(order.shopify_id)}
+                    <CopyButton
+                      value={String(order.shopify_id)}
+                      label="Copy Shopify ID"
+                    />
+                  </span>
+                )}
+              </Field>
               <Field label="Subtotal">{money(order.subtotal_price)}</Field>
               <Field label="Discounts">{money(order.total_discounts)}</Field>
               <Field label="Shipping">{money(order.total_shipping)}</Field>
@@ -160,57 +150,7 @@ export function OrderOverviewPanel({ order, preview }: OverviewProps) {
             </FieldGrid>
           </DetailSection>
 
-          <DetailSection
-            title="Status & Dates"
-            count={12}
-            icon={ClockIcon}
-            defaultOpen={false}
-          >
-            <FieldGrid>
-              <Field label="Payment">
-                <Status
-                  value={order.financial_status}
-                  tone={financialTone(order.financial_status)}
-                />
-              </Field>
-              <Field label="Fulfillment">
-                <Status
-                  value={order.fulfillment_status}
-                  tone={fulfillmentTone(order.fulfillment_status)}
-                />
-              </Field>
-              <Field label="Returns">{humanize(order.return_status)}</Field>
-              <Field label="Created">{time(order.shopify_created_at)}</Field>
-              <Field label="Updated">{time(order.shopify_updated_at)}</Field>
-              <Field label="Processed">{time(order.processed_at)}</Field>
-              <Field label="Closed">{time(order.closed_at)}</Field>
-              <Field label="Cancelled">{time(order.cancelled_at)}</Field>
-              <Field label="Cancel reason">{humanize(order.cancel_reason)}</Field>
-              <Field label="Confirmed">{yesNo(order.confirmed)}</Field>
-              <Field label="Test order">{yesNo(order.test)}</Field>
-              <Field label="Taxes included">{yesNo(order.taxes_included)}</Field>
-            </FieldGrid>
-          </DetailSection>
-
-          <DetailSection
-            title="Store & Source"
-            count={7}
-            icon={OrdersIcon}
-            defaultOpen={false}
-          >
-            <FieldGrid>
-              <Field label="Store">{order.shop?.name}</Field>
-              <Field label="Currency">{order.currency}</Field>
-              <Field label="Presentment currency">{order.presentment_currency}</Field>
-              <Field label="Source">{sourceLabel(order.source_name)}</Field>
-              <Field label="Payment gateways">
-                {order.payment_gateway_names.length > 0 &&
-                  order.payment_gateway_names.join(', ')}
-              </Field>
-              <Field label="PO number">{order.po_number}</Field>
-              <Field label="Shopify ID">{order.shopify_id}</Field>
-            </FieldGrid>
-          </DetailSection>
+          <OrderAddresses order={order} />
 
           {order.tags.length > 0 && (
             <DetailSection title="Tags" count={order.tags.length} icon={TagIcon}>
@@ -464,49 +404,12 @@ export function OrderPaymentsPanel({ order }: { order: OrderDetail }) {
 
 // --- Shipping -------------------------------------------------------------------
 
-function AddressCard({
-  title,
-  address,
-}: {
-  title: string
-  address: OrderAddress | null | undefined
-}) {
-  const lines = formatAddressLines(address)
-  const name =
-    address?.name || [address?.first_name, address?.last_name].filter(Boolean).join(' ')
-  return (
-    <section className={`${DETAIL_CARD} flex flex-col gap-1.5 p-4 text-[0.88rem]`}>
-      <h3 className="flex items-center gap-2 text-[0.95rem] font-semibold">
-        <MapPinIcon width={18} height={18} className="text-accent" />
-        {title}
-      </h3>
-      {!address || (lines.length === 0 && !name) ? (
-        <p className="text-text-muted">No address.</p>
-      ) : (
-        <>
-          {name && <span className="font-semibold">{name}</span>}
-          {address.company && <span className="text-text-muted">{address.company}</span>}
-          {lines.map((line) => (
-            <span key={line}>{line}</span>
-          ))}
-          {address.phone && <span className="text-text-muted">{address.phone}</span>}
-        </>
-      )}
-    </section>
-  )
-}
-
 export function OrderShippingPanel({ order }: { order: OrderDetail }) {
   const money = (value: string | null | undefined) =>
     value === null || value === undefined ? '—' : formatPrice(value, order.currency)
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <AddressCard title="Shipping address" address={order.shipping_address} />
-        <AddressCard title="Billing address" address={order.billing_address} />
-      </div>
-
       <DetailSection
         title="Shipping method"
         count={order.shipping_lines.length}
@@ -544,55 +447,6 @@ export function OrderShippingPanel({ order }: { order: OrderDetail }) {
         <Records records={order.fulfillments} empty="Nothing has been fulfilled yet." />
       </DetailSection>
     </div>
-  )
-}
-
-// --- Notes & tracking -------------------------------------------------------------
-
-export function OrderAttributesPanel({ order }: { order: OrderDetail }) {
-  if (order.note_attributes.length === 0) {
-    return <DetailEmpty icon={ListChecksIcon}>No notes or tracking details.</DetailEmpty>
-  }
-
-  return (
-    <DetailTable>
-      <thead>
-        <tr>
-          <th className={TH}>Name</th>
-          <th className={TH}>Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {order.note_attributes.map((attribute, index) => {
-          const link = safeUrl(attribute.value)
-          return (
-            <tr
-              key={`${attribute.key}-${index}`}
-              className="border-border even:bg-surface border-b last:border-b-0"
-            >
-              <td className={`${TD} font-mono text-[0.8rem]`}>{attribute.key}</td>
-              <td
-                className={`${TD} max-w-[34rem] truncate`}
-                title={attribute.value ?? ''}
-              >
-                {link ? (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-accent hover:underline"
-                  >
-                    {attribute.value}
-                  </a>
-                ) : (
-                  (attribute.value ?? '—')
-                )}
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </DetailTable>
   )
 }
 

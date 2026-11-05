@@ -1,13 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../../../app/store/hooks.ts'
-import {
-  deleteCustomer,
-  fetchCustomers,
-  roleCountFilters,
-} from '../../../app/store/customersSlice.ts'
-
-/** Every role tab, so their counts can be refreshed (a deletion changes them). */
-const ROLE_TABS = ['', 'administrator', 'subscriber'] as const
+import { deleteCustomer, fetchCustomers } from '../../../app/store/customersSlice.ts'
 
 interface DeleteArg {
   id: string
@@ -20,8 +13,7 @@ interface DeleteArg {
  *
  * The moment the server confirms, the customer is gone from every cached page and
  * details copy (see `deleteCustomer.fulfilled` in customersSlice) — no loader, no
- * waiting for a refetch. This hook then re-reads the list and the role counts
- * quietly. A failure (Shopify refuses a customer with orders, for one) is returned
+ * waiting for a refetch. This hook then re-reads the list quietly. A failure (Shopify refuses a customer with orders, for one) is returned
  * as the backend's own message and nothing changes on screen.
  */
 export function useDeleteCustomer() {
@@ -43,11 +35,6 @@ export function useDeleteCustomer() {
       }
 
       void dispatch(fetchCustomers({ filters, force: true }))
-      for (const role of ROLE_TABS) {
-        void dispatch(
-          fetchCustomers({ filters: roleCountFilters(filters, role), force: true }),
-        )
-      }
       return result.payload
     },
     [dispatch, filters],

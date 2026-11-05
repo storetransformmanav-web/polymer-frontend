@@ -135,7 +135,7 @@ export function useCustomersSync() {
     const progress = `${processed}:${saved}`
     if (progress === '0:0' || progress === lastProgress.current) return
     lastProgress.current = progress
-    refreshList(false)
+    refreshList()
   }, [phase, processed, saved, refreshList])
 
   // The run ended: refresh what is on screen (once), then stop showing the result after a while.
@@ -144,7 +144,7 @@ export function useCustomersSync() {
     if (!tracked || (phase !== 'done' && phase !== 'failed')) return undefined
     if (refreshedFor.current !== tracked.startedAt) {
       refreshedFor.current = tracked.startedAt
-      refreshList(true)
+      refreshList()
     }
     const timer = window.setTimeout(() => setTracked(null), SHOW_RESULT_MS)
     return () => window.clearTimeout(timer)

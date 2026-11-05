@@ -231,18 +231,17 @@ describe('what a page requests when a filter is used', () => {
     log.calls = []
 
     await user.click(screen.getByRole('button', { name: 'Filters' }))
-    // Opening the grid loads the role counts (they are shown in its first dropdown).
-    await waitFor(() => expect(callsTo('customers.list').length).toBeGreaterThan(0))
-    expect(callsTo('customers.list').every((call) => isOneRow(call.params))).toBe(true)
+    // Opening the grid asks for nothing: its dropdowns have no counts.
+    await settle()
+    expect(callsTo('customers.list')).toHaveLength(0)
 
-    log.calls = []
-    await user.selectOptions(screen.getByLabelText('Marketing'), 'yes')
+    await user.selectOptions(screen.getByLabelText('Orders'), 'yes')
     await waitFor(() =>
       expect(
         callsTo('customers.list').some(
           (call) =>
             !isOneRow(call.params) &&
-            (call.params as { accepts_marketing?: boolean }).accepts_marketing === true,
+            (call.params as { has_orders?: boolean }).has_orders === true,
         ),
       ).toBe(true),
     )

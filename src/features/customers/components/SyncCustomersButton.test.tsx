@@ -172,7 +172,7 @@ describe('the Sync customers button', () => {
 
     expect(await screen.findByText('Synced 9,760 customers')).toBeInTheDocument()
     await waitFor(() => expect(customersList).toHaveBeenCalled())
-    // Only the list: the role counts were never asked for, so they are not asked for now.
+    // Only the list.
     expect(customersList).toHaveBeenCalledTimes(1)
     expect(customersList).toHaveBeenCalledWith(expect.objectContaining({ role: 'all' }))
     expect(screen.getByRole('button', { name: 'Sync customers' })).toBeEnabled()

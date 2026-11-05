@@ -116,7 +116,6 @@ export function CustomersPage() {
       <div className={activeId ? 'hidden' : 'flex flex-col gap-4'}>
         <CustomersToolbar
           filters={filters}
-          total={data?.total ?? null}
           hasFilters={customers.hasFilters}
           onChange={customers.setFilters}
           onReset={customers.resetFilters}
