@@ -291,7 +291,7 @@ export function ProductDetailsView({
                 {item.id === 'metafields' ? (
                   <span className="flex flex-col items-start leading-tight">
                     {item.label}
-                    <span className="text-text-muted text-[0.65rem] font-normal">
+                    <span className="text-danger text-[0.65rem] font-normal">
                       Under Progress
                     </span>
                   </span>
