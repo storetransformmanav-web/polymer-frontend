@@ -1,5 +1,6 @@
-import { Outlet } from 'react-router-dom'
-import { useAccess } from '../../hooks/useAccess.ts'
+import { Navigate, Outlet } from 'react-router-dom'
+import { useCanOpen, useIsOffice } from '../../hooks/useAccess.ts'
+import { SHOPIFY_HOME } from '../router/navigation.ts'
 import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
@@ -21,7 +22,13 @@ export function DashboardLayout() {
   const activeItem = useActiveNavItem()
   const fill = activeItem?.fillHeight === true
   // Opened from an old link or a bookmark: the sidebar hides the page, this stops the address.
-  const { canView } = useAccess(activeItem?.area)
+  const canView = useCanOpen(activeItem)
+  const isOffice = useIsOffice()
+
+  // The "office" role has only the Shopify Management pages: anywhere else (the dashboard after
+  // sign-in, an old bookmark) goes to Orders.
+  if (isOffice && !canView && activeItem?.to !== SHOPIFY_HOME)
+    return <Navigate to={SHOPIFY_HOME} replace />
 
   // `relative` + `overflow-clip`: a visually hidden helper (`sr-only`, absolutely positioned)
   // deep inside a page's own scroll box would otherwise be placed against the window and

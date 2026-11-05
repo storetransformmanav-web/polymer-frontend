@@ -24,7 +24,7 @@ const filters = (over: Partial<OrderFilters> = {}): OrderFilters => ({
 
 describe('toOrderParams', () => {
   it('sends only sort, order and paging for the default filters', () => {
-    expect(toOrderParams(filters())).toEqual({
+    expect(toOrderParams(filters({ from: '', to: '' }))).toEqual({
       sort: 'created_at',
       order: 'desc',
       page: 1,
@@ -35,6 +35,8 @@ describe('toOrderParams', () => {
   it('maps every filter to the API’s own parameter name', () => {
     const params = toOrderParams(
       filters({
+        from: '',
+        to: '',
         search: '  #1001  ',
         shop: 'polymer-uk',
         financial: 'PAID',
@@ -70,6 +72,15 @@ describe('toOrderParams', () => {
     })
   })
 
+  it('starts on the last 30 days, and "Clear all" goes back to them', () => {
+    const params = toOrderParams(filters())
+    expect(params.from).toBeDefined()
+    expect(params.to).toBeDefined()
+    const days =
+      (new Date(params.to!).getTime() - new Date(params.from!).getTime()) / 86_400_000
+    expect(Math.round(days)).toBe(30)
+  })
+
   it('sends cancelled=true for "yes", and leaves it out for "any"', () => {
     expect(toOrderParams(filters({ cancelled: 'yes' })).cancelled).toBe(true)
     expect('cancelled' in toOrderParams(filters({ cancelled: '' }))).toBe(false)
@@ -93,8 +104,8 @@ describe('toOrderParams', () => {
   })
 
   it('sends only one end of the range when only one is set', () => {
-    expect('to' in toOrderParams(filters({ from: '2026-10-01' }))).toBe(false)
-    expect('from' in toOrderParams(filters({ to: '2026-10-22' }))).toBe(false)
+    expect('to' in toOrderParams(filters({ from: '2026-10-01', to: '' }))).toBe(false)
+    expect('from' in toOrderParams(filters({ from: '', to: '2026-10-22' }))).toBe(false)
   })
 })
 

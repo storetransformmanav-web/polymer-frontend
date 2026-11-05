@@ -175,7 +175,7 @@ describe('clicking a page in the sidebar', () => {
     await user.click(screen.getByRole('button', { name: 'Shopify Management' }))
 
     // Moving over the links asks for nothing…
-    await user.hover(screen.getByRole('link', { name: 'Orders' }))
+    await user.hover(screen.getByRole('link', { name: /^Orders/ }))
     await user.hover(screen.getByRole('link', { name: 'Products' }))
     await user.hover(screen.getByRole('link', { name: 'Customers' }))
     await settle()

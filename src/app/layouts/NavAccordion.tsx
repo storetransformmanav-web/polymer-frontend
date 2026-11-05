@@ -1,8 +1,9 @@
 import { useId, useState } from 'react'
 import { matchPath, useLocation } from 'react-router-dom'
 import { ChevronDownIcon } from '../../components/ui/icons.tsx'
-import type { NavGroup } from '../router/navigation.ts'
+import { withChildren, type NavGroup } from '../router/navigation.ts'
 import { NavItemLink } from './NavItemLink.tsx'
+import { NavItemWithSubmenu } from './NavItemWithSubmenu.tsx'
 
 interface NavAccordionProps {
   group: NavGroup
@@ -18,9 +19,9 @@ export function NavAccordion({ group }: NavAccordionProps) {
   const { label, icon: Icon, items } = group
   const { pathname } = useLocation()
   const panelId = useId()
-  const hasActiveItem = items.some((item) =>
-    matchPath({ path: item.to, end: item.end ?? false }, pathname),
-  )
+  const hasActiveItem = items
+    .flatMap(withChildren)
+    .some((item) => matchPath({ path: item.to, end: item.end ?? false }, pathname))
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const open = userOpen ?? hasActiveItem
 
@@ -57,7 +58,11 @@ export function NavAccordion({ group }: NavAccordionProps) {
           <ul className="border-border mt-1 ml-5 flex flex-col gap-1 border-l pl-2">
             {items.map((item) => (
               <li key={item.to}>
-                <NavItemLink item={item} collapsed={false} />
+                {item.children?.length ? (
+                  <NavItemWithSubmenu item={item} />
+                ) : (
+                  <NavItemLink item={item} collapsed={false} />
+                )}
               </li>
             ))}
           </ul>

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAppSelector } from '../app/store/hooks.ts'
 import {
   NAV_ENTRIES,
+  SHOPIFY_PATHS,
   isNavGroup,
   type NavEntry,
   type NavItem,
@@ -13,17 +14,39 @@ type Permissions = AuthUser['permissions']
 const mayView = (permissions: Permissions, area?: string) =>
   !area || permissions?.[area]?.view !== false
 
+/** The role that only sees the Shopify Management pages (Orders, Products, Customers, Inventory, Lock Management). */
+const OFFICE_ROLE = 'office'
+
+/** True for the "office" role, whatever the backend's letter case. */
+export const isOfficeRole = (role?: string | null) =>
+  role?.trim().toLowerCase() === OFFICE_ROLE
+
+/** The "office" role may open only the Shopify Management pages; any other role is not limited by role. */
+const roleAllows = (role: string | null | undefined, item: NavItem) =>
+  !isOfficeRole(role) || SHOPIFY_PATHS.has(item.to)
+
 /**
  * The sidebar for these permissions: a page the user may not view is left out, and so is a group
- * with no page left. Only an explicit `view: false` hides anything.
+ * with no page left. Only an explicit `view: false` hides anything. The "office" role sees only the
+ * Shopify Management group.
  */
 export function visibleNavEntries(
   permissions: Permissions,
   entries: NavEntry[] = NAV_ENTRIES,
+  role?: string | null,
 ): NavEntry[] {
   return entries.flatMap((entry): NavEntry[] => {
-    if (!isNavGroup(entry)) return mayView(permissions, entry.area) ? [entry] : []
-    const items = entry.items.filter((item: NavItem) => mayView(permissions, item.area))
+    if (!isNavGroup(entry)) {
+      return roleAllows(role, entry) && mayView(permissions, entry.area) ? [entry] : []
+    }
+    const allowed = (item: NavItem) =>
+      roleAllows(role, item) && mayView(permissions, item.area)
+    const items = entry.items.flatMap((item: NavItem): NavItem[] => {
+      const children = (item.children ?? []).filter(allowed)
+      // A page that is hidden keeps its allowed sub-links, which move up into the group.
+      if (!allowed(item)) return children
+      return [{ ...item, children: children.length > 0 ? children : undefined }]
+    })
     return items.length > 0 ? [{ ...entry, items }] : []
   })
 }
@@ -31,9 +54,32 @@ export function visibleNavEntries(
 const usePermissions = () =>
   useAppSelector((state) => state.auth.session?.user.permissions)
 
+const useRole = () => useAppSelector((state) => state.auth.session?.user.role)
+
 export function useVisibleNavEntries(): NavEntry[] {
   const permissions = usePermissions()
-  return useMemo(() => visibleNavEntries(permissions), [permissions])
+  const role = useRole()
+  return useMemo(
+    () => visibleNavEntries(permissions, NAV_ENTRIES, role),
+    [permissions, role],
+  )
+}
+
+/**
+ * Whether the signed-in user may open this page: not hidden by their role ("office" has only the
+ * Shopify Management pages) and not `view: false` in their permissions. Like everything here it only
+ * tidies the screen — the backend is the protection.
+ */
+export function useCanOpen(item?: NavItem): boolean {
+  const permissions = usePermissions()
+  const role = useRole()
+  if (!item) return true
+  return roleAllows(role, item) && mayView(permissions, item.area)
+}
+
+/** True when the signed-in user has the "office" role. */
+export function useIsOffice(): boolean {
+  return isOfficeRole(useRole())
 }
 
 /**

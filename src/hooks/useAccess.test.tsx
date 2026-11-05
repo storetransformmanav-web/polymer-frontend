@@ -35,7 +35,7 @@ const USER: AuthUser = {
   email: 'a@b.co',
   full_name: 'A',
   phone: null,
-  role: 'office',
+  role: 'admin',
   is_active: true,
   last_login_at: null,
 }
@@ -92,8 +92,26 @@ describe('visibleNavEntries', () => {
       products: { view: false },
       customers: { view: false },
       inventory: { view: false },
+      locks: { view: false },
     })
     expect(shown.some(isNavGroup)).toBe(false)
+  })
+
+  it('shows the office role only the Shopify Management group, Lock Management under Inventory', () => {
+    const shown = visibleNavEntries(undefined, NAV_ENTRIES, 'Office')
+    expect(shown).toHaveLength(1)
+    const group = shown[0]
+    expect(isNavGroup(group)).toBe(true)
+    if (!isNavGroup(group)) return
+    expect(group.items.map((item) => item.label)).toEqual([
+      'Orders',
+      'Products',
+      'Customers',
+      'Inventory',
+    ])
+    expect(group.items[3].children?.map((child) => child.label)).toEqual([
+      'Lock Management',
+    ])
   })
 })
 

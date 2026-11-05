@@ -133,11 +133,14 @@ describe('OrdersPage', () => {
     renderWithProviders(<OrdersPage />)
 
     expect(await screen.findByText('17002')).toBeInTheDocument()
+    // The page starts on the last 30 days, so the first request carries that range.
     expect(list).toHaveBeenCalledWith({
       sort: 'created_at',
       order: 'desc',
       page: 1,
       page_size: 25,
+      from: expect.any(String),
+      to: expect.any(String),
     })
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
   })
