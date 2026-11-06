@@ -115,7 +115,8 @@ function OrderTotals({
 /**
  * The Overview's **Items** card, closed to begin with: a table — product (picture, name, variant and SKU), price,
  * quantity and the line's total — with the order's totals under it. The totals draw from the list
- * row while the lines load (`items` is null then).
+ * row while the lines load (`items` is null then). Editing fills in `above`, `quantityOf` and
+ * `extraRows`; the table itself stays.
  */
 export function OrderItemsSummary({
   items,
@@ -124,17 +125,26 @@ export function OrderItemsSummary({
   tip,
   outstanding,
   actions,
-  editor = null,
+  forceOpen = false,
+  above,
+  quantityOf,
+  extraRows,
 }: {
   items: OrderDetail['line_items'] | null
   totals: OrderListItem
   taxesIncluded?: boolean | null
   tip?: string | null
   outstanding?: string | null
-  /** The pencil, or ✓ and ✕. */
+  /** ✓ and ✕, while something is waiting to be saved. */
   actions?: ReactNode
-  /** The fields, in place of the table, while the items are being edited. */
-  editor?: ReactNode
+  /** Stays open while something is waiting to be saved. */
+  forceOpen?: boolean
+  /** Above the table (the search for a product to add). */
+  above?: ReactNode
+  /** What the Quantity column shows for a line, in place of the plain number. */
+  quantityOf?: (item: LineItem) => ReactNode
+  /** More rows under the lines (products being added). */
+  extraRows?: ReactNode
 }) {
   const money = (value: string | null | undefined) =>
     value === null || value === undefined ? '—' : formatPrice(value, totals.currency)
@@ -146,19 +156,21 @@ export function OrderItemsSummary({
       count={items?.length}
       defaultOpen={false}
       actions={actions}
-      forceOpen={editor !== null}
+      forceOpen={forceOpen}
     >
       <div className="flex flex-col gap-3 py-1.5">
-        {editor}
-        {!editor && items === null && <DetailSkeleton />}
-        {!editor && items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
-        {!editor && items && items.length > 0 && (
+        {above}
+        {items === null && <DetailSkeleton />}
+        {items?.length === 0 && !extraRows && (
+          <EmptyNote>No items on this order.</EmptyNote>
+        )}
+        {items && (items.length > 0 || extraRows) && (
           <MiniTable>
             <thead>
               <tr>
                 <th className={MINI_TH}>Product</th>
                 <th className={`${MINI_TH} w-28 text-right`}>Price</th>
-                <th className={`${MINI_TH} w-24 text-right`}>Quantity</th>
+                <th className={`${MINI_TH} w-36 text-center`}>Quantity</th>
                 <th className={`${MINI_TH} w-32 text-right`}>Total price</th>
               </tr>
             </thead>
@@ -180,14 +192,15 @@ export function OrderItemsSummary({
                   <td className={`${MINI_TD} text-right tabular-nums`}>
                     {money(item.price)}
                   </td>
-                  <td className={`${MINI_TD} text-right tabular-nums`}>
-                    {item.quantity ?? '—'}
+                  <td className={`${MINI_TD} text-center tabular-nums`}>
+                    {quantityOf ? quantityOf(item) : (item.quantity ?? '—')}
                   </td>
                   <td className={`${MINI_TD} text-right font-semibold tabular-nums`}>
                     {money(lineTotal(item))}
                   </td>
                 </tr>
               ))}
+              {extraRows}
             </tbody>
           </MiniTable>
         )}

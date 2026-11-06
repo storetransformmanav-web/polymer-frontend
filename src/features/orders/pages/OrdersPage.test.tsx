@@ -157,7 +157,7 @@ describe('OrdersPage', () => {
       'Order',
       'Customer name',
       'Email',
-      'Financial status',
+      'Payment status',
       'Fulfillment status',
       'Items',
       'Total price',
@@ -680,7 +680,7 @@ describe('OrdersPage', () => {
     await screen.findByText('17002')
 
     const table = within(screen.getByRole('table'))
-    const payment = table.getByRole('columnheader', { name: 'Financial status' })
+    const payment = table.getByRole('columnheader', { name: 'Payment status' })
     expect(payment.className).toContain('text-center')
     expect(payment.className).toContain('w-40')
 

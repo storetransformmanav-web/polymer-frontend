@@ -6,7 +6,7 @@ import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/i
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatPrice } from '../../../lib/format.ts'
+import { formatDate, formatDateTime, formatPrice } from '../../../lib/format.ts'
 import {
   customerPath,
   financialTone,
@@ -188,15 +188,15 @@ export function OrdersList({
       className="relative min-h-0 flex-1 overflow-auto"
     >
       <table
-        className={`w-full min-w-[1030px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1080px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={`${TH} w-24`}>Order</th>
-            <th className={`${TH} w-32`}>Created date</th>
+            <th className={`${TH} w-44`}>Created date</th>
             <th className={TH}>Customer name</th>
             <th className={TH}>Email</th>
-            <th className={`${TH_CENTER} w-40`}>Financial status</th>
+            <th className={`${TH_CENTER} w-40`}>Payment status</th>
             <th className={`${TH_CENTER} w-40`}>Fulfillment status</th>
             <th className={`${TH_RIGHT} w-20`}>Items</th>
             <th className={`${TH_RIGHT} w-28`}>Total price</th>
@@ -233,7 +233,9 @@ export function OrdersList({
                       </span>
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
-                      {dateOrDash(order.shopify_created_at)}
+                      {order.shopify_created_at
+                        ? formatDateTime(order.shopify_created_at)
+                        : '—'}
                     </td>
                     <td className={TD}>
                       {name ? (

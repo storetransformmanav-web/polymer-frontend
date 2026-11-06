@@ -22,6 +22,9 @@ const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50'
 export const PRIMARY_BUTTON = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`
 export const SECONDARY_BUTTON = `${BUTTON} border-border bg-bg text-text hover:border-accent`
+/** The round − and + beside a quantity. */
+export const QUANTITY_STEP =
+  'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors disabled:pointer-events-none disabled:opacity-40'
 export const CHIP =
   'border-border-strong bg-accent-tint/50 text-text inline-flex max-w-full items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 text-[0.8rem] font-medium'
 

@@ -170,7 +170,7 @@ function ProductResult({
 }
 
 /** A line's quantity: − and + beside a box that can also be typed in. */
-export function QuantityStepper({
+function QuantityStepper({
   id,
   name,
   value,

@@ -59,6 +59,13 @@ export function useOrderEdit(
     setDraft(from)
   }
 
+  /** The first change of an edit that has no pencil: − or + on a quantity. */
+  function begin(patch: Partial<OrderEditDraft>) {
+    const from = draftFromOrder(order)
+    setInitial(from)
+    setDraft({ ...from, ...patch })
+  }
+
   /** A value changed where it is shown: straight to the question. */
   function ask(patch: Partial<OrderEditDraft>) {
     const from = draftFromOrder(order)
@@ -111,6 +118,7 @@ export function useOrderEdit(
     staffNote,
     setStaffNote,
     start,
+    begin,
     ask,
     change,
     commit,

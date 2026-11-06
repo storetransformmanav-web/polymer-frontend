@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react'
+import { useMemo, type KeyboardEvent, type ReactNode } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { DoubleClickEdit } from '../../../components/ui/DoubleClickEdit.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -6,7 +6,9 @@ import { IconAction } from '../../../components/ui/IconAction.tsx'
 import {
   CheckIcon,
   InfoIcon,
+  MinusIcon,
   PencilIcon,
+  PlusIcon,
   SpinnerIcon,
   TrashIcon,
   XIcon,
@@ -20,18 +22,20 @@ import {
   type OrderEdit,
   type OrderSavedHandler,
 } from '../hooks/useOrderEdit.ts'
-import { EMAIL, MONEY, type DraftLine } from '../utils/orderDraft.ts'
-import { EDIT_FIELD, editableLines } from '../utils/orderEdit.ts'
+import { EMAIL, MONEY, ORDER_LIMITS, WHOLE, type DraftLine } from '../utils/orderDraft.ts'
+import { draftFromOrder, EDIT_FIELD } from '../utils/orderEdit.ts'
 import {
   Field,
   FIELD_TEXTAREA,
   ICON_BUTTON,
   PRIMARY_BUTTON,
+  QUANTITY_STEP,
   SECONDARY_BUTTON,
   TextInput,
   Thumb,
 } from './create/formParts.tsx'
-import { ProductSearch, QuantityStepper } from './create/OrderLinesCard.tsx'
+import { ProductSearch } from './create/OrderLinesCard.tsx'
+import { MINI_ROW, MINI_TD } from './OrderCompact.tsx'
 import { OrderItemsSummary } from './OrderItemsPanel.tsx'
 
 /** What every editable piece of the page needs to know. */
@@ -41,9 +45,6 @@ export interface OrderEditContext {
   shop: string | null
   onSaved: OrderSavedHandler
 }
-
-const TH = 'text-text px-3 py-2.5 text-[0.76rem] font-semibold whitespace-nowrap'
-const TD = 'border-border border-t px-3 py-2.5 align-middle text-[0.82rem]'
 
 /** Pencil → (✓ Save, ✕ Discard), the same controls as a product's sections. */
 export function OrderEditControls({ edit, what }: { edit: OrderEdit; what: string }) {
@@ -380,143 +381,82 @@ export function ShippingAddressEditor({ edit }: { edit: OrderEdit }) {
   )
 }
 
-/** The quantities of the lines and the products to add (`line_items_*`), in place of the table. */
-function OrderItemsEditor({ edit, order }: { edit: OrderEdit; order: OrderDetail }) {
-  const draft = edit.draft
-  if (!draft) return null
-  const { errors } = edit
-  const changeAdded = (update: (current: DraftLine[]) => DraftLine[]) =>
-    edit.change({ added: update(draft.added) })
-
+/**
+ * A quantity with − and + beside it: a click changes it by one, and a double-click on the number
+ * lets it be typed. Nothing is sent from here.
+ */
+function QuantityCell({
+  name,
+  value,
+  onChange,
+}: {
+  name: string
+  value: string
+  onChange: (quantity: string) => void
+}) {
+  const current = Number.parseInt(value, 10)
+  const known = Number.isFinite(current)
   return (
-    <OrderEditArea edit={edit}>
-      <ProductSearch
-        id="order-edit-product-search"
-        shop={order.shop?.key ?? ''}
-        noMatchHint="Try another name or SKU."
-        onAdd={changeAdded}
+    <span className="inline-flex items-center justify-center gap-1.5">
+      <button
+        type="button"
+        aria-label={`One fewer of ${name}`}
+        disabled={known && current <= 1}
+        onClick={() => onChange(String(known ? current - 1 : 1))}
+        className={QUANTITY_STEP}
+      >
+        <MinusIcon width={13} height={13} />
+      </button>
+      <DoubleClickEdit
+        value={value}
+        display={value}
+        label={`Quantity of ${name}`}
+        align="center"
+        autoWidth
+        inputMode="numeric"
+        validate={(next) => {
+          if (!WHOLE.test(next) || Number(next) < 1) return 'A whole number, 1 or more.'
+          return Number(next) > ORDER_LIMITS.quantity
+            ? `At most ${ORDER_LIMITS.quantity}.`
+            : null
+        }}
+        onCommit={onChange}
       />
-      <div className="border-border overflow-x-auto rounded-lg border">
-        <table
-          aria-label="Items to edit"
-          className="w-full min-w-[520px] border-collapse"
-        >
-          <thead className="bg-table-head">
-            <tr>
-              <th className={`${TH} text-left`}>Product</th>
-              <th className={`${TH} w-28 text-right`}>Price</th>
-              <th className={`${TH} w-44 text-center`}>Quantity</th>
-              <th className={`${TH} w-14`}>
-                <span className="sr-only">Remove</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {editableLines(order).map((line) => {
-              const name = line.title || 'Item'
-              const id = EDIT_FIELD.quantity(line.id)
-              return (
-                <tr key={line.id}>
-                  <td className={TD}>
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <Thumb url={line.image_url} alt="" />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-semibold break-words">{name}</span>
-                        <span className="text-text-muted text-[0.72rem]">
-                          {[line.variant_title, line.sku].filter(Boolean).join(' · ') ||
-                            '—'}
-                        </span>
-                      </span>
-                    </span>
-                  </td>
-                  <td className={`${TD} text-right tabular-nums`}>
-                    {line.price ? formatPrice(line.price, order.currency) : '—'}
-                  </td>
-                  <td className={TD}>
-                    <QuantityStepper
-                      id={id}
-                      name={name}
-                      value={draft.quantities[line.id] ?? ''}
-                      error={errors[id]}
-                      onChange={(quantity) =>
-                        edit.change({
-                          quantities: { ...draft.quantities, [line.id]: quantity },
-                        })
-                      }
-                    />
-                  </td>
-                  <td className={TD} />
-                </tr>
-              )
-            })}
-            {draft.added.map((line) => {
-              if (line.kind !== 'variant') return null
-              const id = EDIT_FIELD.quantity(line.key)
-              return (
-                <tr key={line.key} className="bg-accent-tint/50">
-                  <td className={TD}>
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <Thumb url={line.imageUrl} alt="" />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-semibold break-words">
-                          {line.productTitle}
-                        </span>
-                        <span className="text-text-muted text-[0.72rem]">
-                          {['New', line.variantTitle, line.sku]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                      </span>
-                    </span>
-                  </td>
-                  <td className={`${TD} text-right tabular-nums`}>
-                    {formatPrice(line.price, order.currency)}
-                  </td>
-                  <td className={TD}>
-                    <QuantityStepper
-                      id={id}
-                      name={line.productTitle}
-                      value={line.quantity}
-                      error={errors[id]}
-                      onChange={(quantity) =>
-                        changeAdded((current) =>
-                          current.map((candidate) =>
-                            candidate.key === line.key
-                              ? { ...candidate, quantity }
-                              : candidate,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className={`${TD} text-center`}>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${line.productTitle}`}
-                      onClick={() =>
-                        changeAdded((current) =>
-                          current.filter((candidate) => candidate.key !== line.key),
-                        )
-                      }
-                      className={ICON_BUTTON}
-                    >
-                      <TrashIcon width={16} height={16} />
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </OrderEditArea>
+      <button
+        type="button"
+        aria-label={`One more of ${name}`}
+        onClick={() => onChange(String(known ? current + 1 : 1))}
+        className={QUANTITY_STEP}
+      >
+        <PlusIcon width={13} height={13} />
+      </button>
+    </span>
   )
 }
 
-/** The Overview's Items card, with its pencil: it opens the card and turns the table into fields. */
+/**
+ * The Overview's Items card, ready to change at any time: − and + on each quantity (a double-click
+ * types it), and a search to add a product. Changes wait here, and ✓ Save and ✕ Discard appear in
+ * the title row as soon as there are any; nothing is sent before ✓ and "Yes, update". Until the
+ * order has been read again, the Total column and the totals are still the API's own figures.
+ */
 export function EditableOrderItems({ context }: { context: OrderEditContext }) {
   const { order, reference, shop, onSaved } = context
   const edit = useOrderEdit(order, reference, shop, onSaved)
+  const base = useMemo(() => draftFromOrder(order), [order])
+  const quantities = edit.draft?.quantities ?? base.quantities
+  const added = edit.draft?.added ?? []
+
+  const changeAdded = (update: (current: DraftLine[]) => DraftLine[]) =>
+    edit.draft
+      ? edit.change({ added: update(added) })
+      : edit.begin({ added: update(added) })
+  const setQuantity = (id: string, quantity: string) => {
+    const next = { ...quantities, [id]: quantity }
+    if (edit.draft) edit.change({ quantities: next })
+    else edit.begin({ quantities: next })
+  }
+
   return (
     <>
       <OrderItemsSummary
@@ -525,8 +465,92 @@ export function EditableOrderItems({ context }: { context: OrderEditContext }) {
         taxesIncluded={order.taxes_included}
         tip={order.total_tip}
         outstanding={order.total_outstanding}
-        actions={<OrderEditControls edit={edit} what="items" />}
-        editor={edit.editing ? <OrderItemsEditor edit={edit} order={order} /> : null}
+        forceOpen={edit.dirty}
+        actions={edit.dirty ? <OrderEditControls edit={edit} what="items" /> : undefined}
+        above={
+          <ProductSearch
+            id="order-edit-product-search"
+            shop={order.shop?.key ?? shop ?? ''}
+            noMatchHint="Try another name or SKU."
+            onAdd={changeAdded}
+          />
+        }
+        quantityOf={(item) => {
+          const quantity = quantities[item.id]
+          // A line already removed from the order has nothing left to change.
+          if (quantity === undefined) return item.quantity ?? '—'
+          return (
+            <QuantityCell
+              name={item.title || 'Item'}
+              value={quantity}
+              onChange={(next) => setQuantity(item.id, next)}
+            />
+          )
+        }}
+        extraRows={
+          added.length > 0
+            ? added.map((line) => {
+                if (line.kind !== 'variant') return null
+                const quantity = Number.parseInt(line.quantity, 10)
+                return (
+                  <tr key={line.key} className={`${MINI_ROW} bg-accent-tint/50`}>
+                    <td className={MINI_TD}>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <Thumb url={line.imageUrl} alt="" />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="font-semibold break-words">
+                            {line.productTitle}
+                          </span>
+                          <span className="text-text-muted truncate text-[0.7rem]">
+                            {['New', line.variantTitle, line.sku]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        </span>
+                      </span>
+                    </td>
+                    <td className={`${MINI_TD} text-right tabular-nums`}>
+                      {formatPrice(line.price, order.currency)}
+                    </td>
+                    <td className={`${MINI_TD} text-center tabular-nums`}>
+                      <QuantityCell
+                        name={line.productTitle}
+                        value={line.quantity}
+                        onChange={(next) =>
+                          changeAdded((current) =>
+                            current.map((candidate) =>
+                              candidate.key === line.key
+                                ? { ...candidate, quantity: next }
+                                : candidate,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td className={`${MINI_TD} text-right font-semibold tabular-nums`}>
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        {Number.isFinite(quantity)
+                          ? formatPrice(Number(line.price) * quantity, order.currency)
+                          : '—'}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${line.productTitle}`}
+                          onClick={() =>
+                            changeAdded((current) =>
+                              current.filter((candidate) => candidate.key !== line.key),
+                            )
+                          }
+                          className={ICON_BUTTON}
+                        >
+                          <TrashIcon width={15} height={15} />
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })
+            : undefined
+        }
       />
       <OrderUpdateQuestion edit={edit} order={order} />
     </>
