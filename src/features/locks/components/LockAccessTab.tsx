@@ -187,8 +187,8 @@ export function LockAccessTab({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <section className={`${DETAIL_CARD} flex flex-col gap-4 p-4`}>
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      <section className={`${DETAIL_CARD} flex shrink-0 flex-col gap-4 p-4`}>
         <PickedChips
           noun="customer"
           items={picked}

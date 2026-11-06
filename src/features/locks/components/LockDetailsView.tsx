@@ -74,6 +74,7 @@ export function LockDetailsView({
   onBack,
 }: LockDetailsViewProps) {
   const [tab, setTab] = useState<TabId>('overview')
+  const fillPage = tab === 'access'
   // The Settings tab was opened from Customer Access's manual-locking warning.
   const [showAdvanced, setShowAdvanced] = useState(false)
   // The setting being changed, waiting for "Yes, update".
@@ -140,8 +141,14 @@ export function LockDetailsView({
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="flex flex-col gap-4 p-4 sm:p-6">
+    <article
+      // Customer Access fills the height of the page (its table scrolls in its own box), so the
+      // page itself does not scroll; the other tabs are as tall as their content.
+      className={`border-border bg-bg overflow-hidden rounded-2xl border ${
+        fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : 'shrink-0'
+      }`}
+    >
+      <header className="flex shrink-0 flex-col gap-4 p-4 sm:p-6">
         <div className="flex items-start gap-4">
           <LockImage src={lock.image_url} size="lg" />
           <div className="min-w-0 flex-1">
@@ -229,7 +236,7 @@ export function LockDetailsView({
       <div
         role="tablist"
         aria-label="Lock sections"
-        className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
+        className="border-border flex shrink-0 [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
       >
         {TABS.map((item) => {
           const selected = item.id === tab
@@ -258,9 +265,11 @@ export function LockDetailsView({
         id="lock-tabpanel"
         role="tabpanel"
         aria-labelledby={`lock-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        className={`bg-surface p-3 sm:p-5 ${
+          fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''
+        }`}
       >
-        <div className="flex flex-col gap-4">
+        <div className={`flex flex-col gap-4 ${fillPage ? 'lg:min-h-0 lg:flex-1' : ''}`}>
           {lock.sync_status === 'error' && (
             <FormMessage tone="error">
               {`This lock was saved but could not be sent to the store${lock.sync_error ? `: ${lock.sync_error}` : '.'} Use “Set up store” on the list to push it again.`}

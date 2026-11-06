@@ -85,9 +85,9 @@ export function LockCustomersList({
     marked.has(customer.id.toLowerCase())
 
   return (
-    <DetailSection title="Customers" icon={UsersIcon} count={data?.total} flush>
-      <div className="flex flex-col">
-        <div className="flex flex-col gap-3 p-4 sm:p-5">
+    <DetailSection title="Customers" icon={UsersIcon} count={data?.total} flush fill>
+      <div className="flex flex-col lg:h-full">
+        <div className="flex shrink-0 flex-col gap-3 p-4 sm:p-5">
           {notice}
           {loginOnly && (
             <p className="text-text-muted text-[0.82rem]">
@@ -134,8 +134,8 @@ export function LockCustomersList({
           </div>
         </div>
 
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-          <div className="border-border overflow-hidden rounded-lg border">
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          <div className="border-border overflow-hidden rounded-lg border lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             {customers.error ? (
               <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-12 text-center text-[0.9rem]">
                 <AlertTriangleIcon width={26} height={26} className="text-danger" />
@@ -163,7 +163,7 @@ export function LockCustomersList({
             ) : (
               <div
                 aria-busy={customers.isPending || customers.isShowingPrevious}
-                className="max-h-[min(60svh,640px)] overflow-auto lg:max-h-[max(15rem,calc(100svh-43rem))]"
+                className="max-h-[min(60svh,640px)] overflow-auto lg:max-h-none lg:min-h-48 lg:flex-1"
               >
                 <table className="w-full min-w-[860px] border-collapse">
                   <thead>
