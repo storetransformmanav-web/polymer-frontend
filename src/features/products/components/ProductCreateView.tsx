@@ -6,7 +6,10 @@ import { ArrowLeftIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import type { SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useShops } from '../../../hooks/useShops.ts'
 import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
-import { useCreateProduct } from '../hooks/useCreateProduct.ts'
+import {
+  useCreateProduct,
+  type NewCollectionsOutcome,
+} from '../hooks/useCreateProduct.ts'
 import { useStockLocations } from '../hooks/useStockLocations.ts'
 import type { PickedFile } from '../utils/mediaFiles.ts'
 import {
@@ -43,6 +46,8 @@ interface ProductCreateViewProps {
       previewUrl: string | null
       /** How many files were chosen from the computer. */
       uploadedFiles?: number
+      /** The new collections typed in the form: which were made, and which failed. */
+      collections?: NewCollectionsOutcome
     },
   ) => void
 }
@@ -126,6 +131,7 @@ export function ProductCreateView({
       onCreated(result.product, {
         previewUrl: firstImageUrl(effective),
         uploadedFiles: files.length,
+        collections: result.collections,
       })
     }
   }

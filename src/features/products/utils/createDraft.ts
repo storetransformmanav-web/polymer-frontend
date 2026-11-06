@@ -37,6 +37,9 @@ import {
  */
 
 /** The limits the API enforces on a new product (from its schema). */
+/** The longest name a new collection may have (Shopify's title limit). */
+export const COLLECTION_TITLE_MAX = 255
+
 export const CREATE_LIMITS = {
   options: 3,
   optionValues: 100,
@@ -143,6 +146,11 @@ export interface CreateDraft {
   media: NewMediaDraft[]
   /** CRM collection ids. */
   collections: string[]
+  /**
+   * Names of collections the store doesn't have yet. `POST /products` can't make them, so each
+   * is made with `POST /collections` (this product already in it) right after the product exists.
+   */
+  newCollections: string[]
   metafields: MetafieldDraft[]
   /** Product description & information sections, sent as the `apd` metafield. */
   descriptionSections: SectionDraft[]
@@ -209,6 +217,7 @@ export function blankCreateDraft(shop: string): CreateDraft {
     locationId: '',
     media: [],
     collections: [],
+    newCollections: [],
     metafields: [],
     descriptionSections: [],
   }
@@ -278,6 +287,7 @@ export function isCreateDirty(draft: CreateDraft): boolean {
     ].some((value) => value.trim() !== '') ||
     draft.tags.length > 0 ||
     draft.collections.length > 0 ||
+    draft.newCollections.length > 0 ||
     draft.options.length > 0 ||
     draft.giftCard ||
     draft.status !== 'DRAFT' ||
@@ -458,6 +468,16 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
   // Collections
   draft.collections.forEach((id, index) => {
     put(`collections.${index}`, UUID.test(id) ? null : 'Not a valid collection ID')
+  })
+  draft.newCollections.forEach((name, index) => {
+    put(
+      `newCollections.${index}`,
+      name.trim() === ''
+        ? 'Enter a collection name'
+        : name.length > COLLECTION_TITLE_MAX
+          ? `The name can be at most ${COLLECTION_TITLE_MAX} characters`
+          : null,
+    )
   })
 
   // Description sections: each needs a title, and the whole must fit one metafield.

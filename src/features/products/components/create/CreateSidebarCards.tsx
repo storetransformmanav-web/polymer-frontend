@@ -48,18 +48,28 @@ const BLOCK = 'border-border flex flex-col gap-3.5 border-t p-4 first:border-t-0
  * list says how many more there are. Picked ones are chips with a ✕ inside the same card as the box (like the tags). A
  * collection can also be added by pasting its CRM ID (a UUID) and pressing Enter — the create
  * API takes ids. The product is sent with the collections' ids.
+ *
+ * **A name the store doesn't have is made too**, as on the product page: Enter (or the
+ * "Create “name”" row) puts it in the box as a chip marked **New**. `POST /products` cannot make
+ * a collection, so it is made right after the product exists (`POST /collections`, this product
+ * already in it) — see `useCreateProduct`.
  */
 function CollectionsPicker({
   ids,
+  newNames,
   errors,
   shop,
   onChange,
+  onNewChange,
 }: {
   ids: string[]
+  /** Names of collections that will be created with the product. */
+  newNames: string[]
   errors: CreateSectionProps['errors']
   /** The store the product is created in (its collections are the ones listed). */
   shop: string
   onChange: (ids: string[]) => void
+  onNewChange: (names: string[]) => void
 }) {
   const [input, setInput] = useState('')
   const [open, setOpen] = useState(false)
@@ -139,9 +149,34 @@ function CollectionsPicker({
   }, [open, ids.length, input])
   const typedId = UUID.test(input.trim()) ? input.trim().toLowerCase() : null
 
+  // What is typed, as a collection the store doesn't have: offered as "Create “…”" unless that
+  // name is already a picked collection, a new one, or the name of a listed collection.
+  const typedName = input.trim()
+  const taken = useMemo(
+    () =>
+      new Set([
+        ...ids.map((id) => collectionKey(titles[id] ?? '')),
+        ...newNames.map(collectionKey),
+      ]),
+    [titles, ids, newNames],
+  )
+  const canCreate =
+    typedName !== '' &&
+    !typedId &&
+    !taken.has(collectionKey(typedName)) &&
+    !found.some(
+      (collection) => collectionKey(collection.title) === collectionKey(typedName),
+    )
+
   function add(id: string, title?: string) {
     if (!chosen.has(id)) onChange([...ids, id])
     if (title) setTitles((known) => ({ ...known, [id]: title }))
+    setInput('')
+    setProblem(null)
+  }
+
+  function addNew(name: string) {
+    if (!taken.has(collectionKey(name))) onNewChange([...newNames, name])
     setInput('')
     setProblem(null)
   }
@@ -150,6 +185,10 @@ function CollectionsPicker({
     const text = input.trim()
     if (!text) return
     if (typedId) return add(typedId)
+    if (taken.has(collectionKey(text))) {
+      setProblem(`“${text}” is already added`)
+      return
+    }
     // The collection called exactly that, asked of the backend now so Enter doesn't have to
     // wait for the typing pause.
     try {
@@ -160,7 +199,8 @@ function CollectionsPicker({
           collectionKey(collection.title) === collectionKey(text),
       )
       if (named) return add(named.id, named.title)
-      setProblem(`No collection is called “${text}”`)
+      // The store doesn't have it: it is made with the product.
+      addNew(text)
     } catch {
       setProblem('Could not search the collections')
     }
@@ -173,8 +213,10 @@ function CollectionsPicker({
       setOpen(false)
       return
     }
-    if (event.key === 'Backspace' && input === '' && ids.length > 0) {
-      onChange(ids.slice(0, -1))
+    if (event.key === 'Backspace' && input === '') {
+      // The chips read ids first, then new names: the last one drawn goes first.
+      if (newNames.length > 0) onNewChange(newNames.slice(0, -1))
+      else if (ids.length > 0) onChange(ids.slice(0, -1))
       return
     }
     if (event.key !== 'Enter') return
@@ -194,8 +236,33 @@ function CollectionsPicker({
         onClick={() => box.current?.focus()}
         className="border-border bg-bg focus-within:border-accent focus-within:outline-accent-tint flex cursor-text flex-wrap items-center gap-1.5 rounded-xl border p-2.5 transition-colors focus-within:outline-2"
       >
-        {ids.length > 0 && (
+        {(ids.length > 0 || newNames.length > 0) && (
           <ul aria-label="Collections" className="contents">
+            {newNames.map((name, index) => (
+              <li
+                key={`new-${name}`}
+                title="This collection doesn't exist yet: it is created with the product"
+                className={`${TAG_CHIP} flex items-center gap-1 pr-1.5`}
+              >
+                <span className="max-w-44 truncate">{name}</span>
+                <span className="bg-accent text-accent-contrast rounded px-1 text-[0.6rem] font-bold tracking-wide uppercase">
+                  New
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove new collection ${name}`}
+                  onClick={() => onNewChange(newNames.filter((value) => value !== name))}
+                  className="hover:text-danger inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                >
+                  <XIcon width={12} height={12} />
+                </button>
+                {errors[`newCollections.${index}`] && (
+                  <span role="alert" className="text-danger">
+                    {errors[`newCollections.${index}`]}
+                  </span>
+                )}
+              </li>
+            ))}
             {ids.map((id, index) => (
               <li key={id} className={`${TAG_CHIP} flex items-center gap-1 pr-1.5`}>
                 <span className="max-w-44 truncate" title={id}>
@@ -228,7 +295,11 @@ function CollectionsPicker({
           autoComplete="off"
           spellCheck={false}
           value={input}
-          placeholder={ids.length > 0 ? 'Add another' : 'Search collections by name'}
+          placeholder={
+            ids.length + newNames.length > 0
+              ? 'Add another'
+              : 'Search or type a new collection name'
+          }
           aria-invalid={problem ? true : undefined}
           onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}
@@ -292,7 +363,21 @@ function CollectionsPicker({
                 </button>
               </li>
             ))}
-            {shown.length === 0 && !typedId && (
+            {canCreate && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => addNew(typedName)}
+                  className="hover:bg-accent-tint/60 text-accent flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent px-2.5 py-2 text-left text-[0.82rem] font-semibold"
+                >
+                  <PlusIcon width={14} height={14} className="shrink-0" />
+                  <span className="min-w-0 truncate">
+                    Create “{typedName}” as a new collection
+                  </span>
+                </button>
+              </li>
+            )}
+            {shown.length === 0 && !typedId && !canCreate && (
               <li className="text-text-muted px-2.5 py-2 text-[0.8rem]" role="status">
                 {loading
                   ? 'Loading collections…'
@@ -300,9 +385,7 @@ function CollectionsPicker({
                     ? 'Could not load the collections. Try again in a moment.'
                     : found.length > 0
                       ? 'Every listed collection is already added.'
-                      : input.trim()
-                        ? `No collection matches “${input.trim()}”.`
-                        : 'No collections found.'}
+                      : 'No collections found.'}
               </li>
             )}
             {shown.length > 0 && (loading || more > 0) && (
@@ -428,13 +511,15 @@ export function CreateSidebarCard({
         <EditField
           id="create-collections"
           label="Collections"
-          hint="Add the product to manual collections. Smart collections fill themselves by rules, so they aren't listed."
+          hint="Pick a manual collection, or type a new name and press Enter to create it with the product. Smart collections fill themselves by rules, so they aren't listed."
         >
           <CollectionsPicker
             ids={draft.collections}
+            newNames={draft.newCollections}
             errors={errors}
             shop={shop}
             onChange={(collections) => update({ collections })}
+            onNewChange={(newCollections) => update({ newCollections })}
           />
         </EditField>
         <EditField id="create-tags" label="Tags">

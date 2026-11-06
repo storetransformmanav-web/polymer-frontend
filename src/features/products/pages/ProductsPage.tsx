@@ -31,6 +31,7 @@ import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.
 import { ProductsKpis } from '../components/ProductsKpis.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
+import type { NewCollectionsOutcome } from '../hooks/useCreateProduct.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
@@ -52,6 +53,22 @@ const IMAGE_STOP_MS = 10 * 60_000
 
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`
+
+/** What to add to the "created" line about the new collections typed in the form. */
+function collectionNote(outcome: NewCollectionsOutcome | undefined): string {
+  if (!outcome) return ''
+  const quoted = (titles: string[]) => titles.map((title) => `“${title}”`).join(', ')
+  const made = outcome.created.length
+    ? ` New ${outcome.created.length === 1 ? 'collection' : 'collections'} ${quoted(outcome.created)} created with it.`
+    : ''
+  const failed = outcome.failed
+    .map(
+      (item) =>
+        ` The collection “${item.title}” could not be created: ${item.message} Add it from the product's page.`,
+    )
+    .join('')
+  return made + failed
+}
 
 const LIST_PATH = '/products'
 // An open product / the bulk editor / the create form scroll inside the page (from `lg` up the
@@ -170,6 +187,7 @@ export function ProductsPage() {
     info: {
       previewUrl: string | null
       uploadedFiles?: number
+      collections?: NewCollectionsOutcome
     },
   ) {
     closeCreate()
@@ -181,7 +199,7 @@ export function ProductsPage() {
     setNotice(
       `Created “${result.title}”${made.length ? ` with ${made.join(' and ')}` : ''}. ${result.message || 'It is in your store and in the list below.'}${
         info.previewUrl ? ' Its image is being downloaded by the store.' : ''
-      }${info.uploadedFiles ? ` ${plural(info.uploadedFiles, 'file')} ${info.uploadedFiles === 1 ? 'is' : 'are'} uploading in the background — they show in the product as soon as you open it.` : ''}`,
+      }${info.uploadedFiles ? ` ${plural(info.uploadedFiles, 'file')} ${info.uploadedFiles === 1 ? 'is' : 'are'} uploading in the background — they show in the product as soon as you open it.` : ''}${collectionNote(info.collections)}`,
     )
     if (info.previewUrl) {
       setAwaitingImage({

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { useAppDispatch } from '../../../app/store/hooks.ts'
 import {
@@ -6,7 +7,8 @@ import {
   previewImageSet,
   productCreated,
 } from '../../../app/store/productsSlice.ts'
-import type { ProductCreateResult } from '../../../lib/api/endpoints.ts'
+import { toUserMessage } from '../../../lib/api/ApiError.ts'
+import { api, type ProductCreateResult } from '../../../lib/api/endpoints.ts'
 import {
   buildCreateBody,
   buildListItem,
@@ -17,6 +19,12 @@ import {
 import type { PickedFile } from '../utils/mediaFiles.ts'
 import { useAddLocalMedia } from './useLocalMedia.ts'
 import { useRefreshProductList } from './useRefreshProductList.ts'
+
+/** What happened to the collections typed as new names: the ones made, and the ones that failed. */
+export interface NewCollectionsOutcome {
+  created: string[]
+  failed: { title: string; message: string }[]
+}
 
 /**
  * Creates a product from the "Add product" form.
@@ -35,6 +43,7 @@ import { useRefreshProductList } from './useRefreshProductList.ts'
  */
 export function useCreateProduct() {
   const dispatch = useAppDispatch()
+  const queryClient = useQueryClient()
   const refreshList = useRefreshProductList()
   const { start } = useAddLocalMedia()
   const [isCreating, setIsCreating] = useState(false)
@@ -45,7 +54,10 @@ export function useCreateProduct() {
       draft: CreateDraft,
       shop: CreatedShop | null,
       files: readonly PickedFile[] = [],
-    ): Promise<{ product: ProductCreateResult } | null> => {
+    ): Promise<{
+      product: ProductCreateResult
+      collections: NewCollectionsOutcome
+    } | null> => {
       setIsCreating(true)
       setError(null)
       const body = buildCreateBody(draft)
@@ -79,6 +91,29 @@ export function useCreateProduct() {
       // a few seconds later, and keeps doing so until the image is there.
       if (!preview) refreshList(true)
 
+      // A collection the store doesn't have is made now that the product exists, with the
+      // product already in it. One at a time, never retried (a repeat would make it twice); one
+      // that fails doesn't undo the product — the page says which, and the product's own page can
+      // add it again.
+      const collections: NewCollectionsOutcome = { created: [], failed: [] }
+      const shopKey = shop?.key ?? draft.shop
+      for (const title of draft.newCollections) {
+        try {
+          await api.collections.create({
+            title,
+            shop: shopKey,
+            products: [created.product_id],
+          })
+          collections.created.push(title)
+        } catch (failure) {
+          collections.failed.push({ title, message: toUserMessage(failure) })
+        }
+      }
+      if (draft.newCollections.length > 0) {
+        // The new names are now in the store: offer them in every collection search.
+        void queryClient.invalidateQueries({ queryKey: ['collections'] })
+      }
+
       // Files from the computer don't hold the form up: they show on the new product at once,
       // from their own previews, and go up in the background (a failed one is marked on its
       // tile in the product's Media tab, with a way to try again).
@@ -92,9 +127,9 @@ export function useCreateProduct() {
         },
         files,
       )
-      return { product: created }
+      return { product: created, collections }
     },
-    [dispatch, refreshList, start],
+    [dispatch, queryClient, refreshList, start],
   )
 
   return {
