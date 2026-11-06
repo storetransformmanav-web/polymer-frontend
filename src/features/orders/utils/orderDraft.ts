@@ -346,6 +346,19 @@ export function buildOrderBody(draft: OrderDraft): OrderCreateBody {
   return body
 }
 
+/** The lines' prices × quantities; a line with no usable price or quantity is left out. */
+export function orderSubtotal(lines: DraftLine[]): number {
+  let subtotal = 0
+  for (const line of lines) {
+    const quantity = Number.parseInt(line.quantity, 10)
+    const price = Number.parseFloat(line.price)
+    if (Number.isFinite(quantity) && quantity >= 1 && Number.isFinite(price)) {
+      subtotal += price * quantity
+    }
+  }
+  return Math.round(subtotal * 100) / 100
+}
+
 /**
  * What the order comes to before discounts and tax, which the store works out: the lines'
  * prices × quantities, plus delivery. `complete` is false while a line has no usable price.

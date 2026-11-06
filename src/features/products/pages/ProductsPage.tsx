@@ -76,8 +76,9 @@ export function ProductsPage() {
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = products
-  // The stock cards' figures: they do not change when a stock card is pressed.
-  const stockSummary = useStockSummary(filters, data)
+  // The cards' figures (the stock figures and the total): they do not change when a stock
+  // card is pressed.
+  const stockFigures = useStockSummary(filters, data)
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
@@ -369,7 +370,8 @@ export function ProductsPage() {
           the bulk editor and the create form take their place (kept mounted, only hidden). */}
       <div className={activeId || bulkItems || showCreate ? 'hidden' : undefined}>
         <ProductsKpis
-          summary={stockSummary}
+          summary={stockFigures.summary}
+          total={stockFigures.total}
           stock={filters.stock}
           onStock={(stock) => products.setFilters({ stock })}
         />

@@ -1,8 +1,12 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react'
-import { XIcon } from '../../../../components/ui/icons.tsx'
+import { useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  ImageIcon,
+  SearchIcon,
+  XIcon,
+  type IconProps,
+} from '../../../../components/ui/icons.tsx'
+import { safeUrl } from '../../../../lib/safeUrl.ts'
 import { splitChips } from '../../utils/orderDraft.ts'
-
-// The Add product form's look, so the two "Add" pages read alike.
 
 export const CARD = 'border-border bg-bg min-w-0 rounded-2xl border'
 export const FIELD_LABEL = 'text-text text-[0.82rem] font-semibold'
@@ -14,45 +18,160 @@ export const TEXT_BUTTON =
   'text-accent hover:text-accent-hover inline-flex cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 export const ICON_BUTTON =
   'text-text-muted hover:text-danger hover:bg-danger-bg inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent transition-colors'
+const BUTTON =
+  'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50'
+export const PRIMARY_BUTTON = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`
+export const SECONDARY_BUTTON = `${BUTTON} border-border bg-bg text-text hover:border-accent`
 export const CHIP =
   'border-border-strong bg-accent-tint/50 text-text inline-flex max-w-full items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 text-[0.8rem] font-medium'
 
+/** A section's icon, in a tinted tile. */
+export function IconTile({
+  icon: Icon,
+  large = false,
+}: {
+  icon: ComponentType<IconProps>
+  large?: boolean
+}) {
+  const size = large ? 26 : 20
+  return (
+    <span
+      className={`bg-accent-tint text-accent border-border-strong flex shrink-0 items-center justify-center rounded-lg border ${large ? 'h-14 w-14' : 'h-11 w-11'}`}
+    >
+      <Icon width={size} height={size} />
+    </span>
+  )
+}
+
 /**
- * A card of the form: a soft box with a thin border, its heading inside at the top (or, with
- * `headingAbove`, above it as the Add product form puts "Price" and "Variants"). `action` sits at
- * the heading's right edge; `flush` drops the padding for rows that run edge to edge.
+ * A section of the form: its icon, title and one-line description, then what it holds. `action`
+ * sits beside the title, taking the rest of the row (Customer's search box).
  */
-export function FormCard({
+export function OrderSection({
+  icon,
   title,
-  headingAbove = false,
-  flush = false,
+  subtitle,
   action,
   children,
 }: {
+  icon: ComponentType<IconProps>
   title: string
-  headingAbove?: boolean
-  flush?: boolean
+  subtitle: string
   action?: ReactNode
+  children?: ReactNode
+}) {
+  return (
+    <section aria-label={title} className={`${CARD} flex flex-col gap-4 p-4 sm:p-5`}>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex items-center gap-3">
+          <IconTile icon={icon} />
+          <div className="flex flex-col">
+            <h3 className="text-[1rem] font-semibold">{title}</h3>
+            <p className="text-text-muted m-0 text-[0.8rem]">{subtitle}</p>
+          </div>
+        </div>
+        {action && <div className="min-w-0 flex-1 basis-80">{action}</div>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * A search box whose results drop down over the page, as `children`. They show while the box is
+ * in use and holds text; leaving it or Escape puts them away. The pointer pressing inside the
+ * list keeps the focus in the box, so a result can be pressed in every browser.
+ */
+export function SearchDropdown({
+  id,
+  label,
+  value,
+  placeholder,
+  onChange,
+  children,
+}: {
+  id: string
+  label: string
+  value: string
+  placeholder: string
+  onChange: (value: string) => void
   children: ReactNode
 }) {
-  const heading = (
+  const [open, setOpen] = useState(false)
+  const showing = open && value.trim() !== ''
+  return (
     <div
-      className={`flex items-center justify-between gap-3 ${flush && !headingAbove ? 'px-4 pt-4 sm:px-5 sm:pt-5' : ''}`}
+      className="relative min-w-0 flex-1"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && showing) {
+          event.stopPropagation()
+          setOpen(false)
+        }
+      }}
     >
-      <h4 className="text-[0.95rem] font-semibold">{title}</h4>
-      {action}
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <SearchIcon
+        width={16}
+        height={16}
+        aria-hidden="true"
+        className="text-text-muted pointer-events-none absolute top-3 left-3"
+      />
+      <input
+        id={id}
+        type="search"
+        autoComplete="off"
+        value={value}
+        placeholder={placeholder}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setOpen(true)
+          onChange(event.target.value)
+        }}
+        className={`${FIELD_INPUT} pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden`}
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label={`Clear: ${label}`}
+          onClick={() => onChange('')}
+          className="text-text-muted hover:text-text absolute top-2.5 right-2.5 inline-flex cursor-pointer border-none bg-transparent p-0.5"
+        >
+          <XIcon width={16} height={16} />
+        </button>
+      )}
+      {showing && (
+        <div
+          onMouseDown={(event) => event.preventDefault()}
+          className="border-border bg-bg absolute inset-x-0 top-full z-30 mt-1 max-h-96 overflow-y-auto rounded-xl border shadow-lg"
+        >
+          {children}
+        </div>
+      )}
     </div>
   )
+}
+
+/** A product's small picture; an empty tile when there is none. */
+export function Thumb({ url, alt }: { url: string | null | undefined; alt: string }) {
+  const src = safeUrl(url)
   return (
-    <section aria-label={title} className="flex min-w-0 flex-col gap-2.5">
-      {headingAbove && heading}
-      <div
-        className={`${CARD} flex flex-col ${flush ? 'gap-3 overflow-hidden' : 'gap-4 p-4 sm:p-5'}`}
-      >
-        {!headingAbove && heading}
-        {children}
-      </div>
-    </section>
+    <span className="border-border bg-surface flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border">
+      {src ? (
+        <img
+          src={src}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <ImageIcon width={16} height={16} className="text-text-muted" />
+      )}
+    </span>
   )
 }
 

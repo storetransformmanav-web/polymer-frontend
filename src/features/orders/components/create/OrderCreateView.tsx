@@ -3,8 +3,13 @@ import { ALL_SHOPS, shopLabel, shopValue } from '../../../../app/store/shopSlice
 import { ConfirmCancelDialog } from '../../../../components/ui/ConfirmCancelDialog.tsx'
 import { Dialog } from '../../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
-import { ArrowLeftIcon, InfoIcon, SpinnerIcon } from '../../../../components/ui/icons.tsx'
-import type { SelectOption } from '../../../../components/ui/SelectField.tsx'
+import {
+  EyeIcon,
+  InfoIcon,
+  ShoppingCartIcon,
+  SpinnerIcon,
+} from '../../../../components/ui/icons.tsx'
+import { SelectField, type SelectOption } from '../../../../components/ui/SelectField.tsx'
 import { useShops } from '../../../../hooks/useShops.ts'
 import { currencySymbol, formatPrice } from '../../../../lib/format.ts'
 import type { OrderCreateResult } from '../../../../lib/api/endpoints.ts'
@@ -12,19 +17,17 @@ import { useCreateOrder } from '../../hooks/useCreateOrder.ts'
 import {
   blankOrderDraft,
   buildOrderBody,
+  FIELD,
   isOrderDirty,
   orderTotals,
   validateOrderDraft,
   type DraftLine,
   type OrderDraft,
 } from '../../utils/orderDraft.ts'
-import {
-  OrderAddressCard,
-  OrderCustomerCard,
-  OrderDeliveryCard,
-} from './OrderCustomerCards.tsx'
+import { IconTile, SECONDARY_BUTTON } from './formParts.tsx'
+import { OrderCustomerCard, OrderShippingCard } from './OrderCustomerCards.tsx'
 import { OrderLinesCard } from './OrderLinesCard.tsx'
-import { OrderSidebarCard, OrderSummaryCard } from './OrderSidebarCards.tsx'
+import { OrderPaymentCard, OrderSummaryCard } from './OrderSummaryCards.tsx'
 
 const BUTTON =
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -38,9 +41,9 @@ interface OrderCreateViewProps {
 }
 
 /**
- * "Add order": one page of cards in place of the list, laid out like Add product — the order's
- * items, customer, address and delivery in a wide column, and a sidebar (store, payment,
- * discount codes, tags, note, then the summary). Nothing is sent until **Create order**, which
+ * "Add order": one page in place of the list. Sections in a wide column — Customer, Add Products,
+ * Shipping & Delivery, Payment & Details — with the Order Summary beside them, in view while the
+ * form scrolls; the store is chosen in the page's heading. Nothing is sent until **Create order**, which
  * checks every field first (going to the first problem), then asks — the order is also made in
  * Shopify — and only "Yes, create" sends one `POST /orders`. A refusal keeps everything typed
  * and shows the backend's message.
@@ -105,6 +108,12 @@ export function OrderCreateView({
     else onBack()
   }
 
+  /** From the summary: the customer goes, and the search is ready for another. */
+  function changeCustomer() {
+    update({ customer: blankOrderDraft().customer })
+    document.getElementById('order-customer-search')?.focus()
+  }
+
   function submit() {
     setShowErrors(true)
     if (Object.keys(problems).length > 0) {
@@ -137,18 +146,6 @@ export function OrderCreateView({
   }, [stopped])
 
   const totals = orderTotals(effective)
-  const createButton = (
-    <button
-      type="button"
-      onClick={submit}
-      disabled={isCreating}
-      className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`}
-    >
-      {isCreating && <SpinnerIcon width={14} height={14} className="animate-spin" />}
-      {isCreating ? 'Creating…' : 'Create order'}
-    </button>
-  )
-
   return (
     <section
       ref={sectionRef}
@@ -157,22 +154,39 @@ export function OrderCreateView({
       // `relative` keeps the visually hidden labels (sr-only) inside this box.
       className="relative flex w-full flex-col gap-5 lg:min-h-full"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h2 className="text-[1.5rem] leading-tight font-bold">Add order</h2>
-        <div className="ml-auto flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <IconTile icon={ShoppingCartIcon} large />
+        <div className="flex min-w-0 flex-col">
+          <h2 className="text-[1.5rem] leading-tight font-bold">Add order</h2>
+          <p className="text-text-muted m-0 text-[0.85rem]">
+            Create a new order with products and shipping details
+          </p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-end gap-3">
+          <div className="flex w-56 max-w-full flex-col gap-1">
+            <SelectField
+              compact
+              id={FIELD.shop}
+              label="Store"
+              value={effective.shop}
+              options={shopOptions}
+              onChange={(next) => update({ shop: next })}
+            />
+            {errors[FIELD.shop] && (
+              <p role="alert" className="text-danger text-[0.76rem]">
+                {errors[FIELD.shop]}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={back}
             disabled={isCreating}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+            className={SECONDARY_BUTTON}
           >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
+            <EyeIcon width={16} height={16} />
+            View Orders
           </button>
-          {createButton}
         </div>
       </div>
 
@@ -184,8 +198,9 @@ export function OrderCreateView({
         )}
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-5">
+          <OrderCustomerCard draft={effective} errors={errors} update={update} />
           <OrderLinesCard
             lines={effective.lines}
             shop={shop}
@@ -194,37 +209,22 @@ export function OrderCreateView({
             errors={errors}
             onChange={updateLines}
           />
-          <OrderCustomerCard draft={effective} errors={errors} update={update} />
-          <OrderAddressCard draft={effective} errors={errors} update={update} />
-          <OrderDeliveryCard
+          <OrderShippingCard
             draft={effective}
             errors={errors}
             update={update}
             symbol={symbol}
           />
+          <OrderPaymentCard draft={effective} errors={errors} update={update} />
         </div>
 
-        <div className="flex min-w-0 flex-col gap-5">
-          <OrderSidebarCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            shopOptions={shopOptions}
-          />
-          <OrderSummaryCard draft={effective} currency={currency} />
-        </div>
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-2 lg:mt-auto">
-        <button
-          type="button"
-          onClick={back}
-          disabled={isCreating}
-          className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
-        >
-          Cancel
-        </button>
-        {createButton}
+        <OrderSummaryCard
+          draft={effective}
+          currency={currency}
+          isCreating={isCreating}
+          onChangeCustomer={changeCustomer}
+          onCreate={submit}
+        />
       </div>
 
       {confirming && (

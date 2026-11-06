@@ -224,11 +224,11 @@ describe('Add order', () => {
     const customer = within(screen.getByRole('region', { name: 'Customer' }))
     await user.type(customer.getByLabelText('Find a customer'), 'sam')
     await user.click(await customer.findByRole('button', { name: /Sam Taylor/ }))
-    expect(customer.getByLabelText('Email')).toHaveValue('buyer@example.com')
-    expect(customer.getByLabelText(/Phone/)).toHaveValue('+447700900123')
+    expect(customer.getByText('buyer@example.com')).toBeInTheDocument()
+    expect(customer.getByText('+447700900123')).toBeInTheDocument()
 
-    // The shipping address.
-    const address = within(screen.getByRole('region', { name: 'Shipping address' }))
+    // The delivery address.
+    const address = within(screen.getByRole('region', { name: 'Shipping & Delivery' }))
     await user.click(
       address.getByRole('button', { name: 'Use the customer’s name and phone' }),
     )
@@ -239,8 +239,8 @@ describe('Add order', () => {
     await user.selectOptions(address.getByLabelText('Country'), 'GB')
 
     // Delivery, payment, codes, tags and a note.
-    await user.type(within(form).getByLabelText(/Delivery method/), 'Next day delivery')
-    await user.type(within(form).getByLabelText(/Delivery price/), '6.95')
+    await user.type(within(form).getByLabelText(/Shipping method/), 'Next day delivery')
+    await user.type(within(form).getByLabelText(/Shipping cost/), '6.95')
     await user.selectOptions(within(form).getByLabelText('Payment status'), 'paid')
     await user.type(within(form).getByLabelText(/Payment method/), 'Bank Transfer')
     await user.type(within(form).getByLabelText(/Discount codes/), 'WELCOME10{Enter}')
@@ -249,7 +249,7 @@ describe('Add order', () => {
 
     // The summary follows: 2 × 10.00 + 25.00 + 6.95.
     expect(
-      within(screen.getByRole('region', { name: 'Summary' })).getByText('£51.95'),
+      within(screen.getByRole('region', { name: 'Order Summary' })).getByText('£51.95'),
     ).toBeInTheDocument()
 
     await user.click(within(form).getAllByRole('button', { name: 'Create order' })[0])
@@ -344,13 +344,13 @@ describe('Add order', () => {
 
   it('asks before throwing away what was typed, and Back with nothing typed just goes back', async () => {
     const { user, form } = await openForm()
-    await user.click(within(form).getByRole('button', { name: 'Back to list' }))
+    await user.click(within(form).getByRole('button', { name: 'View Orders' }))
     expect(where()).toBe('/orders')
 
     await user.click(screen.getByRole('button', { name: 'Add order' }))
     const again = screen.getByRole('region', { name: 'Add order' })
     await user.click(within(again).getByRole('button', { name: 'Add custom item' }))
-    await user.click(within(again).getByRole('button', { name: 'Back to list' }))
+    await user.click(within(again).getByRole('button', { name: 'View Orders' }))
     const ask = await screen.findByRole('alertdialog', { name: /Discard this new order/ })
     await user.click(within(ask).getByRole('button', { name: 'Yes, discard' }))
     expect(where()).toBe('/orders')

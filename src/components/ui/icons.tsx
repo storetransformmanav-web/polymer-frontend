@@ -785,3 +785,32 @@ export function GridIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function ShoppingCartIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M2 3h2l2 10h9.5L17.5 6H5" />
+      <circle cx="7.5" cy="16.5" r="1.2" />
+      <circle cx="14" cy="16.5" r="1.2" />
+    </svg>
+  )
+}
+
+export function TruckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M2 5h10v9H2z" />
+      <path d="M12 8h3.2l2.8 3v3h-6" />
+      <circle cx="5.8" cy="15.2" r="1.5" />
+      <circle cx="14.5" cy="15.2" r="1.5" />
+    </svg>
+  )
+}
+
+export function MinusIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 10h12" />
+    </svg>
+  )
+}

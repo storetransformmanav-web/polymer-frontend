@@ -1,5 +1,6 @@
 import {
   AlertTriangleIcon,
+  BoxesIcon,
   CheckCircleIcon,
   SlidersIcon,
   XCircleIcon,
@@ -9,11 +10,13 @@ import type { ProductFilters } from '../../../app/store/productsSlice.ts'
 import type { ProductListResponse } from '../../../lib/api/endpoints.ts'
 
 /**
- * The four figures of the answer's `stock_summary`: how many are in stock, low on stock
- * and out of stock, and the threshold that counts as "low". Nothing is worked out here.
+ * The number of products, then the four figures of the answer's `stock_summary`: how many
+ * are in stock, low on stock and out of stock, and the threshold that counts as "low".
+ * Nothing is worked out here.
  */
 function kpis(
   summary: ProductListResponse['stock_summary'],
+  total: number | undefined,
   stock: ProductFilters['stock'],
   onStock: (stock: ProductFilters['stock']) => void,
 ): Kpi[] {
@@ -21,6 +24,12 @@ function kpis(
     value === undefined ? '—' : value.toLocaleString('en-GB')
   const threshold = summary?.low_stock_threshold
   return [
+    {
+      label: 'Total products',
+      hint: 'Products in this list, whatever their stock',
+      value: count(total),
+      icon: BoxesIcon,
+    },
     {
       label: 'In stock',
       hint: 'Products with stock above 0',
@@ -59,19 +68,22 @@ function kpis(
 }
 
 /**
- * The four stock figures above the products list. **In stock** and **Out of stock** are
- * buttons: pressing one shows only those products in the table (the same filter as Stock in
+ * The total number of products and the four stock figures above the products list.
+ * **In stock** and **Out of stock** are buttons: pressing one shows only those products in the table (the same filter as Stock in
  * Filters), pressing it again shows everything. Pressing a card only adds that filter to the
  * table — the four figures keep their values (see `useStockSummary`).
  */
 export function ProductsKpis({
   summary,
+  total,
   stock,
   onStock,
 }: {
   summary: ProductListResponse['stock_summary']
+  /** The list answer's `total` (not part of `stock_summary`); a dash until it arrives. */
+  total: number | undefined
   stock: ProductFilters['stock']
   onStock: (stock: ProductFilters['stock']) => void
 }) {
-  return <KpiCards items={kpis(summary, stock, onStock)} />
+  return <KpiCards items={kpis(summary, total, stock, onStock)} />
 }

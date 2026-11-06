@@ -589,6 +589,104 @@ describe('ProductsPage list', () => {
     expect(within(card('Low stock threshold')).getByText('10')).toBeInTheDocument()
   })
 
+  it('shows the total number of products in a card in front of the stock cards', async () => {
+    renderPage()
+    await screen.findByText('Product 1')
+
+    const card = (label: string) =>
+      screen.getAllByText(label, { selector: 'span' })[0].parentElement!.parentElement!
+    expect(within(card('Total products')).getByText(String(TOTAL))).toBeInTheDocument()
+    expect(
+      within(card('Total products')).getByText(
+        'Products in this list, whatever their stock',
+      ),
+    ).toBeInTheDocument()
+    // A plain figure, not a filter: nothing to press.
+    expect(screen.queryByRole('button', { name: /^Total products/ })).toBeNull()
+
+    // First of the five, ahead of the four stock figures.
+    const labels = screen
+      .getAllByText(
+        /^(Total products|In stock|Low stock|Out of stock|Low stock threshold)$/,
+        {
+          selector: 'span',
+        },
+      )
+      .slice(0, 5)
+      .map((el) => el.textContent)
+    expect(labels).toEqual([
+      'Total products',
+      'In stock',
+      'Low stock',
+      'Out of stock',
+      'Low stock threshold',
+    ])
+  })
+
+  it('keeps the total when a stock card is pressed — it is the list without the stock filter', async () => {
+    // As the real API does: with a stock filter on, `total` counts only the narrowed list.
+    list.mockImplementation((params) => {
+      const total =
+        params.in_stock === true ? 859 : params.in_stock === false ? 407 : TOTAL
+      return Promise.resolve({ ...respond(params), total })
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+    const card = (label: string) =>
+      screen.getAllByText(label, { selector: 'span' })[0].parentElement!.parentElement!
+    expect(within(card('Total products')).getByText(String(TOTAL))).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^In stock/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ in_stock: true })),
+    )
+    // The cards read the answer for the list without the stock filter.
+    await waitFor(() =>
+      expect(
+        list.mock.calls.some(
+          ([params]) => params.page_size === 1 && params.in_stock === undefined,
+        ),
+      ).toBe(true),
+    )
+    expect(within(card('Total products')).getByText(String(TOTAL))).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Out of stock/ }))
+    await waitFor(() =>
+      expect(list).toHaveBeenCalledWith(expect.objectContaining({ in_stock: false })),
+    )
+    expect(within(card('Total products')).getByText(String(TOTAL))).toBeInTheDocument()
+  })
+
+  it('follows the other filters: the total is the products that match them', async () => {
+    list.mockImplementation((params) => {
+      const byStatus = { ACTIVE: 40, DRAFT: 15, ARCHIVED: 5, UNLISTED: 0 }
+      const total = params.status ? byStatus[params.status] : TOTAL
+      return Promise.resolve({ ...respond(params), total })
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Product 1')
+    const card = () =>
+      screen.getAllByText('Total products', { selector: 'span' })[0].parentElement!
+        .parentElement!
+    expect(within(card()).getByText(String(TOTAL))).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    await user.selectOptions(screen.getByLabelText('Product status'), 'ARCHIVED')
+
+    await waitFor(() => expect(within(card()).getByText('5')).toBeInTheDocument())
+  })
+
+  it('shows a dash for the total until the list has answered', async () => {
+    list.mockImplementation(() => new Promise(() => {}))
+    renderPage()
+
+    const card = (await screen.findAllByText('Total products', { selector: 'span' }))[0]
+      .parentElement!.parentElement!
+    expect(within(card).getByText('—')).toBeInTheDocument()
+  })
+
   it('says under each stock figure what it counts, using the API’s threshold', async () => {
     renderPage()
     await screen.findByText('Product 1')
