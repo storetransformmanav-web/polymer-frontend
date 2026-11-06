@@ -17,15 +17,29 @@ const STALE = 60_000
 /** An exact-name look-up reads a wider page than the dropdown, so the one match is in it. */
 const LOOKUP_PAGE_SIZE = 50
 
-function searchOptions(text: string, shop: string | null | undefined, pageSize: number) {
+function searchOptions(
+  text: string,
+  shop: string | null | undefined,
+  pageSize: number,
+  includeSmart: boolean,
+) {
   return {
-    queryKey: ['collections', 'search', shop ?? '', text, pageSize] as const,
-    // The backend does the work: it searches, keeps to manual collections (it refuses to put a
-    // product in a smart one), orders by title and cuts the page. The answer is shown as it is.
+    queryKey: [
+      'collections',
+      'search',
+      shop ?? '',
+      text,
+      pageSize,
+      includeSmart ? 'all-types' : 'custom',
+    ] as const,
+    // The backend does the work: it searches, orders by title and cuts the page. By default it
+    // keeps to manual collections (it refuses to put a product in a smart one); with
+    // `includeSmart` it lists smart ones too, so the page can say why they can't be chosen.
+    // The answer is shown as it is.
     queryFn: (): Promise<CollectionListResponse> =>
       api.collections.list({
         ...(text ? { search: text } : {}),
-        type: 'custom',
+        ...(includeSmart ? {} : { type: 'custom' as const }),
         sort: 'title',
         order: 'asc',
         page_size: pageSize,
@@ -40,6 +54,11 @@ interface CollectionSearchOptions {
   all?: boolean
   /** Rows asked for (the backend's `page_size`); ten by default. */
   pageSize?: number
+  /**
+   * Also list smart collections (filled by rules, so a product can't be put in one by hand).
+   * The product page uses it to show them marked, instead of leaving them out without a word.
+   */
+  includeSmart?: boolean
 }
 
 /**
@@ -53,7 +72,11 @@ interface CollectionSearchOptions {
 export function useCollectionSearch(
   text: string,
   shop: string | null | undefined,
-  { all = false, pageSize = DEFAULT_PAGE_SIZE }: CollectionSearchOptions = {},
+  {
+    all = false,
+    pageSize = DEFAULT_PAGE_SIZE,
+    includeSmart = false,
+  }: CollectionSearchOptions = {},
 ): {
   found: CollectionListItem[]
   total: number
@@ -70,7 +93,7 @@ export function useCollectionSearch(
   }, [typed])
 
   const query = useQuery({
-    ...searchOptions(settled, shop, pageSize),
+    ...searchOptions(settled, shop, pageSize, includeSmart),
     enabled: settled !== '' || all,
     placeholderData: keepPreviousData,
   })
@@ -78,9 +101,14 @@ export function useCollectionSearch(
   const lookup = useCallback(
     (value: string) =>
       client.fetchQuery(
-        searchOptions(value.trim(), shop, Math.max(pageSize, LOOKUP_PAGE_SIZE)),
+        searchOptions(
+          value.trim(),
+          shop,
+          Math.max(pageSize, LOOKUP_PAGE_SIZE),
+          includeSmart,
+        ),
       ),
-    [client, shop, pageSize],
+    [client, shop, pageSize, includeSmart],
   )
 
   if (typed === '' && !all) {

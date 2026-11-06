@@ -1550,7 +1550,25 @@ describe('editing a section in place', () => {
       expect(screen.getByLabelText('Add to a collection')).toBeInTheDocument()
     })
 
+    it('has no working ✕ on a smart collection: the store fills it by rules and refuses', async () => {
+      const user = await openCollections()
+      // "Best Sellers" is smart in this fixture: its ✕ is off, with the reason on hover.
+      const remove = screen.getByRole('button', { name: 'Remove from Best Sellers' })
+      expect(remove).toBeDisabled()
+      expect(remove).toHaveAttribute('title', expect.stringMatching(/Filled by rules/))
+
+      await user.click(remove)
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
+      expect(screen.getByText('Best Sellers')).toBeInTheDocument()
+    })
+
     it('asks first, and sends nothing when Cancel is pressed', async () => {
+      // A manual collection: the one a product can be taken out of.
+      details.mockResolvedValue({
+        ...DETAIL,
+        collections: [{ ...DETAIL.collections[0], collection_type: 'custom' }],
+      })
       const user = await openCollections()
       await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
 
@@ -1558,8 +1576,6 @@ describe('editing a section in place', () => {
         name: 'Remove from “Best Sellers”?',
       })
       expect(within(alert).getByRole('button', { name: 'Cancel' })).toHaveFocus()
-      // A smart collection is filled by rules: the alert says the store may refuse.
-      expect(within(alert).getByText(/smart collection/)).toBeInTheDocument()
       expect(update).not.toHaveBeenCalled()
 
       await user.click(within(alert).getByRole('button', { name: 'Cancel' }))
@@ -1599,6 +1615,10 @@ describe('editing a section in place', () => {
       update.mockRejectedValue(
         new ApiError('A smart collection cannot be changed by hand.', { status: 422 }),
       )
+      details.mockResolvedValue({
+        ...DETAIL,
+        collections: [{ ...DETAIL.collections[0], collection_type: 'custom' }],
+      })
       const user = await openCollections()
       await user.click(screen.getByRole('button', { name: 'Remove from Best Sellers' }))
       await user.click(
@@ -1701,7 +1721,6 @@ describe('editing a section in place', () => {
       expect(search).toHaveBeenCalledTimes(1)
       expect(search).toHaveBeenCalledWith({
         search: 'range',
-        type: 'custom',
         sort: 'title',
         order: 'asc',
         page_size: 10,
@@ -1734,17 +1753,61 @@ describe('editing a section in place', () => {
       expect(screen.queryByText(/^Showing 10 of/)).toBeNull()
     })
 
-    it('does not offer the collection the product is already in', async () => {
+    it('lists the collection the product is already in — marked, and not choosable — instead of hiding it', async () => {
       const user = await openAdd()
 
       await user.type(box(), 'best')
-      // The backend finds it, but the product is in it already: nothing is offered.
-      await waitFor(() => expect(search).toHaveBeenCalled())
-      expect(await screen.findByText(/^No collection matches “best”/)).toBeVisible()
-      expect(within(list()!).queryByText('Best Sellers')).toBeNull()
+      // The backend finds it. It stays on the list (searching "newest" for a product that is in
+      // "Newest Products" must not look like the collection is missing), greyed out with why.
+      const row = await within(
+        await screen.findByRole('listbox', { name: 'Collections to add' }),
+      ).findByRole('option', { name: /Best Sellers/ })
+      expect(row).toHaveAttribute('aria-disabled', 'true')
+      expect(row).toHaveTextContent('The product is already in this collection')
+
+      // Choosing it sends nothing and asks nothing: it says so.
+      await user.click(row)
+      expect(
+        await screen.findByText('The product is already in that collection'),
+      ).toBeVisible()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(update).not.toHaveBeenCalled()
     })
 
-    it('asks the backend for manual collections only, and shows its answer as it is', async () => {
+    it('lists a smart collection greyed out, and says why it cannot be chosen', async () => {
+      search.mockResolvedValue({
+        items: [
+          {
+            ...OTHERS[0],
+            id: 'smart-1',
+            title: 'Newest Products',
+            handle: 'newest-products',
+            collection_type: 'smart',
+            editable: false,
+          },
+        ],
+        page: 1,
+        page_size: 10,
+        total: 1,
+        total_pages: 1,
+        has_next: false,
+      })
+      const user = await openAdd()
+
+      await user.type(box(), 'newest')
+      const row = (await options())[0]
+      expect(row).toHaveTextContent('Newest Products')
+      expect(row).toHaveAttribute('aria-disabled', 'true')
+      expect(row).toHaveTextContent(/can't be added or removed by hand/)
+
+      await user.click(row)
+      expect(
+        await screen.findByText(/is a smart collection: the store fills it by rules/),
+      ).toBeVisible()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+
+    it('asks the backend for every collection, and shows its answer as it is', async () => {
       search.mockResolvedValue({
         items: [
           { ...OTHERS[5], title: 'Zeta juice' },
@@ -1766,7 +1829,9 @@ describe('editing a section in place', () => {
         'Zeta juice',
         'Alpha juice',
       ])
-      expect(search).toHaveBeenCalledWith(expect.objectContaining({ type: 'custom' }))
+      // No type filter: smart collections come back too (the page marks them), nothing is added here.
+      expect(search).toHaveBeenCalledWith(expect.objectContaining({ search: 'juice' }))
+      expect(search.mock.calls[0][0]).not.toHaveProperty('type')
     })
 
     it('says it is searching while the answer is on its way', async () => {

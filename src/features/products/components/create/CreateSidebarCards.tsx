@@ -106,6 +106,9 @@ function CollectionsPicker({
   const { found, total, loading, failed, lookup } = useCollectionSearch(input, shop, {
     all: open,
     pageSize: LIST_SIZE,
+    // Smart collections are listed too (as the backend sends them), greyed out: the store won't
+    // put a product in one by hand, and leaving them out would make "Newest Products" vanish.
+    includeSmart: true,
   })
   const chosen = useMemo(() => new Set(ids), [ids])
   const shown = useMemo(
@@ -160,13 +163,20 @@ function CollectionsPicker({
       ]),
     [titles, ids, newNames],
   )
+  // Only once the search has answered: while it loads or after it failed, the store may well have
+  // a collection of that name, and making a second one with the same title would be wrong.
   const canCreate =
     typedName !== '' &&
     !typedId &&
+    !loading &&
+    !failed &&
     !taken.has(collectionKey(typedName)) &&
     !found.some(
       (collection) => collectionKey(collection.title) === collectionKey(typedName),
     )
+
+  const smartProblem = (title: string) =>
+    `“${title}” is a smart collection: the store fills it by rules, so a product can't be added to it by hand.`
 
   function add(id: string, title?: string) {
     if (!chosen.has(id)) onChange([...ids, id])
@@ -198,7 +208,13 @@ function CollectionsPicker({
           !chosen.has(collection.id) &&
           collectionKey(collection.title) === collectionKey(text),
       )
-      if (named) return add(named.id, named.title)
+      if (named) {
+        if (named.collection_type?.toLowerCase() === 'smart') {
+          setProblem(smartProblem(named.title))
+          return
+        }
+        return add(named.id, named.title)
+      }
       // The store doesn't have it: it is made with the product.
       addNew(text)
     } catch {
@@ -356,10 +372,31 @@ function CollectionsPicker({
               <li key={collection.id}>
                 <button
                   type="button"
-                  onClick={() => add(collection.id, collection.title)}
-                  className="hover:bg-accent-tint/60 flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border-none bg-transparent px-2.5 py-2 text-left text-[0.85rem] font-medium"
+                  onClick={() =>
+                    collection.collection_type?.toLowerCase() === 'smart'
+                      ? setProblem(smartProblem(collection.title))
+                      : add(collection.id, collection.title)
+                  }
+                  aria-disabled={
+                    collection.collection_type?.toLowerCase() === 'smart' || undefined
+                  }
+                  title={
+                    collection.collection_type?.toLowerCase() === 'smart'
+                      ? "Smart collection: filled by rules, a product can't be added by hand"
+                      : undefined
+                  }
+                  className={`hover:bg-accent-tint/60 flex w-full items-center justify-between gap-2 rounded-lg border-none bg-transparent px-2.5 py-2 text-left text-[0.85rem] font-medium ${
+                    collection.collection_type?.toLowerCase() === 'smart'
+                      ? 'text-text-muted cursor-not-allowed'
+                      : 'cursor-pointer'
+                  }`}
                 >
                   <span className="min-w-0 truncate">{collection.title}</span>
+                  {collection.collection_type?.toLowerCase() === 'smart' && (
+                    <span className="bg-surface border-border text-text-muted shrink-0 rounded px-1.5 text-[0.65rem] font-bold tracking-wide uppercase">
+                      Smart
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

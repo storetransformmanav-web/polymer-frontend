@@ -53,7 +53,7 @@ export function RemoveCollectionDialog({
           </button>
           <button
             type="button"
-            disabled={isRemoving}
+            disabled={isRemoving || smart}
             onClick={() => void confirm()}
             className={`${BUTTON} bg-danger text-bg border-transparent hover:opacity-90`}
           >
@@ -71,8 +71,8 @@ export function RemoveCollectionDialog({
       </p>
       {smart && (
         <p>
-          This is a smart collection: the store fills it by rules, so it may not allow a
-          product to be taken out by hand.
+          This is a smart collection: the store fills it by rules, so a product can&apos;t
+          be taken out by hand. To change what is in it, change its rules in Shopify.
         </p>
       )}
       {error && <FormMessage tone="error">{error}</FormMessage>}

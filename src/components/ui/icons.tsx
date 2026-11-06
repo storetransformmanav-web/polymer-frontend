@@ -261,6 +261,16 @@ export function ExternalLinkIcon(props: IconProps) {
   )
 }
 
+export function ArrowUpRightIcon(props: IconProps) {
+  // Small diagonal arrow: the "this card is clickable" mark.
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 14 14 6" />
+      <path d="M7.5 6H14v6.5" />
+    </svg>
+  )
+}
+
 export function ImageIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

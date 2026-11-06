@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import type { IconProps } from './icons.tsx'
+import { ArrowUpRightIcon, type IconProps } from './icons.tsx'
 
 export interface Kpi {
   label: string
@@ -36,7 +36,7 @@ export function KpiCards({ items }: { items: Kpi[] }) {
       {items.map((kpi) => {
         const card = `border-border bg-bg flex items-center justify-between gap-3 rounded-2xl border px-5 py-4 ${
           kpi.onClick
-            ? `hover:border-accent focus-visible:outline-accent w-full cursor-pointer text-left transition-colors focus-visible:outline-2 ${
+            ? `group relative hover:border-accent focus-visible:outline-accent w-full cursor-pointer text-left transition-colors focus-visible:outline-2 ${
                 kpi.active ? 'border-accent bg-accent-tint ring-accent ring-1' : ''
               }`
             : ''
@@ -66,6 +66,19 @@ export function KpiCards({ items }: { items: Kpi[] }) {
             <span className="bg-surface text-text border-border flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border">
               <kpi.icon width={18} height={18} />
             </span>
+            {kpi.onClick && (
+              // Tells people the card is clickable (it is a filter button).
+              <span
+                aria-hidden="true"
+                className={`absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-md transition-colors ${
+                  kpi.active
+                    ? 'bg-accent text-bg'
+                    : 'text-text-muted group-hover:bg-accent-tint group-hover:text-accent'
+                }`}
+              >
+                <ArrowUpRightIcon width={13} height={13} />
+              </span>
+            )}
           </>
         )
         return kpi.onClick ? (

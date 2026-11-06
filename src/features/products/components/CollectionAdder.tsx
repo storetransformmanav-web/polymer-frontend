@@ -19,11 +19,20 @@ function collectionTypeLabel(type: string): string {
   return type.toLowerCase() === 'custom' ? 'Manual' : statusLabel(type)
 }
 
+/** A smart collection is filled by rules: the backend refuses to put a product in or take it out. */
+const isSmart = (collection: { collection_type?: string | null }) =>
+  collection.collection_type?.toLowerCase() === 'smart'
+
+const SMART_NOTE = "Filled by rules — a product can't be added or removed by hand"
+
 /**
  * The unified collections editor, matching the tags input design: existing collections appear
- * as removable chips inside the card, followed by an inline search input. Typing searches
- * existing manual collections on the backend (`GET /collections?search=`); picking a match
- * asks confirmation and adds the product to it. New collections cannot be created here.
+ * as removable chips inside the card, followed by an inline search input. Typing searches the
+ * store's collections on the backend (`GET /collections?search=`); picking a manual match asks
+ * confirmation and adds the product to it. **Smart collections are listed too, but greyed out
+ * and marked** (the backend answers "its products come from rules and can't be assigned"), so a
+ * collection like "Newest Products" is not simply missing; likewise a smart collection's chip has
+ * no working ✕. New collections cannot be created here.
  */
 export function CollectionAdder({
   product,
@@ -54,7 +63,7 @@ export function CollectionAdder({
     loading,
     failed,
     lookup,
-  } = useCollectionSearch(input, product.shop?.key)
+  } = useCollectionSearch(input, product.shop?.key, { includeSmart: true })
 
   const listId = useId()
   const [focused, setFocused] = useState(false)
@@ -63,10 +72,15 @@ export function CollectionAdder({
     () => new Set(product.collections.map((c) => collectionKey(c.title))),
     [product.collections],
   )
+  // Everything the backend found is listed, in its order: a collection the product is already in
+  // (or a smart one) stays on the list, marked and not choosable, instead of silently vanishing —
+  // otherwise searching "newest" for a product already in "Newest Products" finds nothing.
   const { shown, total } = useMemo(
-    () => offerFoundCollections(found, foundTotal, skip, COLLECTION_LIST_LIMIT),
-    [found, foundTotal, skip],
+    () => offerFoundCollections(found, foundTotal, new Set(), COLLECTION_LIST_LIMIT),
+    [found, foundTotal],
   )
+  const alreadyIn = (collection: { title: string }) =>
+    skip.has(collectionKey(collection.title))
   const typed = input.trim() !== ''
   const panelOpen = focused && typed
   const listOpen = panelOpen && shown.length > 0
@@ -111,8 +125,19 @@ export function CollectionAdder({
     }
   }, [panelOpen, input, shown.length])
 
-  function select(collection: { title: string }) {
+  function select(collection: { title: string; collection_type?: string | null }) {
     const name = collection.title.trim()
+    if (alreadyIn(collection)) {
+      setInputError('The product is already in that collection')
+      return
+    }
+    if (isSmart(collection)) {
+      // Nothing to confirm: the store won't allow it. Say why and keep what was typed.
+      setInputError(
+        `“${name}” is a smart collection: the store fills it by rules, so a product can't be added to it by hand.`,
+      )
+      return
+    }
     setInput('')
     setInputError(null)
     setActive(-1)
@@ -167,12 +192,17 @@ export function CollectionAdder({
                 <button
                   type="button"
                   aria-label={`Remove from ${collection.title}`}
-                  title="Remove from this collection"
+                  title={
+                    isSmart(collection)
+                      ? `${SMART_NOTE}. Change its rules in Shopify.`
+                      : 'Remove from this collection'
+                  }
+                  disabled={isSmart(collection)}
                   onClick={(event) => {
                     event.stopPropagation()
                     onRemove(collection)
                   }}
-                  className="hover:text-danger inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                  className="hover:text-danger inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-current"
                 >
                   <XIcon width={12} height={12} />
                 </button>
@@ -228,12 +258,10 @@ export function CollectionAdder({
               event.preventDefault()
               if (listOpen && active >= 0) select(shown[active])
               else void add()
-            } else if (
-              event.key === 'Backspace' &&
-              input === '' &&
-              product.collections.length > 0
-            ) {
-              onRemove(product.collections[product.collections.length - 1])
+            } else if (event.key === 'Backspace' && input === '') {
+              // The last collection that can be taken out (a smart one can't).
+              const last = product.collections.filter((c) => !isSmart(c)).at(-1)
+              if (last) onRemove(last)
             }
           }}
           className="text-text placeholder:text-text-muted/70 min-w-32 flex-1 border-none bg-transparent px-1 py-1 text-[0.85rem] outline-none"
@@ -271,20 +299,40 @@ export function CollectionAdder({
                   id={`${listId}-${index}`}
                   role="option"
                   aria-selected={index === active}
+                  aria-disabled={
+                    isSmart(collection) || alreadyIn(collection) || undefined
+                  }
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => select(collection)}
-                  className={`flex cursor-pointer items-center gap-3 px-3.5 py-2 ${
-                    index === active ? 'bg-accent-tint/60' : ''
-                  }`}
+                  className={`flex items-center gap-3 px-3.5 py-2 ${
+                    isSmart(collection) || alreadyIn(collection)
+                      ? 'cursor-not-allowed'
+                      : 'cursor-pointer'
+                  } ${index === active ? 'bg-accent-tint/60' : ''}`}
                 >
-                  <div className="min-w-0 flex-1">
+                  <div
+                    className={`min-w-0 flex-1 ${
+                      isSmart(collection) || alreadyIn(collection) ? 'opacity-60' : ''
+                    }`}
+                  >
                     <p className="truncate text-[0.88rem] font-semibold">
                       {collection.title}
                     </p>
                     <p className="text-text-muted truncate font-mono text-[0.74rem]">
                       {collection.handle}
                     </p>
+                    {alreadyIn(collection) ? (
+                      <p className="text-text-muted truncate text-[0.72rem]">
+                        The product is already in this collection
+                      </p>
+                    ) : (
+                      isSmart(collection) && (
+                        <p className="text-text-muted truncate text-[0.72rem]">
+                          {SMART_NOTE}
+                        </p>
+                      )
+                    )}
                   </div>
                   {collection.collection_type && (
                     <Badge

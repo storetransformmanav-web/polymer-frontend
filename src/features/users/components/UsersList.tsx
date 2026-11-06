@@ -1,3 +1,4 @@
+import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
@@ -115,24 +116,7 @@ function Stores({
   if (user.shop_keys.length === 0) return <span className="text-text-muted">None</span>
 
   const names = user.shop_keys.map((key) => shopNames[key] ?? key)
-  return (
-    <span className="flex items-center gap-1">
-      {names.slice(0, 2).map((name) => (
-        <span
-          key={name}
-          className="bg-surface border-border max-w-28 truncate rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
-          title={name}
-        >
-          {name}
-        </span>
-      ))}
-      {names.length > 2 && (
-        <span className="text-text-muted text-[0.7rem]" title={names.slice(2).join(', ')}>
-          +{names.length - 2}
-        </span>
-      )}
-    </span>
-  )
+  return <ExpandableChips values={names} chipWidth="max-w-28" />
 }
 
 function LastLogin({ value }: { value: string | null | undefined }) {

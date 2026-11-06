@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
+import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LockIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
@@ -39,27 +40,7 @@ interface LocksListProps {
 
 function Chips({ values, empty }: { values: string[]; empty: string }) {
   if (values.length === 0) return <span className="text-text-muted">{empty}</span>
-  return (
-    <span className="inline-flex items-center gap-1">
-      {values.slice(0, 2).map((value) => (
-        <span
-          key={value}
-          className="bg-surface border-border max-w-32 truncate rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
-          title={value}
-        >
-          {value}
-        </span>
-      ))}
-      {values.length > 2 && (
-        <span
-          className="text-text-muted text-[0.7rem]"
-          title={values.slice(2).join(', ')}
-        >
-          +{values.length - 2}
-        </span>
-      )}
-    </span>
-  )
+  return <ExpandableChips values={values} centered />
 }
 
 /**

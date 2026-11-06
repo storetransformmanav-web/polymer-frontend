@@ -1018,16 +1018,43 @@ describe('adding a product', () => {
     })
   })
 
-  it('says so when a collection does not exist, and does not add it', async () => {
+  it('adds a name the store does not have as a New collection, without sending it with the product', async () => {
     const { user, form } = await openForm()
     await fillBasics(user, form)
     await user.type(within(form).getByLabelText('Search collections'), 'nope{Enter}')
 
+    // It is a chip marked New; the product itself is not sent with it (POST /products can't make one).
+    const chips = await within(form).findByRole('list', { name: 'Collections' })
+    expect(chips).toHaveTextContent('nope')
+    expect(chips).toHaveTextContent('New')
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('does not offer to create a collection whose name the backend lists as a smart one', async () => {
+    vi.mocked(api.collections.list).mockResolvedValue({
+      ...collectionsPage([{ id: 's-1', title: 'Newest Products' }]),
+      items: [
+        {
+          id: 's-1',
+          title: 'Newest Products',
+          handle: 'newest-products',
+          collection_type: 'smart',
+          editable: false,
+        },
+      ],
+    })
+    const { user, form } = await openForm()
+    await fillBasics(user, form)
+    await user.type(
+      within(form).getByLabelText('Search collections'),
+      'Newest Products{Enter}',
+    )
+
+    // Listed by the backend, so it is not made again — and it is not added either: it is smart.
     expect(
-      await within(form).findByText('No collection is called “nope”'),
+      await within(form).findByText(/is a smart collection: the store fills it by rules/),
     ).toBeInTheDocument()
     expect(within(form).queryByRole('list', { name: 'Collections' })).toBeNull()
-    expect(create).not.toHaveBeenCalled()
   })
 
   describe('the store admin Add product design', () => {
@@ -1163,9 +1190,9 @@ describe('adding a product', () => {
       expect(
         within(choices).getByRole('button', { name: 'Wholesale' }),
       ).toBeInTheDocument()
-      // The store's manual collections, first page by title, for the store the product goes to.
+      // The store's collections, first page by title, for the store the product goes to
+      // (smart ones too: they are listed greyed out rather than left out).
       expect(search).toHaveBeenCalledWith({
-        type: 'custom',
         sort: 'title',
         order: 'asc',
         page_size: 50,
