@@ -470,7 +470,10 @@ describe('an order’s details page', () => {
     const link = await screen.findByRole('link', {
       name: 'Pizza Box White Plain, Square [Alternative]',
     })
-    expect(link).toHaveAttribute('href', '/products/a499a9c7-72d1-4ab1-aa64-4f5ff282edaf')
+    expect(link).toHaveAttribute(
+      'href',
+      '/orders/product/a499a9c7-72d1-4ab1-aa64-4f5ff282edaf',
+    )
     const row = link.closest('tr')!
     expect(within(row).getByText('14inch · PB416E')).toBeInTheDocument()
     const picture = row.querySelector('img')!
@@ -612,7 +615,7 @@ describe('an order’s details page', () => {
     )
     expect(customer.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
       'href',
-      '/customers/cust-9',
+      '/orders/customer/cust-9',
     )
     expect(customer.getByText('jane@example.com')).toBeInTheDocument()
     // The same email twice (the order's differs only in case) is one row.

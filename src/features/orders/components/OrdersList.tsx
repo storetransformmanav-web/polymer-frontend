@@ -240,9 +240,10 @@ export function OrdersList({
                     <td className={TD}>
                       {name ? (
                         customerPath(order) ? (
-                          // A customer in the CRM: their name opens their own page.
+                          // A customer in the CRM: their name opens their details in this page.
                           <Link
                             to={customerPath(order) as string}
+                            state={{ linkedName: name }}
                             title={`Open ${name}`}
                             className="text-text hover:text-accent block truncate font-medium hover:underline"
                           >

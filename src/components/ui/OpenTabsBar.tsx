@@ -7,6 +7,8 @@ export interface OpenTab {
   label: string
   /** Hover text. */
   title?: string
+  /** The small word on this tab, when it is not the strip's own (a linked customer, say). */
+  kind?: string
 }
 
 interface OpenTabsBarProps {
@@ -91,7 +93,7 @@ export function OpenTabsBar({
               >
                 <Icon width={14} height={14} className="text-accent" />
                 <span className="text-text-muted text-[0.62rem] font-bold tracking-wider uppercase">
-                  {kind}
+                  {tab.kind ?? kind}
                 </span>
                 <span className="max-w-32 truncate font-semibold">{tab.label}</span>
               </button>

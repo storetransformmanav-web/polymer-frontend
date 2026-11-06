@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { CustomerDetailsView } from '../../customers/index.ts'
+import { ProductDetailsView } from '../../products/index.ts'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { PlusIcon } from '../../../components/ui/icons.tsx'
@@ -16,6 +18,7 @@ import { orderDetailsKey } from '../../../app/store/ordersSlice.ts'
 import { useOrders } from '../hooks/useOrders.ts'
 import { useOrderTabs } from '../hooks/useOrderTabs.ts'
 import {
+  type LinkedKind,
   orderCustomer,
   orderLabel,
   orderPath,
@@ -46,15 +49,26 @@ export function OrdersPage() {
   const orders = useOrders()
   const tabs = useOrderTabs()
   const navigate = useNavigate()
+  const location = useLocation()
   const { '*': splat } = useParams()
   const [search] = useSearchParams()
   const { filters, data } = orders
 
   // `/orders/<number>[/…]` → the order's number; `/orders/new` → the Add order form; `/orders`
   // → null (the list).
-  const first = splat ? decodeURIComponent(splat.split('/')[0]) || null : null
+  const segments = splat ? splat.split('/') : []
+  const first = segments[0] ? decodeURIComponent(segments[0]) || null : null
+  // `/orders/customer/<id>` and `/orders/product/<id>`: a customer's or a product's details,
+  // opened from an order and shown in this same page, as a tab of their own.
+  const linkedId = segments[1] ? decodeURIComponent(segments[1]) || null : null
+  const linked: { kind: LinkedKind; id: string } | null =
+    (first === 'customer' || first === 'product') && linkedId
+      ? { kind: first, id: linkedId }
+      : null
+  const rawName = (location.state as { linkedName?: unknown } | null)?.linkedName
+  const linkedName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : null
   const creatingRoute = first === 'new'
-  const activeRef = creatingRoute ? null : first
+  const activeRef = creatingRoute || linked ? null : first
   const activeShop = search.get('shop')
   const activeId = activeRef ? orderDetailsKey(activeRef, activeShop) : null
 
@@ -124,6 +138,13 @@ export function OrdersPage() {
     navigate(orderPathFor(ref, storeKey))
   }
 
+  // Back from a customer's or product's page goes where the person came from (the order, or the
+  // list); opened from a bare address there is nothing behind, so it goes to the list.
+  function leaveLinked() {
+    if (location.key !== 'default') navigate(-1)
+    else navigate(LIST_PATH)
+  }
+
   function closeTab(id: string) {
     const index = tabs.tabs.findIndex((tab) => tab.id === id)
     const neighbour = tabs.tabs[index + 1] ?? tabs.tabs[index - 1]
@@ -150,6 +171,16 @@ export function OrdersPage() {
         draft={creating ? { active: creatingRoute } : null}
         onSelectDraft={() => navigate(CREATE_PATH)}
         onCloseDraft={() => discardCreate()}
+        linked={
+          linked
+            ? {
+                kind: linked.kind === 'customer' ? 'Customer' : 'Product',
+                label:
+                  linkedName ?? (linked.kind === 'customer' ? 'Customer' : 'Product'),
+              }
+            : null
+        }
+        onCloseLinked={leaveLinked}
         onShowList={() => leaveTo(LIST_PATH)}
         onSelect={(id) => {
           const tab = tabs.tabs.find((candidate) => candidate.id === id)
@@ -204,11 +235,30 @@ export function OrdersPage() {
         </div>
       )}
 
+      {linked && (
+        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          {linked.kind === 'customer' ? (
+            <CustomerDetailsView
+              key={`customer-${linked.id}`}
+              id={linked.id}
+              backLabel="Back"
+              onBack={leaveLinked}
+            />
+          ) : (
+            <ProductDetailsView
+              key={`product-${linked.id}`}
+              id={linked.id}
+              onBack={leaveLinked}
+            />
+          )}
+        </div>
+      )}
+
       {/* Kept mounted but hidden while an order is open (display: none also removes it
           from tab order and screen readers). */}
       <div
         className={
-          activeRef || creatingRoute
+          activeRef || creatingRoute || linked
             ? 'hidden'
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }

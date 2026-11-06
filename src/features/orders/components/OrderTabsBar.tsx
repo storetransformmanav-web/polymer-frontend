@@ -10,6 +10,12 @@ interface OrderTabsBarProps {
   draft?: { active: boolean } | null
   onSelectDraft?: () => void
   onCloseDraft?: () => void
+  /**
+   * A customer's or product's details opened from an order, in this same page: a tab of its
+   * own (labelled "Customer" / "Product"), showing while that page is on screen.
+   */
+  linked?: { kind: string; label: string } | null
+  onCloseLinked?: () => void
   onShowList: () => void
   onSelect: (id: string) => void
   onClose: (id: string) => void
@@ -18,6 +24,7 @@ interface OrderTabsBarProps {
 
 // Not an order's key (those are "<shop>|<ref>").
 const DRAFT_ID = '__new-order__'
+const LINKED_ID = '__linked__'
 
 /** The strip of opened orders: "All Orders" returns to the list (see `OpenTabsBar`). */
 export function OrderTabsBar({
@@ -26,6 +33,8 @@ export function OrderTabsBar({
   draft = null,
   onSelectDraft,
   onCloseDraft,
+  linked = null,
+  onCloseLinked,
   onSelect,
   onClose,
   ...rest
@@ -33,9 +42,17 @@ export function OrderTabsBar({
   return (
     <OpenTabsBar
       {...rest}
-      activeId={draft?.active ? DRAFT_ID : activeId}
-      onSelect={(id) => (id === DRAFT_ID ? onSelectDraft?.() : onSelect(id))}
-      onClose={(id) => (id === DRAFT_ID ? onCloseDraft?.() : onClose(id))}
+      activeId={linked ? LINKED_ID : draft?.active ? DRAFT_ID : activeId}
+      onSelect={(id) => {
+        if (id === LINKED_ID) return
+        if (id === DRAFT_ID) onSelectDraft?.()
+        else onSelect(id)
+      }}
+      onClose={(id) => {
+        if (id === LINKED_ID) onCloseLinked?.()
+        else if (id === DRAFT_ID) onCloseDraft?.()
+        else onClose(id)
+      }}
       tabs={[
         ...tabs.map((tab) => ({
           id: tab.id,
@@ -44,6 +61,16 @@ export function OrderTabsBar({
         })),
         ...(draft
           ? [{ id: DRAFT_ID, label: 'New order', title: 'An order being added' }]
+          : []),
+        ...(linked
+          ? [
+              {
+                id: LINKED_ID,
+                label: linked.label,
+                kind: linked.kind,
+                title: linked.label,
+              },
+            ]
           : []),
       ]}
       navLabel="Open orders"

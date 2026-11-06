@@ -71,13 +71,22 @@ export function orderCustomer(
   return name ? { name, email } : { name: email, email: '' }
 }
 
+/** What a linked customer or product page is opened as, inside the Orders page. */
+export type LinkedKind = 'customer' | 'product'
+
 /**
- * The address of the order's customer in the CRM (`/customers/<id>`), or null for a guest
- * checkout that has no customer there.
+ * The address of the order's customer **inside the Orders page** (`/orders/customer/<id>`:
+ * their details open in place, with a tab, like an order does), or null for a guest checkout
+ * that has no customer in the CRM.
  */
 export function customerPath(order: Pick<OrderListItem, 'customer'>): string | null {
   const id = order.customer?.id?.trim()
-  return id ? `/customers/${encodeURIComponent(id)}` : null
+  return id ? `/orders/customer/${encodeURIComponent(id)}` : null
+}
+
+/** A product's details inside the Orders page (`/orders/product/<id>`). */
+export function productPath(id: string): string {
+  return `/orders/product/${encodeURIComponent(id)}`
 }
 
 /** Has a refund been made (a total above zero)? */

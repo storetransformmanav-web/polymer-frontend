@@ -28,8 +28,17 @@ type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields'
 interface CustomerDetailsViewProps {
   id: string
   onBack: () => void
-  /** Ask to delete this customer (the page shows the confirmation). */
-  onDelete: (customer: { name: string; shop: string | null; ordersCount: number }) => void
+  /**
+   * Ask to delete this customer (the page shows the confirmation). Left out where the
+   * customer is only being looked at (opened from an order): no Delete button then.
+   */
+  onDelete?: (customer: {
+    name: string
+    shop: string | null
+    ordersCount: number
+  }) => void
+  /** What the back button says; "Back to list" by default. */
+  backLabel?: string
 }
 
 /**
@@ -38,7 +47,12 @@ interface CustomerDetailsViewProps {
  * full record loads, so nothing waits on the network when you come from the
  * list.
  */
-export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsViewProps) {
+export function CustomerDetailsView({
+  id,
+  onBack,
+  onDelete,
+  backLabel = 'Back to list',
+}: CustomerDetailsViewProps) {
   const details = useCustomerDetails(id)
   const { customer, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
@@ -79,7 +93,7 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
             onClick={onBack}
             className="border-border bg-bg text-text-muted hover:text-text cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors"
           >
-            Back to list
+            {backLabel}
           </button>
         </div>
       </section>
@@ -123,7 +137,7 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
             )}
           </div>
         </div>
-        {known && (
+        {known && onDelete && (
           <button
             type="button"
             onClick={() =>
@@ -145,12 +159,12 @@ export function CustomerDetailsView({ id, onBack, onDelete }: CustomerDetailsVie
         <button
           type="button"
           onClick={onBack}
-          aria-label="Back to list"
+          aria-label={backLabel}
           className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
         >
           <ArrowLeftIcon width={16} height={16} />
           <span className="hidden sm:inline" aria-hidden="true">
-            Back to list
+            {backLabel}
           </span>
         </button>
       </header>

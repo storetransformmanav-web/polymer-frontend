@@ -5,7 +5,7 @@ import { BoxesIcon } from '../../../components/ui/icons.tsx'
 import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatPrice } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
-import { hasRefund } from '../utils/format.ts'
+import { hasRefund, productPath } from '../utils/format.ts'
 import {
   EmptyNote,
   FoldCard,
@@ -44,7 +44,8 @@ function ItemName({ item }: { item: LineItem }) {
   const title = item.title || 'Item'
   return item.product_id ? (
     <Link
-      to={`/products/${encodeURIComponent(item.product_id)}`}
+      to={productPath(item.product_id)}
+      state={{ linkedName: title }}
       className="text-text hover:text-accent block truncate font-semibold hover:underline"
       title={title}
     >

@@ -205,7 +205,7 @@ describe('OrdersPage', () => {
     const named = within(screen.getByText('17002').closest('tr')!)
     expect(named.getByRole('link', { name: 'Customer 2' })).toHaveAttribute(
       'href',
-      '/customers/cust-2',
+      '/orders/customer/cust-2',
     )
     // #1 is a guest checkout (no customer in the CRM): nothing to open.
     const guest = within(screen.getByText('17001').closest('tr')!)

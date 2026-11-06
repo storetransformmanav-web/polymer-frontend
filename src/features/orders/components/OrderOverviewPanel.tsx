@@ -158,6 +158,7 @@ export function OrderOverviewPanel({
                 (customerPage ? (
                   <Link
                     to={customerPage}
+                    state={{ linkedName: customer.name }}
                     className="text-accent font-semibold hover:underline"
                   >
                     {customer.name}
