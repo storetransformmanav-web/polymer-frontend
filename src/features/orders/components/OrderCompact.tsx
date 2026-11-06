@@ -12,6 +12,9 @@ import { recordFields } from '../utils/format.ts'
 const COUNT =
   'bg-surface text-text-muted border-border rounded-full border px-1.5 text-[0.62rem] leading-4 font-bold'
 
+/** Every card's title row: the same soft tint on all of them, so the sections read at a glance. */
+const TITLE_ROW = 'bg-accent-tint/60 flex items-center gap-2 px-3 py-2'
+
 /** A small card: a slim title row (icon, title, count) over its content. A labelled region. */
 export function MiniCard({
   title,
@@ -28,7 +31,7 @@ export function MiniCard({
 }) {
   return (
     <section className={`${DETAIL_CARD} min-w-0 ${className}`}>
-      <div className="border-border flex items-center gap-2 border-b px-3 py-2">
+      <div className={`${TITLE_ROW} border-border border-b`}>
         <Icon width={14} height={14} className="text-accent shrink-0" />
         <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>
         {count !== undefined && <span className={COUNT}>{count}</span>}
@@ -69,9 +72,7 @@ export function FoldCard({
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={() => setOpen((value) => !value)}
-        className={`hover:bg-accent-tint/60 flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-2 text-left transition-colors ${
-          open ? 'rounded-t-[0.7rem]' : 'rounded-[0.7rem]'
-        }`}
+        className={`${TITLE_ROW} hover:bg-accent-tint w-full cursor-pointer border-none text-left transition-colors`}
       >
         <Icon width={14} height={14} className="text-accent shrink-0" />
         <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>

@@ -7,10 +7,10 @@ import { safeUrl } from '../../../lib/safeUrl.ts'
 import { hasRefund } from '../utils/format.ts'
 import {
   EmptyNote,
+  FoldCard,
   MINI_ROW,
   MINI_TD,
   MINI_TH,
-  MiniCard,
   MiniTable,
   Row,
   Rows,
@@ -112,7 +112,7 @@ function OrderTotals({
 }
 
 /**
- * The Overview's **Items** card: a table — product (picture, name, variant and SKU), price,
+ * The Overview's **Items** card, closed to begin with: a table — product (picture, name, variant and SKU), price,
  * quantity and the line's total — with the order's totals under it. The totals draw from the list
  * row while the lines load (`items` is null then).
  */
@@ -133,7 +133,7 @@ export function OrderItemsSummary({
     value === null || value === undefined ? '—' : formatPrice(value, totals.currency)
 
   return (
-    <MiniCard title="Items" icon={BoxesIcon} count={items?.length}>
+    <FoldCard title="Items" icon={BoxesIcon} count={items?.length} defaultOpen={false}>
       <div className="flex flex-col gap-3 py-1.5">
         {items === null && <DetailSkeleton />}
         {items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
@@ -183,6 +183,6 @@ export function OrderItemsSummary({
           outstanding={outstanding}
         />
       </div>
-    </MiniCard>
+    </FoldCard>
   )
 }

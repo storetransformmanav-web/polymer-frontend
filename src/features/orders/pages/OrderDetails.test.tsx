@@ -276,8 +276,12 @@ describe('an order’s details page', () => {
     // (The list stays mounted behind the page, so look inside the page only.)
     const page = within(screen.getByRole('article'))
     expect(page.queryByText('Order Summary')).toBeNull()
-    expect(page.getByText('Total price')).toBeInTheDocument()
-    expect(page.getAllByText('£26.50')).toHaveLength(1)
+    // The Items card, with the totals in it, is closed to begin with.
+    expect(page.getByRole('button', { name: /^Items/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(page.queryByText('Total price')).toBeNull()
     expect(page.getByText('14000000000001')).toBeInTheDocument()
     expect(page.queryByRole('heading', { name: 'Payment Summary' })).toBeNull()
   })
@@ -312,8 +316,11 @@ describe('an order’s details page', () => {
   })
 
   it('shows the order’s money, customer, status and store in cards on the Overview', async () => {
-    await openFirst()
+    const user = await openFirst()
     await screen.findByRole('heading', { name: 'Customer' })
+    await user.click(
+      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
+    )
 
     const page = within(screen.getByRole('article'))
     expect(page.queryByText('Order Summary')).toBeNull()
@@ -352,8 +359,11 @@ describe('an order’s details page', () => {
   })
 
   it('summarises the items and the shipping on the Overview, with no payment summary', async () => {
-    await openFirst()
+    const user = await openFirst()
     await screen.findByRole('heading', { name: 'Customer' })
+    await user.click(
+      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
+    )
     const page = within(screen.getByRole('article'))
     const card = (name: string) =>
       within(page.getByRole('heading', { name }).closest('section')!)
@@ -451,8 +461,11 @@ describe('an order’s details page', () => {
   })
 
   it('lists the items on the Overview, each linking to its product, with safe pictures only', async () => {
-    await openFirst()
+    const user = await openFirst()
     await screen.findByRole('heading', { name: 'Items' })
+    await user.click(
+      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
+    )
 
     const link = await screen.findByRole('link', {
       name: 'Pizza Box White Plain, Square [Alternative]',
@@ -473,8 +486,11 @@ describe('an order’s details page', () => {
   })
 
   it('ends the Items table with the order’s totals', async () => {
-    await openFirst()
+    const user = await openFirst()
     await screen.findByRole('heading', { name: 'Items' })
+    await user.click(
+      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
+    )
 
     const page = within(screen.getByRole('article'))
     const table = within(await page.findByRole('table'))
