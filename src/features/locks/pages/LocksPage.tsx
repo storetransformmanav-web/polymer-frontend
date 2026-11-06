@@ -157,7 +157,9 @@ export function LocksPage() {
 
   if (activeHandle) {
     return (
-      <div className={`flex flex-col gap-4 [&>*:not(article)]:shrink-0 ${SCROLL_VIEW}`}>
+      <div
+        className={`flex flex-col gap-4 [&>*:not(article)]:shrink-0 ${SCROLL_VIEW} lg:has-[#lock-tab-access[aria-selected=true]]:overflow-y-hidden`}
+      >
         {tabsBar}
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
         <LockDetailsView

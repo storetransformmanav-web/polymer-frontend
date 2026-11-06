@@ -266,7 +266,7 @@ export function LockDetailsView({
         role="tabpanel"
         aria-labelledby={`lock-tab-${tab}`}
         className={`bg-surface p-3 sm:p-5 ${
-          fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''
+          fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto' : ''
         }`}
       >
         <div className={`flex flex-col gap-4 ${fillPage ? 'lg:min-h-0 lg:flex-1' : ''}`}>

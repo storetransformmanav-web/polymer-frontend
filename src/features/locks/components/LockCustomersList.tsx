@@ -5,17 +5,11 @@ import {
   PencilIcon,
   TrashIcon,
   UsersIcon,
-  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
-import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { initials } from '../../../lib/format.ts'
-import type {
-  AccessLock,
-  LockCustomer,
-  LockCustomerSort,
-} from '../../../lib/api/endpoints.ts'
+import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
 import { canEditCustomer, customerName } from '../utils/format.ts'
 
@@ -23,12 +17,6 @@ const TH =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
 const TD = 'border-border border-b px-3.5 py-2.5 align-middle text-[0.85rem]'
 const SKELETON_ROWS = 6
-
-const SORT_OPTIONS: SelectOption[] = [
-  { value: 'name', label: 'Name' },
-  { value: 'email', label: 'Email' },
-  { value: 'newest', label: 'Newest' },
-]
 
 const BUTTON =
   'inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
@@ -73,10 +61,6 @@ export function LockCustomersList({
 }) {
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
-  const tagOptions: SelectOption[] = [
-    { value: '', label: 'All tags' },
-    ...lock.tags.map((tag) => ({ value: tag, label: tag })),
-  ]
   const marked = new Set(
     highlight.map((ref) => ref.trim().toLowerCase()).filter((ref) => ref !== ''),
   )
@@ -95,43 +79,6 @@ export function LockCustomersList({
               product. Add a key on the Overview tab to choose who can.
             </p>
           )}
-
-          <div className="flex flex-wrap items-end gap-3">
-            {!loginOnly && (
-              <div className="w-44 max-w-full">
-                <SelectField
-                  compact
-                  id="lock-customers-tag"
-                  label="Tag"
-                  value={filters.tag}
-                  options={tagOptions}
-                  onChange={(tag) => customers.setFilters({ tag })}
-                />
-              </div>
-            )}
-            <div className="w-36 max-w-full">
-              <SelectField
-                compact
-                id="lock-customers-sort"
-                label="Sort by"
-                value={filters.sort}
-                options={SORT_OPTIONS}
-                onChange={(sort) =>
-                  customers.setFilters({ sort: sort as LockCustomerSort })
-                }
-              />
-            </div>
-            {customers.hasFilters && (
-              <button
-                type="button"
-                onClick={customers.resetFilters}
-                className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
-              >
-                <XIcon width={14} height={14} />
-                Clear
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="px-4 pb-4 sm:px-5 sm:pb-5 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">

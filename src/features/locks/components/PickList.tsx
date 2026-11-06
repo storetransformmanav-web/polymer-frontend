@@ -47,6 +47,8 @@ interface PickListProps {
   onLoadMore: () => void
   error: string | null
   onRetry: () => void
+  /** Tailwind max-height class of the rows' scroll box (default `max-h-80`). */
+  listHeight?: string
 }
 
 const CHECKBOX = 'accent-accent h-4 w-4 shrink-0 cursor-pointer'
@@ -76,6 +78,7 @@ export function PickList({
   onLoadMore,
   error,
   onRetry,
+  listHeight = 'max-h-80',
 }: PickListProps) {
   const [text, setText] = useDebouncedField(search, onSearch)
   const headingId = useId()
@@ -136,7 +139,7 @@ export function PickList({
             </span>
           </div>
 
-          <ul aria-label={label} className="max-h-80 overflow-auto">
+          <ul aria-label={label} className={`${listHeight} overflow-auto`}>
             {error ? (
               <li className="text-danger flex flex-col items-center gap-2 px-4 py-8 text-center text-[0.85rem]">
                 {error}

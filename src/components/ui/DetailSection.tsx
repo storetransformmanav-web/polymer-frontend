@@ -18,7 +18,9 @@ interface DetailSectionProps {
   flush?: boolean
   /**
    * From `lg`, while open, the card fills the height left in a flex column (`min-h-0 flex-1`) and
-   * its body is a column that does the same, so something inside can scroll in its own box.
+   * its body is a column that does the same, so something inside can scroll in its own box. It
+   * never gets shorter than about 20rem, so a tall neighbour can't squeeze it away: the column's
+   * own scroll takes over instead.
    */
   fill?: boolean
   children: ReactNode
@@ -48,7 +50,7 @@ export function DetailSection({
 
   return (
     <section
-      className={`${DETAIL_CARD} ${filling ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''}`}
+      className={`${DETAIL_CARD} ${filling ? 'lg:flex lg:min-h-[20rem] lg:flex-1 lg:flex-col' : ''}`}
     >
       {/* Only the title row takes the hover tint, not the whole card. */}
       <div

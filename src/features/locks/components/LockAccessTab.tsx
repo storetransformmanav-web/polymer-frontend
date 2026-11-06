@@ -196,6 +196,7 @@ export function LockAccessTab({
           onClear={() => choose([])}
         />
         <PickList
+          listHeight="max-h-56"
           label="Customers to check"
           noun="customer"
           rows={store.items.map((customer) => customerRow(customer, lock.tags))}

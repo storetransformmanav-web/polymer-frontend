@@ -1071,22 +1071,13 @@ describe('LocksPage', () => {
         expect(screen.queryByRole('button', { name: /^Edit access of/ })).toBeNull()
       })
 
-      it('has no search box; it filters by one of the lock’s tags and sorts — all by the API', async () => {
+      it('has no search box, Tag filter or Sort by on the customers list', async () => {
         locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
-        const user = await openAccess()
+        await openAccess()
 
         expect(screen.queryByLabelText('Search customers')).toBeNull()
-        await user.selectOptions(screen.getByLabelText('Tag'), 'b2b')
-        await user.selectOptions(screen.getByLabelText('Sort by'), 'Newest')
-        await waitFor(() =>
-          expect(lockCustomers).toHaveBeenLastCalledWith('locked-product-1', {
-            shop: 'polymer-uk',
-            tag: 'b2b',
-            sort: 'newest',
-            page: 1,
-            page_size: 25,
-          }),
-        )
+        expect(screen.queryByLabelText('Tag')).toBeNull()
+        expect(screen.queryByLabelText('Sort by')).toBeNull()
       })
 
       it('says so when nobody can see the product yet', async () => {
