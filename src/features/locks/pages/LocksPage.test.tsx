@@ -193,6 +193,7 @@ const customersList = vi.mocked(api.customers.list)
 async function pickAndCheck(
   user: ReturnType<typeof userEvent.setup>,
   people: { name: string; email: string }[],
+  check = true,
 ) {
   customersList.mockResolvedValue(
     pageOf(
@@ -210,7 +211,7 @@ async function pickAndCheck(
       await screen.findByRole('checkbox', { name: person.name }, { timeout: 2000 }),
     )
   }
-  await user.click(screen.getByRole('button', { name: 'Check' }))
+  if (check) await user.click(screen.getByRole('button', { name: 'Check' }))
 }
 
 const WRITE_OK = {
@@ -957,7 +958,7 @@ describe('LocksPage', () => {
         expect(screen.queryByRole('list', { name: 'Access check results' })).toBeNull()
       })
 
-      it('a customer who is not in the list can be added from the check, prefilled', async () => {
+      it('a customer who is not in the list is given access straight from the check, with no window', async () => {
         check.mockResolvedValue(denied)
         const user = await openAccess()
 
@@ -967,89 +968,75 @@ describe('LocksPage', () => {
           await screen.findByRole('button', { name: 'Give access to New Person' }),
         )
 
-        const dialog = await screen.findByRole('alertdialog')
-        expect(within(dialog).getByLabelText('Customers to add')).toHaveValue(
-          'new@example.com',
-        )
-        expect(setLockCustomers).not.toHaveBeenCalled()
-        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
-
         await waitFor(() =>
           expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
             shop: 'polymer-uk',
             add: ['new@example.com'],
           }),
         )
+        expect(screen.queryByRole('alertdialog')).toBeNull()
         expect(await screen.findByText('Customers: 1 updated.')).toBeInTheDocument()
       })
 
       it('shows the API’s error when the customer already has the access', async () => {
-        check.mockResolvedValue(denied)
         setLockCustomers.mockRejectedValue(
           new ApiError('buyer@example.com already has this access', { status: 422 }),
         )
         const user = await openAccess()
 
-        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
-        const dialog = await screen.findByRole('alertdialog')
-        await user.type(
-          within(dialog).getByLabelText('Customers to add'),
-          'buyer@example.com',
+        await pickAndCheck(
+          user,
+          [{ name: 'Ada Buyer', email: 'buyer@example.com' }],
+          false,
         )
-        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
 
         expect(
-          await within(dialog).findByText('buyer@example.com already has this access'),
+          await screen.findByText('buyer@example.com already has this access'),
         ).toBeInTheDocument()
-        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+        expect(screen.queryByRole('alertdialog')).toBeNull()
       })
 
-      it('Add New Customer takes any customers; its button is off until something is typed', async () => {
+      it('Add New Customer adds the ticked customers at once, with no window; it is off until one is ticked', async () => {
         const user = await openAccess()
-        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
-        const dialog = await screen.findByRole('alertdialog')
-        const give = within(dialog).getByRole('button', { name: 'Give access' })
-        expect(give).toBeDisabled()
+        const add = screen.getByRole('button', { name: 'Add New Customer' })
+        expect(add).toBeDisabled()
 
-        await user.type(
-          within(dialog).getByLabelText('Customers to add'),
-          'new@example.com, 7012345678901 new@example.com',
-        )
-        expect(within(dialog).getByText('2 customers')).toBeInTheDocument()
-        // The tag is shared with other locked products: the dialog says so.
-        expect(within(dialog).getByRole('note')).toHaveTextContent(
-          'Tags are shared: “vans” (3 locked products)',
+        await pickAndCheck(
+          user,
+          [
+            { name: 'New Person', email: 'new@example.com' },
+            { name: 'Other Person', email: 'other@example.com' },
+          ],
+          false,
         )
         expect(setLockCustomers).not.toHaveBeenCalled()
-        await user.click(give)
+        await user.click(add)
 
         await waitFor(() =>
           expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
             shop: 'polymer-uk',
-            add: ['new@example.com', '7012345678901'],
+            add: ['new@example.com', 'other@example.com'],
           }),
         )
         expect(screen.queryByRole('alertdialog')).toBeNull()
       })
 
-      it('a lock with several tags asks which one to give', async () => {
+      it('a lock with several tags gives its first one', async () => {
         locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
         const user = await openAccess()
-        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
-        const dialog = await screen.findByRole('alertdialog')
-
-        await user.type(
-          within(dialog).getByLabelText('Customers to add'),
-          'new@example.com',
+        await pickAndCheck(
+          user,
+          [{ name: 'New Person', email: 'new@example.com' }],
+          false,
         )
-        await user.selectOptions(within(dialog).getByLabelText('Tag to give'), 'b2b')
-        await user.click(within(dialog).getByRole('button', { name: 'Give access' }))
+        await user.click(screen.getByRole('button', { name: 'Add New Customer' }))
 
         await waitFor(() =>
           expect(setLockCustomers).toHaveBeenCalledWith('locked-product-1', {
             shop: 'polymer-uk',
             add: ['new@example.com'],
-            tag: 'b2b',
+            tag: 'vans',
           }),
         )
       })

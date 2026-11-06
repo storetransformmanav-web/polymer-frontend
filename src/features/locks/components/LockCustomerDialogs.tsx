@@ -12,7 +12,6 @@ import {
   missingKeys,
   sharedTagsNote,
 } from '../utils/format.ts'
-import { MAX_ITEMS, parseCustomerRefs } from '../utils/lockDraft.ts'
 import { LockConfirmDialog } from './LockConfirmDialog.tsx'
 
 interface DialogProps {
@@ -30,39 +29,35 @@ interface DialogProps {
 const NOTE = 'bg-warning-bg text-warning mt-3 rounded-lg px-3 py-2 text-[0.82rem]'
 
 /**
- * "Give access" — to new customers (the box takes emails or ids, separated by commas, spaces or
- * new lines; `initialText` fills it, e.g. with the customer that was just checked) or, with
- * `editing`, to one customer who is already in the list: **Edit** then offers the lock's other tags
- * that customer does not hold yet. A tag is chosen only when the lock has several (`tag` is sent
- * only then). The dialog is the question: it names the tag and, when other locked products share
- * it, how many; only "Give access" sends `{ add, tag? }`. A customer who already has the access
- * is refused by the backend, and its message shows inside the dialog, which stays open.
+ * "Edit access" — gives one customer who is already in the list another of the lock's keys: it
+ * offers only the keys that customer does not hold yet. A tag is chosen only when the lock has
+ * several (`tag` is sent only then). The dialog is the question: it names the tag and, when other
+ * locked products share it, how many; only "Give access" sends `{ add, tag? }`. (Adding new
+ * customers has no window: the Customer Access tab does it at once.) An error from the backend
+ * shows inside the dialog, which stays open.
  */
 export function AddCustomersDialog({
   lock,
   shop,
   product,
   sharedTags,
-  editing = null,
-  initialText = '',
+  editing,
   onClose,
   onDone,
-}: DialogProps & { editing?: LockCustomer | null; initialText?: string }) {
+}: DialogProps & { editing: LockCustomer }) {
   const { set } = useSetLockCustomers()
-  const [text, setText] = useState(initialText)
-  const choices = editing ? missingKeys(lock.tags, editing.tags) : lock.tags
+  const choices = missingKeys(lock.tags, editing.tags)
   const several = lock.tags.length > 1
   const [tag, setTag] = useState(choices[0] ?? '')
-  const refs = editing ? [customerRef(editing)] : parseCustomerRefs(text)
-  const tooMany = refs.length > MAX_ITEMS
+  const refs = [customerRef(editing)]
   const given = several ? [tag] : lock.tags
   const note = sharedTagsNote(sharedTags, given)
 
   return (
     <LockConfirmDialog
-      title={editing ? `Edit access of ${customerName(editing)}` : 'Add new customer'}
+      title={`Edit access of ${customerName(editing)}`}
       confirmLabel="Give access"
-      confirmDisabled={refs.length === 0 || tooMany || (several && !tag)}
+      confirmDisabled={several && !tag}
       onClose={onClose}
       onConfirm={async () => {
         const result = await set({
@@ -74,42 +69,16 @@ export function AddCustomersDialog({
       }}
     >
       <p className="text-text-muted text-[0.85rem]">
-        {editing
-          ? `Give ${customerName(editing)} another key to “${lock.title}”.`
-          : `These customers will be able to open “${lock.title}”.`}{' '}
-        These changes will also be updated in Shopify.
+        {`Give ${customerName(editing)} another key to “${lock.title}”.`} These changes
+        will also be updated in Shopify.
       </p>
-      {editing ? (
-        <p className="mt-3 text-[0.85rem]">
-          <span className="text-text-muted">Customer: </span>
-          <strong>{editing.email ?? editing.id}</strong>
-          {editing.tags.length > 0 && (
-            <span className="text-text-muted"> · holds {editing.tags.join(', ')}</span>
-          )}
-        </p>
-      ) : (
-        <label className="mt-3 flex flex-col gap-1.5">
-          <span className="text-[0.78rem] font-semibold">Customers (emails or ids)</span>
-          <textarea
-            rows={3}
-            aria-label="Customers to add"
-            placeholder="buyer@example.com, 7012345678901"
-            value={text}
-            autoFocus
-            onChange={(event) => setText(event.target.value)}
-            className="border-border bg-surface text-text placeholder:text-text-muted focus:border-accent focus:outline-accent-tint min-h-20 w-full resize-y rounded-lg border px-3 py-2 text-[0.88rem] outline-none focus:outline-2"
-          />
-          <span
-            className={`text-[0.78rem] ${tooMany ? 'text-danger' : 'text-text-muted'}`}
-          >
-            {tooMany
-              ? `At most ${MAX_ITEMS} customers at a time.`
-              : refs.length === 0
-                ? 'Separate them with commas, spaces or new lines.'
-                : `${refs.length} ${refs.length === 1 ? 'customer' : 'customers'}`}
-          </span>
-        </label>
-      )}
+      <p className="mt-3 text-[0.85rem]">
+        <span className="text-text-muted">Customer: </span>
+        <strong>{editing.email ?? editing.id}</strong>
+        {editing.tags.length > 0 && (
+          <span className="text-text-muted"> · holds {editing.tags.join(', ')}</span>
+        )}
+      </p>
       {several ? (
         <div className="mt-3">
           <SelectField

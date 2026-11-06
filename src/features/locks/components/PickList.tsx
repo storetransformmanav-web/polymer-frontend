@@ -13,6 +13,11 @@ export interface PickRow {
   withImage?: boolean
   /** Small chips on the right (a customer's tags, a product's status). */
   chips?: string[]
+  /**
+   * Already taken care of (a customer who already has the access): drawn ticked and greyed out
+   * with this text beside it, can't be chosen, and is left out of "Select all shown".
+   */
+  locked?: string
 }
 
 interface PickListProps {
@@ -75,8 +80,9 @@ export function PickList({
   const [text, setText] = useDebouncedField(search, onSearch)
   const headingId = useId()
 
-  const ticked = rows.filter((row) => selectedIds.has(row.id)).length
-  const allTicked = rows.length > 0 && ticked === rows.length
+  const choosable = rows.filter((row) => !row.locked)
+  const ticked = choosable.filter((row) => selectedIds.has(row.id)).length
+  const allTicked = choosable.length > 0 && ticked === choosable.length
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,14 +121,14 @@ export function PickList({
               id={headingId}
               className={CHECKBOX}
               checked={allTicked}
-              disabled={rows.length === 0}
-              onChange={() => onTogglePage(rows, !allTicked)}
+              disabled={choosable.length === 0}
+              onChange={() => onTogglePage(choosable, !allTicked)}
             />
             <label
               htmlFor={headingId}
               className="text-text cursor-pointer text-[0.7rem] font-bold tracking-wide uppercase"
             >
-              Select all shown ({rows.length})
+              Select all shown ({choosable.length})
             </label>
             <span className="text-text-muted ml-auto text-[0.75rem]" aria-live="polite">
               {isPending ? 'Loading…' : `${total.toLocaleString('en-GB')} found`}
@@ -162,13 +168,21 @@ export function PickList({
               rows.map((row) => (
                 <li
                   key={row.id}
-                  className="border-border hover:bg-accent-tint/60 border-b transition-colors last:border-b-0"
+                  className={`border-border border-b transition-colors last:border-b-0 ${
+                    row.locked ? 'bg-surface' : 'hover:bg-accent-tint/60'
+                  }`}
                 >
-                  <label className="flex cursor-pointer items-center gap-3 px-3.5 py-2">
+                  <label
+                    className={`flex items-center gap-3 px-3.5 py-2 ${
+                      row.locked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+                    }`}
+                    title={row.locked}
+                  >
                     <input
                       type="checkbox"
-                      className={CHECKBOX}
-                      checked={selectedIds.has(row.id)}
+                      className={`${CHECKBOX} ${row.locked ? '!cursor-not-allowed' : ''}`}
+                      checked={row.locked ? true : selectedIds.has(row.id)}
+                      disabled={Boolean(row.locked)}
                       onChange={() => onToggle(row)}
                       aria-label={row.label}
                     />
@@ -189,6 +203,11 @@ export function PickList({
                         </span>
                       )}
                     </span>
+                    {row.locked && (
+                      <span className="bg-accent-tint text-accent border-accent/30 shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold">
+                        {row.locked}
+                      </span>
+                    )}
                     {row.chips && row.chips.length > 0 && (
                       <span className="hidden shrink-0 items-center gap-1 sm:flex">
                         {row.chips.slice(0, 3).map((chip) => (

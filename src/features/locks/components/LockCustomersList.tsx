@@ -163,7 +163,7 @@ export function LockCustomersList({
             ) : (
               <div
                 aria-busy={customers.isPending || customers.isShowingPrevious}
-                className="max-h-[min(60svh,640px)] overflow-auto"
+                className="max-h-[min(60svh,640px)] overflow-auto lg:max-h-[max(15rem,calc(100svh-43rem))]"
               >
                 <table className="w-full min-w-[860px] border-collapse">
                   <thead>

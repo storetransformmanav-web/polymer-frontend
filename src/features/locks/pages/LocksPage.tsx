@@ -157,7 +157,7 @@ export function LocksPage() {
 
   if (activeHandle) {
     return (
-      <div className={`flex flex-col gap-4 ${SCROLL_VIEW}`}>
+      <div className={`flex flex-col gap-4 [&>*]:shrink-0 ${SCROLL_VIEW}`}>
         {tabsBar}
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
         <LockDetailsView

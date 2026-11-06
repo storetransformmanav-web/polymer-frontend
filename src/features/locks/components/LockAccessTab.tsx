@@ -9,7 +9,11 @@ import type {
   LockCustomer,
 } from '../../../lib/api/endpoints.ts'
 import { useLockCustomers } from '../hooks/useLockCustomers.ts'
-import { useAccessChecks, type AccessCheckOutcome } from '../hooks/useLockWrites.ts'
+import {
+  useAccessChecks,
+  useSetLockCustomers,
+  type AccessCheckOutcome,
+} from '../hooks/useLockWrites.ts'
 import { usePickCustomers } from '../hooks/usePickers.ts'
 import { canEditCustomer, checkReasonText } from '../utils/format.ts'
 import { MAX_ITEMS, type PickedItem } from '../utils/lockDraft.ts'
@@ -25,12 +29,27 @@ const PRIMARY = `${BUTTON} border-transparent bg-accent text-accent-contrast hov
 const SMALL =
   'inline-flex h-8 cursor-pointer items-center justify-center rounded-md border px-3 text-[0.8rem] font-semibold transition-colors'
 
-const customerRow = (customer: CustomerListItem): PickRow => ({
-  id: customer.id,
-  label: customer.full_name?.trim() || customer.email || 'Unnamed customer',
-  sub: customer.email,
-  chips: customer.tags,
-})
+/**
+ * A customer in the search list. One who already carries one of the lock's tags can already open
+ * the product (that is what the access check looks at), so the row is shown ticked and locked —
+ * there is nothing to add. A lock with no tags is login-only: no row is marked.
+ */
+const customerRow = (
+  customer: CustomerListItem,
+  lockTags: readonly string[],
+): PickRow => {
+  const keys = new Set(lockTags.map((tag) => tag.trim().toLowerCase()))
+  const hasAccess =
+    keys.size > 0 &&
+    (customer.tags ?? []).some((tag) => keys.has(String(tag).trim().toLowerCase()))
+  return {
+    id: customer.id,
+    label: customer.full_name?.trim() || customer.email || 'Unnamed customer',
+    sub: customer.email,
+    chips: customer.tags,
+    ...(hasAccess ? { locked: 'Already has access' } : {}),
+  }
+}
 
 /** What is sent to `GET /access/check` (and to the dialogs) for a picked customer. */
 const refOf = (item: PickedItem) => item.sub?.trim() || item.id
@@ -78,7 +97,7 @@ export function LockAccessTab({
   const store = usePickCustomers(shop, search, search.trim() !== '')
   const [picked, setPicked] = useState<PickedItem[]>([])
   const { check, results, isChecking, reset } = useAccessChecks()
-  const [adding, setAdding] = useState<{ text: string } | null>(null)
+  const { set, isSetting, error: addError } = useSetLockCustomers()
   const [editing, setEditing] = useState<LockCustomer | null>(null)
   const [removing, setRemoving] = useState<LockCustomer | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -113,6 +132,30 @@ export function LockAccessTab({
           ]
         : picked.filter((item) => !ids.has(item.id)),
     )
+  }
+
+  /**
+   * Gives access straight away — no window: the customers are the ones ticked above (or the
+   * ones an answer is for). A lock with several tags gives its first; the API refuses a customer
+   * who already has the access and its message shows under the buttons.
+   */
+  async function addNow(refs: string[]) {
+    if (refs.length === 0 || isSetting) return
+    setNotice(null)
+    try {
+      const result = await set({
+        product,
+        body: {
+          shop,
+          add: refs,
+          ...(lock.tags.length > 1 ? { tag: lock.tags[0] } : {}),
+        },
+      })
+      setNotice(result.message)
+      choose([])
+    } catch {
+      // The message is shown from `addError`; the choice stays so it can be tried again.
+    }
   }
 
   function runCheck() {
@@ -155,7 +198,7 @@ export function LockAccessTab({
         <PickList
           label="Customers to check"
           noun="customer"
-          rows={store.items.map(customerRow)}
+          rows={store.items.map((customer) => customerRow(customer, lock.tags))}
           selectedIds={pickedIds}
           onToggle={toggle}
           onTogglePage={togglePage}
@@ -194,27 +237,35 @@ export function LockAccessTab({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setNotice(null)
-              setAdding({ text: '' })
-            }}
+            onClick={() => void addNow(picked.map(refOf))}
+            disabled={isSetting || picked.length === 0}
+            title={
+              picked.length === 0
+                ? 'Tick the customers to add in the list above'
+                : undefined
+            }
             className={PRIMARY}
           >
-            <PlusIcon width={14} height={14} />
+            {isSetting ? (
+              <SpinnerIcon width={14} height={14} className="animate-spin" />
+            ) : (
+              <PlusIcon width={14} height={14} />
+            )}
             Add New Customer
           </button>
           {notAllowed.length > 1 && (
             <button
               type="button"
-              onClick={() =>
-                setAdding({ text: notAllowed.map(({ item }) => refOf(item)).join(', ') })
-              }
+              onClick={() => void addNow(notAllowed.map(({ item }) => refOf(item)))}
+              disabled={isSetting}
               className={`${SMALL} border-border bg-bg text-text hover:border-accent ml-auto`}
             >
               Give access to all not allowed ({notAllowed.length})
             </button>
           )}
         </div>
+
+        {addError && <FormMessage tone="error">{addError}</FormMessage>}
 
         {answers.length > 0 && (
           <ul aria-label="Access check results" className="flex flex-col gap-2">
@@ -260,7 +311,8 @@ export function LockAccessTab({
                         <button
                           type="button"
                           aria-label={`Give access to ${item.label}`}
-                          onClick={() => setAdding({ text: refOf(item) })}
+                          onClick={() => void addNow([refOf(item)])}
+                          disabled={isSetting}
                           className={`${SMALL} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
                         >
                           Give access
@@ -331,15 +383,6 @@ export function LockAccessTab({
         }}
       />
 
-      {adding &&
-        createPortal(
-          <AddCustomersDialog
-            {...dialogProps}
-            initialText={adding.text}
-            onClose={() => setAdding(null)}
-          />,
-          document.body,
-        )}
       {editing &&
         createPortal(
           <AddCustomersDialog
