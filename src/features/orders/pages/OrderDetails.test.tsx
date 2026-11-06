@@ -275,11 +275,11 @@ describe('an order’s details page', () => {
     // The summary figures are there (once), the rest is a placeholder.
     // (The list stays mounted behind the page, so look inside the page only.)
     const page = within(screen.getByRole('article'))
-    expect(page.getByText('Order Summary')).toBeInTheDocument()
+    expect(page.queryByText('Order Summary')).toBeNull()
     expect(page.getByText('Total price')).toBeInTheDocument()
     expect(page.getAllByText('£26.50')).toHaveLength(1)
     expect(page.getByText('14000000000001')).toBeInTheDocument()
-    expect(page.queryByRole('heading', { name: 'Customer' })).toBeNull()
+    expect(page.queryByRole('heading', { name: 'Payment Summary' })).toBeNull()
   })
 
   it('has the details ready when the eye was hovered first: nothing to wait for', async () => {
@@ -295,19 +295,17 @@ describe('an order’s details page', () => {
     await user.click(screen.getByRole('button', { name: 'View order 17502' }))
 
     // The cards are there in the same render as the click.
-    expect(screen.getByText('Order Summary')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Customer' })).toBeInTheDocument()
     expect(screen.queryByText('Loading…')).toBeNull()
     expect(details).toHaveBeenCalledTimes(1)
   })
 
-  it('has the tabs of a product page: Overview, Items, Payments, Shipping, Notes & Tracking', async () => {
+  it('has the tabs: Overview, Shipping, Notes & Tracking', async () => {
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Overview',
-      'Items2',
-      'Payments1',
       'Shipping',
       'Notes & Tracking4',
     ])
@@ -315,17 +313,16 @@ describe('an order’s details page', () => {
 
   it('shows the order’s money, customer, status and store in cards on the Overview', async () => {
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
-    const summary = within(screen.getByText('Order Summary').closest('section')!)
-    expect(summary.getByText('£12.50')).toBeInTheDocument() // subtotal
-    expect(summary.getByText('£9.58')).toBeInTheDocument() // shipping
-    expect(summary.getByText('£4.42')).toBeInTheDocument() // tax
-    expect(summary.getByText('£26.50')).toBeInTheDocument() // total
-    // The order's Shopify ID is in the summary, with a copy button.
-    expect(summary.getByText('Shopify ID')).toBeInTheDocument()
-    expect(summary.getByText('14000000000001')).toBeInTheDocument()
-    expect(summary.getByRole('button', { name: 'Copy Shopify ID' })).toBeInTheDocument()
+    const page = within(screen.getByRole('article'))
+    expect(page.queryByText('Order Summary')).toBeNull()
+    const rowOf = (label: string) => page.getByText(label).closest('div')!
+    // The totals are at the foot of the Items card.
+    expect(rowOf('Subtotal')).toHaveTextContent('£12.50')
+    expect(rowOf('Shipping')).toHaveTextContent('£9.58')
+    expect(rowOf('Tax')).toHaveTextContent('£4.42')
+    expect(rowOf('Total price')).toHaveTextContent('£26.50')
 
     // The customer card: a guest checkout has no customer name or email, but the order's
     // own email is there, labelled as such.
@@ -336,16 +333,17 @@ describe('an order’s details page', () => {
     expect(customer.getByText('buyer1@example.com')).toBeInTheDocument()
     const name = customer.getByText('Name').closest('div')!
     expect(name).toHaveTextContent('—')
+    // The order's Shopify ID is here, with a copy button.
+    expect(customer.getByText('14000000000001')).toBeInTheDocument()
+    expect(
+      customer.getByRole('button', { name: 'Copy order Shopify ID' }),
+    ).toBeInTheDocument()
 
     expect(
       screen.getAllByText('Expected Delivery Day: Wednesday').length,
     ).toBeGreaterThan(0)
 
-    // The money is in the summary only (no big figure cards, no price in the header), and the
-    // note is only on Notes & Tracking.
-    const page = within(screen.getByRole('article'))
-    expect(page.getAllByText('Total price')).toHaveLength(1)
-    expect(page.getAllByText('Net payment')).toHaveLength(1)
+    // The note is only on Notes & Tracking.
     expect(page.queryByText('Leave with the neighbour')).toBeNull()
 
     // The status & dates and store & source cards are gone.
@@ -353,38 +351,28 @@ describe('an order’s details page', () => {
     expect(screen.queryByText('Store & Source')).toBeNull()
   })
 
-  it('summarises the items, the payment and the shipping on the Overview', async () => {
+  it('summarises the items and the shipping on the Overview, with no payment summary', async () => {
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     const page = within(screen.getByRole('article'))
     const card = (name: string) =>
       within(page.getByRole('heading', { name }).closest('section')!)
 
-    // Items: a compact row per line — name, variant and SKU, quantity × price, total.
+    // Items: a table row per line — name, variant and SKU, price, quantity, total.
     const items = card('Items')
     const pizza = within(
       items
         .getByRole('link', { name: 'Pizza Box White Plain, Square [Alternative]' })
-        .closest('li')!,
+        .closest('tr')!,
     )
     expect(pizza.getByText('14inch · PB416E')).toBeInTheDocument()
-    expect(pizza.getByText('1 × £12.50')).toBeInTheDocument()
+    expect(pizza.getByText('1')).toBeInTheDocument()
+    expect(pizza.getAllByText('£12.50')).toHaveLength(2)
     expect(
-      pizza.getByText('£12.50', { selector: 'span.font-semibold' }),
-    ).toBeInTheDocument()
-    expect(
-      items.getByText('Hostile image').closest('li')!.querySelector('img'),
+      items.getByText('Hostile image').closest('tr')!.querySelector('img'),
     ).toBeNull()
 
-    // Payment: the status and the transaction.
-    const payment = card('Payment Summary')
-    expect(payment.getByText('Authorized')).toBeInTheDocument()
-    expect(payment.getByText('Authorization')).toBeInTheDocument()
-    expect(payment.getByText('shopify_payments')).toBeInTheDocument()
-    expect(payment.getByText('Mastercard •••• •••• •••• 1906')).toBeInTheDocument()
-    expect(payment.getByText('Transaction amount').closest('div')).toHaveTextContent(
-      '£26.50',
-    )
+    expect(page.queryByRole('heading', { name: 'Payment Summary' })).toBeNull()
 
     // Shipping: the method, what was charged, the status and the counts.
     const shipping = card('Shipping Summary')
@@ -413,18 +401,17 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     const header = within(screen.getByRole('banner'))
     expect(header.getByText('Jane Doe · Example Co')).toBeInTheDocument()
     expect(header.getByText('Authorized')).toBeInTheDocument()
     expect(header.getByText('Unfulfilled')).toBeInTheDocument()
   })
 
-  it('shows the shipping and billing addresses on the Overview, as two cards', async () => {
+  it('shows the shipping and billing addresses on the Overview, as two cards that fold', async () => {
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
-    expect(screen.getByRole('heading', { name: 'Addresses' })).toBeInTheDocument()
     const shipping = within(screen.getByRole('region', { name: 'Shipping address' }))
     expect(shipping.getByText('jane doe')).toBeInTheDocument()
     expect(shipping.getByText('Example Co')).toBeInTheDocument()
@@ -451,7 +438,7 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
     expect(
       within(screen.getByRole('region', { name: 'Shipping address' })).getByText(
@@ -463,19 +450,16 @@ describe('an order’s details page', () => {
     expect(billing.queryByText('Same as the shipping address.')).toBeNull()
   })
 
-  it('lists the items on the Items tab, each linking to its product, with safe pictures only', async () => {
-    const user = await openFirst()
-    await screen.findByText('Order Summary')
-    await user.click(screen.getByRole('tab', { name: /^Items/ }))
+  it('lists the items on the Overview, each linking to its product, with safe pictures only', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Items' })
 
-    const link = screen.getByRole('link', {
+    const link = await screen.findByRole('link', {
       name: 'Pizza Box White Plain, Square [Alternative]',
     })
     expect(link).toHaveAttribute('href', '/products/a499a9c7-72d1-4ab1-aa64-4f5ff282edaf')
     const row = link.closest('tr')!
-    expect(within(row).getByText('PB416E')).toBeInTheDocument()
-    expect(within(row).getByText(/14inch/)).toBeInTheDocument()
-    expect(within(row).getByText('Unfulfilled')).toBeInTheDocument()
+    expect(within(row).getByText('14inch · PB416E')).toBeInTheDocument()
     const picture = row.querySelector('img')!
     expect(picture).toHaveAttribute(
       'src',
@@ -486,58 +470,37 @@ describe('an order’s details page', () => {
     // A picture address that is not http(s) is never used.
     const hostile = screen.getByText('Hostile image').closest('tr')!
     expect(hostile.querySelector('img')).toBeNull()
-    expect(within(hostile).getByText('Fulfilled')).toBeInTheDocument()
   })
 
-  it('ends the Items table with a line for the total quantity and the order value', async () => {
-    const user = await openFirst()
-    await screen.findByText('Order Summary')
-    await user.click(screen.getByRole('tab', { name: /^Items/ }))
+  it('ends the Items table with the order’s totals', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Items' })
 
-    const table = within(within(screen.getByRole('article')).getByRole('table'))
+    const page = within(screen.getByRole('article'))
+    const table = within(await page.findByRole('table'))
     expect(
       table.getAllByRole('columnheader').map((header) => header.textContent),
-    ).toEqual(['Product', 'SKU', 'Quantity', 'Price', 'Discount', 'Total', 'Fulfillment'])
-    expect(screen.getByText('Total quantity').closest('span')).toHaveTextContent('3')
-    expect(screen.getByText('Order value').closest('span')).toHaveTextContent('£26.50')
+    ).toEqual(['Product', 'Price', 'Quantity', 'Total price'])
+    expect(page.getAllByText('Total price')).toHaveLength(2)
+    expect(page.getByText('Subtotal').closest('div')).toHaveTextContent('£12.50')
   })
 
-  it('folds the payment sections: transactions, refunds, taxes and discounts', async () => {
-    const user = await openFirst()
-    await screen.findByText('Order Summary')
-    await user.click(screen.getByRole('tab', { name: /^Payments/ }))
+  it('shows the order’s status, payment method, date and store in the header', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Customer' })
+    const header = within(screen.getByRole('banner'))
+    const fact = (label: string) => header.getByText(label).closest('div')!
 
-    for (const name of [/^Transactions/, /^Refunds/, /^Taxes/, /^Discounts/]) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
-    }
-    const refunds = screen.getByRole('button', { name: /^Refunds/ })
-    expect(refunds).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Nothing has been refunded.')).toBeInTheDocument()
-    await user.click(refunds)
-    expect(refunds).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('Nothing has been refunded.')).toBeNull()
-    await user.click(refunds)
-    expect(screen.getByText('Nothing has been refunded.')).toBeInTheDocument()
-  })
-
-  it('shows the payments: the card transaction, no refunds, and the tax', async () => {
-    const user = await openFirst()
-    await screen.findByText('Order Summary')
-    await user.click(screen.getByRole('tab', { name: /^Payments/ }))
-
-    const row = screen.getByText('Authorization').closest('tr')!
-    expect(within(row).getByText('Success')).toBeInTheDocument()
-    expect(within(row).getByText('shopify_payments')).toBeInTheDocument()
-    expect(within(row).getByText('Mastercard •••• •••• •••• 1906')).toBeInTheDocument()
-    expect(within(row).getByText('£26.50')).toBeInTheDocument()
-    expect(screen.getByText('Nothing has been refunded.')).toBeInTheDocument()
-    expect(screen.getByText('GB VAT')).toBeInTheDocument()
-    expect(screen.getByText('(20%)')).toBeInTheDocument()
+    expect(fact('Payment status')).toHaveTextContent('Authorized')
+    expect(fact('Fulfillment status')).toHaveTextContent('Unfulfilled')
+    expect(await within(fact('Payment method')).findByText(/Mastercard/)).toBeVisible()
+    expect(header.getByText('Order date')).toBeInTheDocument()
+    expect(fact('Store')).toHaveTextContent('Polymer UK')
   })
 
   it('shows the shipping: the method and what was fulfilled (the addresses are on the Overview)', async () => {
     const user = await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     await user.click(screen.getByRole('tab', { name: 'Shipping' }))
 
     expect(screen.queryByRole('region', { name: 'Shipping address' })).toBeNull()
@@ -569,7 +532,7 @@ describe('an order’s details page', () => {
       }),
     )
     const user = await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     await user.click(screen.getByRole('tab', { name: 'Shipping' }))
 
     const delivery = within(
@@ -626,7 +589,7 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
     const customer = within(
       screen.getByRole('heading', { name: 'Customer' }).closest('section')!,
@@ -642,7 +605,7 @@ describe('an order’s details page', () => {
 
   it('lists the notes and tracking, with only http(s) values as links', async () => {
     const user = await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
 
     // The order's note, then (none yet) the tracking, then the other details saved with it.
@@ -686,7 +649,7 @@ describe('an order’s details page', () => {
       }),
     )
     const user = await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
     await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
 
     expect(screen.getByText('No note on this order.')).toBeInTheDocument()
@@ -717,7 +680,7 @@ describe('an order’s details page', () => {
 
   it('goes back to the list, which kept its page and filters', async () => {
     const user = await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
     await user.click(screen.getByRole('button', { name: 'Back to list' }))
 
@@ -737,10 +700,10 @@ describe('an order’s details page', () => {
       await screen.findByRole('heading', { level: 1, name: 'Order #17516' }),
     ).toBeInTheDocument()
     expect(details).toHaveBeenCalledWith('17516', 'polymer-uk')
-    expect(screen.queryByText('Order Summary')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Customer' })).toBeNull()
 
     finish({ ...makeDetail(1), order_number: 17516, name: '#17516' })
-    expect(await screen.findByText('Order Summary')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Customer' })).toBeInTheDocument()
   })
 
   it('shows the backend’s message when the order cannot be read, and recovers on retry', async () => {
@@ -753,7 +716,7 @@ describe('an order’s details page', () => {
 
     details.mockResolvedValue({ ...makeDetail(1), order_number: 99999, name: '#99999' })
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('Order Summary')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Customer' })).toBeInTheDocument()
   })
 
   describe('the strip of opened orders (like the products’ tabs)', () => {
@@ -768,7 +731,7 @@ describe('an order’s details page', () => {
 
     it('shows "All Orders" and a tab for the opened order, with the order’s tab active', async () => {
       await openFirst()
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
 
       expect(within(strip()).getByRole('button', { name: 'All Orders' })).toBeVisible()
       const tab = within(strip()).getByRole('button', { name: /^Order\s*17501$/ })
@@ -778,7 +741,7 @@ describe('an order’s details page', () => {
 
     it('returns to the list from "All Orders" and back to the order from its tab', async () => {
       const user = await openFirst()
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
 
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       expect(where()).toBe('/orders')
@@ -796,7 +759,7 @@ describe('an order’s details page', () => {
 
     it('keeps every order opened this way as its own tab, and switches between them', async () => {
       const user = await openFirst()
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       await user.click(screen.getByRole('button', { name: 'View order 17502' }))
       await screen.findByRole('heading', { level: 1, name: 'Order #17502' })
@@ -814,7 +777,7 @@ describe('an order’s details page', () => {
 
     it('closes a tab; closing the one you are on moves to its neighbour, then to the list', async () => {
       const user = await openFirst()
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       await user.click(screen.getByRole('button', { name: 'View order 17502' }))
       await screen.findByRole('heading', { level: 1, name: 'Order #17502' })
@@ -832,7 +795,7 @@ describe('an order’s details page', () => {
 
     it('closes them all with Clear and goes back to the list', async () => {
       const user = await openFirst()
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
 
       await user.click(within(strip()).getByRole('button', { name: 'Clear' }))
 
@@ -842,7 +805,7 @@ describe('an order’s details page', () => {
 
     it('gives an order opened from a bare address a tab too, labelled with its number', async () => {
       renderAt('/orders/17503?shop=polymer-uk')
-      await screen.findByText('Order Summary')
+      await screen.findByRole('heading', { name: 'Customer' })
 
       expect(
         within(strip()).getByRole('button', { name: /^Order\s*17503$/ }),
@@ -852,7 +815,7 @@ describe('an order’s details page', () => {
 
   it('never asks for the raw Shopify payload', async () => {
     await openFirst()
-    await screen.findByText('Order Summary')
+    await screen.findByRole('heading', { name: 'Customer' })
 
     expect(screen.queryByRole('tab', { name: /raw/i })).toBeNull()
     // The call carries only the number and the store (include_raw=false is added by the API layer).

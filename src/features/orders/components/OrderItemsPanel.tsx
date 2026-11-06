@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
-import { Badge } from '../../../components/ui/Badge.tsx'
+import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { BoxesIcon } from '../../../components/ui/icons.tsx'
-import type { OrderDetail } from '../../../lib/api/endpoints.ts'
+import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatPrice } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
-import { fulfillmentTone, humanize } from '../utils/format.ts'
+import { hasRefund } from '../utils/format.ts'
 import {
   EmptyNote,
   MINI_ROW,
@@ -12,6 +12,8 @@ import {
   MINI_TH,
   MiniCard,
   MiniTable,
+  Row,
+  Rows,
 } from './OrderCompact.tsx'
 
 type LineItem = OrderDetail['line_items'][number]
@@ -57,133 +59,130 @@ function ItemName({ item }: { item: LineItem }) {
 const lineTotal = (item: LineItem) => item.discounted_total ?? item.original_total
 
 /**
- * The Overview's **Items** card: every line as one compact row — thumbnail, name, variant and
- * SKU, quantity × price, and the line's total. The full table is on the Items tab.
+ * What the order comes to, in a box at the right under its lines: subtotal, shipping, tax, discount
+ * and the total — then the tip, what was refunded and what is left to pay, when there are any.
+ * The figures are the backend's; nothing is worked out here.
  */
-export function OrderItemsSummary({ order }: { order: OrderDetail }) {
+function OrderTotals({
+  totals,
+  taxesIncluded,
+  tip,
+  outstanding,
+}: {
+  totals: OrderListItem
+  taxesIncluded?: boolean | null
+  tip?: string | null
+  outstanding?: string | null
+}) {
   const money = (value: string | null | undefined) =>
-    value === null || value === undefined ? '—' : formatPrice(value, order.currency)
+    value === null || value === undefined || value === ''
+      ? null
+      : formatPrice(value, totals.currency)
+  const isAbove0 = (value: string | null | undefined) =>
+    Number.parseFloat(value ?? '0') > 0
+  const discount = money(totals.total_discounts)
 
   return (
-    <MiniCard title="Items" icon={BoxesIcon} count={order.line_items.length}>
-      {order.line_items.length === 0 ? (
-        <EmptyNote>No items on this order.</EmptyNote>
-      ) : (
-        <ul className="m-0 flex list-none flex-col p-0">
-          {order.line_items.map((item) => (
-            <li
-              key={item.id}
-              className="border-border flex items-center gap-2.5 border-b py-1.5 last:border-b-0"
-            >
-              <Thumb item={item} />
-              <span className="flex min-w-0 flex-1 flex-col text-[0.78rem]">
-                <ItemName item={item} />
-                <span className="text-text-muted truncate text-[0.7rem]">
-                  {[item.variant_title, item.sku].filter(Boolean).join(' · ') || '—'}
-                </span>
-              </span>
-              <span className="text-text-muted shrink-0 text-[0.74rem] tabular-nums">
-                {item.quantity ?? '—'} × {money(item.price)}
-              </span>
-              <span className="w-20 shrink-0 text-right text-[0.8rem] font-semibold tabular-nums">
-                {money(lineTotal(item))}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </MiniCard>
+    <div className="flex justify-end">
+      <div className="border-border bg-surface/40 w-full rounded-lg border px-3 py-1 sm:w-80">
+        <Rows>
+          <Row label="Subtotal">{money(totals.subtotal_price)}</Row>
+          <Row label="Shipping">{money(totals.total_shipping)}</Row>
+          <Row label={taxesIncluded ? 'Tax (included)' : 'Tax'}>
+            {money(totals.total_tax)}
+          </Row>
+          <Row label="Discount">
+            {discount && isAbove0(totals.total_discounts) ? `−${discount}` : discount}
+          </Row>
+          {isAbove0(tip) && <Row label="Tip">{money(tip)}</Row>}
+          <Row label="Total price" strong>
+            {money(totals.total_price)}
+          </Row>
+          {hasRefund(totals) && (
+            <>
+              <Row label="Refunded">{money(totals.total_refunded)}</Row>
+              <Row label="Net payment">{money(totals.net_payment)}</Row>
+            </>
+          )}
+          {isAbove0(outstanding) && <Row label="Outstanding">{money(outstanding)}</Row>}
+        </Rows>
+      </div>
+    </div>
   )
 }
 
 /**
- * The **Items** tab: one compact table — product (picture, name, variant, vendor), SKU, quantity,
- * price, discount, total and fulfillment — with a line under it for the total quantity and the
- * order's value.
+ * The Overview's **Items** card: a table — product (picture, name, variant and SKU), price,
+ * quantity and the line's total — with the order's totals under it. The totals draw from the list
+ * row while the lines load (`items` is null then).
  */
-export function OrderItemsPanel({ order }: { order: OrderDetail }) {
-  if (order.line_items.length === 0) {
-    return (
-      <MiniCard title="Items" icon={BoxesIcon} count={0}>
-        <EmptyNote>No items on this order.</EmptyNote>
-      </MiniCard>
-    )
-  }
+export function OrderItemsSummary({
+  items,
+  totals,
+  taxesIncluded,
+  tip,
+  outstanding,
+}: {
+  items: OrderDetail['line_items'] | null
+  totals: OrderListItem
+  taxesIncluded?: boolean | null
+  tip?: string | null
+  outstanding?: string | null
+}) {
   const money = (value: string | null | undefined) =>
-    value === null || value === undefined ? '—' : formatPrice(value, order.currency)
-  const quantity = order.line_items.reduce((sum, item) => sum + (item.quantity ?? 0), 0)
+    value === null || value === undefined ? '—' : formatPrice(value, totals.currency)
 
   return (
-    <div className="flex flex-col gap-2">
-      <MiniTable>
-        <thead>
-          <tr>
-            <th className={MINI_TH}>Product</th>
-            <th className={MINI_TH}>SKU</th>
-            <th className={`${MINI_TH} text-right`}>Quantity</th>
-            <th className={`${MINI_TH} text-right`}>Price</th>
-            <th className={`${MINI_TH} text-right`}>Discount</th>
-            <th className={`${MINI_TH} text-right`}>Total</th>
-            <th className={MINI_TH}>Fulfillment</th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.line_items.map((item) => (
-            <tr key={item.id} className={`${MINI_ROW} even:bg-surface/50`}>
-              <td className={MINI_TD}>
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <Thumb item={item} />
-                  <span className="flex min-w-0 flex-col">
-                    <ItemName item={item} />
-                    {(item.variant_title || item.vendor) && (
-                      <span className="text-text-muted truncate text-[0.7rem]">
-                        {[item.variant_title, item.vendor].filter(Boolean).join(' · ')}
+    <MiniCard title="Items" icon={BoxesIcon} count={items?.length}>
+      <div className="flex flex-col gap-3 py-1.5">
+        {items === null && <DetailSkeleton />}
+        {items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
+        {items && items.length > 0 && (
+          <MiniTable>
+            <thead>
+              <tr>
+                <th className={MINI_TH}>Product</th>
+                <th className={`${MINI_TH} w-28 text-right`}>Price</th>
+                <th className={`${MINI_TH} w-24 text-right`}>Quantity</th>
+                <th className={`${MINI_TH} w-32 text-right`}>Total price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className={MINI_ROW}>
+                  <td className={MINI_TD}>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Thumb item={item} />
+                      <span className="flex min-w-0 flex-col">
+                        <ItemName item={item} />
+                        <span className="text-text-muted truncate text-[0.7rem]">
+                          {[item.variant_title, item.sku].filter(Boolean).join(' · ') ||
+                            '—'}
+                        </span>
                       </span>
-                    )}
-                  </span>
-                </span>
-              </td>
-              <td className={`${MINI_TD} font-mono text-[0.72rem] break-all`}>
-                {item.sku || '—'}
-              </td>
-              <td className={`${MINI_TD} text-right tabular-nums`}>
-                {item.quantity ?? '—'}
-              </td>
-              <td className={`${MINI_TD} text-right tabular-nums`}>
-                {money(item.price)}
-              </td>
-              <td className={`${MINI_TD} text-right tabular-nums`}>
-                {money(item.total_discount)}
-              </td>
-              <td className={`${MINI_TD} text-right font-semibold tabular-nums`}>
-                {money(lineTotal(item))}
-              </td>
-              <td className={MINI_TD}>
-                {item.fulfillment_status ? (
-                  <Badge tone={fulfillmentTone(item.fulfillment_status)}>
-                    {humanize(item.fulfillment_status)}
-                  </Badge>
-                ) : (
-                  '—'
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </MiniTable>
-
-      <p className="text-text-muted m-0 flex flex-wrap justify-end gap-x-4 gap-y-0.5 px-1 text-[0.78rem]">
-        <span>
-          Total quantity{' '}
-          <strong className="text-text font-semibold tabular-nums">{quantity}</strong>
-        </span>
-        <span>
-          Order value{' '}
-          <strong className="text-text font-semibold tabular-nums">
-            {money(order.total_price)}
-          </strong>
-        </span>
-      </p>
-    </div>
+                    </span>
+                  </td>
+                  <td className={`${MINI_TD} text-right tabular-nums`}>
+                    {money(item.price)}
+                  </td>
+                  <td className={`${MINI_TD} text-right tabular-nums`}>
+                    {item.quantity ?? '—'}
+                  </td>
+                  <td className={`${MINI_TD} text-right font-semibold tabular-nums`}>
+                    {money(lineTotal(item))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </MiniTable>
+        )}
+        <OrderTotals
+          totals={totals}
+          taxesIncluded={taxesIncluded}
+          tip={tip}
+          outstanding={outstanding}
+        />
+      </div>
+    </MiniCard>
   )
 }

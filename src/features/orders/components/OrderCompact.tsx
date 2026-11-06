@@ -44,6 +44,7 @@ export function FoldCard({
   icon: Icon,
   count,
   defaultOpen = true,
+  shrinkWhenFolded = false,
   className = '',
   children,
 }: {
@@ -51,13 +52,18 @@ export function FoldCard({
   icon: ComponentType<IconProps>
   count?: number
   defaultOpen?: boolean
+  /** In a row of cards of one height: a folded card keeps only its title row. */
+  shrinkWhenFolded?: boolean
   className?: string
   children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const bodyId = useId()
   return (
-    <section className={`${DETAIL_CARD} min-w-0 ${className}`}>
+    <section
+      aria-label={title}
+      className={`${DETAIL_CARD} min-w-0 ${shrinkWhenFolded && !open ? 'self-start' : ''} ${className}`}
+    >
       <button
         type="button"
         aria-expanded={open}

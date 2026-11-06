@@ -495,6 +495,7 @@ const orderListItemSchema = z.object({
   customer: z
     .object({
       id: z.string().nullish(),
+      shopify_id: z.number().nullish(),
       full_name: z.string().nullish(),
       email: z.string().nullish(),
       phone: z.string().nullish(),

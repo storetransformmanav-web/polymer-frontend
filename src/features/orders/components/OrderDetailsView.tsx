@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import {
@@ -15,15 +15,14 @@ import {
   orderCustomer,
   orderLabel,
 } from '../utils/format.ts'
+import { orderPaymentMethod } from '../utils/payment.ts'
 import { notesCount } from '../utils/tracking.ts'
 import { OrderEventsPanel } from './OrderDetailPanels.tsx'
-import { OrderItemsPanel } from './OrderItemsPanel.tsx'
 import { OrderNotesPanel } from './OrderNotesPanel.tsx'
 import { OrderOverviewPanel } from './OrderOverviewPanel.tsx'
-import { OrderPaymentsPanel } from './OrderPaymentsPanel.tsx'
 import { OrderShippingPanel } from './OrderShippingPanel.tsx'
 
-type TabId = 'overview' | 'items' | 'payments' | 'shipping' | 'attributes' | 'events'
+type TabId = 'overview' | 'shipping' | 'attributes' | 'events'
 
 interface OrderDetailsViewProps {
   /** The order number from the address (17516). */
@@ -31,6 +30,18 @@ interface OrderDetailsViewProps {
   /** The order's store key from the address, when it has one. */
   shop: string | null
   onBack: () => void
+}
+
+/** One labelled fact of the page's header: the label small above its value. */
+function HeaderFact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-text-muted text-[0.68rem] font-semibold">{label}</dt>
+      <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1 text-[0.8rem] font-medium break-words">
+        {children}
+      </dd>
+    </div>
+  )
 }
 
 /**
@@ -47,6 +58,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
   const created = known?.shopify_created_at
+  const method = known ? orderPaymentMethod(known) : ''
   // Who it is for: the customer's name and, when the addresses name one, their company.
   const who = [
     known ? orderCustomer(known)?.name : null,
@@ -57,8 +69,6 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'items', label: 'Items', count: order?.line_items.length },
-    { id: 'payments', label: 'Payments', count: order?.transactions.length },
     { id: 'shipping', label: 'Shipping' },
     ...(order
       ? [
@@ -104,58 +114,64 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
 
   return (
     <article className="border-border bg-bg overflow-hidden rounded-xl border">
-      <header className="flex items-center gap-3 px-4 py-3">
-        <span
-          aria-hidden="true"
-          className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-        >
-          <OrdersIcon width={18} height={18} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="m-0 text-base leading-snug font-bold break-words sm:text-lg">
-            Order #{title}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem]">
-            {known && (
-              <>
-                {known.financial_status && (
-                  <Badge tone={financialTone(known.financial_status)}>
-                    {humanize(known.financial_status)}
-                  </Badge>
-                )}
-                {known.fulfillment_status && (
-                  <Badge tone={fulfillmentTone(known.fulfillment_status)}>
-                    {humanize(known.fulfillment_status)}
-                  </Badge>
-                )}
-                {known.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
-                {created && (
-                  <span className="text-text-muted">{formatDateTime(created)}</span>
-                )}
-                {who && <span className="text-text font-medium">{who}</span>}
-                {known.shop?.name && (
-                  <span className="text-text-muted">{known.shop.name}</span>
-                )}
-              </>
-            )}
+      <header className="flex flex-col gap-3 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+          >
+            <OrdersIcon width={18} height={18} />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="m-0 text-base leading-snug font-bold break-words sm:text-lg">
+              Order #{title}
+            </h1>
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.72rem]" role="status">
                 Updating…
               </span>
             )}
           </div>
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to list"
+            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-semibold transition-colors"
+          >
+            <ArrowLeftIcon width={14} height={14} />
+            <span className="hidden sm:inline" aria-hidden="true">
+              Back to list
+            </span>
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to list"
-          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-semibold transition-colors"
-        >
-          <ArrowLeftIcon width={14} height={14} />
-          <span className="hidden sm:inline" aria-hidden="true">
-            Back to list
-          </span>
-        </button>
+
+        {known && (
+          <dl className="border-border m-0 flex flex-wrap gap-x-8 gap-y-2.5 border-t pt-3">
+            {(known.financial_status || known.cancelled_at) && (
+              <HeaderFact label="Payment status">
+                {known.financial_status && (
+                  <Badge tone={financialTone(known.financial_status)}>
+                    {humanize(known.financial_status)}
+                  </Badge>
+                )}
+                {known.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
+              </HeaderFact>
+            )}
+            {known.fulfillment_status && (
+              <HeaderFact label="Fulfillment status">
+                <Badge tone={fulfillmentTone(known.fulfillment_status)}>
+                  {humanize(known.fulfillment_status)}
+                </Badge>
+              </HeaderFact>
+            )}
+            {method && <HeaderFact label="Payment method">{method}</HeaderFact>}
+            {created && (
+              <HeaderFact label="Order date">{formatDateTime(created)}</HeaderFact>
+            )}
+            {who && <HeaderFact label="Customer">{who}</HeaderFact>}
+            {known.shop?.name && <HeaderFact label="Store">{known.shop.name}</HeaderFact>}
+          </dl>
+        )}
       </header>
 
       <div
@@ -199,8 +215,6 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
       >
         {tab === 'overview' && <OrderOverviewPanel order={order} preview={preview} />}
         {tab !== 'overview' && !order && <DetailSkeleton />}
-        {order && tab === 'items' && <OrderItemsPanel order={order} />}
-        {order && tab === 'payments' && <OrderPaymentsPanel order={order} />}
         {order && tab === 'shipping' && <OrderShippingPanel order={order} />}
         {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
         {order && tab === 'events' && <OrderEventsPanel order={order} />}
