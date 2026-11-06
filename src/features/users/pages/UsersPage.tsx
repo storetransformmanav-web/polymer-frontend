@@ -195,6 +195,8 @@ export function UsersPage() {
           key={activeId}
           details={details}
           shopNames={shopNames}
+          roles={roles.roles}
+          shops={shops}
           onBack={() => navigate(LIST_PATH)}
         />
       )}

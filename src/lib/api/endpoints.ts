@@ -35,6 +35,8 @@ export const ENDPOINTS = {
     create: '/users',
     /** `GET` one user; `id` is the user's UUID. */
     detail: (id: string) => `/users/${encodeURIComponent(id)}`,
+    /** `PUT` — update a user's details, role, status and store access; `id` is the UUID. */
+    update: (id: string) => `/users/${encodeURIComponent(id)}`,
     /** `DELETE` — soft delete: deactivated and hidden, its activity history is kept. */
     remove: (id: string) => `/users/${encodeURIComponent(id)}`,
   },
@@ -268,6 +270,12 @@ const userDetailResponseSchema = z.union([
   userDetailSchema,
 ])
 
+/**
+ * What `PUT /users/{user_id}` answers. The spec gives no answer, so it is read leniently: the
+ * updated user (bare, `{ user }` or `{ result }`) when there is one, and a `message` if any.
+ */
+const userUpdateAnswerSchema = z.object({ message: z.string().nullish() })
+
 /** What deleting a user answers (the spec says nothing; only a message is used, if there is one). */
 const userDeleteAnswerSchema = z.object({ message: z.string().nullish() })
 
@@ -297,6 +305,25 @@ export interface UserListParams {
   page?: number
   /** 1–100. */
   page_size?: number
+}
+
+/**
+ * Body of `PUT /users/{user_id}` — the spec lists every field, none marked required. The CRM
+ * always sends the whole record with the changed value in it (`buildUserUpdateBody`), so it works
+ * whether the backend replaces the user or only applies what is sent.
+ */
+export interface UserUpdateBody {
+  first_name?: string
+  last_name?: string
+  email?: string
+  /** A role name from `GET /roles`. */
+  role?: string
+  /** An empty string clears it. */
+  phone?: string
+  /** `false` deactivates the account (they can no longer sign in). */
+  is_active?: boolean
+  /** Keys of the stores a non-admin user may see. */
+  shop_keys?: string[]
 }
 
 /** Body of `POST /users`. */
@@ -3016,6 +3043,23 @@ export const api = {
     async detail(id: string): Promise<UserDetail> {
       const data = await apiClient.get(ENDPOINTS.users.detail(id))
       return userDetailResponseSchema.parse(data)
+    },
+
+    /**
+     * Updates a user (`PUT /users/{user_id}`). Returns the updated user when the answer carries
+     * one (else null) and the backend's message. Never retried automatically.
+     */
+    async update(
+      id: string,
+      body: UserUpdateBody,
+    ): Promise<{ user: UserDetail | null; message: string }> {
+      const data = await apiClient.put(ENDPOINTS.users.update(id), body)
+      const user = userDetailResponseSchema.safeParse(data)
+      const message = userUpdateAnswerSchema.safeParse(data)
+      return {
+        user: user.success ? user.data : null,
+        message: message.success ? (message.data.message ?? '') : '',
+      }
     },
 
     /** Creates a staff user (they sign in by emailed code or Google). Returns the new user. */

@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
+import type { Role, Shop } from '../../../lib/api/endpoints.ts'
 import { initials } from '../../../lib/format.ts'
 import type { useUserDetails } from '../hooks/useUserDetails.ts'
 import { roleLabel, roleTone, userName } from '../utils/format.ts'
 import { UserAccessPanel, UserOverviewPanel } from './UserDetailPanels.tsx'
+import { UserUpdateDialog, type UserUpdateRequest } from './UserUpdateDialog.tsx'
 
 type TabId = 'overview' | 'access'
 
@@ -19,8 +22,21 @@ interface UserDetailsViewProps {
   details: ReturnType<typeof useUserDetails>
   /** Store key → display name. */
   shopNames: Record<string, string>
+  /** Every role (the role dropdown) and every store the signed-in user can see (store access). */
+  roles: Role[]
+  shops: Shop[]
   onBack: () => void
 }
+
+/** The change a small pencil asked for, waiting for "Yes, update". */
+interface Asking {
+  request: UserUpdateRequest
+  /** Runs once the update went through. */
+  onSaved?: () => void
+}
+
+/** How long the "saved" line stays. */
+const NOTICE_MS = 6000
 
 /**
  * A user's full details, shown in place of the list (same page, no overlay) — laid out like
@@ -28,9 +44,28 @@ interface UserDetailsViewProps {
  * straight from the list row while the full record loads, so nothing waits on the network
  * when you come from the list.
  */
-export function UserDetailsView({ details, shopNames, onBack }: UserDetailsViewProps) {
+export function UserDetailsView({
+  details,
+  shopNames,
+  roles,
+  shops,
+  onBack,
+}: UserDetailsViewProps) {
   const { user, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
+  const [asking, setAsking] = useState<Asking | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+
+  function ask(request: UserUpdateRequest, onSaved?: () => void) {
+    setNotice(null)
+    setAsking({ request, onSaved })
+  }
 
   const known = user ?? preview
   const name = known ? userName(known) : 'Loading user…'
@@ -146,12 +181,36 @@ export function UserDetailsView({ details, shopNames, onBack }: UserDetailsViewP
         aria-labelledby={`user-tab-${tab}`}
         className="bg-surface p-3 sm:p-5"
       >
-        {tab === 'overview' && <UserOverviewPanel user={user} preview={preview} />}
+        {notice && (
+          <div className="mb-3">
+            <FormMessage tone="success">{notice}</FormMessage>
+          </div>
+        )}
+        {tab === 'overview' && (
+          <UserOverviewPanel user={user} preview={preview} roles={roles} onAsk={ask} />
+        )}
         {tab === 'access' && !user && <DetailSkeleton />}
         {tab === 'access' && user && (
-          <UserAccessPanel user={user} shopNames={shopNames} />
+          <UserAccessPanel user={user} shops={shops} shopNames={shopNames} onAsk={ask} />
         )}
       </div>
+
+      {/* Outside the tab panel, so an Escape in the question never reaches an edit around it. */}
+      {asking && known && (
+        <UserUpdateDialog
+          key={`update-${known.id}`}
+          userId={known.id}
+          name={name}
+          request={asking.request}
+          roles={roles}
+          onClose={() => setAsking(null)}
+          onDone={(message) => {
+            asking.onSaved?.()
+            setAsking(null)
+            setNotice(message || 'Saved.')
+          }}
+        />
+      )}
     </article>
   )
 }

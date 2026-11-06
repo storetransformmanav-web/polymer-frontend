@@ -1,5 +1,6 @@
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
+import type { Role, Shop } from '../../../lib/api/endpoints.ts'
 import {
   DETAIL_TD as TD,
   DETAIL_TH as TH,
@@ -9,10 +10,18 @@ import {
   Field,
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
-import { ListChecksIcon, StoreIcon, UsersIcon } from '../../../components/ui/icons.tsx'
+import { ListChecksIcon, UsersIcon } from '../../../components/ui/icons.tsx'
 import type { UserDetail, UserItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime } from '../../../lib/format.ts'
-import { areaLabel, isAdminRole, roleLabel, roleTone } from '../utils/format.ts'
+import { areaLabel, isAdminRole, roleLabel } from '../utils/format.ts'
+import {
+  UserRoleCell,
+  UserStatusCell,
+  UserTextCell,
+  type AskUserUpdate,
+} from './UserEditCells.tsx'
+import { UserStoreAccess } from './UserStoreAccess.tsx'
+import type { UserUpdateRequest } from './UserUpdateDialog.tsx'
 
 const dateOrNull = (value: string | null | undefined) =>
   value ? formatDate(value) : null
@@ -28,9 +37,13 @@ interface OverviewProps {
   user: UserDetail | null
   /** The matching list row, so the summary can draw before the details arrive. */
   preview: UserItem | null
+  /** Every role, for the role dropdown. */
+  roles: Role[]
+  /** Asks "Are you sure?" for a change made with a small pencil. */
+  onAsk: AskUserUpdate
 }
 
-export function UserOverviewPanel({ user, preview }: OverviewProps) {
+export function UserOverviewPanel({ user, preview, roles, onAsk }: OverviewProps) {
   const source = user ?? preview
 
   return (
@@ -69,22 +82,28 @@ export function UserOverviewPanel({ user, preview }: OverviewProps) {
         <div className="flex min-w-0 flex-col gap-4">
           <DetailSection title="Profile & Account" count={11} icon={UsersIcon}>
             <FieldGrid>
-              <Field label="First name">{user.first_name}</Field>
-              <Field label="Last name">{user.last_name}</Field>
-              <Field label="Email">
-                <span className="flex items-center gap-1.5 break-words">
-                  {user.email}
-                  <CopyButton value={user.email} label="Copy email" />
-                </span>
+              <Field label="First name">
+                <UserTextCell user={user} field="firstName" onAsk={onAsk} />
               </Field>
-              <Field label="Phone">{user.phone}</Field>
+              <Field label="Last name">
+                <UserTextCell user={user} field="lastName" onAsk={onAsk} />
+              </Field>
+              <Field label="Email">
+                <UserTextCell
+                  user={user}
+                  field="email"
+                  onAsk={onAsk}
+                  after={<CopyButton value={user.email} label="Copy email" />}
+                />
+              </Field>
+              <Field label="Phone">
+                <UserTextCell user={user} field="phone" onAsk={onAsk} />
+              </Field>
               <Field label="Role">
-                <Badge tone={roleTone(user.role)}>{roleLabel(user)}</Badge>
+                <UserRoleCell user={user} roles={roles} onAsk={onAsk} />
               </Field>
               <Field label="Status">
-                <Badge tone={user.is_active ? 'success' : 'neutral'}>
-                  {user.is_active ? 'Active' : 'Inactive'}
-                </Badge>
+                <UserStatusCell user={user} onAsk={onAsk} />
               </Field>
               <Field label="Sign-in">
                 {user.google_linked ? (
@@ -116,31 +135,12 @@ export function UserOverviewPanel({ user, preview }: OverviewProps) {
 
 interface AccessProps {
   user: UserDetail
+  /** Every store the signed-in user can see — what this user can be given. */
+  shops: Shop[]
   /** Store key → display name. */
   shopNames: Record<string, string>
-}
-
-function StoreAccess({ user, shopNames }: AccessProps) {
-  if (isAdminRole(user.role)) {
-    return <p className="text-[0.9rem]">Administrators can see every store.</p>
-  }
-  if (user.shop_keys.length === 0) {
-    return <p className="text-text-muted text-[0.9rem]">No stores have been given.</p>
-  }
-
-  return (
-    <ul className="flex flex-wrap gap-1.5">
-      {user.shop_keys.map((key) => (
-        <li
-          key={key}
-          title={key}
-          className="bg-accent-tint text-accent rounded-full px-2.5 py-0.5 text-xs font-semibold"
-        >
-          {shopNames[key] ?? key}
-        </li>
-      ))}
-    </ul>
-  )
+  /** Asks "Are you sure?" for a change; `onSaved` runs once it went through. */
+  onAsk: (request: UserUpdateRequest, onSaved?: () => void) => void
 }
 
 const yesNoBadge = (value: boolean | undefined) =>
@@ -150,20 +150,14 @@ const yesNoBadge = (value: boolean | undefined) =>
     <Badge tone={value ? 'success' : 'neutral'}>{value ? 'Yes' : 'No'}</Badge>
   )
 
-export function UserAccessPanel({ user, shopNames }: AccessProps) {
+export function UserAccessPanel({ user, shops, shopNames, onAsk }: AccessProps) {
   const areas = Object.entries(user.permissions ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   )
 
   return (
     <div className="flex flex-col gap-4">
-      <DetailSection
-        title="Store access"
-        count={isAdminRole(user.role) ? undefined : user.shop_keys.length}
-        icon={StoreIcon}
-      >
-        <StoreAccess user={user} shopNames={shopNames} />
-      </DetailSection>
+      <UserStoreAccess user={user} shops={shops} shopNames={shopNames} onAsk={onAsk} />
 
       {areas.length === 0 ? (
         <DetailEmpty icon={ListChecksIcon}>
