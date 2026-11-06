@@ -4,6 +4,7 @@ import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { OrdersIcon, TagIcon, UsersIcon } from '../../../components/ui/icons.tsx'
 import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
+import type { OrderSavedHandler } from '../hooks/useOrderEdit.ts'
 import { formatPrice } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import {
@@ -15,12 +16,24 @@ import {
 import { itemsToShip, orderTracking } from '../utils/tracking.ts'
 import { OrderAddresses } from './OrderAddressCards.tsx'
 import { Chips, MiniCard, Row, Rows } from './OrderCompact.tsx'
+import {
+  EditableOrderItems,
+  OrderDeliveryCostCell,
+  OrderDeliveryMethodCell,
+  OrderEmailCell,
+  type OrderEditContext,
+} from './OrderInlineEdits.tsx'
 import { OrderItemsSummary } from './OrderItemsPanel.tsx'
 
 interface OverviewProps {
   order: OrderDetail | null
   /** The matching list row, so the cards can draw before the details arrive. */
   preview: OrderListItem | null
+  /** The order number from the address, what the update is sent to. */
+  reference: string
+  shop: string | null
+  /** A change was accepted (the order is read again from the API). */
+  onSaved: OrderSavedHandler
 }
 
 /** An id in small fixed-width type, with a copy button. */
@@ -34,7 +47,8 @@ function CopyableId({ value, label }: { value: string; label: string }) {
 }
 
 /** The Overview's **Shipping Summary**: how it goes out, what was charged, and the tracking. */
-function ShippingSummary({ order }: { order: OrderDetail }) {
+function ShippingSummary({ context }: { context: OrderEditContext }) {
+  const { order } = context
   const { tracking } = orderTracking(order)
   const methods = order.shipping_lines.map((line) => line.title).filter(Boolean)
   const toShip = itemsToShip(order)
@@ -42,12 +56,20 @@ function ShippingSummary({ order }: { order: OrderDetail }) {
     <MiniCard title="Shipping Summary" icon={OrdersIcon}>
       <Rows>
         <Row label="Delivery method">
-          {methods.length > 0 ? methods.join(', ') : null}
+          <OrderDeliveryMethodCell
+            context={context}
+            display={methods.length > 0 ? methods.join(', ') : '—'}
+          />
         </Row>
         <Row label="Shipping charged">
-          {order.total_shipping === null || order.total_shipping === undefined
-            ? null
-            : formatPrice(order.total_shipping, order.currency)}
+          <OrderDeliveryCostCell
+            context={context}
+            display={
+              order.total_shipping === null || order.total_shipping === undefined
+                ? '—'
+                : formatPrice(order.total_shipping, order.currency)
+            }
+          />
         </Row>
         <Row label="Fulfillment status">
           {order.fulfillment_status && (
@@ -95,10 +117,22 @@ function ShippingSummary({ order }: { order: OrderDetail }) {
  * The Overview: **Customer**, **Shipping address** and **Billing address** side by side as three
  * cards of one size (the two addresses fold away), then **Items** — a line per product with the
  * order's totals at its foot — **Shipping Summary** and **Tags**. The customer and the totals draw
- * from the list row while the details load; how it was paid is in the page's header.
+ * from the list row while the details load; how it was paid is in the page's header. What the
+ * update API takes is edited in place, as on a product's page: the email, delivery method and
+ * cost by double-clicking them (or their small pencil), the shipping address and the items with
+ * the card's pencil, then ✓ Save or ✕ Discard.
  */
-export function OrderOverviewPanel({ order, preview }: OverviewProps) {
+export function OrderOverviewPanel({
+  order,
+  preview,
+  reference,
+  shop,
+  onSaved,
+}: OverviewProps) {
   const source = order ?? preview
+  const context: OrderEditContext | null = order
+    ? { order, reference, shop, onSaved }
+    : null
 
   // Nothing known yet (opened from a bare address): a placeholder, not cards of dashes.
   if (!source) return <DetailSkeleton />
@@ -141,18 +175,34 @@ export function OrderOverviewPanel({ order, preview }: OverviewProps) {
               </Row>
             )}
             <Row label="Email">
-              {source.customer?.email && (
+              {context && !orderEmail ? (
                 <span className="flex items-center justify-end gap-1.5 break-all">
-                  {source.customer.email}
-                  <CopyButton value={source.customer.email} label="Copy email" />
+                  <OrderEmailCell
+                    context={context}
+                    display={source.customer?.email || source.email || '—'}
+                  />
+                  {source.customer?.email && (
+                    <CopyButton value={source.customer.email} label="Copy email" />
+                  )}
                 </span>
+              ) : (
+                source.customer?.email && (
+                  <span className="flex items-center justify-end gap-1.5 break-all">
+                    {source.customer.email}
+                    <CopyButton value={source.customer.email} label="Copy email" />
+                  </span>
+                )
               )}
             </Row>
             <Row label="Phone">{source.customer?.phone ?? order?.phone}</Row>
             {orderEmail && (
               <Row label="Order email">
                 <span className="flex items-center justify-end gap-1.5 break-all">
-                  {orderEmail}
+                  {context ? (
+                    <OrderEmailCell context={context} display={orderEmail} />
+                  ) : (
+                    orderEmail
+                  )}
                   <CopyButton value={orderEmail} label="Copy order email" />
                 </span>
               </Row>
@@ -171,8 +221,8 @@ export function OrderOverviewPanel({ order, preview }: OverviewProps) {
           </Rows>
         </MiniCard>
 
-        {order ? (
-          <OrderAddresses order={order} />
+        {context ? (
+          <OrderAddresses context={context} />
         ) : (
           <>
             <DetailSkeleton />
@@ -181,17 +231,15 @@ export function OrderOverviewPanel({ order, preview }: OverviewProps) {
         )}
       </div>
 
-      <OrderItemsSummary
-        items={order?.line_items ?? null}
-        totals={source}
-        taxesIncluded={order?.taxes_included}
-        tip={order?.total_tip}
-        outstanding={order?.total_outstanding}
-      />
+      {context ? (
+        <EditableOrderItems context={context} />
+      ) : (
+        <OrderItemsSummary items={null} totals={source} />
+      )}
 
-      {order && (
+      {context && order && (
         <>
-          <ShippingSummary order={order} />
+          <ShippingSummary context={context} />
           {order.tags.length > 0 && (
             <MiniCard title="Tags" count={order.tags.length} icon={TagIcon}>
               <Chips items={order.tags} />

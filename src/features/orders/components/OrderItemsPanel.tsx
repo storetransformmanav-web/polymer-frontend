@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { BoxesIcon } from '../../../components/ui/icons.tsx'
 import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
@@ -122,22 +123,36 @@ export function OrderItemsSummary({
   taxesIncluded,
   tip,
   outstanding,
+  actions,
+  editor = null,
 }: {
   items: OrderDetail['line_items'] | null
   totals: OrderListItem
   taxesIncluded?: boolean | null
   tip?: string | null
   outstanding?: string | null
+  /** The pencil, or ✓ and ✕. */
+  actions?: ReactNode
+  /** The fields, in place of the table, while the items are being edited. */
+  editor?: ReactNode
 }) {
   const money = (value: string | null | undefined) =>
     value === null || value === undefined ? '—' : formatPrice(value, totals.currency)
 
   return (
-    <FoldCard title="Items" icon={BoxesIcon} count={items?.length} defaultOpen={false}>
+    <FoldCard
+      title="Items"
+      icon={BoxesIcon}
+      count={items?.length}
+      defaultOpen={false}
+      actions={actions}
+      forceOpen={editor !== null}
+    >
       <div className="flex flex-col gap-3 py-1.5">
-        {items === null && <DetailSkeleton />}
-        {items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
-        {items && items.length > 0 && (
+        {editor}
+        {!editor && items === null && <DetailSkeleton />}
+        {!editor && items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
+        {!editor && items && items.length > 0 && (
           <MiniTable>
             <thead>
               <tr>

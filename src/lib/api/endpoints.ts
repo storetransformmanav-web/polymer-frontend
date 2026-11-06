@@ -49,7 +49,7 @@ export const ENDPOINTS = {
   orders: {
     /** `GET` the list; `POST` creates an order. */
     list: '/orders',
-    /** `ref` is the order number (17516) — add `shop` when two stores could share one. */
+    /** `GET` one order, `PATCH` updates it. `ref` is the order number (17516) — add `shop` when two stores could share one. */
     detail: (ref: string) => `/orders/${encodeURIComponent(ref)}`,
   },
   customers: {
@@ -723,6 +723,16 @@ export interface OrderCreateBody {
   note?: string
   tags?: string[]
   payment?: { status: OrderPaymentStatus; method?: string }
+}
+
+/** `PATCH /orders/{ref}`: only what changes is sent. */
+export interface OrderUpdateBody {
+  email?: string
+  shipping_address?: OrderCreateAddress
+  line_items_add?: OrderCreateVariantLine[]
+  line_items_update?: { line_item_id: string; quantity: number }[]
+  shipping?: { title: string; price: string }
+  staff_note?: string
 }
 
 /** What the app keeps of a create answer: enough to open the new order and say so. */
@@ -2498,6 +2508,24 @@ export const api = {
     async create(body: OrderCreateBody): Promise<OrderCreateResult> {
       const data = await apiClient.post<unknown>(ENDPOINTS.orders.list, body)
       return readOrderCreate(data)
+    },
+
+    /**
+     * Updates an order in the store (`PATCH /orders/{ref}?preview=false&shop=`). `preview` is
+     * always false: the change is really made. Only the answer's `message` is read — its shape
+     * isn't documented, and the page reads the order again afterwards. Never retried: a repeat
+     * could add a product twice.
+     */
+    async update(
+      ref: string,
+      body: OrderUpdateBody,
+      shop: string | null,
+    ): Promise<{ message: string }> {
+      const data = await apiClient.patch<unknown>(ENDPOINTS.orders.detail(ref), body, {
+        params: { preview: false, ...(shop ? { shop } : {}) },
+      })
+      const message = asRecord(data)?.message
+      return { message: typeof message === 'string' ? message.trim() : '' }
     },
   },
   customers: {

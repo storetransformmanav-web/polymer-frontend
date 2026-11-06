@@ -188,11 +188,12 @@ export function OrdersList({
       className="relative min-h-0 flex-1 overflow-auto"
     >
       <table
-        className={`w-full min-w-[900px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1030px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={`${TH} w-24`}>Order</th>
+            <th className={`${TH} w-32`}>Created date</th>
             <th className={TH}>Customer name</th>
             <th className={TH}>Email</th>
             <th className={`${TH_CENTER} w-40`}>Financial status</th>
@@ -211,7 +212,7 @@ export function OrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: 9 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -230,6 +231,9 @@ export function OrdersList({
                       <span className="block truncate font-semibold">
                         <Highlight text={orderLabel(order)} />
                       </span>
+                    </td>
+                    <td className={`${TD} whitespace-nowrap`}>
+                      {dateOrDash(order.shopify_created_at)}
                     </td>
                     <td className={TD}>
                       {name ? (

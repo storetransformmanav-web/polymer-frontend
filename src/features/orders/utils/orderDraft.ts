@@ -150,10 +150,10 @@ export function isOrderDirty(draft: OrderDraft): boolean {
   )
 }
 
-const MONEY = /^\d+(\.\d{1,2})?$/
-const WHOLE = /^\d+$/
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const PHONE = /^\+?[\d\s()-]{6,20}$/
+export const MONEY = /^\d+(\.\d{1,2})?$/
+export const WHOLE = /^\d+$/
+export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export const PHONE = /^\+?[\d\s()-]{6,20}$/
 
 /** The ids of the fields, shared by the form and the checks. */
 export const FIELD = {

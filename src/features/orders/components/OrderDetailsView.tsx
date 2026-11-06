@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -54,6 +55,14 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   const details = useOrderDetails(reference, shop)
   const { order, preview } = details
   const [tab, setTab] = useState<TabId>('overview')
+  // What the backend said about the latest change; the order itself is re-read from the API.
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!notice) return undefined
+    const timer = window.setTimeout(() => setNotice(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
@@ -174,6 +183,12 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         )}
       </header>
 
+      {notice && (
+        <div className="px-4 pb-3">
+          <FormMessage tone="success">{notice}</FormMessage>
+        </div>
+      )}
+
       <div
         role="tablist"
         aria-label="Order sections"
@@ -213,7 +228,15 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         aria-labelledby={`order-tab-${tab}`}
         className="bg-surface p-3"
       >
-        {tab === 'overview' && <OrderOverviewPanel order={order} preview={preview} />}
+        {tab === 'overview' && (
+          <OrderOverviewPanel
+            order={order}
+            preview={preview}
+            reference={reference}
+            shop={shop}
+            onSaved={(message) => setNotice(message || 'Order updated.')}
+          />
+        )}
         {tab !== 'overview' && !order && <DetailSkeleton />}
         {order && tab === 'shipping' && <OrderShippingPanel order={order} />}
         {order && tab === 'attributes' && <OrderNotesPanel order={order} />}

@@ -170,7 +170,7 @@ function ProductResult({
 }
 
 /** A line's quantity: − and + beside a box that can also be typed in. */
-function QuantityStepper({
+export function QuantityStepper({
   id,
   name,
   value,
@@ -229,6 +229,68 @@ function QuantityStepper({
 }
 
 /**
+ * A search over the store's products (nothing is asked until something is typed) whose matches
+ * drop down under the box; opening one lists its variants, each with **Add**.
+ */
+export function ProductSearch({
+  id,
+  shop,
+  noMatchHint,
+  onAdd,
+}: {
+  id: string
+  shop: string
+  /** Said after "No product matches …". */
+  noMatchHint: string
+  onAdd: (update: (current: DraftLine[]) => DraftLine[]) => void
+}) {
+  const [text, setText] = useState('')
+  const found = usePickProducts(shop, text)
+  const products = found.data?.items ?? []
+  const total = found.data?.total ?? 0
+
+  return (
+    <SearchDropdown
+      id={id}
+      label="Search products"
+      value={text}
+      placeholder="Search products by name or SKU"
+      onChange={setText}
+    >
+      {found.isFetching && products.length === 0 && (
+        <p className="text-text-muted flex items-center gap-2 px-3 py-3 text-[0.8rem]">
+          <SpinnerIcon width={14} height={14} className="animate-spin" />
+          Searching products…
+        </p>
+      )}
+      {found.isError && (
+        <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
+          Could not search the products. Try again in a moment.
+        </p>
+      )}
+      {found.data && products.length === 0 && !found.isFetching && (
+        <p className="text-text-muted px-3 py-3 text-[0.8rem]">
+          No product matches “{text.trim()}”. {noMatchHint}
+        </p>
+      )}
+      {products.length > 0 && (
+        <ul aria-label="Products found" className="m-0 list-none p-0">
+          {products.map((product) => (
+            <ProductResult key={product.id} product={product} onAdd={onAdd} />
+          ))}
+        </ul>
+      )}
+      {total > PICK_LIMIT && (
+        <p className="border-border text-text-muted border-t px-3 py-2 text-[0.76rem]">
+          Showing {PICK_LIMIT} of {total.toLocaleString('en-GB')} — keep typing to narrow
+          the list.
+        </p>
+      )}
+    </SearchDropdown>
+  )
+}
+
+/**
  * "Add Products": a search over the store's products (nothing is asked until something is typed)
  * whose matches drop down under the box; opening one lists its variants, and **Add** puts a
  * variant on the order (again: one more of it). **Add custom item** adds a line that is not a
@@ -250,11 +312,6 @@ export function OrderLinesCard({
   errors: OrderErrors
   onChange: (update: (current: DraftLine[]) => DraftLine[]) => void
 }) {
-  const [text, setText] = useState('')
-  const found = usePickProducts(shop, text)
-  const products = found.data?.items ?? []
-  const total = found.data?.total ?? 0
-
   const setLine = (key: string, patch: Partial<CustomLine> | { quantity: string }) =>
     onChange((current) =>
       current.map((line) =>
@@ -269,43 +326,12 @@ export function OrderLinesCard({
       subtitle="Search and add products to this order"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <SearchDropdown
+        <ProductSearch
           id="order-product-search"
-          label="Search products"
-          value={text}
-          placeholder="Search products by name or SKU"
-          onChange={setText}
-        >
-          {found.isFetching && products.length === 0 && (
-            <p className="text-text-muted flex items-center gap-2 px-3 py-3 text-[0.8rem]">
-              <SpinnerIcon width={14} height={14} className="animate-spin" />
-              Searching products…
-            </p>
-          )}
-          {found.isError && (
-            <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
-              Could not search the products. Try again in a moment.
-            </p>
-          )}
-          {found.data && products.length === 0 && !found.isFetching && (
-            <p className="text-text-muted px-3 py-3 text-[0.8rem]">
-              No product matches “{text.trim()}”. Add it as a custom item instead.
-            </p>
-          )}
-          {products.length > 0 && (
-            <ul aria-label="Products found" className="m-0 list-none p-0">
-              {products.map((product) => (
-                <ProductResult key={product.id} product={product} onAdd={onChange} />
-              ))}
-            </ul>
-          )}
-          {total > PICK_LIMIT && (
-            <p className="border-border text-text-muted border-t px-3 py-2 text-[0.76rem]">
-              Showing {PICK_LIMIT} of {total.toLocaleString('en-GB')} — keep typing to
-              narrow the list.
-            </p>
-          )}
-        </SearchDropdown>
+          shop={shop}
+          noMatchHint="Add it as a custom item instead."
+          onAdd={onChange}
+        />
         <button
           type="button"
           onClick={() => onChange((current) => [...current, blankCustomLine()])}

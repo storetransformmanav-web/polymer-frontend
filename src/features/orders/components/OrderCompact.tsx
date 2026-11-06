@@ -13,7 +13,7 @@ const COUNT =
   'bg-surface text-text-muted border-border rounded-full border px-1.5 text-[0.62rem] leading-4 font-bold'
 
 /** Every card's title row: the same soft tint on all of them, so the sections read at a glance. */
-const TITLE_ROW = 'bg-accent-tint/60 flex items-center gap-2 px-3 py-2'
+const TITLE_ROW = 'bg-accent-tint/60 flex min-h-10 items-center gap-2 px-3 py-1.5'
 
 /** A small card: a slim title row (icon, title, count) over its content. A labelled region. */
 export function MiniCard({
@@ -48,6 +48,8 @@ export function FoldCard({
   count,
   defaultOpen = true,
   shrinkWhenFolded = false,
+  actions,
+  forceOpen = false,
   className = '',
   children,
 }: {
@@ -57,34 +59,44 @@ export function FoldCard({
   defaultOpen?: boolean
   /** In a row of cards of one height: a folded card keeps only its title row. */
   shrinkWhenFolded?: boolean
+  /** Controls at the row's right edge (the pencil, or ✓ and ✕). */
+  actions?: ReactNode
+  /** Stays open whatever the title row says (while its content is being edited). */
+  forceOpen?: boolean
   className?: string
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [opened, setOpen] = useState(defaultOpen)
+  const open = opened || forceOpen
   const bodyId = useId()
   return (
     <section
       aria-label={title}
       className={`${DETAIL_CARD} min-w-0 ${shrinkWhenFolded && !open ? 'self-start' : ''} ${className}`}
     >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => setOpen((value) => !value)}
-        className={`${TITLE_ROW} hover:bg-accent-tint w-full cursor-pointer border-none text-left transition-colors`}
-      >
-        <Icon width={14} height={14} className="text-accent shrink-0" />
-        <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>
-        {count !== undefined && <span className={COUNT}>{count}</span>}
-        <ChevronDownIcon
-          width={14}
-          height={14}
-          className={`text-text-muted ml-auto shrink-0 transition-transform duration-200 ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
+      <div className="bg-accent-tint/60 flex items-center">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen(!open)}
+          className={`${TITLE_ROW} hover:bg-accent-tint min-w-0 flex-1 cursor-pointer border-none text-left transition-colors`}
+        >
+          <Icon width={14} height={14} className="text-accent shrink-0" />
+          <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>
+          {count !== undefined && <span className={COUNT}>{count}</span>}
+          <ChevronDownIcon
+            width={14}
+            height={14}
+            className={`text-text-muted ml-auto shrink-0 transition-transform duration-200 ${
+              open ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+        {actions && (
+          <span className="flex shrink-0 items-center gap-1.5 px-2">{actions}</span>
+        )}
+      </div>
       {open && (
         <div id={bodyId} className="border-border border-t px-3 py-1.5">
           {children}
