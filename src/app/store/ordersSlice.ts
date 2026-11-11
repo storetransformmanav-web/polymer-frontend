@@ -19,6 +19,7 @@ import {
 import { RANGE_PRESETS } from '../../components/ui/dateRange.ts'
 import { sessionCleared } from './authSlice.ts'
 import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
+import { storeTimeToIso } from '../../lib/storeTime.ts'
 
 /**
  * Orders list, cached the same way as products and customers (see productsSlice.ts):
@@ -78,11 +79,10 @@ export const DEFAULT_ORDER_FILTERS: OrderFilters = {
   pageSize: 25,
 }
 
-/** A whole day in the user's time zone → the ISO timestamp the API wants, or undefined. */
+/** A whole day on the store's clock → the ISO timestamp the API wants, or undefined. */
 function dayBoundary(day: string, time: '00:00:00' | '23:59:59'): string | undefined {
   if (!day) return undefined
-  const date = new Date(`${day}T${time}`)
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+  return storeTimeToIso(day, time)
 }
 
 /** Filters → the query parameters the API understands (empty ones omitted). */

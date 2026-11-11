@@ -3,6 +3,7 @@
  * both orders and products — keep new formatters here rather than
  * duplicating `Intl` calls per feature.
  */
+import { formatStoreDate, getStoreTimeZone } from './storeTime.ts'
 
 export function formatCurrency(amount: number, currency = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount)
@@ -45,34 +46,35 @@ export function currencySymbol(currency: string | null | undefined): string {
   }
 }
 
+/** "14 Oct 2026" — a day, as the store's calendar shows it (see `lib/storeTime.ts`). */
 export function formatDate(isoString: string): string {
   return new Intl.DateTimeFormat('en-GB', {
+    timeZone: getStoreTimeZone(),
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   }).format(new Date(isoString))
 }
 
-/** "14 Oct 2026, 10:59" — a timestamp with its time (for tooltips and "last seen" cells). */
+/**
+ * "14 Oct 2026, 10:59" — a timestamp with its time, on the store's clock (24-hour), so it matches
+ * what Shopify shows. For tooltips, "last seen" cells and every date-with-time on screen.
+ */
 export function formatDateTime(isoString: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(isoString))
+  return formatStoreDate(isoString)
 }
 
-/** "14 Oct 2026, 11:04:03" — down to the second, for log entries. */
+/** "14 Oct 2026, 11:04:03" — down to the second, for log entries; on the store's clock. */
 export function formatTimestamp(isoString: string): string {
   return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
+    timeZone: getStoreTimeZone(),
+    day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    hourCycle: 'h23',
   }).format(new Date(isoString))
 }
 

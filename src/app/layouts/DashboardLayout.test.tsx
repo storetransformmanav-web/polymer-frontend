@@ -36,6 +36,7 @@ function renderAt(route: string) {
         <Route path="orders" element={<p>the orders page</p>} />
         <Route path="products" element={<p>the products page</p>} />
         <Route path="customers" element={<p>the customers page</p>} />
+        <Route path="users" element={<p>the users page</p>} />
       </Route>
     </Routes>,
     { route },
@@ -50,10 +51,11 @@ describe('DashboardLayout', () => {
     vi.mocked(api.orders.list).mockResolvedValue({ ...emptyList, totals: null })
   })
 
-  it('marks only Orders, Products, Inventory and Lock Management as pages that fill the window’s height', () => {
+  it('marks only Orders, Products, Customers, Inventory and Lock Management as pages that fill the window’s height', () => {
     expect(NAV_ITEMS.filter((item) => item.fillHeight).map((item) => item.to)).toEqual([
       '/orders',
       '/products',
+      '/customers',
       '/inventory',
       '/locks',
     ])
@@ -73,7 +75,7 @@ describe('DashboardLayout', () => {
   })
 
   it('leaves every other page scrolling as a whole, as before', () => {
-    for (const route of ['/customers']) {
+    for (const route of ['/users']) {
       const { container, unmount } = renderAt(route)
 
       const layout = container.firstElementChild as HTMLElement

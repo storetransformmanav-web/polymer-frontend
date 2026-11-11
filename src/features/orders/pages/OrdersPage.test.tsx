@@ -395,11 +395,16 @@ describe('OrdersPage', () => {
       const withDates = pageCalls().find(([params]) => params.from && params.to)
       expect(withDates).toBeDefined()
       const { from, to } = withDates![0]
-      // Whole days in the user's time zone: 00:00:00 … 23:59:59 local.
-      expect(new Date(from!).getHours()).toBe(0)
-      expect(new Date(from!).getMinutes()).toBe(0)
-      expect(new Date(to!).getHours()).toBe(23)
-      expect(new Date(to!).getMinutes()).toBe(59)
+      // Whole days on the store's clock: 00:00 … 23:59 in the store's time zone.
+      const clock = (iso: string) =>
+        new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Europe/London',
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).format(new Date(iso))
+      expect(clock(from!)).toBe('00:00')
+      expect(clock(to!)).toBe('23:59')
       expect(new Date(to!).getTime()).toBeGreaterThan(new Date(from!).getTime())
     })
   })

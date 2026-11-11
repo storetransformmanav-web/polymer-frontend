@@ -4,6 +4,7 @@ import {
   type ActivityListParams,
   type ActivityMethod,
 } from '../../../lib/api/endpoints.ts'
+import { storeTimeToIso } from '../../../lib/storeTime.ts'
 
 /**
  * Query definitions shared by the page's hooks and by the prefetch that runs
@@ -53,11 +54,11 @@ export function toDateFilters(range: {
   }
 }
 
-/** A `datetime-local` value (local time) → the ISO timestamp the API wants, or undefined. */
+/** A `datetime-local` value (on the store's clock) → the ISO timestamp the API wants, or undefined. */
 function toIso(local: string): string | undefined {
   if (!local) return undefined
-  const date = new Date(local)
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+  const [day, time = '00:00:00'] = local.split('T')
+  return storeTimeToIso(day, time)
 }
 
 /** The start is after the end — the API would return nothing (or reject it). */

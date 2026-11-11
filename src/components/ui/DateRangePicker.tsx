@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from './icons.tsx'
+import { storeToday } from '../../lib/storeTime.ts'
 import {
   RANGE_PRESETS,
   formatDayLong,
@@ -177,7 +178,8 @@ function DateField({
  * first. A choice applies as soon as it is made, and either end may be left open.
  */
 export function DateRangePicker({ label, id, from, to, onChange }: DateRangePickerProps) {
-  const today = new Date()
+  // "Today" is the store's today, not the computer's.
+  const today = storeToday()
   const todayYmd = toYmd(today)
   const hasRange = Boolean(from || to)
   const preset = matchingPreset({ from, to }, today)
@@ -191,7 +193,7 @@ export function DateRangePicker({ label, id, from, to, onChange }: DateRangePick
   const [menuOpen, setMenuOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [side, setSide] = useState<Side>('from')
-  const [view, setView] = useState<Month>(() => monthOf(new Date()))
+  const [view, setView] = useState<Month>(() => monthOf(storeToday()))
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
@@ -246,7 +248,7 @@ export function DateRangePicker({ label, id, from, to, onChange }: DateRangePick
     setSide(next)
     if (!calendarOpen || next !== side) {
       const day = parseYmd(next === 'from' ? from || to : to || from)
-      setView(monthOf(day ?? new Date()))
+      setView(monthOf(day ?? storeToday()))
     }
     setMenuOpen(false)
     setCalendarOpen(true)

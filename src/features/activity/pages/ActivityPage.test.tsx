@@ -447,8 +447,9 @@ describe('ActivityPage', () => {
           page: 1,
           page_size: 25,
           action: 'create_user',
-          from: new Date('2026-10-14T00:00:00').toISOString(),
-          to: new Date('2026-10-16T23:59:59').toISOString(),
+          // The days are on the store's clock (London, summer time: UTC+1).
+          from: '2026-10-13T23:00:00.000Z',
+          to: '2026-10-16T22:59:59.000Z',
         }),
       )
     })

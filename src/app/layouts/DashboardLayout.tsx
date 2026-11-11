@@ -1,5 +1,8 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useCanOpen, useIsOffice } from '../../hooks/useAccess.ts'
+import { setStoreTimeZone } from '../../lib/storeTime.ts'
+import { useAppSelector } from '../store/hooks.ts'
+import { ALL_SHOPS, shopValue } from '../store/shopSlice.ts'
 import { SHOPIFY_HOME } from '../router/navigation.ts'
 import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
@@ -25,6 +28,20 @@ export function DashboardLayout() {
   const canView = useCanOpen(activeItem)
   const isOffice = useIsOffice()
 
+  // Times are shown in the store's time zone (from `GET /shops`, `items[].timezone`): the chosen
+  // store's, else the first store that has one, else Europe/London. It is set while rendering so
+  // every page below formats with it from its first paint; if it changes (the stores just
+  // loaded, another store picked) the page below is rebuilt once so every time is redone.
+  const shops = useAppSelector((state) => state.shop.items)
+  const selectedShop = useAppSelector((state) => state.shop.selected)
+  const chosen =
+    selectedShop === ALL_SHOPS
+      ? undefined
+      : shops.find((shop) => shopValue(shop) === selectedShop)
+  const timeZone = setStoreTimeZone(
+    chosen?.timezone ?? shops.find((shop) => shop.timezone)?.timezone,
+  )
+
   // The "office" role has only the Shopify Management pages: anywhere else (the dashboard after
   // sign-in, an old bookmark) goes to Orders.
   if (isOffice && !canView && activeItem?.to !== SHOPIFY_HOME)
@@ -45,7 +62,7 @@ export function DashboardLayout() {
             fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-clip lg:pb-6' : ''
           }`}
         >
-          {canView ? <Outlet /> : <NoAccessPage />}
+          {canView ? <Outlet key={timeZone} /> : <NoAccessPage />}
         </main>
       </div>
     </div>

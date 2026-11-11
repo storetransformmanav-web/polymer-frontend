@@ -92,13 +92,12 @@ describe('toOrderParams', () => {
     expect('max_total' in params).toBe(false)
   })
 
-  it('turns whole days into the first and last second of those days (local time)', () => {
+  it('turns whole days into the first and last second of those days on the store’s clock', () => {
     const params = toOrderParams(filters({ from: '2026-10-01', to: '2026-10-22' }))
 
-    expect(new Date(params.from!).getTime()).toBe(
-      new Date('2026-10-01T00:00:00').getTime(),
-    )
-    expect(new Date(params.to!).getTime()).toBe(new Date('2026-10-22T23:59:59').getTime())
+    // Europe/London is on summer time (UTC+1) in October, so the day starts an hour before UTC's.
+    expect(params.from).toBe('2026-09-30T23:00:00.000Z')
+    expect(params.to).toBe('2026-10-22T22:59:59.000Z')
     // They are ISO timestamps.
     expect(params.from).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   })
