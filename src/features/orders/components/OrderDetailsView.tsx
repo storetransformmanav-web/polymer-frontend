@@ -155,8 +155,8 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="p-4 sm:p-6">
+    <article className="border-border bg-bg flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1">
+      <header className="shrink-0 p-4 sm:p-6">
         <div className="flex items-start gap-4">
           <span
             aria-hidden="true"
@@ -245,7 +245,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
       </header>
 
       {notice && (
-        <div className="px-4 pb-3 sm:px-6">
+        <div className="shrink-0 px-4 pb-3 sm:px-6">
           <FormMessage tone="success">{notice}</FormMessage>
         </div>
       )}
@@ -253,7 +253,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
       <div
         role="tablist"
         aria-label="Order sections"
-        className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
+        className="border-border flex shrink-0 [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((item) => {
           const selected = item.id === tab
@@ -287,7 +287,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         id="order-tabpanel"
         role="tabpanel"
         aria-labelledby={`order-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        className="bg-surface p-3 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {tab === 'details' && (
           <OrderDetailsPanel

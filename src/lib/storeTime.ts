@@ -211,3 +211,18 @@ export function formatStoreClock(
     hourCycle: 'h23',
   }).format(date)
 }
+
+/** "BST" or "GMT" — what the store's clock is called at this moment (summer or winter time). */
+export function storeTimeZoneAbbreviation(
+  iso: string | null | undefined,
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return (
+    new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'short' })
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value ?? ''
+  )
+}

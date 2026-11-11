@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { MapPinIcon } from '../../../components/ui/icons.tsx'
+import { MapPinIcon, PhoneIcon } from '../../../components/ui/icons.tsx'
 import type { OrderAddress } from '../../../lib/api/endpoints.ts'
 import { useOrderEdit } from '../hooks/useOrderEdit.ts'
 import { formatAddressLines } from '../utils/format.ts'
@@ -20,6 +20,19 @@ function addressParts(address: OrderAddress | null | undefined) {
     name: name.trim(),
     company: address?.company?.trim() ?? '',
     lines: formatAddressLines(address),
+    // The same parts on one line, as they would be said: "331 Kenton Road, Harrow, London, England,
+    // United Kingdom" — so the card needs a line or two, not one for every part.
+    summary: [
+      address?.address1,
+      address?.address2,
+      address?.city,
+      address?.province,
+      address?.zip,
+      address?.country,
+    ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(', '),
     phone: address?.phone?.trim() ?? '',
   }
 }
@@ -31,9 +44,9 @@ function addressText(address: OrderAddress | null | undefined): string {
 }
 
 /**
- * One address as a card that folds: its title row, then the name, company, street, town and
- * postcode, region and country as they would be written on a parcel, the phone number under them,
- * and a copy button.
+ * One address as a card that folds: its title row, then the name and company on one line, the
+ * street, town, region, postcode and country together on the next (a description, not a line per
+ * part), the phone number under them and a copy button.
  */
 function AddressCard({
   title,
@@ -51,7 +64,7 @@ function AddressCard({
   /** The fields, in place of the address, while it is being edited. */
   editor?: ReactNode
 }) {
-  const { name, company, lines, phone } = addressParts(address)
+  const { name, company, lines, summary, phone } = addressParts(address)
   const empty = !name && !company && lines.length === 0 && !phone
 
   return (
@@ -65,24 +78,34 @@ function AddressCard({
         (empty ? (
           <p className="text-text-muted m-0 py-1 text-[0.78rem]">No address.</p>
         ) : (
-          <div className="flex flex-col gap-1.5 py-1">
-            <div className="flex items-start justify-between gap-2">
-              <address className="m-0 flex min-w-0 flex-col text-[0.78rem] leading-snug break-words not-italic">
-                {name && <span className="text-[0.82rem] font-semibold">{name}</span>}
-                {company && <span className="text-text-muted">{company}</span>}
-                {lines.map((line) => (
-                  <span key={line}>{line}</span>
-                ))}
-                {phone && <span className="text-text-muted mt-1">{phone}</span>}
-              </address>
+          <div className="flex items-start justify-between gap-3">
+            <address className="m-0 flex min-w-0 flex-col gap-0.5 text-[0.85rem] leading-snug break-words not-italic">
+              {(name || company) && (
+                <span>
+                  {name && <span className="font-semibold">{name}</span>}
+                  {name && company && <span className="text-text-muted"> · </span>}
+                  {company && <span className="text-text-muted">{company}</span>}
+                </span>
+              )}
+              {summary && <span>{summary}</span>}
+              {phone && (
+                <span className="text-text-muted flex items-center gap-1.5">
+                  <PhoneIcon width={14} height={14} className="shrink-0" />
+                  {phone}
+                </span>
+              )}
+            </address>
+            <div className="flex shrink-0 flex-col items-end gap-2">
               <CopyButton
                 value={addressText(address)}
                 label={`Copy ${title.toLowerCase()}`}
               />
+              {note && (
+                <span className="bg-accent-tint text-accent rounded-full px-3 py-1 text-[0.75rem] font-semibold">
+                  {note}
+                </span>
+              )}
             </div>
-            {note && (
-              <p className="text-text-muted m-0 text-[0.7rem] font-medium">{note}</p>
-            )}
           </div>
         ))}
     </FoldCard>
@@ -118,7 +141,7 @@ export function BillingAddressCard({ context }: { context: OrderEditContext }) {
     <AddressCard
       title="Billing address"
       address={order.billing_address}
-      note={same ? 'Same as the shipping address.' : undefined}
+      note={same ? 'Same as shipping' : undefined}
     />
   )
 }

@@ -165,6 +165,13 @@ export function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      {/* The figures sit at the very top, above the strip of open orders. They belong to the
+          list, so an open order, the Add order form or a linked page takes their place (kept
+          mounted, only hidden). */}
+      <div className={activeRef || creatingRoute || linked ? 'hidden' : undefined}>
+        <OrdersKpis data={data} />
+      </div>
+
       <OrderTabsBar
         tabs={tabs.tabs}
         activeId={activeId}
@@ -225,7 +232,9 @@ export function OrdersPage() {
       )}
 
       {activeRef && (
-        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        // From `lg` the order fills the window and does not scroll as a whole: its header and tabs
+        // stay put and the tab's content scrolls inside its own box (see OrderDetailsView).
+        <div className="relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <OrderDetailsView
             key={`${activeShop ?? ''}|${activeRef}`}
             reference={activeRef}
@@ -263,8 +272,6 @@ export function OrdersPage() {
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
-        <OrdersKpis data={data} />
-
         <OrdersToolbar
           actions={
             <button

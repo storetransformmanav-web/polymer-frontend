@@ -37,6 +37,7 @@ export function MiniCard({
       count={count}
       titleExtra={after}
       actions={aside ?? undefined}
+      compact
     >
       {children}
     </DetailSection>
@@ -75,6 +76,7 @@ export function FoldCard({
       defaultOpen={defaultOpen}
       forceOpen={forceOpen}
       actions={actions}
+      compact
     >
       {children}
     </DetailSection>

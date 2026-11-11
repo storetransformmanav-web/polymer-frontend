@@ -20,7 +20,11 @@ import {
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import type { OrderDetail } from '../../../lib/api/endpoints.ts'
 import { formatTimestamp } from '../../../lib/format.ts'
-import { formatStoreClock } from '../../../lib/storeTime.ts'
+import {
+  formatStoreClock,
+  getStoreTimeZone,
+  storeTimeZoneAbbreviation,
+} from '../../../lib/storeTime.ts'
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -48,7 +52,7 @@ const ICONS: Record<TimelineIcon, ComponentType<IconProps>> = {
 }
 
 const BUTTON =
-  'border-border bg-bg text-text hover:border-accent inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.76rem] font-semibold transition-colors'
+  'border-border bg-bg text-text hover:border-accent inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors'
 
 const plural = (count: number, word: string) =>
   `${count.toLocaleString('en-GB')} ${word}${count === 1 ? '' : 's'}`
@@ -81,12 +85,12 @@ function EventRow({
         >
           <Icon width={16} height={16} />
         </span>
-        <span className="min-w-0 truncate text-[0.85rem] font-semibold">
+        <span className="min-w-0 truncate text-[0.88rem] font-semibold">
           {event.title}
         </span>
         <span
           title={event.message}
-          className="text-text-muted min-w-0 text-[0.8rem] leading-snug max-md:order-2 max-md:col-span-4 max-md:line-clamp-2 md:truncate"
+          className="text-text-muted min-w-0 text-[0.85rem] leading-snug max-md:order-2 max-md:col-span-4 max-md:line-clamp-2 md:truncate"
         >
           {event.message || '—'}
         </span>
@@ -118,12 +122,17 @@ function EventRow({
             {event.message || 'No message was sent with this event.'}
           </p>
           <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-2 min-[520px]:grid-cols-2 lg:grid-cols-4">
-            <Detail label="Time">{formatTimestamp(event.occurredAt) || '—'}</Detail>
+            <Detail label="Time">
+              {formatTimestamp(event.occurredAt)
+                ? `${formatTimestamp(event.occurredAt)} ${storeTimeZoneAbbreviation(event.occurredAt)}`.trim()
+                : '—'}
+            </Detail>
+            <Detail label="Time zone">{getStoreTimeZone()}</Detail>
             {event.author && <Detail label="By">{event.author}</Detail>}
             <Detail label="Category">{CATEGORY_LABELS[event.category]}</Detail>
             {event.verb && (
               <Detail label="Event">
-                <span className="font-mono text-[0.78rem]">{event.verb}</span>
+                <span className="font-mono text-[0.8rem]">{event.verb}</span>
               </Detail>
             )}
             {event.details.map(([label, value]) => (
@@ -141,10 +150,10 @@ function EventRow({
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-text-muted mb-0.5 text-[0.66rem] font-bold tracking-wide uppercase">
+      <dt className="text-text-muted mb-0.5 text-[0.7rem] font-bold tracking-wide uppercase">
         {label}
       </dt>
-      <dd className="m-0 text-[0.82rem] font-medium break-words">{children}</dd>
+      <dd className="m-0 text-[0.85rem] font-medium break-words">{children}</dd>
     </div>
   )
 }
@@ -207,7 +216,7 @@ export function OrderTimelinePanel({ order }: { order: OrderDetail }) {
           <ClockIcon width={18} height={18} />
         </span>
         <h3 className="text-[1.05rem] font-bold">Timeline</h3>
-        <span className="bg-accent-tint text-accent rounded-full px-2.5 py-0.5 text-[0.72rem] font-bold">
+        <span className="bg-accent-tint text-accent rounded-full px-2.5 py-0.5 text-[0.7rem] font-bold">
           {selected === 'all'
             ? plural(events.length, 'event')
             : `${shown.length.toLocaleString('en-GB')} of ${plural(events.length, 'event')}`}
@@ -234,11 +243,11 @@ export function OrderTimelinePanel({ order }: { order: OrderDetail }) {
       </header>
 
       {events.length === 0 ? (
-        <p className="text-text-muted m-0 px-5 py-10 text-center text-[0.85rem]">
+        <p className="text-text-muted m-0 px-5 py-10 text-center text-[0.9rem]">
           No events yet.
         </p>
       ) : shown.length === 0 ? (
-        <p className="text-text-muted m-0 px-5 py-10 text-center text-[0.85rem]">
+        <p className="text-text-muted m-0 px-5 py-10 text-center text-[0.9rem]">
           No events in this category.
         </p>
       ) : (
@@ -250,7 +259,7 @@ export function OrderTimelinePanel({ order }: { order: OrderDetail }) {
             >
               <div className="border-border-strong bg-accent-tint/50 flex h-fit flex-col rounded-xl border px-3 py-2 max-md:flex-row max-md:items-baseline max-md:gap-2">
                 <span className="text-[0.88rem] font-bold">{day.label}</span>
-                <span className="text-text-muted text-[0.74rem]">
+                <span className="text-text-muted text-[0.78rem]">
                   {plural(day.events.length, 'event')}
                 </span>
               </div>

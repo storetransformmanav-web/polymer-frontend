@@ -18,6 +18,8 @@ interface DetailSectionProps {
   titleExtra?: ReactNode
   /** Drops the body's padding, for content that draws its own edge-to-edge cells. */
   flush?: boolean
+  /** A shorter title row and a tighter body (the order's pages). */
+  compact?: boolean
   children: ReactNode
 }
 
@@ -31,6 +33,7 @@ export function DetailSection({
   actions,
   titleExtra,
   flush = false,
+  compact = false,
   children,
 }: DetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
@@ -46,14 +49,14 @@ export function DetailSection({
     <section className={DETAIL_CARD}>
       {/* Only the title row takes the hover tint, not the whole card. */}
       <div
-        className={`hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] pr-4 pl-5 transition-colors ${open ? '' : 'rounded-b-[0.7rem]'}`}
+        className={`hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] transition-colors ${compact ? 'pr-3 pl-4' : 'pr-4 pl-5'} ${open ? '' : 'rounded-b-[0.7rem]'}`}
       >
         <button
           type="button"
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => setOpen((value) => !value)}
-          className="text-text flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 border-none bg-transparent py-4 text-left"
+          className={`text-text flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 border-none bg-transparent text-left ${compact ? 'py-2.5' : 'py-4'}`}
         >
           <Icon width={18} height={18} className="text-accent shrink-0" />
           <h3 className="text-[0.95rem] font-semibold">{title}</h3>
@@ -92,7 +95,9 @@ export function DetailSection({
         }`}
       >
         <div className="overflow-hidden">
-          <div className={`border-border-strong border-t ${flush ? '' : 'p-5'}`}>
+          <div
+            className={`border-border-strong border-t ${flush ? '' : compact ? 'p-3 sm:p-4' : 'p-5'}`}
+          >
             {children}
           </div>
         </div>

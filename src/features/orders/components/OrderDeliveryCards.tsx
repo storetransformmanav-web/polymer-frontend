@@ -101,8 +101,9 @@ export function ShippingMethodCard({ context }: { context: OrderEditContext }) {
         </Row>
         <Row label="Shipping method ID">
           {methodIds.length > 0 ? (
-            <span className="text-text-muted text-[0.72rem] break-words">
-              {methodIds.join(', ')}
+            <span className="flex items-center justify-end gap-1.5 text-[0.72rem] break-all">
+              <span className="text-text-muted">{methodIds.join(', ')}</span>
+              <CopyButton value={methodIds.join(', ')} label="Copy shipping method ID" />
             </span>
           ) : null}
         </Row>
@@ -133,7 +134,7 @@ export function FulfillmentsCard({ order }: { order: OrderDetail }) {
       {order.fulfillments.length === 0 ? (
         <EmptyNote>Nothing has been fulfilled yet.</EmptyNote>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-3 p-0">
+        <ul className="m-0 flex list-none flex-col gap-4 p-0">
           {order.fulfillments.map((record, index) => {
             const name = text(record.name) ?? `Fulfillment ${index + 1}`
             const status = fulfillmentStatus(record)
@@ -147,61 +148,68 @@ export function FulfillmentsCard({ order }: { order: OrderDetail }) {
               text(record.carrier)
             const fields = otherFields(record)
             return (
-              <li
-                key={`${name}-${index}`}
-                className="border-border bg-surface/40 min-w-0 rounded-lg border px-3 py-2"
-              >
-                <div className="flex items-center justify-between gap-2 py-1">
-                  <span className="flex min-w-0 items-center gap-1.5 text-[0.85rem] font-semibold">
-                    <BoxesIcon width={14} height={14} className="text-accent shrink-0" />
-                    <span className="truncate">{name}</span>
+              <li key={`${name}-${index}`} className="flex min-w-0 flex-col gap-2">
+                <div className="bg-accent-tint/60 flex items-center gap-2 px-3 py-2">
+                  <BoxesIcon width={15} height={15} className="text-accent shrink-0" />
+                  <span className="min-w-0 truncate text-[0.88rem] font-semibold">
+                    {name}
                   </span>
                   {status && <Badge tone={statusTone(status)}>{humanize(status)}</Badge>}
                 </div>
-                <Rows>
-                  <Row label="Carrier">{carrier}</Row>
-                  {parcels.length === 0 && <Row label="Tracking number">{null}</Row>}
-                  {parcels.map((parcel) => {
-                    const link = safeUrl(parcel.url)
-                    return (
-                      <div key={parcel.key} className="contents">
-                        <Row label="Tracking number">
-                          {parcel.number && (
-                            <span className="flex items-center justify-end gap-1 font-mono text-[0.74rem] break-all">
-                              {parcel.number}
-                              <CopyButton
-                                value={parcel.number}
-                                label="Copy tracking number"
-                              />
-                            </span>
-                          )}
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="border-border min-w-0 rounded-lg border px-3">
+                    <Rows>
+                      <Row label="Carrier">{carrier}</Row>
+                      {parcels.length === 0 && <Row label="Tracking number">{null}</Row>}
+                      {parcels.map((parcel) => {
+                        const link = safeUrl(parcel.url)
+                        return (
+                          <div key={parcel.key} className="contents">
+                            <Row label="Tracking number">
+                              {parcel.number && (
+                                <span className="flex items-center justify-end gap-1 font-mono text-[0.74rem] break-all">
+                                  {parcel.number}
+                                  <CopyButton
+                                    value={parcel.number}
+                                    label="Copy tracking number"
+                                  />
+                                </span>
+                              )}
+                            </Row>
+                            {link && (
+                              <Row label="Tracking URL">
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-accent break-all hover:underline"
+                                >
+                                  {link}
+                                </a>
+                              </Row>
+                            )}
+                          </div>
+                        )
+                      })}
+                      <Row label="Service">{service ? humanize(service) : null}</Row>
+                    </Rows>
+                  </div>
+                  <div className="border-border min-w-0 rounded-lg border px-3">
+                    <Rows>
+                      <Row label="Fulfillment date">
+                        {date ? formatDateTime(date) : null}
+                      </Row>
+                      <Row label="Shopify updated at">
+                        {updated ? formatDateTime(updated) : null}
+                      </Row>
+                      {fields.map(([label, value]) => (
+                        <Row key={label} label={label}>
+                          {value}
                         </Row>
-                        {link && (
-                          <Row label="Tracking URL">
-                            <a
-                              href={link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-accent break-all hover:underline"
-                            >
-                              {link}
-                            </a>
-                          </Row>
-                        )}
-                      </div>
-                    )
-                  })}
-                  <Row label="Fulfillment date">{date ? formatDateTime(date) : null}</Row>
-                  <Row label="Service">{service ? humanize(service) : null}</Row>
-                  <Row label="Shopify updated at">
-                    {updated ? formatDateTime(updated) : null}
-                  </Row>
-                  {fields.map(([label, value]) => (
-                    <Row key={label} label={label}>
-                      {value}
-                    </Row>
-                  ))}
-                </Rows>
+                      ))}
+                    </Rows>
+                  </div>
+                </div>
               </li>
             )
           })}

@@ -242,9 +242,17 @@ export function OrdersList({
                     className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                   >
                     <td className={TD}>
-                      <span className="block truncate font-semibold">
+                      {/* The order number opens the order, like the eye button does. */}
+                      <button
+                        type="button"
+                        title={`Open order ${orderLabel(order)}`}
+                        onClick={() => onOpen(order)}
+                        onPointerEnter={() => onPrefetch(order)}
+                        onFocus={() => onPrefetch(order)}
+                        className="text-text hover:text-accent block max-w-full cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold hover:underline"
+                      >
                         <Highlight text={orderLabel(order)} />
-                      </span>
+                      </button>
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
                       {order.shopify_created_at ? (
