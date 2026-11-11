@@ -4,12 +4,16 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DETAIL_CARD, DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import {
+  DetailsHeader,
+  HeaderChip,
+  HeaderTile,
+} from '../../../components/ui/DetailsHeader.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import {
   AlertTriangleIcon,
   CheckCircleIcon,
-  ArrowLeftIcon,
   CheckIcon,
   ClockIcon,
   EyeIcon,
@@ -210,123 +214,107 @@ export function LockDetailsView({
         fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : 'shrink-0'
       }`}
     >
-      <header className="border-border mx-4 mt-4 flex shrink-0 flex-col gap-2 border-b pb-3 sm:mx-5">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1
-            className="min-w-0 text-lg leading-snug font-bold break-words sm:text-2xl"
-            title={lock.title}
-          >
-            {lock.title}
-          </h1>
-          {/* Enabled / Disabled — changed here with a dropdown, saved with the other settings. */}
-          <PillSelect
-            label={`Status of ${lock.title}: ${flagWord('enabled', valueOf('enabled'))}`}
-            menuLabel={`Status of ${lock.title}`}
-            options={STATUS_OPTIONS}
-            value={valueOf('enabled') ? 'active' : 'inactive'}
-            onChange={(next) => setFlag('enabled', next === 'active')}
-          />
-          {changed.includes('enabled') && (
-            <Badge tone="warning" className="text-[0.7rem]">
-              Not saved
-            </Badge>
-          )}
-          <span title={lock.sync_error ?? undefined}>
-            <Badge tone={syncTone(lock.sync_status)} className="gap-1.5 py-1">
-              {lock.sync_status === 'synced' && (
-                <CheckCircleIcon width={14} height={14} />
-              )}
-              {lock.sync_status === 'synced'
-                ? 'Synced with Shopify'
-                : syncLabel(lock.sync_status)}
-            </Badge>
-          </span>
-          <div className="ml-auto flex shrink-0 items-center gap-3">
-            {dirty && (
-              // Save / Discard sit beside Back to list, as on a product's page.
-              <div
-                role="region"
-                aria-label="Unsaved changes"
-                className="flex items-center gap-3"
-              >
-                <p className="text-text-muted m-0 hidden text-[0.8rem] font-semibold sm:block">
-                  {changed.length === 1
-                    ? '1 unsaved change'
-                    : `${changed.length} unsaved changes`}
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <IconAction
-                    label="Save"
-                    accessibleLabel="Save changes"
-                    icon={CheckIcon}
-                    tone="primary"
-                    onClick={save}
-                  />
-                  <IconAction
-                    label="Discard"
-                    accessibleLabel="Cancel"
-                    icon={XIcon}
-                    onClick={() => setDraft({})}
-                  />
-                </div>
-              </div>
+      <DetailsHeader
+        className="border-border mx-4 mt-4 shrink-0 border-b pb-3 sm:mx-5"
+        visual={
+          <HeaderTile>
+            <LockIcon width={26} height={26} />
+          </HeaderTile>
+        }
+        title={lock.title}
+        titleHint={lock.title}
+        status={
+          <>
+            {/* Enabled / Disabled — changed here with a dropdown, saved with the other settings. */}
+            <PillSelect
+              label={`Status of ${lock.title}: ${flagWord('enabled', valueOf('enabled'))}`}
+              menuLabel={`Status of ${lock.title}`}
+              options={STATUS_OPTIONS}
+              value={valueOf('enabled') ? 'active' : 'inactive'}
+              onChange={(next) => setFlag('enabled', next === 'active')}
+            />
+            {changed.includes('enabled') && (
+              <Badge tone="warning" className="text-[0.7rem]">
+                Not saved
+              </Badge>
             )}
-            <button
-              type="button"
-              onClick={back}
-              aria-label="Back to list"
-              className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-            >
-              <ArrowLeftIcon width={16} height={16} />
-              <span className="hidden sm:inline" aria-hidden="true">
-                Back to list
-              </span>
-            </button>
-          </div>
-        </div>
-        <div className="text-text-muted flex flex-wrap items-center gap-x-2 text-[0.85rem]">
-          <span className="font-medium">/products/{handle ?? '—'}</span>
-          {handle && <CopyButton value={handle} label="Copy product handle" />}
-          {isFetching && (
-            <span className="text-[0.75rem]" role="status">
-              Updating…
+            <span title={lock.sync_error ?? undefined}>
+              <Badge tone={syncTone(lock.sync_status)} className="gap-1.5 py-1">
+                {lock.sync_status === 'synced' && (
+                  <CheckCircleIcon width={14} height={14} />
+                )}
+                {lock.sync_status === 'synced'
+                  ? 'Synced with Shopify'
+                  : syncLabel(lock.sync_status)}
+              </Badge>
             </span>
-          )}
-        </div>
-        <dl className="m-0 flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.85rem]">
-          <div className="flex items-center gap-2">
-            <dt className="sr-only">Customers with access</dt>
-            <dd className="m-0 flex items-center gap-2 whitespace-nowrap">
-              <UsersIcon width={18} height={18} className="text-accent shrink-0" />
+            {isFetching && (
+              <span className="text-text-muted text-[0.75rem]" role="status">
+                Updating…
+              </span>
+            )}
+          </>
+        }
+        chips={
+          <>
+            <HeaderChip label="Product page">
+              <span className="flex items-center gap-1.5">
+                <span>/products/{handle ?? '—'}</span>
+                {handle && <CopyButton value={handle} label="Copy product handle" />}
+              </span>
+            </HeaderChip>
+            <HeaderChip icon={UsersIcon} label="Customers with access">
               <span className="font-semibold">
                 {lock.customers_with_access != null
                   ? lock.customers_with_access.toLocaleString('en-GB')
                   : '—'}
-              </span>
+              </span>{' '}
               <span className="text-text-muted">with access</span>
-            </dd>
-          </div>
-          <div className="border-border flex items-center gap-2 sm:border-l sm:pl-6">
-            <dt className="sr-only">Keys</dt>
-            <dd className="m-0 flex items-center gap-2 whitespace-nowrap">
-              <TagIcon width={18} height={18} className="text-text-muted shrink-0" />
-              <span className="font-semibold">{lock.tags.length}</span>
+            </HeaderChip>
+            <HeaderChip icon={TagIcon} label="Keys">
+              <span className="font-semibold">{lock.tags.length}</span>{' '}
               <span className="text-text-muted">
                 {lock.tags.length === 1 ? 'key' : 'keys'}
               </span>
-            </dd>
-          </div>
-          <div className="border-border flex items-center gap-2 sm:border-l sm:pl-6">
-            <dt className="text-text-muted flex items-center gap-2">
-              <ClockIcon width={16} height={16} className="shrink-0" />
-              Last updated
-            </dt>
-            <dd className="m-0 font-semibold whitespace-nowrap">
+            </HeaderChip>
+            <HeaderChip icon={ClockIcon} label="Last updated">
               {lock.updated_at ? formatDateTime(lock.updated_at) : '—'}
-            </dd>
-          </div>
-        </dl>
-      </header>
+            </HeaderChip>
+          </>
+        }
+        actions={
+          dirty ? (
+            // Save / Discard sit beside Back to list, as on a product's page.
+            <div
+              role="region"
+              aria-label="Unsaved changes"
+              className="flex items-center gap-3"
+            >
+              <p className="text-text-muted m-0 hidden text-[0.8rem] font-semibold sm:block">
+                {changed.length === 1
+                  ? '1 unsaved change'
+                  : `${changed.length} unsaved changes`}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <IconAction
+                  label="Save"
+                  accessibleLabel="Save changes"
+                  icon={CheckIcon}
+                  tone="primary"
+                  onClick={save}
+                />
+                <IconAction
+                  label="Discard"
+                  accessibleLabel="Cancel"
+                  icon={XIcon}
+                  onClick={() => setDraft({})}
+                />
+              </div>
+            </div>
+          ) : null
+        }
+        onBack={back}
+      />
 
       <div
         className={`flex flex-col gap-4 p-4 sm:p-5 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-x-4 ${

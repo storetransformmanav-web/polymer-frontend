@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import {
+  DetailsHeader,
+  HeaderChip,
+  HeaderTile,
+  StatusPill,
+} from '../../../components/ui/DetailsHeader.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
-import { AlertTriangleIcon, ArrowLeftIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  MailIcon,
+  UserCogIcon,
+} from '../../../components/ui/icons.tsx'
 import type { Role, Shop } from '../../../lib/api/endpoints.ts'
 import { initials } from '../../../lib/format.ts'
 import type { useUserDetails } from '../hooks/useUserDetails.ts'
-import { roleLabel, roleTone, userName } from '../utils/format.ts'
+import { roleLabel, userName } from '../utils/format.ts'
 import { UserAccessPanel, UserOverviewPanel } from './UserDetailPanels.tsx'
 import { UserUpdateDialog, type UserUpdateRequest } from './UserUpdateDialog.tsx'
 
@@ -103,49 +112,41 @@ export function UserDetailsView({
       aria-label={`User ${name}`}
       className="border-border bg-bg overflow-hidden rounded-2xl border"
     >
-      <header className="flex items-start gap-4 p-4 sm:p-6">
-        <span
-          aria-hidden="true"
-          className="bg-accent-tint text-accent inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold"
-        >
-          {initials(name) || '?'}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-            {name}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
+      <DetailsHeader
+        visual={<HeaderTile>{initials(name) || '?'}</HeaderTile>}
+        title={name}
+        status={
+          <>
             {known && (
-              <>
-                <Badge tone={roleTone(known.role)}>{roleLabel(known)}</Badge>
-                <Badge tone={known.is_active ? 'success' : 'neutral'}>
-                  {known.is_active ? 'Active' : 'Inactive'}
-                </Badge>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate">{known.email}</span>
-                  <CopyButton value={known.email} label="Copy email" />
-                </span>
-              </>
+              <StatusPill
+                label={known.is_active ? 'Active' : 'Inactive'}
+                tone={known.is_active ? 'success' : 'neutral'}
+              />
             )}
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.75rem]" role="status">
                 Updating…
               </span>
             )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to list"
-          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-        >
-          <ArrowLeftIcon width={16} height={16} />
-          <span className="hidden sm:inline" aria-hidden="true">
-            Back to list
-          </span>
-        </button>
-      </header>
+          </>
+        }
+        chips={
+          known && (
+            <>
+              <HeaderChip icon={UserCogIcon} label="Role">
+                {roleLabel(known)}
+              </HeaderChip>
+              <HeaderChip icon={MailIcon} label="Email">
+                <span className="flex items-center gap-1.5">
+                  <span className="break-all">{known.email}</span>
+                  <CopyButton value={known.email} label="Copy email" />
+                </span>
+              </HeaderChip>
+            </>
+          )
+        }
+        onBack={onBack}
+      />
 
       <div
         role="tablist"

@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { Badge } from '../../../components/ui/Badge.tsx'
+import {
+  DetailsHeader,
+  HeaderChip,
+  StatusPill,
+} from '../../../components/ui/DetailsHeader.tsx'
 import {
   AlertTriangleIcon,
-  ArrowLeftIcon,
   CheckCircleIcon,
+  StoreIcon,
   TagIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
@@ -151,119 +155,70 @@ export function ProductDetailsView({
 
   return (
     <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="flex items-start gap-4">
-          <ProductImage src={imageUrl} alt="" productId={id} />
-          <div className="min-w-0 flex-1">
-            {/* Name, then stock and price right beside it (they wrap below on narrow screens). */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-                {title}
-              </h1>
-
-              <dl className="flex flex-col gap-y-2 lg:flex-row lg:flex-wrap lg:items-center">
-                <div className="border-border flex items-center gap-2 lg:border-l lg:pl-5">
-                  <dt className="sr-only">Total stock</dt>
-                  <dd className="flex items-center gap-2 whitespace-nowrap">
-                    {stock === null ? (
-                      <span className="text-text-muted">—</span>
-                    ) : stock <= 0 ? (
-                      <>
-                        <XCircleIcon
-                          width={20}
-                          height={20}
-                          className="text-danger shrink-0"
-                        />
-                        <span className="text-danger font-semibold">Out of stock</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircleIcon
-                          width={20}
-                          height={20}
-                          className="text-accent shrink-0"
-                        />
-                        <span className="font-semibold">
-                          {stock.toLocaleString('en-GB')}
-                        </span>
-                        <span className="text-text-muted text-[0.85rem]">in stock</span>
-                      </>
-                    )}
-                  </dd>
-                </div>
-
-                <div className="border-border flex flex-wrap items-center gap-x-2 lg:ml-5 lg:border-l lg:pl-5">
-                  <dt className="sr-only">Price</dt>
-                  <dd className="flex items-center gap-2 whitespace-nowrap">
-                    <TagIcon
-                      width={20}
-                      height={20}
-                      className="text-text-muted shrink-0"
-                    />
-                    <span className="text-lg font-bold tracking-tight">{price}</span>
-                  </dd>
-                  {compareAt?.min && (
-                    <dd className="text-text-muted text-[0.8rem] whitespace-nowrap">
-                      <span className="sr-only">Compare at </span>
-                      <span className="line-through">
-                        {formatRange(compareAt.min, compareAt.max, currency)}
-                      </span>
-                    </dd>
-                  )}
-                </div>
-              </dl>
-            </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
-              {status &&
-                (product ? (
-                  <ProductStatusSelect
-                    title={product.title}
-                    value={statusChange.pending[id] ?? status}
-                    saving={id in statusChange.pending}
-                    error={statusChange.errors[id]}
-                    onChange={(next) => {
-                      if (next !== status.toUpperCase()) setAskedStatus(next)
-                    }}
-                  />
-                ) : (
-                  <Badge tone={statusTone(status)}>
-                    <span
-                      aria-hidden="true"
-                      className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"
-                    />
-                    {statusLabel(status)}
-                  </Badge>
-                ))}
-              {vendor && (
-                <span>
-                  <span className="text-text-muted">Vendor </span>
-                  <span className="font-semibold">{vendor}</span>
+      <DetailsHeader
+        visual={<ProductImage src={imageUrl} alt="" productId={id} />}
+        title={title}
+        status={
+          <>
+            {status &&
+              (product ? (
+                <ProductStatusSelect
+                  title={product.title}
+                  value={statusChange.pending[id] ?? status}
+                  saving={id in statusChange.pending}
+                  error={statusChange.errors[id]}
+                  onChange={(next) => {
+                    if (next !== status.toUpperCase()) setAskedStatus(next)
+                  }}
+                />
+              ) : (
+                <StatusPill label={statusLabel(status)} tone={statusTone(status)} />
+              ))}
+            {details.isRefreshing && (
+              <span className="text-text-muted text-[0.75rem]" role="status">
+                Updating…
+              </span>
+            )}
+            {savedStatus !== null && (
+              <ProductSyncStatus id={id} shop={shop} initialStatus={savedStatus} />
+            )}
+          </>
+        }
+        chips={
+          <>
+            <HeaderChip
+              icon={stock !== null && stock <= 0 ? XCircleIcon : CheckCircleIcon}
+              label="Total stock"
+            >
+              {stock === null ? (
+                <span className="text-text-muted">—</span>
+              ) : stock <= 0 ? (
+                <span className="text-danger font-semibold">Out of stock</span>
+              ) : (
+                <>
+                  <span className="font-semibold">{stock.toLocaleString('en-GB')}</span>{' '}
+                  <span className="text-text-muted">in stock</span>
+                </>
+              )}
+            </HeaderChip>
+            <HeaderChip icon={TagIcon} label="Price">
+              <span className="font-bold">{price}</span>
+              {compareAt?.min && (
+                <span className="text-text-muted ml-2 text-[0.78rem] line-through">
+                  <span className="sr-only">Compare at </span>
+                  {formatRange(compareAt.min, compareAt.max, currency)}
                 </span>
               )}
-              {details.isRefreshing && (
-                <span className="text-text-muted text-[0.75rem]" role="status">
-                  Updating…
-                </span>
-              )}
-              {savedStatus !== null && (
-                <ProductSyncStatus id={id} shop={shop} initialStatus={savedStatus} />
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
-          </button>
-        </div>
-      </header>
+            </HeaderChip>
+            {vendor && (
+              <HeaderChip icon={StoreIcon} label="Vendor">
+                {vendor}
+              </HeaderChip>
+            )}
+          </>
+        }
+        onBack={onBack}
+      />
 
       {!editingVariants && (
         <div

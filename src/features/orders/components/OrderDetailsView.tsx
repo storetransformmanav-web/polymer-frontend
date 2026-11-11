@@ -1,20 +1,23 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import {
+  DetailsHeader,
+  HeaderChip,
+  HeaderTile,
+  StatusPill,
+} from '../../../components/ui/DetailsHeader.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
-  ArrowLeftIcon,
+  BarcodeIcon,
   CalendarIcon,
-  ListChecksIcon,
   MailIcon,
   OrdersIcon,
   StoreIcon,
   UsersIcon,
-  type IconProps,
 } from '../../../components/ui/icons.tsx'
 import { formatDateTime } from '../../../lib/format.ts'
 import { useOrderDetails } from '../hooks/useOrderDetails.ts'
@@ -37,25 +40,6 @@ interface OrderDetailsViewProps {
   /** The order's store key from the address, when it has one. */
   shop: string | null
   onBack: () => void
-}
-
-/** A small fact in the header's second line (date, customer, store). */
-function Meta({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: ComponentType<IconProps>
-  label: string
-  children: ReactNode
-}) {
-  return (
-    <span className="flex min-w-0 items-center gap-1.5" title={label}>
-      <Icon width={15} height={15} className="text-text-muted shrink-0" />
-      <span className="sr-only">{label}: </span>
-      <span className="min-w-0 break-words">{children}</span>
-    </span>
-  )
 }
 
 /**
@@ -156,93 +140,80 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
 
   return (
     <article className="border-border bg-bg flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1">
-      <header className="shrink-0 p-4 sm:p-6">
-        <div className="flex items-start gap-4">
-          <span
-            aria-hidden="true"
-            className="bg-accent-tint text-accent inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-          >
+      <DetailsHeader
+        visual={
+          <HeaderTile>
             <OrdersIcon width={26} height={26} />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h1 className="m-0 text-lg leading-snug font-bold break-words sm:text-2xl">
-                Order #{title}
-              </h1>
-              {status && <Badge tone={status.tone}>{status.label}</Badge>}
-              {details.isRefreshing && (
-                <span className="text-text-muted text-[0.72rem]" role="status">
-                  Updating…
-                </span>
-              )}
-            </div>
-            {known && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8rem] font-medium">
-                {created && (
-                  <Meta icon={CalendarIcon} label="Order date">
-                    {formatDateTime(created)}
-                  </Meta>
-                )}
-                {(customerName || company) && (
-                  <Meta icon={UsersIcon} label="Customer">
-                    {customerName &&
-                      (customerLink ? (
-                        <Link
-                          to={customerLink}
-                          state={linkedState(customerName)}
-                          title={`Open ${customerName}`}
-                          className="text-accent font-semibold hover:underline"
-                        >
-                          {customerName}
-                        </Link>
-                      ) : (
-                        customerName
-                      ))}
-                    {customerName && company && ' · '}
-                    {company}
-                  </Meta>
-                )}
-                {known.shop?.name && (
-                  <Meta icon={StoreIcon} label="Store">
-                    {known.shop.name}
-                  </Meta>
-                )}
-                {email && (
-                  <Meta icon={MailIcon} label="Email">
-                    <span className="flex items-center gap-1.5 break-all">
-                      {context ? (
-                        <OrderEmailCell context={context} display={email} />
-                      ) : (
-                        email
-                      )}
-                      <CopyButton value={email} label="Copy email" />
-                    </span>
-                  </Meta>
-                )}
-                {shopifyId && (
-                  <Meta icon={ListChecksIcon} label="Shopify ID">
-                    <span className="flex items-center gap-1.5 font-mono text-[0.76rem]">
-                      {shopifyId}
-                      <CopyButton value={shopifyId} label="Copy Shopify ID" />
-                    </span>
-                  </Meta>
-                )}
-              </div>
+          </HeaderTile>
+        }
+        title={<>Order #{title}</>}
+        status={
+          <>
+            {status && <StatusPill label={status.label} tone={status.tone} />}
+            {details.isRefreshing && (
+              <span className="text-text-muted text-[0.72rem]" role="status">
+                Updating…
+              </span>
             )}
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
-          </button>
-        </div>
-      </header>
+          </>
+        }
+        chips={
+          known && (
+            <>
+              {created && (
+                <HeaderChip icon={CalendarIcon} label="Order date">
+                  {formatDateTime(created)}
+                </HeaderChip>
+              )}
+              {(customerName || company) && (
+                <HeaderChip icon={UsersIcon} label="Customer">
+                  {customerName &&
+                    (customerLink ? (
+                      <Link
+                        to={customerLink}
+                        state={linkedState(customerName)}
+                        title={`Open ${customerName}`}
+                        className="text-accent font-semibold hover:underline"
+                      >
+                        {customerName}
+                      </Link>
+                    ) : (
+                      customerName
+                    ))}
+                  {customerName && company && ' · '}
+                  {company}
+                </HeaderChip>
+              )}
+              {known.shop?.name && (
+                <HeaderChip icon={StoreIcon} label="Store">
+                  {known.shop.name}
+                </HeaderChip>
+              )}
+              {email && (
+                <HeaderChip icon={MailIcon} label="Email">
+                  <span className="flex items-center gap-1.5 break-all">
+                    {context ? (
+                      <OrderEmailCell context={context} display={email} />
+                    ) : (
+                      email
+                    )}
+                    <CopyButton value={email} label="Copy email" />
+                  </span>
+                </HeaderChip>
+              )}
+              {shopifyId && (
+                <HeaderChip icon={BarcodeIcon} label="Shopify ID">
+                  <span className="flex items-center gap-1.5">
+                    {shopifyId}
+                    <CopyButton value={shopifyId} label="Copy Shopify ID" />
+                  </span>
+                </HeaderChip>
+              )}
+            </>
+          )
+        }
+        onBack={onBack}
+      />
 
       {notice && (
         <div className="shrink-0 px-4 pb-3 sm:px-6">

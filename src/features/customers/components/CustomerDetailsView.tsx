@@ -1,22 +1,22 @@
 import { useState } from 'react'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import {
+  DetailsHeader,
+  HeaderChip,
+  HeaderTile,
+  StatusPill,
+} from '../../../components/ui/DetailsHeader.tsx'
+import {
   AlertTriangleIcon,
-  ArrowLeftIcon,
   CalendarIcon,
+  MailIcon,
   TrashIcon,
+  UsersIcon,
 } from '../../../components/ui/icons.tsx'
 import { formatDate, initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
-import {
-  capitalize,
-  customerName,
-  customerSource,
-  roleTone,
-  stateTone,
-} from '../utils/format.ts'
+import { capitalize, customerName, customerSource, stateTone } from '../utils/format.ts'
 import { CustomerMarketingPanel, CustomerOverviewPanel } from './CustomerDetailPanels.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
@@ -101,94 +101,75 @@ export function CustomerDetailsView({
 
   return (
     <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="flex items-start gap-4 p-4 sm:p-6">
-        <span
-          aria-hidden="true"
-          className="bg-accent-tint text-accent inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold"
-        >
-          {initials(name) || '?'}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-            {name}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
+      <DetailsHeader
+        visual={<HeaderTile>{initials(name) || '?'}</HeaderTile>}
+        title={name}
+        status={
+          <>
             {known && (
-              <>
-                <Badge tone={roleTone(known.role)}>{capitalize(known.role)}</Badge>
-                {state ? (
-                  <Badge tone={stateTone(state)}>{capitalize(state)}</Badge>
-                ) : (
-                  <Badge tone="neutral">{customerSource(known)}</Badge>
-                )}
-              </>
-            )}
-            {email && (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate">{email}</span>
-                <CopyButton value={email} label="Copy email" />
-              </span>
-            )}
-            {created && (
-              <span className="flex items-center gap-1.5">
-                <CalendarIcon
-                  width={15}
-                  height={15}
-                  className="text-text-muted shrink-0"
-                />
-                <span className="text-text-muted">Created:</span>
-                <span className="font-semibold">{formatDate(created)}</span>
-              </span>
-            )}
-            {customer?.updated_at && (
-              <span className="flex items-center gap-1.5">
-                <CalendarIcon
-                  width={15}
-                  height={15}
-                  className="text-text-muted shrink-0"
-                />
-                <span className="text-text-muted">Updated:</span>
-                <span className="font-semibold">{formatDate(customer.updated_at)}</span>
-              </span>
+              <StatusPill
+                label={state ? capitalize(state) : customerSource(known)}
+                tone={state ? stateTone(state) : 'neutral'}
+              />
             )}
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.75rem]" role="status">
                 Updating…
               </span>
             )}
-          </div>
-        </div>
-        {known && onDelete && (
-          <button
-            type="button"
-            onClick={() =>
-              onDelete({
-                name,
-                shop: known.shop?.key ?? null,
-                ordersCount: known.orders_count,
-              })
-            }
-            aria-label={`Delete ${name}`}
-            className="border-border bg-bg text-text-muted hover:text-danger hover:border-danger flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <TrashIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Delete
-            </span>
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label={backLabel}
-          className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-        >
-          <ArrowLeftIcon width={16} height={16} />
-          <span className="hidden sm:inline" aria-hidden="true">
-            {backLabel}
-          </span>
-        </button>
-      </header>
+          </>
+        }
+        chips={
+          known && (
+            <>
+              <HeaderChip icon={UsersIcon} label="Role">
+                {capitalize(known.role)}
+              </HeaderChip>
+              {email && (
+                <HeaderChip icon={MailIcon} label="Email">
+                  <span className="flex items-center gap-1.5">
+                    <span className="break-all">{email}</span>
+                    <CopyButton value={email} label="Copy email" />
+                  </span>
+                </HeaderChip>
+              )}
+              {created && (
+                <HeaderChip icon={CalendarIcon} label="Created">
+                  {formatDate(created)}
+                </HeaderChip>
+              )}
+              {customer?.updated_at && (
+                <HeaderChip icon={CalendarIcon} label="Updated">
+                  {formatDate(customer.updated_at)}
+                </HeaderChip>
+              )}
+            </>
+          )
+        }
+        actions={
+          known && onDelete ? (
+            <button
+              type="button"
+              onClick={() =>
+                onDelete({
+                  name,
+                  shop: known.shop?.key ?? null,
+                  ordersCount: known.orders_count,
+                })
+              }
+              aria-label={`Delete ${name}`}
+              className="border-border bg-bg text-text-muted hover:text-danger hover:border-danger flex shrink-0 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-[0.85rem] font-semibold transition-colors"
+            >
+              <TrashIcon width={16} height={16} />
+              <span className="hidden sm:inline" aria-hidden="true">
+                Delete
+              </span>
+            </button>
+          ) : null
+        }
+        onBack={onBack}
+        backLabel={backLabel}
+      />
 
       <div
         role="tablist"

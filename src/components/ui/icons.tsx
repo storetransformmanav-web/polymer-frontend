@@ -881,3 +881,12 @@ export function FileTextIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function BarcodeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 4.5v11M6 4.5v11M9 4.5v11M13 4.5v11M16 4.5v11" />
+      <path d="M11 4.5v11" strokeWidth="2.4" />
+    </svg>
+  )
+}

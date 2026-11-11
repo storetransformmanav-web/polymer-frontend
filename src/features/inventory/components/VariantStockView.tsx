@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import {
+  DetailsHeader,
+  HeaderChip,
+  StatusPill,
+} from '../../../components/ui/DetailsHeader.tsx'
+import {
   AlertTriangleIcon,
-  ArrowLeftIcon,
+  BarcodeIcon,
   PlusIcon,
+  PoundIcon,
+  StoreIcon,
 } from '../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../lib/format.ts'
 import {
@@ -94,76 +100,69 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
 
   return (
     <article className="border-border bg-bg overflow-hidden rounded-2xl border">
-      <header className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="flex items-start gap-4">
-          <VariantImage src={source?.image_url} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <h1 className="text-lg leading-snug font-bold break-words sm:text-2xl">
-                {title}
-              </h1>
-              {name && (
-                <span className="text-text-muted text-[1rem] font-semibold">{name}</span>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
-              {source?.status && (
-                <Badge tone={statusTone(source.status)}>
-                  {statusLabel(source.status)}
-                </Badge>
-              )}
-              {source && !editable && <Badge tone="neutral">Not tracked</Badge>}
-              {source?.sku && (
-                <span className="flex items-center gap-1">
-                  <span className="text-text-muted">SKU </span>
-                  <span className="bg-surface border-border rounded border px-1.5 py-0.5 font-mono text-[0.8rem]">
-                    {source.sku}
-                  </span>
+      <DetailsHeader
+        className="shrink-0 p-4 pb-3 sm:p-6 sm:pb-3"
+        visual={<VariantImage src={source?.image_url} size="lg" />}
+        title={
+          <>
+            {title}
+            {name && (
+              <span className="text-text-muted ml-3 text-[1rem] font-semibold">
+                {name}
+              </span>
+            )}
+          </>
+        }
+        status={
+          <>
+            {source?.status && (
+              <StatusPill
+                label={statusLabel(source.status)}
+                tone={statusTone(source.status)}
+              />
+            )}
+            {source && !editable && <StatusPill label="Not tracked" tone="neutral" />}
+            {details.isRefreshing && (
+              <span className="text-text-muted text-[0.75rem]" role="status">
+                Updating…
+              </span>
+            )}
+          </>
+        }
+        chips={
+          <>
+            {source?.sku && (
+              <HeaderChip icon={BarcodeIcon} label="SKU">
+                <span className="flex items-center gap-1.5 font-mono text-[0.8rem]">
+                  {source.sku}
                   <CopyButton value={source.sku} label={`Copy ${source.sku}`} />
                 </span>
-              )}
-              {source?.barcode && (
-                <span>
-                  <span className="text-text-muted">Barcode </span>
-                  <span className="font-semibold">{source.barcode}</span>
-                </span>
-              )}
-              {variant?.price && (
+              </HeaderChip>
+            )}
+            {source?.barcode && <HeaderChip label="Barcode">{source.barcode}</HeaderChip>}
+            {variant?.price && (
+              <HeaderChip icon={PoundIcon} label="Price">
                 <span className="font-bold">
                   {formatPrice(variant.price, variant.currency)}
                 </span>
-              )}
-              {variant && (
-                <span className="text-text-muted">
-                  {keepsSelling ? 'Keeps selling at 0' : 'Stops selling at 0'}
-                </span>
-              )}
-              {variant?.shop?.name && (
-                <span>
-                  <span className="text-text-muted">Store </span>
-                  <span className="font-semibold">{variant.shop.name}</span>
-                </span>
-              )}
-              {details.isRefreshing && (
-                <span className="text-text-muted text-[0.75rem]" role="status">
-                  Updating…
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
-          >
-            <ArrowLeftIcon width={16} height={16} />
-            <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
-            </span>
-          </button>
-        </div>
+              </HeaderChip>
+            )}
+            {variant && (
+              <HeaderChip label="When out of stock">
+                {keepsSelling ? 'Keeps selling at 0' : 'Stops selling at 0'}
+              </HeaderChip>
+            )}
+            {variant?.shop?.name && (
+              <HeaderChip icon={StoreIcon} label="Store">
+                {variant.shop.name}
+              </HeaderChip>
+            )}
+          </>
+        }
+        onBack={onBack}
+      />
 
+      <div className="px-4 pb-4 sm:px-6 sm:pb-6">
         <dl className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-5">
           {FIGURES.map((figure) => (
             <div
@@ -190,7 +189,7 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
             </div>
           ))}
         </dl>
-      </header>
+      </div>
 
       <div
         role="tablist"
