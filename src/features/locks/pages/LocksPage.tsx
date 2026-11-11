@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -16,7 +16,7 @@ import { LocksToolbar } from '../components/LocksToolbar.tsx'
 import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
 import { useLockShop } from '../hooks/useLockShop.ts'
 import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
-import { useLockTabs } from '../hooks/useLockTabs.ts'
+import { lockMemory, useLockTabs } from '../hooks/useLockTabs.ts'
 import { useSetupStore } from '../hooks/useLockWrites.ts'
 import { lockPath } from '../utils/format.ts'
 
@@ -76,6 +76,24 @@ export function LocksPage() {
   useEffect(() => {
     if (activeHandle) openTab({ id: activeHandle, title: openedTitle })
   }, [activeHandle, openedTitle, openTab])
+
+  // Leaving the Locks page for another and coming back must not close the lock that was open: the
+  // page remembers which one was on screen (and for which store), and when it is reached at the
+  // bare list address — from the sidebar — it reopens that lock. Showing the list *inside* the
+  // page (Back to list, All Locks, closing the tab) forgets it, so the list stays the list.
+  const arrived = useRef(true)
+  useEffect(() => {
+    if (arrived.current) {
+      arrived.current = false
+      const back = lockMemory.open
+      if (!splat && back && back.shop === shop) {
+        navigate(back.path, { replace: true })
+        return
+      }
+    }
+    if (!splat) lockMemory.open = null
+    else if (activeHandle) lockMemory.open = { shop, path: location.pathname }
+  }, [splat, activeHandle, shop, location.pathname, navigate])
 
   const [notice, setNotice] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
