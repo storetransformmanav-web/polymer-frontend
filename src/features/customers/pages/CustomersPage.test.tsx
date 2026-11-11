@@ -201,7 +201,7 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows every column by default: Customer name, Email verified, Orders, Amount spent, Role, Joined, Actions', async () => {
+  it('shows every column by default: Customer name, Email, Email verified, Orders, Amount spent, Role, Joined, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
@@ -209,6 +209,7 @@ describe('CustomersPage', () => {
     const headers = table.getAllByRole('columnheader').map((header) => header.textContent)
     expect(headers).toEqual([
       'Customer name',
+      'Email',
       'Email verified',
       'Orders',
       'Amount spent',

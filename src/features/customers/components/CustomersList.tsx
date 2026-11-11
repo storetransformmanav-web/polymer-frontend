@@ -1,3 +1,4 @@
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
@@ -117,7 +118,7 @@ export function CustomersList({
 }: CustomersListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // name, subscription, orders, spent, role, joined, last login, actions.
-  const columnCount = 7
+  const columnCount = 8
 
   if (error) {
     return (
@@ -224,11 +225,12 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
-        className={`w-full min-w-[1060px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1340px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={TH}>Customer name</th>
+            <th className={`${TH} w-72`}>Email</th>
             <th className={`${TH_CENTER} w-36`}>Email verified</th>
             <th className={`${TH_RIGHT} w-36`}>Orders</th>
             <th className={`${TH_RIGHT} w-36`}>Amount spent</th>
@@ -263,18 +265,29 @@ export function CustomersList({
                     <td className={TD}>
                       <span className="flex min-w-0 items-center gap-3">
                         <Avatar name={name} />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate font-semibold" title={name}>
-                            <Highlight text={name} />
-                          </span>
-                          <span
-                            className="text-text-muted truncate text-[0.78rem]"
-                            title={customer.email ?? ''}
-                          >
-                            <Highlight text={customer.email ?? '—'} />
-                          </span>
+                        <span className="truncate font-semibold" title={name}>
+                          <Highlight text={name} />
                         </span>
                       </span>
+                    </td>
+                    <td className={TD}>
+                      {customer.email ? (
+                        // The address, with a copy button always visible beside it — the same
+                        // button and box as the product name's on the Products page.
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate" title={customer.email}>
+                            <Highlight text={customer.email} />
+                          </span>
+                          <span className="flex h-5 shrink-0 items-center">
+                            <CopyButton
+                              value={customer.email}
+                              label={`Copy email of ${name}`}
+                            />
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
                     <td className={`${TD} text-center`}>
                       <EmailVerified value={customer.verified_email} />

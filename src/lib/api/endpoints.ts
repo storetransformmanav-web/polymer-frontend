@@ -1043,6 +1043,29 @@ const customerDetailResponseSchema = z.object({ customer: customerDetailSchema }
 /** What deleting a customer answers (the spec doesn't say; only a message is used, if there is one). */
 const customerDeleteAnswerSchema = z.object({ message: z.string().nullish() })
 
+/**
+ * `PUT /customers/{customer_ref}?shop=` — changes a customer (`customer_ref` is the CRM id, the
+ * Shopify id or the email). Only the fields sent are looked at, and only the ones that really
+ * differ reach Shopify; **`tags` is the FULL list** (what the customer should carry afterwards,
+ * not a change). The customer is then read back from Shopify.
+ */
+export interface CustomerUpdateBody {
+  tags?: string[]
+}
+
+/**
+ * What the update answers. The spec doesn't show it, so it is read leniently: a `message` and,
+ * when the answer carries the customer read back (bare or under `customer` / `result`), that
+ * customer.
+ */
+const customerUpdateAnswerSchema = z
+  .object({
+    message: z.string().nullish(),
+    customer: z.unknown().nullish(),
+    result: z.unknown().nullish(),
+  })
+  .loose()
+
 export type CustomerDetail = z.infer<typeof customerDetailSchema>
 export type CustomerAddress = z.infer<typeof customerAddressSchema>
 
@@ -2578,6 +2601,31 @@ export const api = {
       })
       const parsed = customerDeleteAnswerSchema.safeParse(data)
       return { message: parsed.success ? (parsed.data.message ?? '') : '' }
+    },
+
+    /**
+     * Changes a customer (`PUT /customers/{ref}?shop=`) — see `CustomerUpdateBody`. Returns the
+     * backend's message and, when the answer has it, the customer as read back from Shopify.
+     * Never retried automatically (a repeat could write twice).
+     */
+    async update(
+      ref: string,
+      body: CustomerUpdateBody,
+      shop?: string | null,
+    ): Promise<{ message: string; customer: CustomerDetail | null }> {
+      const data = await apiClient.put(ENDPOINTS.customers.detail(ref), body, {
+        params: shop ? { shop } : undefined,
+      })
+      const parsed = customerUpdateAnswerSchema.safeParse(data)
+      if (!parsed.success) return { message: '', customer: null }
+      const candidates = [parsed.data.customer, parsed.data.result, data]
+      for (const candidate of candidates) {
+        const found = customerDetailSchema.safeParse(candidate)
+        if (found.success) {
+          return { message: parsed.data.message ?? '', customer: found.data }
+        }
+      }
+      return { message: parsed.data.message ?? '', customer: null }
     },
 
     async details(ref: string, includeRaw = false): Promise<CustomerDetail> {

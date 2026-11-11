@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { useAppSelector } from '../../../app/store/hooks.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -10,19 +12,29 @@ import {
   Field,
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
+import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { IconAction } from '../../../components/ui/IconAction.tsx'
 import {
+  CheckIcon,
   ListChecksIcon,
   MailIcon,
   MapPinIcon,
   OrdersIcon,
+  PencilIcon,
   UsersIcon,
+  XIcon,
 } from '../../../components/ui/icons.tsx'
+import { useAccess } from '../../../hooks/useAccess.ts'
 import type { CustomerDetail, CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
+import { mergeTags, TagsInput, useStoreTags } from '../../products/index.ts'
+import { useUpdateCustomer } from '../hooks/useUpdateCustomer.ts'
+import { CustomerUpdateDialog } from './CustomerUpdateDialog.tsx'
 import {
   capitalize,
   customerSource,
   formatAddressLines,
+  customerName,
   humanize,
   roleTone,
   stateTone,
@@ -47,6 +59,139 @@ function Chips({ items }: { items: string[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+// --- Tags ---------------------------------------------------------------------
+
+/**
+ * The customer's tags, edited in place like a product's: a pencil in the card's header turns
+ * them into the tag box (with every tag seen so far offered while typing), and the pencil becomes
+ * ✓ Save and ✕ Discard. Saving asks "Are you sure?" with what is added and removed, and only
+ * "Yes, update" sends `PUT /customers/{ref}` with the full list of tags (`tags` is the whole list,
+ * not a change). Only for people who may manage customers.
+ */
+function CustomerTagsCard({ customer }: { customer: CustomerDetail }) {
+  const { canManage } = useAccess('customers')
+  // Every tag the store has (from the tags API, asked for once the pencil is pressed), together
+  // with the tags seen on the customers loaded so far — so the box offers all of them, and still
+  // works when the call is refused.
+  const seen = useAppSelector((state) => state.customers.facets.tags)
+  const [editingStarted, setEditingStarted] = useState(false)
+  const store = useStoreTags(customer.shop?.key ? [customer.shop.key] : [], {
+    enabled: editingStarted,
+  })
+  const known = mergeTags(store.tags, seen, customer.tags)
+  const { update, isUpdating, error, clearError } = useUpdateCustomer()
+  const [draft, setDraft] = useState<string[] | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const editing = draft !== null
+  const added = (draft ?? []).filter((tag) => !customer.tags.includes(tag))
+  const removed = customer.tags.filter((tag) => !(draft ?? customer.tags).includes(tag))
+  const changed = added.length > 0 || removed.length > 0
+
+  function discard() {
+    setDraft(null)
+    setConfirming(false)
+    clearError()
+  }
+
+  async function confirm() {
+    if (!draft) return
+    const result = await update({
+      id: customer.id,
+      shop: customer.shop?.key ?? null,
+      body: { tags: draft },
+    })
+    if (!result) return
+    setNotice(result.message || 'Tags updated. They are also updated in Shopify.')
+    setConfirming(false)
+    setDraft(null)
+  }
+
+  return (
+    <>
+      <DetailSection
+        title="Tags"
+        count={customer.tags.length}
+        icon={ListChecksIcon}
+        actions={
+          canManage ? (
+            editing ? (
+              <>
+                <IconAction
+                  label="Save"
+                  accessibleLabel="Save tags"
+                  icon={CheckIcon}
+                  tone="primary"
+                  disabled={!changed}
+                  onClick={() => setConfirming(true)}
+                />
+                <IconAction
+                  label="Discard"
+                  accessibleLabel="Discard tags"
+                  icon={XIcon}
+                  onClick={discard}
+                />
+              </>
+            ) : (
+              <IconAction
+                label="Edit"
+                accessibleLabel="Edit tags"
+                icon={PencilIcon}
+                onClick={() => {
+                  setNotice(null)
+                  setEditingStarted(true)
+                  setDraft([...customer.tags])
+                }}
+              />
+            )
+          ) : undefined
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {notice && <FormMessage tone="success">{notice}</FormMessage>}
+          {editing ? (
+            <TagsInput
+              id="customer-tags"
+              ariaLabel="Add tags"
+              listLabel="Tags"
+              removeLabel={(tag) => `Remove tag ${tag}`}
+              tags={draft}
+              onChange={setDraft}
+              suggestions={known}
+              suggestAll
+              autoFocus
+            />
+          ) : customer.tags.length > 0 ? (
+            <Chips items={customer.tags} />
+          ) : (
+            <p className="text-text-muted m-0 text-[0.85rem]">
+              This customer has no tags.
+            </p>
+          )}
+        </div>
+      </DetailSection>
+
+      {confirming && (
+        <CustomerUpdateDialog
+          title={`Update “${customerName(customer)}”?`}
+          added={added}
+          removed={removed}
+          isUpdating={isUpdating}
+          error={error}
+          onConfirm={() => void confirm()}
+          onCancel={() => {
+            if (!isUpdating) {
+              setConfirming(false)
+              clearError()
+            }
+          }}
+        />
+      )}
+    </>
   )
 }
 
@@ -149,15 +294,7 @@ export function CustomerOverviewPanel({ customer, preview }: OverviewProps) {
             </FieldGrid>
           </DetailSection>
 
-          {customer.tags.length > 0 && (
-            <DetailSection
-              title="Tags"
-              count={customer.tags.length}
-              icon={ListChecksIcon}
-            >
-              <Chips items={customer.tags} />
-            </DetailSection>
-          )}
+          <CustomerTagsCard customer={customer} />
 
           {customer.note && (
             <DetailSection title="Note" icon={ListChecksIcon}>

@@ -212,6 +212,11 @@ export interface OrdersState {
   details: Record<string, OrderDetailsEntry>
   /** Opened orders, shown as tabs above the list/details (oldest first). */
   tabs: OrderTab[]
+  /**
+   * The starting date range (the last 30 days) was lifted because a search began, so an order
+   * older than that can be found; it comes back when the search is cleared.
+   */
+  rangeSuspended?: boolean
 }
 
 type OrdersRootState = { orders: OrdersState }
@@ -223,6 +228,7 @@ const initialState: OrdersState = {
   facets: { tags: [], gateways: [] },
   details: {},
   tabs: [],
+  rangeSuspended: false,
 }
 
 interface FetchArg {
@@ -317,6 +323,27 @@ const ordersSlice = createSlice({
     filtersChanged(state, action: PayloadAction<Partial<OrderFilters>>) {
       const next = { ...state.filters, ...action.payload }
       if (!('page' in action.payload)) next.page = 1
+
+      // A search looks through every date: the starting "last 30 days" would hide any older
+      // order, so it is lifted while a search is typed and put back when it is cleared. A range
+      // the person chose themselves is never touched.
+      const rangeChosen = 'from' in action.payload || 'to' in action.payload
+      if (rangeChosen) {
+        state.rangeSuspended = false
+      } else if ('search' in action.payload) {
+        const before = state.filters.search.trim() !== ''
+        const after = next.search.trim() !== ''
+        const start = defaultDateRange()
+        if (after && !before && next.from === start.from && next.to === start.to) {
+          next.from = ''
+          next.to = ''
+          state.rangeSuspended = true
+        } else if (!after && before && state.rangeSuspended) {
+          next.from = start.from
+          next.to = start.to
+          state.rangeSuspended = false
+        }
+      }
       state.filters = next
 
       // Cached already? Show it in the same render — no empty flash.
@@ -327,6 +354,7 @@ const ordersSlice = createSlice({
     filtersReset(state) {
       // The top-bar store isn't one of this page's filters, so it survives "Clear all".
       const { sort, order, pageSize, shop } = state.filters
+      state.rangeSuspended = false
       state.filters = {
         ...DEFAULT_ORDER_FILTERS,
         ...defaultDateRange(),

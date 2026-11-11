@@ -13,6 +13,7 @@ import {
   type CustomerListResponse,
   type CustomerRole,
   type CustomerSort,
+  type CustomerUpdateBody,
   type CustomerState,
 } from '../../lib/api/endpoints.ts'
 import { sessionCleared } from './authSlice.ts'
@@ -278,6 +279,29 @@ export const deleteCustomer = createAsyncThunk<
   }
 })
 
+interface UpdateCustomerArg {
+  id: string
+  /** The customer's store key (sent as `shop=`), when known. */
+  shop?: string | null
+  body: CustomerUpdateBody
+}
+
+/**
+ * Changes a customer (`PUT /customers/{ref}`). On success every cached copy is patched at once
+ * (see the `fulfilled` case), so the new tags show with no loader. Never retried.
+ */
+export const updateCustomer = createAsyncThunk<
+  { message: string; customer: CustomerDetail | null },
+  UpdateCustomerArg,
+  { state: CustomersRootState; rejectValue: string }
+>('customers/update', async ({ id, shop, body }, { rejectWithValue }) => {
+  try {
+    return await api.customers.update(id, body, shop)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
 /** Takes a deleted customer out of a cached page, keeping its totals right. */
 function withoutCustomer(data: CustomerListResponse, id: string): CustomerListResponse {
   if (!data.items.some((item) => item.id === id)) return data
@@ -438,6 +462,33 @@ const customersSlice = createSlice({
         state.tabs = state.tabs.filter((tab) => tab.id !== id)
         delete state.details[customerDetailsKey(id)]
         delete state.details[customerDetailsKey(id, true)]
+      })
+      // A saved change shows in every cached copy the moment the server confirms: the customer
+      // as read back when the answer has it, else the fields that were sent. Pages are marked
+      // stale so each is re-read quietly.
+      .addCase(updateCustomer.fulfilled, (state, action) => {
+        const { id, body } = action.meta.arg
+        const { customer } = action.payload
+        for (const key of [customerDetailsKey(id), customerDetailsKey(id, true)]) {
+          const entry = state.details[key]
+          if (!entry?.data) continue
+          entry.data = customer
+            ? { ...entry.data, ...customer }
+            : { ...entry.data, ...(body.tags ? { tags: body.tags } : {}) }
+          entry.fetchedAt = null
+        }
+        const patchRow = (data: CustomerListResponse | null) => {
+          if (!data) return
+          for (const item of data.items) {
+            if (item.id === id && body.tags) item.tags = body.tags
+          }
+        }
+        for (const entry of Object.values(state.entries)) {
+          patchRow(entry.data)
+          entry.fetchedAt = null
+        }
+        patchRow(state.lastData)
+        if (body.tags) addSorted(state.facets.tags, body.tags)
       })
       .addCase(fetchCustomers.rejected, (state, action) => {
         if (action.meta.condition) return

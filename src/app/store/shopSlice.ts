@@ -9,8 +9,13 @@ import { sessionCleared } from './authSlice.ts'
  * support it (products, customers) send the choice as the API's `shop`
  * parameter — they listen for `shopSelected` and reset to page 1.
  *
- * The selection is deliberately *not* persisted: every visit starts on "all".
+ * The selection is deliberately *not* persisted. Every visit starts on the store named
+ * `DEFAULT_SHOP_NAME` once the stores are known (when the user may see it, else on "all");
+ * after the person picks one themselves — "All shops" included — their choice stays.
  */
+
+/** The store the dropdown starts on each visit. */
+export const DEFAULT_SHOP_NAME = 'Packaging By Polymer'
 
 /** The selection meaning "every store" (also what the API treats an empty `shop` as). */
 export const ALL_SHOPS = 'all'
@@ -21,9 +26,16 @@ export interface ShopState {
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** A shop's `key` (or its domain when it has none), or `ALL_SHOPS`. */
   selected: string
+  /** The starting store was chosen, or the person picked one: don't choose again. */
+  defaultApplied: boolean
 }
 
-const initialState: ShopState = { items: [], status: 'idle', selected: ALL_SHOPS }
+const initialState: ShopState = {
+  items: [],
+  status: 'idle',
+  selected: ALL_SHOPS,
+  defaultApplied: false,
+}
 
 type ShopRootState = { shop: ShopState }
 
@@ -64,6 +76,11 @@ const shopSlice = createSlice({
   reducers: {
     shopSelected(state, action: PayloadAction<string>) {
       state.selected = action.payload || ALL_SHOPS
+      state.defaultApplied = true
+    },
+    /** The starting store is settled (there was none to choose): leave "all" as it is. */
+    shopDefaultApplied(state) {
+      state.defaultApplied = true
     },
   },
   extraReducers: (builder) => {
@@ -84,5 +101,5 @@ const shopSlice = createSlice({
   },
 })
 
-export const { shopSelected } = shopSlice.actions
+export const { shopSelected, shopDefaultApplied } = shopSlice.actions
 export const shopReducer = shopSlice.reducer
