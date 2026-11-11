@@ -16,6 +16,7 @@ import {
   capitalize,
   customerLocation,
   customerName,
+  humanize,
   roleTone,
   stateTone,
 } from '../utils/format.ts'
@@ -70,18 +71,44 @@ function StateBadge({ customer }: { customer: CustomerListItem }) {
   )
 }
 
-function EmailVerified({ value }: { value: boolean | null | undefined }) {
-  if (value === null || value === undefined)
-    return <span className="text-text-muted">—</span>
-  return value ? (
-    <Badge tone="success" className={PILL}>
-      Verified
-    </Badge>
-  ) : (
-    <Badge tone="neutral" className={PILL}>
-      Not verified
-    </Badge>
-  )
+/**
+ * The email column. Shopify's own "verified email" flag wins when the answer has it; the list
+ * usually carries the CRM's address check instead (`email_check_status`: pending, valid,
+ * invalid…), which is shown in words.
+ */
+function EmailVerified({ customer }: { customer: CustomerListItem }) {
+  const { verified_email: verified, email_check_status: check } = customer
+  if (verified === true) {
+    return (
+      <Badge tone="success" className={PILL}>
+        Verified
+      </Badge>
+    )
+  }
+  if (check) {
+    const key = check.toLowerCase()
+    const tone =
+      key === 'valid' || key === 'verified'
+        ? 'success'
+        : key === 'pending'
+          ? 'warning'
+          : key === 'invalid' || key === 'undeliverable' || key === 'bounced'
+            ? 'danger'
+            : 'neutral'
+    return (
+      <Badge tone={tone} className={PILL}>
+        {key === 'valid' ? 'Verified' : humanize(check)}
+      </Badge>
+    )
+  }
+  if (verified === false) {
+    return (
+      <Badge tone="neutral" className={PILL}>
+        Not verified
+      </Badge>
+    )
+  }
+  return <span className="text-text-muted">—</span>
 }
 
 const money = (customer: CustomerListItem) =>
@@ -117,8 +144,8 @@ export function CustomersList({
   onClearFilters,
 }: CustomersListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  // name, subscription, orders, spent, role, joined, last login, actions.
-  const columnCount = 8
+  // name, email, email verified, orders, spent, role, account state, joined, actions.
+  const columnCount = 9
 
   if (error) {
     return (
@@ -225,7 +252,7 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
-        className={`w-full min-w-[1340px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[1480px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
@@ -235,6 +262,7 @@ export function CustomersList({
             <th className={`${TH_RIGHT} w-36`}>Orders</th>
             <th className={`${TH_RIGHT} w-36`}>Amount spent</th>
             <th className={`${TH_CENTER} w-36`}>Role</th>
+            <th className={`${TH_CENTER} w-36`}>Shopify state</th>
             <th className={`${TH_CENTER} w-36`}>Joined</th>
             <th className={`${TH_CENTER} w-28`}>Actions</th>
           </tr>
@@ -290,7 +318,7 @@ export function CustomersList({
                       )}
                     </td>
                     <td className={`${TD} text-center`}>
-                      <EmailVerified value={customer.verified_email} />
+                      <EmailVerified customer={customer} />
                     </td>
                     <td className={`${TD} text-right`}>
                       {customer.orders_count.toLocaleString('en-GB')}
@@ -302,6 +330,15 @@ export function CustomersList({
                       <Badge tone={roleTone(customer.role)} className={PILL}>
                         {capitalize(customer.role)}
                       </Badge>
+                    </td>
+                    <td className={`${TD} text-center`}>
+                      {customer.shopify_state ? (
+                        <Badge tone={stateTone(customer.shopify_state)} className={PILL}>
+                          {capitalize(customer.shopify_state)}
+                        </Badge>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
                     </td>
                     <td className={`${TD} text-center`}>
                       {dateOrDash(customer.shopify_created_at)}

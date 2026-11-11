@@ -874,6 +874,12 @@ const customerListItemSchema = z.object({
   accepts_marketing: z.boolean().nullish(),
   // Whether the customer's email address is verified (the Email verified column).
   verified_email: z.boolean().nullish(),
+  // The result of the CRM's own check of the email address: "pending" until it has been
+  // looked at, then e.g. "valid" / "invalid". The list answer carries these instead of
+  // `verified_email`.
+  email_check_status: z.string().nullish(),
+  email_check_score: z.number().nullish(),
+  email_checked_at: z.string().nullish(),
   orders_count: z.number(),
   // A decimal string, e.g. "45.70".
   total_spent: z.string().nullish(),
