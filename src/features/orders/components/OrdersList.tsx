@@ -7,7 +7,8 @@ import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/i
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatDateTime, formatPrice } from '../../../lib/format.ts'
+import { formatDateTime, formatPrice } from '../../../lib/format.ts'
+import { formatRelativeDateTime } from '../../../lib/storeTime.ts'
 import {
   customerPath,
   financialTone,
@@ -43,7 +44,8 @@ interface OrdersListProps {
   onClearFilters: () => void
 }
 
-const dateOrDash = (value: string | null | undefined) => (value ? formatDate(value) : '—')
+const dateOrDash = (value: string | null | undefined) =>
+  value ? formatRelativeDateTime(value) : '—'
 
 const itemsLabel = (order: OrderListItem) =>
   `${order.items_count.toLocaleString('en-GB')} ${order.items_count === 1 ? 'item' : 'items'}`
@@ -245,9 +247,15 @@ export function OrdersList({
                       </span>
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
-                      {order.shopify_created_at
-                        ? formatDateTime(order.shopify_created_at)
-                        : '—'}
+                      {order.shopify_created_at ? (
+                        // "Today at 10:37 am" / "Yesterday at …" / "4 Nov at 10:38 am"; the full
+                        // date and time on hover.
+                        <span title={formatDateTime(order.shopify_created_at)}>
+                          {formatRelativeDateTime(order.shopify_created_at)}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className={TD}>
                       {name ? (

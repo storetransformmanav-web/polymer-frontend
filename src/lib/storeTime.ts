@@ -113,3 +113,57 @@ export function storeTimeToIso(
   if (settled !== instant) instant = settled
   return new Date(instant).toISOString()
 }
+
+/** "10:37 am" — the time of day on the store's clock, 12-hour, lower-case am / pm. */
+function clockTime(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\s/g, ' ')
+    .toLowerCase()
+}
+
+/**
+ * A moment the way a busy list shows it, on the store's clock:
+ * today → "Today at 10:37 am", yesterday → "Yesterday at 11:45 pm", the days before that up to a
+ * week → "Monday at 9:40 am", and anything older → "4 Nov at 10:38 am" ("4 Nov 2025 at …" when
+ * it is not this year). Days are the store's calendar days, not 24-hour spans. `now` is only
+ * for tests.
+ */
+export function formatRelativeDateTime(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const then = partsInZone(date.getTime(), timeZone)
+  const today = partsInZone(now.getTime(), timeZone)
+  const dayNumber = (p: { year: number; month: number; day: number }) =>
+    Date.UTC(p.year, p.month - 1, p.day) / 86_400_000
+  const daysAgo = dayNumber(today) - dayNumber(then)
+  const time = clockTime(date, timeZone)
+
+  if (daysAgo <= 0) return `Today at ${time}`
+  if (daysAgo === 1) return `Yesterday at ${time}`
+  if (daysAgo < 7) {
+    const weekday = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      weekday: 'long',
+    }).format(date)
+    return `${weekday} at ${time}`
+  }
+  const day = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+    ...(then.year === today.year ? {} : { year: 'numeric' }),
+  }).format(date)
+  return `${day} at ${time}`
+}

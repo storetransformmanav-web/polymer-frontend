@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { formatDate, formatDateTime, formatTimestamp } from './format.ts'
 import {
   DEFAULT_TIME_ZONE,
+  formatRelativeDateTime,
   formatStoreDate,
   getStoreTimeZone,
   setStoreTimeZone,
@@ -65,5 +66,39 @@ describe('store time zone', () => {
     }).format(new Date())
     const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     expect(ymd).toBe(text)
+  })
+})
+
+describe('relative date and time', () => {
+  // A Wednesday noon in London (winter, so London is UTC).
+  const now = new Date('2026-11-11T12:00:00Z')
+
+  it('says Today and Yesterday, with a 12-hour time', () => {
+    expect(formatRelativeDateTime('2026-11-11T02:10:29Z', now)).toBe('Today at 2:10 am')
+    expect(formatRelativeDateTime('2026-11-10T22:45:00Z', now)).toBe(
+      'Yesterday at 10:45 pm',
+    )
+  })
+
+  it('names the weekday for the days before that, up to a week', () => {
+    expect(formatRelativeDateTime('2026-11-09T09:40:00Z', now)).toBe('Monday at 9:40 am')
+  })
+
+  it('shows the date for anything older than that', () => {
+    expect(formatRelativeDateTime('2026-11-04T10:38:00Z', now)).toBe('4 Nov at 10:38 am')
+    expect(formatRelativeDateTime('2025-11-04T10:38:00Z', now)).toBe(
+      '4 Nov 2025 at 10:38 am',
+    )
+  })
+
+  it('counts the store’s calendar days, not 24-hour spans', () => {
+    // 23:30 UTC on 10 Nov is 23:30 in London; "now" is just after midnight on the 11th.
+    expect(
+      formatRelativeDateTime('2026-11-10T23:30:00Z', new Date('2026-11-11T00:10:00Z')),
+    ).toBe('Yesterday at 11:30 pm')
+  })
+
+  it('gives nothing for an empty value', () => {
+    expect(formatRelativeDateTime(null, now)).toBe('')
   })
 })
