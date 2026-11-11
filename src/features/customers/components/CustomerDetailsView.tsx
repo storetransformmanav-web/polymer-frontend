@@ -5,9 +5,10 @@ import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
+  CalendarIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
-import { initials } from '../../../lib/format.ts'
+import { formatDate, initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
 import {
   capitalize,
@@ -16,14 +17,10 @@ import {
   roleTone,
   stateTone,
 } from '../utils/format.ts'
-import {
-  CustomerAddressesPanel,
-  CustomerMarketingPanel,
-  CustomerMetafieldsPanel,
-  CustomerOverviewPanel,
-} from './CustomerDetailPanels.tsx'
+import { CustomerMarketingPanel, CustomerOverviewPanel } from './CustomerDetailPanels.tsx'
+import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
-type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields'
+type TabId = 'overview' | 'marketing' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -61,11 +58,13 @@ export function CustomerDetailsView({
   const name = known ? customerName(known) : 'Loading customer…'
   const email = known?.email
   const state = known?.shopify_state
+  const created = customer
+    ? (customer.created_at ?? customer.shopify_created_at)
+    : preview?.shopify_created_at
   const metafieldCount = customer?.metafields.length ?? 0
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'addresses', label: 'Addresses', count: customer?.addresses.length },
     { id: 'marketing', label: 'Marketing & Tax' },
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
@@ -128,6 +127,28 @@ export function CustomerDetailsView({
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate">{email}</span>
                 <CopyButton value={email} label="Copy email" />
+              </span>
+            )}
+            {created && (
+              <span className="flex items-center gap-1.5">
+                <CalendarIcon
+                  width={15}
+                  height={15}
+                  className="text-text-muted shrink-0"
+                />
+                <span className="text-text-muted">Created:</span>
+                <span className="font-semibold">{formatDate(created)}</span>
+              </span>
+            )}
+            {customer?.updated_at && (
+              <span className="flex items-center gap-1.5">
+                <CalendarIcon
+                  width={15}
+                  height={15}
+                  className="text-text-muted shrink-0"
+                />
+                <span className="text-text-muted">Updated:</span>
+                <span className="font-semibold">{formatDate(customer.updated_at)}</span>
               </span>
             )}
             {details.isRefreshing && (
@@ -212,9 +233,6 @@ export function CustomerDetailsView({
           <CustomerOverviewPanel customer={customer} preview={preview} />
         )}
         {tab !== 'overview' && !customer && <DetailSkeleton />}
-        {customer && tab === 'addresses' && (
-          <CustomerAddressesPanel customer={customer} />
-        )}
         {customer && tab === 'marketing' && (
           <CustomerMarketingPanel customer={customer} />
         )}

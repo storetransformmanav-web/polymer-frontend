@@ -824,3 +824,30 @@ export function MinusIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function PhoneIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5.2 2.8h2.4l1.2 3.4-1.7 1.2a9.4 9.4 0 0 0 4.7 4.7l1.2-1.7 3.4 1.2v2.4a1.6 1.6 0 0 1-1.7 1.6A12.6 12.6 0 0 1 3.6 4.5 1.6 1.6 0 0 1 5.2 2.8Z" />
+    </svg>
+  )
+}
+
+export function GlobeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M2.5 10h15" />
+      <path d="M10 2.5c2.2 2.1 3.3 4.6 3.3 7.5s-1.1 5.4-3.3 7.5c-2.2-2.1-3.3-4.6-3.3-7.5S7.8 4.6 10 2.5Z" />
+    </svg>
+  )
+}
+
+export function ShieldCheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10 2.5 16 4.7v4.8c0 3.6-2.5 6.3-6 8-3.5-1.7-6-4.4-6-8V4.7L10 2.5Z" />
+      <path d="m7.2 10 2 2 3.6-3.8" />
+    </svg>
+  )
+}

@@ -211,12 +211,12 @@ describe('Customer details', () => {
     expect(screen.getByText(/Prefers morning deliveries/)).toBeInTheDocument()
   })
 
-  it('shows addresses, marketing & tax, and an empty state when there are no addresses', async () => {
+  it('shows addresses on the overview (no Addresses tab), and marketing & tax on its tab', async () => {
     const user = userEvent.setup()
     renderPage('/customers/cust-7')
     await screen.findByText('Contact & Account')
 
-    await user.click(screen.getByRole('tab', { name: /Addresses/ }))
+    expect(screen.queryByRole('tab', { name: /Addresses/ })).not.toBeInTheDocument()
     expect(screen.getByText('12 High Street')).toBeInTheDocument()
     expect(screen.getByText('Winchester, Hampshire')).toBeInTheDocument()
     expect(screen.getByText('SO23 9AA United Kingdom')).toBeInTheDocument()
@@ -228,11 +228,9 @@ describe('Customer details', () => {
   })
 
   it('says so when a CRM customer has no saved addresses', async () => {
-    const user = userEvent.setup()
     renderPage('/customers/cust-1')
     await screen.findByText('Contact & Account')
 
-    await user.click(screen.getByRole('tab', { name: /Addresses/ }))
     expect(screen.getByText('No saved addresses.')).toBeInTheDocument()
   })
 

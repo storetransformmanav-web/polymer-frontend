@@ -1,14 +1,9 @@
-import { useState } from 'react'
+import { useState, type ComponentType, type ReactNode } from 'react'
 import { useAppSelector } from '../../../app/store/hooks.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
-  DETAIL_TD as TD,
-  DETAIL_TH as TH,
-  DetailEmpty,
   DetailSection,
   DetailSkeleton,
-  DetailTable,
   Field,
   FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
@@ -16,13 +11,19 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import {
   CheckIcon,
+  ClockIcon,
+  GlobeIcon,
   ListChecksIcon,
   MailIcon,
   MapPinIcon,
   OrdersIcon,
   PencilIcon,
+  PhoneIcon,
+  ShieldCheckIcon,
+  StoreIcon,
   UsersIcon,
   XIcon,
+  type IconProps,
 } from '../../../components/ui/icons.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
 import type { CustomerDetail, CustomerListItem } from '../../../lib/api/endpoints.ts'
@@ -31,21 +32,15 @@ import { mergeTags, TagsInput, useStoreTags } from '../../products/index.ts'
 import { useUpdateCustomer } from '../hooks/useUpdateCustomer.ts'
 import { CustomerUpdateDialog } from './CustomerUpdateDialog.tsx'
 import {
-  capitalize,
   customerSource,
   formatAddressLines,
   customerName,
   humanize,
-  roleTone,
-  stateTone,
 } from '../utils/format.ts'
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
 const date = (value: string | null | undefined) => (value ? formatDate(value) : null)
-
-const SUMMARY_CARD = 'border-border bg-accent-tint/50 rounded-xl border p-5'
-const SUMMARY_LABEL = 'text-text-muted text-[0.7rem] font-bold tracking-wide uppercase'
 
 function Chips({ items }: { items: string[] }) {
   return (
@@ -197,103 +192,147 @@ function CustomerTagsCard({ customer }: { customer: CustomerDetail }) {
 
 // --- Overview -----------------------------------------------------------------
 
+/** One labelled fact of the Contact & Account card: a small accent icon, the label, the value. */
+function Fact({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: ComponentType<IconProps>
+  label: string
+  children: ReactNode
+}) {
+  const empty = children === null || children === undefined || children === ''
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      <Icon width={18} height={18} className="text-accent mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <dt className="text-text-muted mb-0.5 text-[0.68rem] font-bold tracking-wide uppercase">
+          {label}
+        </dt>
+        <dd className="text-[0.88rem] font-medium break-words">
+          {empty ? <span className="text-text-muted">—</span> : children}
+        </dd>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Contact & Account. What the header already shows (name, email, role, Shopify account state,
+ * created and updated dates) is not repeated here.
+ */
+function ContactCard({ customer }: { customer: CustomerDetail }) {
+  return (
+    <DetailSection title="Contact & Account" icon={UsersIcon}>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-5 min-[520px]:grid-cols-2 xl:grid-cols-4 xl:[&>*:not(:nth-child(4n+1))]:border-l xl:[&>*:not(:nth-child(4n+1))]:pl-4">
+        <Fact icon={PhoneIcon} label="Phone">
+          {customer.phone}
+        </Fact>
+        <Fact icon={ShieldCheckIcon} label="Email verified">
+          {customer.verified_email === true ? (
+            <Badge tone="success">Yes</Badge>
+          ) : (
+            (yesNo(customer.verified_email) ?? date(customer.email_verified_at))
+          )}
+        </Fact>
+        <Fact icon={GlobeIcon} label="Locale">
+          {customer.locale}
+        </Fact>
+        <Fact icon={StoreIcon} label="Source">
+          {customerSource(customer)}
+        </Fact>
+        <Fact icon={ListChecksIcon} label="Shopify ID">
+          {customer.shopify_id}
+        </Fact>
+        <Fact icon={ClockIcon} label="Last login">
+          {date(customer.last_login_at)}
+        </Fact>
+        <Fact icon={UsersIcon} label="Status">
+          <Badge tone={customer.is_active ? 'success' : 'danger'}>
+            {customer.is_active ? 'Active' : 'Inactive'}
+          </Badge>
+        </Fact>
+      </dl>
+    </DetailSection>
+  )
+}
+
+function AddressesCard({ customer }: { customer: CustomerDetail }) {
+  return (
+    <DetailSection title="Addresses" count={customer.addresses.length} icon={MapPinIcon}>
+      {customer.addresses.length === 0 ? (
+        <p className="text-text-muted m-0 text-[0.85rem]">No saved addresses.</p>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {customer.addresses.map((address) => {
+            const lines = formatAddressLines(address)
+            const name =
+              address.name ||
+              [address.first_name, address.last_name].filter(Boolean).join(' ')
+            return (
+              <li
+                key={address.id}
+                className={`flex gap-3 rounded-xl border p-4 text-[0.85rem] ${
+                  address.is_default
+                    ? 'border-accent bg-accent-tint/40'
+                    : 'border-border bg-bg'
+                }`}
+              >
+                <MapPinIcon
+                  width={18}
+                  height={18}
+                  className="text-accent mt-0.5 shrink-0"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="font-semibold break-words">{name || 'Address'}</span>
+                    {address.is_default && <Badge tone="default">Default</Badge>}
+                  </span>
+                  {address.company && (
+                    <span className="text-text-muted">{address.company}</span>
+                  )}
+                  {lines.map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+                  {address.phone && (
+                    <span className="text-text-muted">{address.phone}</span>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </DetailSection>
+  )
+}
+
 interface OverviewProps {
   customer: CustomerDetail | null
   /** The matching list row, so the summary can draw before details arrive. */
   preview: CustomerListItem | null
 }
 
+const MINI_LABEL = 'text-text-muted text-[0.68rem] font-bold tracking-wide uppercase'
+
+/**
+ * The Overview tab: on the left Contact & Account, Addresses, Tags (and the note); on the right
+ * Orders & Spend. The right card draws from the list row while the full record loads.
+ */
 export function CustomerOverviewPanel({ customer, preview }: OverviewProps) {
   const source = customer ?? preview
-  const currency = source?.currency
   const orders = source?.orders_count ?? 0
   const lastOrder = source?.last_order_name
-  const since = customer
-    ? (customer.shopify_created_at ?? customer.created_at)
-    : preview?.shopify_created_at
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-      <div className="flex flex-col gap-4">
-        <div className={SUMMARY_CARD}>
-          <p className={SUMMARY_LABEL}>Total spent</p>
-          <p className="mt-1 text-3xl font-bold tracking-tight">
-            {formatPrice(source?.total_spent ?? '0', currency)}
-          </p>
-        </div>
-        <div className={SUMMARY_CARD}>
-          <p className={SUMMARY_LABEL}>Orders</p>
-          <p className="mt-1 text-3xl font-bold tracking-tight">
-            {orders.toLocaleString('en-GB')}
-          </p>
-          {lastOrder && (
-            <p className="text-text-muted mt-1 text-[0.82rem]">Last order {lastOrder}</p>
-          )}
-        </div>
-        <div className={SUMMARY_CARD}>
-          <p className={SUMMARY_LABEL}>Customer since</p>
-          <p className="mt-1 text-xl font-bold tracking-tight">{date(since) ?? '—'}</p>
-        </div>
-      </div>
-
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
       {!customer ? (
         <DetailSkeleton />
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
-          <DetailSection title="Contact & Account" count={12} icon={UsersIcon}>
-            <FieldGrid>
-              <Field label="Email">
-                {customer.email && (
-                  <span className="flex items-center gap-1.5 break-words">
-                    {customer.email}
-                    <CopyButton value={customer.email} label="Copy email" />
-                  </span>
-                )}
-              </Field>
-              <Field label="Phone">{customer.phone}</Field>
-              <Field label="Role">
-                <Badge tone={roleTone(customer.role)}>{capitalize(customer.role)}</Badge>
-              </Field>
-              <Field label="Status">
-                <Badge tone={customer.is_active ? 'success' : 'danger'}>
-                  {customer.is_active ? 'Active' : 'Inactive'}
-                </Badge>
-              </Field>
-              <Field label="Source">{customerSource(customer)}</Field>
-              <Field label="Shopify account">
-                {customer.shopify_state && (
-                  <Badge tone={stateTone(customer.shopify_state)}>
-                    {capitalize(customer.shopify_state)}
-                  </Badge>
-                )}
-              </Field>
-              <Field label="Email verified">
-                {yesNo(customer.verified_email) ?? date(customer.email_verified_at)}
-              </Field>
-              <Field label="Locale">{customer.locale}</Field>
-              <Field label="Shopify ID">{customer.shopify_id}</Field>
-              <Field label="Last login">{date(customer.last_login_at)}</Field>
-              <Field label="Created">{date(customer.created_at)}</Field>
-              <Field label="Updated">{date(customer.updated_at)}</Field>
-            </FieldGrid>
-          </DetailSection>
-
-          <DetailSection title="Orders & Spend" count={5} icon={OrdersIcon}>
-            <FieldGrid>
-              <Field label="Orders">
-                {customer.orders_count.toLocaleString('en-GB')}
-              </Field>
-              <Field label="Total spent">
-                {formatPrice(customer.total_spent ?? '0', customer.currency)}
-              </Field>
-              <Field label="Last order">{customer.last_order_name}</Field>
-              <Field label="RFM group">{humanize(customer.rfm_group)}</Field>
-              <Field label="Predicted spend tier">
-                {humanize(customer.predicted_spend_tier)}
-              </Field>
-            </FieldGrid>
-          </DetailSection>
-
+          <ContactCard customer={customer} />
+          <AddressesCard customer={customer} />
           <CustomerTagsCard customer={customer} />
 
           {customer.note && (
@@ -305,44 +344,45 @@ export function CustomerOverviewPanel({ customer, preview }: OverviewProps) {
           )}
         </div>
       )}
+
+      <DetailSection title="Orders & Spend" icon={OrdersIcon}>
+        <div className="border-border bg-surface grid grid-cols-2 gap-x-4 gap-y-4 rounded-xl border p-4">
+          <div>
+            <p className={MINI_LABEL}>Orders</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight">
+              {orders.toLocaleString('en-GB')}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className={MINI_LABEL}>Total spent</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight">
+              {formatPrice(source?.total_spent ?? '0', source?.currency)}
+            </p>
+          </div>
+          <div className="border-border col-span-2 grid grid-cols-2 gap-x-4 border-t pt-4">
+            <div>
+              <p className={`${MINI_LABEL} mb-1.5`}>RFM group</p>
+              {customer?.rfm_group ? (
+                <Badge tone="success">{humanize(customer.rfm_group)}</Badge>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </div>
+            <div className="text-right">
+              <p className={`${MINI_LABEL} mb-1.5`}>Predicted spend tier</p>
+              {customer?.predicted_spend_tier ? (
+                <Badge tone="default">{humanize(customer.predicted_spend_tier)}</Badge>
+              ) : (
+                <span className="text-text-muted">—</span>
+              )}
+            </div>
+          </div>
+        </div>
+        {lastOrder && (
+          <p className="text-text-muted mt-3 text-[0.82rem]">Last order {lastOrder}</p>
+        )}
+      </DetailSection>
     </div>
-  )
-}
-
-// --- Addresses ----------------------------------------------------------------
-
-export function CustomerAddressesPanel({ customer }: { customer: CustomerDetail }) {
-  if (customer.addresses.length === 0) {
-    return <DetailEmpty icon={MapPinIcon}>No saved addresses.</DetailEmpty>
-  }
-
-  return (
-    <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {customer.addresses.map((address) => {
-        const lines = formatAddressLines(address)
-        const name =
-          address.name ||
-          [address.first_name, address.last_name].filter(Boolean).join(' ')
-        return (
-          <li
-            key={address.id}
-            className="border-border bg-bg flex flex-col gap-1.5 rounded-xl border p-4 text-[0.88rem]"
-          >
-            <span className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{name || 'Address'}</span>
-              {address.is_default && <Badge tone="default">Default</Badge>}
-            </span>
-            {address.company && (
-              <span className="text-text-muted">{address.company}</span>
-            )}
-            {lines.map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-            {address.phone && <span className="text-text-muted">{address.phone}</span>}
-          </li>
-        )
-      })}
-    </ul>
   )
 }
 
@@ -384,41 +424,5 @@ export function CustomerMarketingPanel({ customer }: { customer: CustomerDetail 
         </FieldGrid>
       </DetailSection>
     </div>
-  )
-}
-
-// --- Metafields -----------------------------------------------------------------
-
-export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail }) {
-  if (customer.metafields.length === 0) {
-    return <DetailEmpty icon={ListChecksIcon}>No metafields.</DetailEmpty>
-  }
-
-  return (
-    <DetailTable>
-      <thead>
-        <tr>
-          <th className={TH}>Field</th>
-          <th className={TH}>Type</th>
-          <th className={TH}>Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {customer.metafields.map((field) => (
-          <tr
-            key={`${field.namespace}.${field.key}`}
-            className="border-border even:bg-surface border-b last:border-b-0"
-          >
-            <td className={`${TD} font-mono text-[0.8rem]`}>
-              {field.namespace}.{field.key}
-            </td>
-            <td className={TD}>{field.type ?? '—'}</td>
-            <td className={`${TD} max-w-96 truncate`} title={field.value ?? ''}>
-              {field.value ?? '—'}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </DetailTable>
   )
 }
