@@ -3,31 +3,31 @@ import type { OrderFilters, OrdersFacets } from '../../../app/store/ordersSlice.
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import {
   ArrowUpDownIcon,
-  BoxesIcon,
   CalendarIcon,
   ChevronDownIcon,
   DollarSignIcon,
   ListChecksIcon,
-  OrdersIcon,
   SearchIcon,
   SlidersIcon,
   TagIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { SearchableSelectField } from '../../../components/ui/SearchableSelectField.tsx'
 import { withAll } from '../../../components/ui/selectOptions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
+import { shopValue } from '../../../app/store/shopSlice.ts'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
+import { useShops } from '../../../hooks/useShops.ts'
 import {
   ORDER_FINANCIAL_STATUSES,
   ORDER_SORTS,
-  ORDER_SOURCES,
   type OrderFinancialStatus,
   type OrderFulfillmentStatus,
   type OrderSort,
-  type OrderSource,
 } from '../../../lib/api/endpoints.ts'
+import { mergeTags, useStoreTags } from '../../products/index.ts'
 import { useOrderFulfillmentCounts } from '../hooks/useOrderFulfillmentCounts.ts'
-import { humanize, sourceLabel } from '../utils/format.ts'
+import { humanize } from '../utils/format.ts'
 
 const FULFILLMENT_TABS: { value: OrderFulfillmentStatus | ''; label: string }[] = [
   { value: '', label: 'All Orders' },
@@ -55,16 +55,11 @@ const ORDER_OPTIONS: SelectOption[] = [
 ]
 const PAYMENT_OPTIONS: SelectOption[] = [
   { value: '', label: 'All Payments' },
-  ...ORDER_FINANCIAL_STATUSES.map((value) => ({ value, label: humanize(value) })),
-]
-const SOURCE_OPTIONS: SelectOption[] = [
-  { value: '', label: 'All Sources' },
-  ...ORDER_SOURCES.map((value) => ({ value, label: sourceLabel(value) })),
-]
-const CANCELLED_OPTIONS: SelectOption[] = [
-  { value: '', label: 'Any' },
-  { value: 'no', label: 'Not cancelled' },
-  { value: 'yes', label: 'Cancelled' },
+  // No plain "Refunded" choice (removed by choice): "Partially refunded" stays.
+  ...ORDER_FINANCIAL_STATUSES.filter((value) => value !== 'REFUNDED').map((value) => ({
+    value,
+    label: humanize(value),
+  })),
 ]
 
 // The filter grid is compact: narrower columns, shorter controls, smaller text.
@@ -113,6 +108,14 @@ export function OrdersToolbar({
         count === null ? tab.label : `${tab.label} (${count.toLocaleString('en-GB')})`,
     }
   })
+
+  // The Tag dropdown lists every tag the store has, from the tags API — for the chosen store, or
+  // every store with "All shops" — merged with the tags seen on the orders loaded so far, and has
+  // a search box. Asked for only once the grid is open.
+  const { shops } = useShops()
+  const tagShops = filters.shop ? [filters.shop] : shops.map(shopValue)
+  const { tags: storeTags } = useStoreTags(tagShops, { enabled: filtersOpen })
+  const tagChoices = mergeTags(storeTags, facets.tags, filters.tag ? [filters.tag] : [])
 
   const [search, setSearch] = useDebouncedField(filters.search, (search) =>
     onChange({ search }),
@@ -234,15 +237,6 @@ export function OrdersToolbar({
               />
               <SelectField
                 compact
-                id="filter-source"
-                label="Source"
-                icon={OrdersIcon}
-                value={filters.source}
-                options={SOURCE_OPTIONS}
-                onChange={(source) => onChange({ source: source as OrderSource | '' })}
-              />
-              <SelectField
-                compact
                 id="filter-gateway"
                 label="Payment gateway"
                 icon={DollarSignIcon}
@@ -250,25 +244,15 @@ export function OrdersToolbar({
                 options={withAll('All gateways', facets.gateways, filters.gateway)}
                 onChange={(gateway) => onChange({ gateway })}
               />
-              <SelectField
+              <SearchableSelectField
                 compact
                 id="filter-tag"
                 label="Tag"
                 icon={TagIcon}
                 value={filters.tag}
-                options={withAll('All Tags', facets.tags, filters.tag)}
+                values={tagChoices}
+                allLabel="All Tags"
                 onChange={(tag) => onChange({ tag })}
-              />
-              <SelectField
-                compact
-                id="filter-cancelled"
-                label="Cancelled"
-                icon={BoxesIcon}
-                value={filters.cancelled}
-                options={CANCELLED_OPTIONS}
-                onChange={(cancelled) =>
-                  onChange({ cancelled: cancelled as OrderFilters['cancelled'] })
-                }
               />
               <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor="filter-min-total" className={FIELD_LABEL}>

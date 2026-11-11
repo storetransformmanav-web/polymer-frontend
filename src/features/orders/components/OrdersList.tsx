@@ -48,6 +48,16 @@ const dateOrDash = (value: string | null | undefined) => (value ? formatDate(val
 const itemsLabel = (order: OrderListItem) =>
   `${order.items_count.toLocaleString('en-GB')} ${order.items_count === 1 ? 'item' : 'items'}`
 
+/**
+ * Whether to show the "Cancelled" pill: when the order was cancelled — unless its payment status
+ * already says so (voided or refunded), which would only be a second pill for the same thing.
+ */
+function showsCancelled(order: OrderListItem): boolean {
+  if (!order.cancelled_at) return false
+  const status = (order.financial_status ?? '').toUpperCase()
+  return status !== 'VOIDED' && status !== 'REFUNDED'
+}
+
 /** The order's status pills: payment, fulfillment, and "Cancelled" when it was. */
 function StatusBadges({ order }: { order: OrderListItem }) {
   return (
@@ -58,7 +68,7 @@ function StatusBadges({ order }: { order: OrderListItem }) {
       <Badge tone={fulfillmentTone(order.fulfillment_status)}>
         {humanize(order.fulfillment_status) || '—'}
       </Badge>
-      {order.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
+      {showsCancelled(order) && <Badge tone="danger">Cancelled</Badge>}
     </>
   )
 }
@@ -277,7 +287,7 @@ export function OrdersList({
                         >
                           {humanize(order.financial_status) || '—'}
                         </Badge>
-                        {order.cancelled_at && (
+                        {showsCancelled(order) && (
                           <Badge tone="danger" className={PILL}>
                             Cancelled
                           </Badge>
