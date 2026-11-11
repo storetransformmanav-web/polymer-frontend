@@ -2,11 +2,14 @@ import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
+import { PlusIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import {
   CustomerDeleteDialog,
   type CustomerToDelete,
 } from '../components/CustomerDeleteDialog.tsx'
+import { CustomerCreateView } from '../components/CustomerCreateView.tsx'
 import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
@@ -15,12 +18,18 @@ import { CustomersKpis } from '../components/CustomersKpis.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
+import { useCustomerFigures } from '../hooks/useCustomerFigures.ts'
 import { useCustomers } from '../hooks/useCustomers.ts'
 import { useCustomerTabs } from '../hooks/useCustomerTabs.ts'
-import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
+import type {
+  CustomerCreateResult,
+  CustomerListItem,
+} from '../../../lib/api/endpoints.ts'
+import { DRAFT_TAB } from '../utils/customerDraft.ts'
 import { customerName } from '../utils/format.ts'
 
 const LIST_PATH = '/customers'
+const NEW_PATH = '/customers/new'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 
 /**
@@ -39,9 +48,21 @@ export function CustomersPage() {
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = customers
+  const figures = useCustomerFigures(filters, data)
 
-  // `/customers/<id>[/…]` → the customer id; `/customers` → null (the list).
-  const activeId = splat ? splat.split('/')[0] || null : null
+  // `/customers/<id>[/…]` → the customer id; `/customers` and `/customers/new` → null.
+  const first = splat ? splat.split('/')[0] : ''
+  const activeId = first && first !== 'new' ? first : null
+
+  // The Add customer form is open: it stays mounted, with what was typed, while the list or a
+  // customer is shown. It starts open when the page is reached at /customers/new directly.
+  const [adding, setAdding] = useState(splat === 'new')
+  const [dirty, setDirty] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  // The form is on screen (at /customers/new); anywhere else it is only kept.
+  const creatingRoute = splat === 'new'
+  // Also drawn while the address is /customers/new, e.g. after the browser's Back button.
+  const formOpen = adding || creatingRoute
 
   // The customer a trash button asked to delete (the dialog confirms), and what to say after.
   const [deleting, setDeleting] = useState<CustomerToDelete | null>(null)
@@ -63,6 +84,47 @@ export function CustomersPage() {
     if (activeId === customer.id) navigate(LIST_PATH)
   }
 
+  const openForm = useCallback(() => {
+    setNotice(null)
+    setAdding(true)
+    navigate(NEW_PATH)
+  }, [navigate])
+
+  /** Close the form for good and go back to the list. */
+  const closeForm = useCallback(() => {
+    setConfirmingClose(false)
+    setAdding(false)
+    setDirty(false)
+    navigate(LIST_PATH)
+  }, [navigate])
+
+  /** Back / Cancel / the tab's X: ask first when something was entered. */
+  const requestClose = useCallback(() => {
+    if (dirty) setConfirmingClose(true)
+    else closeForm()
+  }, [dirty, closeForm])
+
+  /** The store made the customer: close the form, say so, and open the new customer in a tab. */
+  function handleCreated(result: CustomerCreateResult) {
+    setConfirmingClose(false)
+    setAdding(false)
+    setDirty(false)
+    const warnings = result.warnings.length > 0 ? ` ${result.warnings.join(' ')}` : ''
+    setNotice(
+      `${result.message || 'Customer created in Shopify and the CRM.'}${warnings}`,
+    )
+    if (result.id) {
+      tabs.openTab({
+        id: result.id,
+        name: result.name || result.email,
+        email: result.email,
+      })
+      navigate(detailsPath(result.id))
+    } else {
+      navigate(LIST_PATH)
+    }
+  }
+
   function openCustomer(customer: CustomerListItem) {
     tabs.openTab({ id: customer.id, name: customerName(customer), email: customer.email })
     navigate(detailsPath(customer.id))
@@ -78,6 +140,7 @@ export function CustomersPage() {
   function clearTabs() {
     tabs.clearTabs()
     if (activeId) navigate(LIST_PATH)
+    if (formOpen) requestClose()
   }
 
   // From `lg` the page fills the window (see `fillHeight` in navigation.ts): the table scrolls in
@@ -86,16 +149,24 @@ export function CustomersPage() {
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {/* The figures sit above the tabs; they belong to the list, so an open customer takes
           their place (kept mounted, only hidden). */}
-      <div className={activeId ? 'hidden' : undefined}>
-        <CustomersKpis totals={data?.totals} total={data?.total ?? null} />
+      <div className={activeId || creatingRoute ? 'hidden' : undefined}>
+        <CustomersKpis
+          totals={figures.totals}
+          total={figures.total}
+          orders={filters.orders}
+          marketing={filters.marketing}
+          onOrders={(orders) => customers.setFilters({ orders })}
+          onMarketing={(marketing) => customers.setFilters({ marketing })}
+        />
       </div>
 
       <CustomerTabsBar
         tabs={tabs.tabs}
-        activeId={activeId}
+        activeId={creatingRoute ? DRAFT_TAB : activeId}
+        draft={formOpen}
         onShowList={() => navigate(LIST_PATH)}
-        onSelect={(id) => navigate(detailsPath(id))}
-        onClose={closeTab}
+        onSelect={(id) => navigate(id === DRAFT_TAB ? NEW_PATH : detailsPath(id))}
+        onClose={(id) => (id === DRAFT_TAB ? requestClose() : closeTab(id))}
         onClear={clearTabs}
       />
 
@@ -115,25 +186,59 @@ export function CustomersPage() {
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
+      {/* The form stays mounted (hidden) while the list or a customer is shown. */}
+      {formOpen && (
+        <div
+          className={
+            creatingRoute ? 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto' : 'hidden'
+          }
+        >
+          <CustomerCreateView
+            onCreated={handleCreated}
+            onBack={requestClose}
+            onDirtyChange={setDirty}
+          />
+        </div>
+      )}
+
       {/* Kept mounted but hidden while a customer is open (display: none also
           removes it from tab order and screen readers). */}
-      <div className={activeId ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'}>
+      <div
+        className={
+          activeId || creatingRoute
+            ? 'hidden'
+            : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
+        }
+      >
         <CustomersToolbar
           filters={filters}
           hasFilters={customers.hasFilters}
           onChange={customers.setFilters}
           onReset={customers.resetFilters}
+          // Add customer sits in the search row, to the right of Filters and Clear All.
+          actions={
+            canManage ? (
+              <button
+                type="button"
+                onClick={openForm}
+                className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors"
+              >
+                <PlusIcon width={16} height={16} />
+                Add customer
+              </button>
+            ) : undefined
+          }
         />
 
         {/* The Import and Export buttons sit in the top bar; they only show while the list is. */}
-        <CustomersImport visible={!activeId} />
+        <CustomersImport visible={!activeId && !creatingRoute} />
 
         <CustomersExport
           items={customers.items}
           filters={filters}
           total={data?.total ?? 0}
           // The whole list of people's details: only for those who may manage customers.
-          visible={!activeId && canManage}
+          visible={!activeId && !creatingRoute && canManage}
         />
 
         <section
@@ -170,6 +275,16 @@ export function CustomersPage() {
               }}
               onRetry={customers.retry}
               onClearFilters={customers.resetFilters}
+              sort={filters.sort}
+              order={filters.order}
+              // A new column starts ascending; the same column flips direction.
+              onSort={(sort) =>
+                customers.setFilters(
+                  sort === filters.sort
+                    ? { order: filters.order === 'asc' ? 'desc' : 'asc' }
+                    : { sort, order: 'asc' },
+                )
+              }
             />
           </HighlightQuery>
 
@@ -185,6 +300,14 @@ export function CustomersPage() {
           )}
         </section>
       </div>
+
+      {confirmingClose && (
+        <ConfirmCancelDialog
+          lose="what you entered for the new customer"
+          onConfirm={closeForm}
+          onKeep={() => setConfirmingClose(false)}
+        />
+      )}
 
       {deleting && (
         <CustomerDeleteDialog

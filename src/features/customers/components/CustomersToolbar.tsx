@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { CustomerFilters } from '../../../app/store/customersSlice.ts'
 import {
   ArrowUpDownIcon,
@@ -22,16 +22,14 @@ const SORT_CHOICES: { value: CustomerSort; label: string }[] = [
   { value: 'orders_count', label: 'Orders' },
 ]
 const SORT_OPTIONS: SelectOption[] = SORT_CHOICES
-const ORDER_OPTIONS: SelectOption[] = [
-  { value: 'desc', label: 'Descending' },
-  { value: 'asc', label: 'Ascending' },
-]
 
 interface CustomersToolbarProps {
   filters: CustomerFilters
   hasFilters: boolean
   onChange: (changes: Partial<CustomerFilters>) => void
   onReset: () => void
+  /** Extra buttons at the end of the search row (Add customer). */
+  actions?: ReactNode
 }
 
 /**
@@ -44,6 +42,7 @@ export function CustomersToolbar({
   hasFilters,
   onChange,
   onReset,
+  actions,
 }: CustomersToolbarProps) {
   // Collapsed by default on every screen size; the Filters button reveals the grid.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -114,6 +113,7 @@ export function CustomersToolbar({
             <XIcon width={14} height={14} />
             Clear All
           </button>
+          {actions}
         </div>
       </div>
 
@@ -145,14 +145,6 @@ export function CustomersToolbar({
               value={filters.sort}
               options={SORT_OPTIONS}
               onChange={(sort) => onChange({ sort: sort as CustomerSort })}
-            />
-            <SelectField
-              compact
-              id="filter-order"
-              label="Order"
-              value={filters.order}
-              options={ORDER_OPTIONS}
-              onChange={(order) => onChange({ order: order as CustomerFilters['order'] })}
             />
           </div>
         </div>

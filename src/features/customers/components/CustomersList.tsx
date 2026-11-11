@@ -9,8 +9,9 @@ import {
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
-import type { CustomerListItem } from '../../../lib/api/endpoints.ts'
+import type { CustomerListItem, CustomerSort } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
 import {
   capitalize,
@@ -47,6 +48,11 @@ interface CustomersListProps {
   onDelete: (customer: CustomerListItem) => void
   onRetry: () => void
   onClearFilters: () => void
+  /** The column the list is sorted by, and its direction (the header's sort buttons). */
+  sort: CustomerSort
+  order: 'asc' | 'desc'
+  /** A header's sort button was clicked. */
+  onSort: (sort: CustomerSort) => void
 }
 
 function Avatar({ name }: { name: string }) {
@@ -142,7 +148,18 @@ export function CustomersList({
   onDelete,
   onRetry,
   onClearFilters,
+  sort,
+  order,
+  onSort,
 }: CustomersListProps) {
+  const sortHeader = (label: string, column: CustomerSort) => (
+    <SortButton
+      label={label}
+      active={sort === column}
+      order={order}
+      onClick={() => onSort(column)}
+    />
+  )
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // name, email, email verified, orders, spent, role, account state, joined, actions.
   const columnCount = 9
@@ -256,14 +273,33 @@ export function CustomersList({
       >
         <thead>
           <tr>
-            <th className={TH}>Customer name</th>
-            <th className={`${TH} w-72`}>Email</th>
+            <th className={TH} aria-sort={ariaSort(sort === 'name', order)}>
+              {sortHeader('Customer name', 'name')}
+            </th>
+            <th className={`${TH} w-72`} aria-sort={ariaSort(sort === 'email', order)}>
+              {sortHeader('Email', 'email')}
+            </th>
             <th className={`${TH_CENTER} w-36`}>Email verified</th>
-            <th className={`${TH_RIGHT} w-36`}>Orders</th>
-            <th className={`${TH_RIGHT} w-36`}>Amount spent</th>
+            <th
+              className={`${TH_RIGHT} w-36`}
+              aria-sort={ariaSort(sort === 'orders_count', order)}
+            >
+              {sortHeader('Orders', 'orders_count')}
+            </th>
+            <th
+              className={`${TH_RIGHT} w-36`}
+              aria-sort={ariaSort(sort === 'total_spent', order)}
+            >
+              {sortHeader('Amount spent', 'total_spent')}
+            </th>
             <th className={`${TH_CENTER} w-36`}>Role</th>
             <th className={`${TH_CENTER} w-36`}>Shopify state</th>
-            <th className={`${TH_CENTER} w-36`}>Joined</th>
+            <th
+              className={`${TH_CENTER} w-36`}
+              aria-sort={ariaSort(sort === 'created_at', order)}
+            >
+              {sortHeader('Joined', 'created_at')}
+            </th>
             <th className={`${TH_CENTER} w-28`}>Actions</th>
           </tr>
         </thead>

@@ -8,6 +8,8 @@ import {
 import { toUserMessage } from '../../lib/api/ApiError.ts'
 import {
   api,
+  type CustomerCreateBody,
+  type CustomerCreateResult,
   type CustomerDetail,
   type CustomerListParams,
   type CustomerListResponse,
@@ -97,6 +99,23 @@ export function toCustomerParams(filters: CustomerFilters): CustomerListParams {
 /** Cache key: two filter sets that produce the same request share one entry. */
 export function customersCacheKey(filters: CustomerFilters): string {
   return JSON.stringify(toCustomerParams(filters))
+}
+
+/**
+ * The same list without the two filters the cards stand for (Orders, email marketing), one row
+ * only (just the `totals` are read). The list answer's own totals describe the narrowed list,
+ * so the cards read this while one of them is pressed.
+ */
+export function customerFigureFilters(filters: CustomerFilters): CustomerFilters {
+  return {
+    ...filters,
+    orders: '',
+    marketing: '',
+    page: 1,
+    pageSize: 1,
+    sort: DEFAULT_CUSTOMER_FILTERS.sort,
+    order: DEFAULT_CUSTOMER_FILTERS.order,
+  }
 }
 
 /** True when any narrowing filter (not sort/paging) is applied. */
@@ -279,6 +298,22 @@ export const deleteCustomer = createAsyncThunk<
   }
 })
 
+/**
+ * Makes a customer (`POST /customers`). Every cached list page is marked stale when the store
+ * answers, so the new customer shows as each page is read again. Never retried.
+ */
+export const createCustomer = createAsyncThunk<
+  CustomerCreateResult,
+  CustomerCreateBody,
+  { state: CustomersRootState; rejectValue: string }
+>('customers/create', async (body, { rejectWithValue }) => {
+  try {
+    return await api.customers.create(body)
+  } catch (error) {
+    return rejectWithValue(toUserMessage(error))
+  }
+})
+
 interface UpdateCustomerArg {
   id: string
   /** The customer's store key (sent as `shop=`), when known. */
@@ -452,6 +487,9 @@ const customersSlice = createSlice({
       // A deleted customer disappears from every cached page and from the details cache
       // at once; every page is marked stale so each is re-read quietly (other rows may
       // move up, and the role counts change).
+      .addCase(createCustomer.fulfilled, (state) => {
+        for (const entry of Object.values(state.entries)) entry.fetchedAt = null
+      })
       .addCase(deleteCustomer.fulfilled, (state, action) => {
         const { id } = action.meta.arg
         for (const entry of Object.values(state.entries)) {

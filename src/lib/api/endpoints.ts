@@ -1072,6 +1072,77 @@ const customerUpdateAnswerSchema = z
   })
   .loose()
 
+/** The address of a new customer (`POST /customers` → `address`); every part is optional. */
+export interface CustomerCreateAddress {
+  address1?: string
+  address2?: string
+  city?: string
+  company?: string
+  /** Two letters, e.g. `GB`. */
+  country_code?: string
+  phone?: string
+  /** e.g. `ENG`. */
+  province_code?: string
+  zip?: string
+}
+
+/**
+ * `POST /customers` — makes a customer in Shopify and the CRM. `shop` (the store key) is the only
+ * required field besides an email; everything else is sent only when it was filled in.
+ */
+export interface CustomerCreateBody {
+  shop: string
+  email: string
+  first_name?: string
+  last_name?: string
+  accepts_email_marketing?: boolean
+  tax_exempt?: boolean
+  address?: CustomerCreateAddress
+  tags?: string[]
+  metafields?: { namespace: string; key: string; value: string }[]
+}
+
+/**
+ * What the create answers: `{ code, status, message, result: { customer, changed, warnings } }`.
+ * Read leniently — only the id and the names are needed to open the new customer.
+ */
+const customerCreateAnswerSchema = z
+  .object({
+    message: z.string().nullish(),
+    result: z
+      .object({
+        customer: z.unknown().nullish(),
+        changed: z.array(z.string()).nullish(),
+        warnings: z.array(z.string()).nullish(),
+      })
+      .loose()
+      .nullish(),
+    customer: z.unknown().nullish(),
+  })
+  .loose()
+
+const customerCreatedSchema = z
+  .object({
+    id: z.string(),
+    email: z.string().nullish(),
+    full_name: z.string().nullish(),
+    first_name: z.string().nullish(),
+    last_name: z.string().nullish(),
+  })
+  .loose()
+
+/** What a created customer comes back as. */
+export interface CustomerCreateResult {
+  message: string
+  /** The CRM id of the new customer; null if the answer didn't carry one. */
+  id: string | null
+  email: string | null
+  /** The customer's name as the CRM has it (empty when it has none). */
+  name: string
+  /** What the store changed or left out, in its own words. */
+  warnings: string[]
+}
+
 export type CustomerDetail = z.infer<typeof customerDetailSchema>
 export type CustomerAddress = z.infer<typeof customerAddressSchema>
 
@@ -2607,6 +2678,37 @@ export const api = {
       })
       const parsed = customerDeleteAnswerSchema.safeParse(data)
       return { message: parsed.success ? (parsed.data.message ?? '') : '' }
+    },
+
+    /**
+     * Makes a customer in Shopify and the CRM (`POST /customers`) — see `CustomerCreateBody`.
+     * Never retried automatically (a repeat would make the customer twice).
+     */
+    async create(body: CustomerCreateBody): Promise<CustomerCreateResult> {
+      const data = await apiClient.post(ENDPOINTS.customers.list, body)
+      const answer = customerCreateAnswerSchema.safeParse(data)
+      const message = answer.success ? (answer.data.message ?? '') : ''
+      const warnings = answer.success ? (answer.data.result?.warnings ?? []) : []
+      const candidates = answer.success
+        ? [answer.data.result?.customer, answer.data.customer]
+        : []
+      for (const candidate of candidates) {
+        const found = customerCreatedSchema.safeParse(candidate)
+        if (found.success) {
+          const customer = found.data
+          const name =
+            customer.full_name?.trim() ||
+            [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+          return {
+            message,
+            id: customer.id,
+            email: customer.email ?? null,
+            name,
+            warnings,
+          }
+        }
+      }
+      return { message, id: null, email: null, name: '', warnings }
     },
 
     /**
