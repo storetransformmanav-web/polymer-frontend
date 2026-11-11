@@ -2608,12 +2608,68 @@ async function readCsvFile(
   )
 }
 
+/**
+ * A search for an order **number** that the list finds nothing for is looked up directly
+ * (`GET /orders/{number}`), which takes the number as it is. If that order exists it is the one
+ * result (with its own figures as the totals). It only runs for a plain number (`18063` or
+ * `#18063`) on page 1 when nothing else but the store and the dates narrows the list — a status,
+ * tag, gateway, source, cancelled or total filter would exclude orders this lookup doesn't know
+ * about — and any failure leaves the empty list as it was.
+ */
+async function findByNumber(
+  params: OrderListParams,
+  empty: OrderListResponse,
+): Promise<OrderListResponse | null> {
+  const match = /^#?\s*(\d{3,12})$/.exec(params.search?.trim() ?? '')
+  if (!match || (params.page ?? 1) !== 1) return null
+  const narrowed =
+    params.financial_status ||
+    params.fulfillment_status ||
+    params.customer_id ||
+    params.product_id ||
+    params.tag ||
+    params.gateway ||
+    params.source ||
+    params.cancelled !== undefined ||
+    params.min_total !== undefined ||
+    params.max_total !== undefined
+  if (narrowed) return null
+  try {
+    const order = await api.orders.details(match[1], params.shop)
+    // Inside the dates asked for, if any (an order outside them is not a match).
+    const created = Date.parse(order.shopify_created_at ?? '')
+    const from = params.from ? Date.parse(params.from) : Number.NaN
+    const to = params.to ? Date.parse(params.to) : Number.NaN
+    if (!Number.isNaN(created)) {
+      if (!Number.isNaN(from) && created < from) return null
+      if (!Number.isNaN(to) && created > to) return null
+    }
+    return {
+      ...empty,
+      items: [order],
+      total: 1,
+      total_pages: 1,
+      has_next: false,
+      page: 1,
+      totals: {
+        orders: 1,
+        total_price: order.total_price,
+        total_refunded: order.total_refunded,
+        net_payment: order.net_payment,
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
 export const api = {
   orders: {
     /** One page of orders, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: OrderListParams): Promise<OrderListResponse> {
       const data = await apiClient.get(ENDPOINTS.orders.list, { params })
-      return orderListResponseSchema.parse(data)
+      const list = orderListResponseSchema.parse(data)
+      return list.total === 0 ? ((await findByNumber(params, list)) ?? list) : list
     },
 
     /**
