@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangleIcon,
   PencilIcon,
@@ -10,7 +11,7 @@ import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions
 import { initials } from '../../../lib/format.ts'
 import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
-import { canEditCustomer, customerName } from '../utils/format.ts'
+import { canEditCustomer, customerName, linkedCustomerPath } from '../utils/format.ts'
 
 const TH =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
@@ -37,22 +38,18 @@ function Avatar({ name }: { name: string }) {
  * access: Name, Email, Phone, Company, the lock tags each customer holds (hover: how many locked
  * products share the tag) and the row actions — Edit (a pencil, only when the lock has another key
  * to give) and Remove access (a bin). A search box, a Tag filter (the lock's own tags), a Sort by
- * and the paging footer narrow it, all by the API. **The customers just checked are highlighted** (a
- * tinted row with a "Checked" pill). A login-only lock (no keys) lists every customer with an
+ * and the paging footer narrow it, all by the API. A login-only lock (no keys) lists every customer with an
  * account and has no row actions. The data and the writes are held by the parent.
  */
 export function LockCustomersList({
   lock,
   customers,
-  highlight,
   notice,
   onEdit,
   onRemove,
 }: {
   lock: AccessLock
   customers: LockCustomersState
-  /** The emails (and ids) of the customers that were checked, to highlight. */
-  highlight: readonly string[]
   /** The backend's message about the last change. */
   notice?: ReactNode
   onEdit: (customer: LockCustomer) => void
@@ -60,12 +57,6 @@ export function LockCustomersList({
 }) {
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
-  const marked = new Set(
-    highlight.map((ref) => ref.trim().toLowerCase()).filter((ref) => ref !== ''),
-  )
-  const isChecked = (customer: LockCustomer) =>
-    marked.has((customer.email ?? '').toLowerCase()) ||
-    marked.has(customer.id.toLowerCase())
 
   return (
     <section
@@ -146,26 +137,25 @@ export function LockCustomersList({
                           </tr>
                         ))
                       : customers.customers.map((customer) => {
-                          const checked = isChecked(customer)
                           return (
                             <tr
                               key={customer.id}
-                              aria-current={checked ? 'true' : undefined}
-                              className={`transition-colors ${
-                                checked
-                                  ? 'bg-accent-tint shadow-[inset_3px_0_0_var(--color-accent)]'
-                                  : 'hover:bg-accent-tint/40'
-                              }`}
+                              className="hover:bg-accent-tint/40 transition-colors"
                             >
                               <td className={`${TD} font-medium`}>
                                 <span className="flex flex-wrap items-center gap-3">
                                   <Avatar name={customer.name ?? customer.email ?? ''} />
-                                  {customer.name ?? '—'}
-                                  {checked && (
-                                    <span className="bg-accent text-accent-contrast rounded-full px-2 py-0.5 text-[0.65rem] font-bold">
-                                      Checked
-                                    </span>
-                                  )}
+                                  <Link
+                                    to={linkedCustomerPath(customer.id)}
+                                    state={{
+                                      linkedName:
+                                        customer.name ?? customer.email ?? undefined,
+                                    }}
+                                    title="Open the customer's details"
+                                    className="text-text hover:text-accent no-underline hover:underline"
+                                  >
+                                    {customer.name ?? customer.email ?? '—'}
+                                  </Link>
                                 </span>
                               </td>
                               <td className={TD}>{customer.email ?? '—'}</td>

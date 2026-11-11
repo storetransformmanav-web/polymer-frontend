@@ -87,3 +87,7 @@ export const canEditCustomer = (lock: AccessLock, customer: LockCustomer) =>
 /** A protected product's own page, shown inside Lock Management as a tab (`/locks/product/<id>`). */
 export const linkedProductPath = (productId: string) =>
   `/locks/product/${encodeURIComponent(productId)}`
+
+/** A customer's own page, shown inside Lock Management as a tab (`/locks/customer/<id>`). */
+export const linkedCustomerPath = (customerId: string) =>
+  `/locks/customer/${encodeURIComponent(customerId)}`

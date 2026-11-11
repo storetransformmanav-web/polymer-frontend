@@ -76,8 +76,6 @@ export function LockDetailsView({
 }: LockDetailsViewProps) {
   const [tab, setTab] = useState<TabId>('overview')
   const fillPage = tab === 'access'
-  // The Settings tab was opened from Customer Access's manual-locking warning.
-  const [showAdvanced, setShowAdvanced] = useState(false)
   // The setting being changed, waiting for "Yes, update".
   const [pending, setPending] = useState<PendingLockChange | null>(null)
 
@@ -335,8 +333,6 @@ export function LockDetailsView({
                 title="Advanced settings"
                 icon={SlidersIcon}
                 defaultOpen={false}
-                // Opened from Customer Access's warning: the manual locking setting is in here.
-                forceOpen={showAdvanced}
               >
                 <FieldGrid>
                   {flagField('manual_locking')}
@@ -347,16 +343,7 @@ export function LockDetailsView({
             </>
           )}
 
-          {tab === 'access' && (
-            <LockAccessTab
-              lock={lock}
-              shop={shop}
-              onOpenSettings={() => {
-                setShowAdvanced(true)
-                setTab('settings')
-              }}
-            />
-          )}
+          {tab === 'access' && <LockAccessTab lock={lock} shop={shop} />}
         </div>
       </div>
       {pending &&
