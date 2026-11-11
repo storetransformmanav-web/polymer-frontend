@@ -154,10 +154,10 @@ export function OrderItemsSummary({
 
   return (
     <FoldCard
-      title="Items"
+      title="Order Items"
       icon={BoxesIcon}
       count={items?.length}
-      defaultOpen={false}
+      defaultOpen
       actions={actions}
       forceOpen={forceOpen}
     >

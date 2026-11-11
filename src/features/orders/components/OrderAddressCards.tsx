@@ -58,7 +58,6 @@ function AddressCard({
     <FoldCard
       title={title}
       icon={MapPinIcon}
-      shrinkWhenFolded
       actions={actions}
       forceOpen={editor !== null}
     >
@@ -91,7 +90,7 @@ function AddressCard({
 }
 
 /** The shipping address's card, with its pencil (`PATCH`'s `shipping_address`). */
-function EditableShippingAddress({ context }: { context: OrderEditContext }) {
+export function ShippingAddressCard({ context }: { context: OrderEditContext }) {
   const { order, reference, shop, onSaved } = context
   const edit = useOrderEdit(order, reference, shop, onSaved)
   return (
@@ -108,24 +107,28 @@ function EditableShippingAddress({ context }: { context: OrderEditContext }) {
 }
 
 /**
- * The Overview's **Shipping address** and **Billing address** cards, which fold. They sit straight
- * in the row beside the Customer card, so all three are one size. Only the shipping address can
- * be edited: the update API has no billing address. When both are the same place the billing card
- * says so.
+ * The **Billing address** card, which folds. Only the shipping address can be edited: the update
+ * API has no billing address. When both are the same place the card says so.
  */
-export function OrderAddresses({ context }: { context: OrderEditContext }) {
+export function BillingAddressCard({ context }: { context: OrderEditContext }) {
   const { order } = context
   const shipping = addressText(order.shipping_address)
   const same = shipping !== '' && shipping === addressText(order.billing_address)
+  return (
+    <AddressCard
+      title="Billing address"
+      address={order.billing_address}
+      note={same ? 'Same as the shipping address.' : undefined}
+    />
+  )
+}
 
+/** Both cards one after the other (the shipping address first). */
+export function OrderAddresses({ context }: { context: OrderEditContext }) {
   return (
     <>
-      <EditableShippingAddress context={context} />
-      <AddressCard
-        title="Billing address"
-        address={order.billing_address}
-        note={same ? 'Same as the shipping address.' : undefined}
-      />
+      <ShippingAddressCard context={context} />
+      <BillingAddressCard context={context} />
     </>
   )
 }

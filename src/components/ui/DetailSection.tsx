@@ -14,6 +14,8 @@ interface DetailSectionProps {
   forceOpen?: boolean
   /** Controls shown in the card's header, to the right of the title. */
   actions?: ReactNode
+  /** Something small right after the title and count (a chip with an id). */
+  titleExtra?: ReactNode
   /** Drops the body's padding, for content that draws its own edge-to-edge cells. */
   flush?: boolean
   children: ReactNode
@@ -27,6 +29,7 @@ export function DetailSection({
   defaultOpen = true,
   forceOpen = false,
   actions,
+  titleExtra,
   flush = false,
   children,
 }: DetailSectionProps) {
@@ -59,6 +62,7 @@ export function DetailSection({
               {count}
             </span>
           )}
+          {titleExtra}
         </button>
 
         {/* Controls for this card (e.g. edit / save / discard) — beside, not inside, the toggle. */}

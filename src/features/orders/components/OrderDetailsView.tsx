@@ -1,29 +1,35 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
+  CalendarIcon,
+  ListChecksIcon,
+  MailIcon,
   OrdersIcon,
+  StoreIcon,
+  UsersIcon,
+  type IconProps,
 } from '../../../components/ui/icons.tsx'
 import { formatDateTime } from '../../../lib/format.ts'
 import { useOrderDetails } from '../hooks/useOrderDetails.ts'
-import {
-  financialTone,
-  fulfillmentTone,
-  humanize,
-  orderCustomer,
-  orderLabel,
-} from '../utils/format.ts'
-import { orderPaymentMethod } from '../utils/payment.ts'
+import { customerPath, orderCustomer, orderLabel, orderStatus } from '../utils/format.ts'
 import { notesCount } from '../utils/tracking.ts'
-import { OrderTimelinePanel } from './OrderTimelinePanel.tsx'
+import { OrderDetailsPanel } from './OrderDetailsPanel.tsx'
+import {
+  EditableOrderItems,
+  OrderEmailCell,
+  type OrderEditContext,
+} from './OrderInlineEdits.tsx'
 import { OrderNotesPanel } from './OrderNotesPanel.tsx'
-import { OrderOverviewPanel } from './OrderOverviewPanel.tsx'
-import { OrderShippingPanel } from './OrderShippingPanel.tsx'
+import { OrderTimelinePanel } from './OrderTimelinePanel.tsx'
 
-type TabId = 'overview' | 'shipping' | 'attributes' | 'events'
+type TabId = 'details' | 'items' | 'attributes' | 'events'
 
 interface OrderDetailsViewProps {
   /** The order number from the address (17516). */
@@ -33,28 +39,37 @@ interface OrderDetailsViewProps {
   onBack: () => void
 }
 
-/** One labelled fact of the page's header: the label small above its value. */
-function HeaderFact({ label, children }: { label: string; children: ReactNode }) {
+/** A small fact in the header's second line (date, customer, store). */
+function Meta({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: ComponentType<IconProps>
+  label: string
+  children: ReactNode
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-text-muted text-[0.68rem] font-semibold">{label}</dt>
-      <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1 text-[0.8rem] font-medium break-words">
-        {children}
-      </dd>
-    </div>
+    <span className="flex min-w-0 items-center gap-1.5" title={label}>
+      <Icon width={15} height={15} className="text-text-muted shrink-0" />
+      <span className="sr-only">{label}: </span>
+      <span className="min-w-0 break-words">{children}</span>
+    </span>
   )
 }
 
 /**
- * An order's full details, shown in place of the list (same page, no overlay) and laid
- * out like a product's: a header, tabs, and cards. The header and summary draw straight
- * from the list row while the full record loads, so nothing waits on the network when you
- * come from the list.
+ * An order's full details, shown in place of the list (same page, no overlay). A header card —
+ * the order number and its overall status, then its date, customer and store, and under them a
+ * summary strip: payment status, fulfillment status, payment method, total items, number of
+ * fulfillments and shipping charged — then the tabs **Details**, **Notes & Tracking** and
+ * **Timeline**. The header and summary draw straight from the list row while the full record
+ * loads, so nothing waits on the network when you come from the list.
  */
 export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewProps) {
   const details = useOrderDetails(reference, shop)
   const { order, preview } = details
-  const [tab, setTab] = useState<TabId>('overview')
+  const [tab, setTab] = useState<TabId>('details')
   // What the backend said about the latest change; the order itself is re-read from the API.
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -67,18 +82,36 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
   const created = known?.shopify_created_at
-  const method = known ? orderPaymentMethod(known) : ''
-  // Who it is for: the customer's name and, when the addresses name one, their company.
-  const who = [
-    known ? orderCustomer(known)?.name : null,
-    order?.shipping_address?.company?.trim() || order?.billing_address?.company?.trim(),
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const status = known ? orderStatus(known) : null
+  // Who it is for: the customer's name — a link to their page when they are in the CRM — and,
+  // when the addresses name one, their company. (The Customer card doesn't repeat the name.)
+  const linkedState = useLinkedState()
+  const customerName = known ? orderCustomer(known)?.name : null
+  const customerLink = known ? customerPath(known) : null
+  const company =
+    order?.shipping_address?.company?.trim() || order?.billing_address?.company?.trim()
+
+  // The summary's figures: the quantities on the order's lines (the list row's count until the
+  // lines arrive), the number of fulfillments, and what shipping cost.
+  const lineQuantity = order
+    ? order.line_items.reduce((sum, line) => sum + (line.quantity ?? 0), 0)
+    : 0
+  const totalItems = lineQuantity > 0 ? lineQuantity : (known?.items_count ?? 0)
+  // The order's email (editable in place, like it was in the Customer card) and Shopify ID.
+  const email = known?.email?.trim() || known?.customer?.email?.trim() || ''
+  const shopifyId = known?.shopify_id != null ? String(known.shopify_id) : ''
+  const context: OrderEditContext | null = order
+    ? {
+        order,
+        reference,
+        shop,
+        onSaved: (message) => setNotice(message || 'Order updated.'),
+      }
+    : null
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'shipping', label: 'Shipping' },
+    { id: 'details', label: 'Overview' },
+    ...(order ? [{ id: 'items' as const, label: 'Items', count: totalItems }] : []),
     ...(order
       ? [
           {
@@ -122,69 +155,97 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-xl border">
-      <header className="flex flex-col gap-3 px-4 py-3">
-        <div className="flex items-center gap-3">
+    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
+      <header className="p-4 sm:p-6">
+        <div className="flex items-start gap-4">
           <span
             aria-hidden="true"
-            className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            className="bg-accent-tint text-accent inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
           >
-            <OrdersIcon width={18} height={18} />
+            <OrdersIcon width={26} height={26} />
           </span>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="m-0 text-base leading-snug font-bold break-words sm:text-lg">
-              Order #{title}
-            </h1>
-            {details.isRefreshing && (
-              <span className="text-text-muted text-[0.72rem]" role="status">
-                Updating…
-              </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="m-0 text-lg leading-snug font-bold break-words sm:text-2xl">
+                Order #{title}
+              </h1>
+              {status && <Badge tone={status.tone}>{status.label}</Badge>}
+              {details.isRefreshing && (
+                <span className="text-text-muted text-[0.72rem]" role="status">
+                  Updating…
+                </span>
+              )}
+            </div>
+            {known && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8rem] font-medium">
+                {created && (
+                  <Meta icon={CalendarIcon} label="Order date">
+                    {formatDateTime(created)}
+                  </Meta>
+                )}
+                {(customerName || company) && (
+                  <Meta icon={UsersIcon} label="Customer">
+                    {customerName &&
+                      (customerLink ? (
+                        <Link
+                          to={customerLink}
+                          state={linkedState(customerName)}
+                          title={`Open ${customerName}`}
+                          className="text-accent font-semibold hover:underline"
+                        >
+                          {customerName}
+                        </Link>
+                      ) : (
+                        customerName
+                      ))}
+                    {customerName && company && ' · '}
+                    {company}
+                  </Meta>
+                )}
+                {known.shop?.name && (
+                  <Meta icon={StoreIcon} label="Store">
+                    {known.shop.name}
+                  </Meta>
+                )}
+                {email && (
+                  <Meta icon={MailIcon} label="Email">
+                    <span className="flex items-center gap-1.5 break-all">
+                      {context ? (
+                        <OrderEmailCell context={context} display={email} />
+                      ) : (
+                        email
+                      )}
+                      <CopyButton value={email} label="Copy email" />
+                    </span>
+                  </Meta>
+                )}
+                {shopifyId && (
+                  <Meta icon={ListChecksIcon} label="Shopify ID">
+                    <span className="flex items-center gap-1.5 font-mono text-[0.76rem]">
+                      {shopifyId}
+                      <CopyButton value={shopifyId} label="Copy Shopify ID" />
+                    </span>
+                  </Meta>
+                )}
+              </div>
             )}
           </div>
           <button
             type="button"
             onClick={onBack}
             aria-label="Back to list"
-            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[0.78rem] font-semibold transition-colors"
+            className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
           >
-            <ArrowLeftIcon width={14} height={14} />
+            <ArrowLeftIcon width={16} height={16} />
             <span className="hidden sm:inline" aria-hidden="true">
               Back to list
             </span>
           </button>
         </div>
-
-        {known && (
-          <dl className="border-border m-0 flex flex-wrap gap-x-8 gap-y-2.5 border-t pt-3">
-            {(known.financial_status || known.cancelled_at) && (
-              <HeaderFact label="Payment status">
-                {known.financial_status && (
-                  <Badge tone={financialTone(known.financial_status)}>
-                    {humanize(known.financial_status)}
-                  </Badge>
-                )}
-                {known.cancelled_at && <Badge tone="danger">Cancelled</Badge>}
-              </HeaderFact>
-            )}
-            {known.fulfillment_status && (
-              <HeaderFact label="Fulfillment status">
-                <Badge tone={fulfillmentTone(known.fulfillment_status)}>
-                  {humanize(known.fulfillment_status)}
-                </Badge>
-              </HeaderFact>
-            )}
-            {method && <HeaderFact label="Payment method">{method}</HeaderFact>}
-            {created && (
-              <HeaderFact label="Order date">{formatDateTime(created)}</HeaderFact>
-            )}
-            {who && <HeaderFact label="Customer">{who}</HeaderFact>}
-            {known.shop?.name && <HeaderFact label="Store">{known.shop.name}</HeaderFact>}
-          </dl>
-        )}
       </header>
 
       {notice && (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-3 sm:px-6">
           <FormMessage tone="success">{notice}</FormMessage>
         </div>
       )}
@@ -192,7 +253,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
       <div
         role="tablist"
         aria-label="Order sections"
-        className="border-border flex [scrollbar-width:none] gap-0.5 overflow-x-auto border-y px-2 [&::-webkit-scrollbar]:hidden"
+        className="border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-y px-2 sm:px-4 [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((item) => {
           const selected = item.id === tab
@@ -205,7 +266,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
               aria-selected={selected}
               aria-controls="order-tabpanel"
               onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 text-[0.8rem] font-semibold whitespace-nowrap transition-colors ${
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
                 selected
                   ? 'border-accent text-text'
                   : 'text-text-muted hover:text-text border-transparent'
@@ -213,7 +274,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
             >
               {item.label}
               {item.count !== undefined && (
-                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 text-[0.62rem] leading-4 font-bold">
+                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
                   {item.count}
                 </span>
               )}
@@ -226,10 +287,10 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         id="order-tabpanel"
         role="tabpanel"
         aria-labelledby={`order-tab-${tab}`}
-        className="bg-surface p-3"
+        className="bg-surface p-3 sm:p-5"
       >
-        {tab === 'overview' && (
-          <OrderOverviewPanel
+        {tab === 'details' && (
+          <OrderDetailsPanel
             order={order}
             preview={preview}
             reference={reference}
@@ -237,8 +298,8 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
             onSaved={(message) => setNotice(message || 'Order updated.')}
           />
         )}
-        {tab !== 'overview' && !order && <DetailSkeleton />}
-        {order && tab === 'shipping' && <OrderShippingPanel order={order} />}
+        {tab !== 'details' && !order && <DetailSkeleton />}
+        {context && tab === 'items' && <EditableOrderItems context={context} />}
         {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
         {order && tab === 'events' && <OrderTimelinePanel order={order} />}
       </div>

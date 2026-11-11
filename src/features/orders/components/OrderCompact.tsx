@@ -1,6 +1,6 @@
-import { useId, useState, type ComponentType, type ReactNode } from 'react'
-import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
-import { ChevronDownIcon, type IconProps } from '../../../components/ui/icons.tsx'
+import type { ComponentType, ReactNode } from 'react'
+import { DETAIL_CARD, DetailSection } from '../../../components/ui/DetailSection.tsx'
+import type { IconProps } from '../../../components/ui/icons.tsx'
 import { recordFields } from '../utils/format.ts'
 
 /**
@@ -9,100 +9,75 @@ import { recordFields } from '../utils/format.ts'
  * shadows.
  */
 
-const COUNT =
-  'bg-surface text-text-muted border-border rounded-full border px-1.5 text-[0.62rem] leading-4 font-bold'
-
-/** Every card's title row: the same soft tint on all of them, so the sections read at a glance. */
-const TITLE_ROW = 'bg-accent-tint/60 flex min-h-10 items-center gap-2 px-3 py-1.5'
-
-/** A small card: a slim title row (icon, title, count) over its content. A labelled region. */
+/**
+ * A card of the order's pages: the same card as on a product's and a customer's details page
+ * (`DetailSection`) — a sage border, a title row with an icon, the title and a count that takes the
+ * hover tint, a chevron that folds it, and a padded body. `after` is something small after the
+ * title (a chip with an id) and `aside` sits at the title row's right edge (a status pill).
+ */
 export function MiniCard({
   title,
-  icon: Icon,
+  icon,
   count,
-  className = '',
+  after,
+  aside,
   children,
 }: {
   title: string
   icon: ComponentType<IconProps>
   count?: number
-  className?: string
+  after?: ReactNode
+  aside?: ReactNode
   children: ReactNode
 }) {
   return (
-    <section className={`${DETAIL_CARD} min-w-0 ${className}`}>
-      <div className={`${TITLE_ROW} border-border border-b`}>
-        <Icon width={14} height={14} className="text-accent shrink-0" />
-        <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>
-        {count !== undefined && <span className={COUNT}>{count}</span>}
-      </div>
-      <div className="px-3 py-1.5">{children}</div>
-    </section>
+    <DetailSection
+      title={title}
+      icon={icon}
+      count={count}
+      titleExtra={after}
+      actions={aside ?? undefined}
+    >
+      {children}
+    </DetailSection>
   )
 }
 
-/** The same card, but the title row folds it away (a chevron says which way it goes). */
+/**
+ * The same card, with a way to start folded (`defaultOpen`), to stay open while its content is
+ * being edited (`forceOpen`) and controls at the title row's right edge (`actions`: the pencil,
+ * or ✓ and ✕).
+ */
 export function FoldCard({
   title,
-  icon: Icon,
+  icon,
   count,
   defaultOpen = true,
-  shrinkWhenFolded = false,
   actions,
   forceOpen = false,
-  className = '',
   children,
 }: {
   title: string
   icon: ComponentType<IconProps>
   count?: number
   defaultOpen?: boolean
-  /** In a row of cards of one height: a folded card keeps only its title row. */
-  shrinkWhenFolded?: boolean
   /** Controls at the row's right edge (the pencil, or ✓ and ✕). */
   actions?: ReactNode
   /** Stays open whatever the title row says (while its content is being edited). */
   forceOpen?: boolean
-  className?: string
   children: ReactNode
 }) {
-  const [opened, setOpen] = useState(defaultOpen)
-  const open = opened || forceOpen
-  const bodyId = useId()
   return (
-    <section
-      aria-label={title}
-      className={`${DETAIL_CARD} min-w-0 ${shrinkWhenFolded && !open ? 'self-start' : ''} ${className}`}
+    <DetailSection
+      title={title}
+      icon={icon}
+      count={count}
+      defaultOpen={defaultOpen}
+      forceOpen={forceOpen}
+      actions={actions}
     >
-      <div className="bg-accent-tint/60 flex items-center">
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          onClick={() => setOpen(!open)}
-          className={`${TITLE_ROW} hover:bg-accent-tint min-w-0 flex-1 cursor-pointer border-none text-left transition-colors`}
-        >
-          <Icon width={14} height={14} className="text-accent shrink-0" />
-          <h3 className="m-0 text-[0.8rem] font-semibold">{title}</h3>
-          {count !== undefined && <span className={COUNT}>{count}</span>}
-          <ChevronDownIcon
-            width={14}
-            height={14}
-            className={`text-text-muted ml-auto shrink-0 transition-transform duration-200 ${
-              open ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-        {actions && (
-          <span className="flex shrink-0 items-center gap-1.5 px-2">{actions}</span>
-        )}
-      </div>
-      {open && (
-        <div id={bodyId} className="border-border border-t px-3 py-1.5">
-          {children}
-        </div>
-      )}
-    </section>
+      {children}
+    </DetailSection>
   )
 }
 

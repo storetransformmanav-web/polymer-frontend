@@ -30,6 +30,20 @@ export const financialTone = (status: string | null | undefined): BadgeTone =>
 export const fulfillmentTone = (status: string | null | undefined): BadgeTone =>
   (status && FULFILLMENT_TONES[status.toUpperCase()]) || 'neutral'
 
+/** The order's overall state as one pill: cancelled, completed (fulfilled and paid) or still open. */
+export function orderStatus(
+  order: Pick<OrderListItem, 'cancelled_at' | 'financial_status' | 'fulfillment_status'>,
+): { label: string; tone: BadgeTone } {
+  if (order.cancelled_at) return { label: 'Cancelled', tone: 'danger' }
+  const fulfilled = (order.fulfillment_status ?? '').toUpperCase() === 'FULFILLED'
+  const paid = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(
+    (order.financial_status ?? '').toUpperCase(),
+  )
+  return fulfilled && paid
+    ? { label: 'Completed', tone: 'success' }
+    : { label: 'Open', tone: 'warning' }
+}
+
 /** What the order's channel is called: the API's `source_name` made readable. */
 export function sourceLabel(source: string | null | undefined): string {
   if (!source) return ''
