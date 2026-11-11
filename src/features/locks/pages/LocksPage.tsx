@@ -13,6 +13,7 @@ import { LockCreateView } from '../components/LockCreateView.tsx'
 import { LockDetailsView } from '../components/LockDetailsView.tsx'
 import { LocksList } from '../components/LocksList.tsx'
 import { LocksToolbar } from '../components/LocksToolbar.tsx'
+import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
 import { useLockShop } from '../hooks/useLockShop.ts'
 import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
 import { useLockTabs } from '../hooks/useLockTabs.ts'
@@ -107,11 +108,10 @@ export function LocksPage() {
     if (id === activeHandle) navigate(neighbour ? lockPath(neighbour.id) : LIST_PATH)
   }
 
-  // Back from the product or customer goes where the person came from (the lock); opened from a bare
-  // address there is nothing behind, so it goes to the list.
+  // Closing the product or customer goes to the address it was opened from (the lock, or the
+  // list) — never "back in history", which may be another page if the person left and returned.
   function leaveLinked() {
-    if (location.key !== 'default') navigate(-1)
-    else navigate(LIST_PATH)
+    navigate(readLinkedFrom(location.state, LIST_PATH) ?? LIST_PATH, { replace: true })
   }
 
   const tabsBar = (

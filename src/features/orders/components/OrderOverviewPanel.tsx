@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
@@ -129,6 +130,7 @@ export function OrderOverviewPanel({
   shop,
   onSaved,
 }: OverviewProps) {
+  const linkedState = useLinkedState()
   const source = order ?? preview
   const context: OrderEditContext | null = order
     ? { order, reference, shop, onSaved }
@@ -158,7 +160,7 @@ export function OrderOverviewPanel({
                 (customerPage ? (
                   <Link
                     to={customerPage}
-                    state={{ linkedName: customer.name }}
+                    state={linkedState(customer.name)}
                     className="text-accent font-semibold hover:underline"
                   >
                     {customer.name}

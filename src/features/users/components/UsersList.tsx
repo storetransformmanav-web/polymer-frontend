@@ -116,7 +116,7 @@ function Stores({
   if (user.shop_keys.length === 0) return <span className="text-text-muted">None</span>
 
   const names = user.shop_keys.map((key) => shopNames[key] ?? key)
-  return <ExpandableChips values={names} chipWidth="max-w-28" />
+  return <ExpandableChips values={names} chipWidth="max-w-28" label="Store access" />
 }
 
 function LastLogin({ value }: { value: string | null | undefined }) {

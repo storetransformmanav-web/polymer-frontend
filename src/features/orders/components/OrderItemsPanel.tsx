@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import type { ReactNode } from 'react'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { BoxesIcon } from '../../../components/ui/icons.tsx'
@@ -41,11 +42,12 @@ function Thumb({ item }: { item: LineItem }) {
 
 /** The product's name, a link to its page in the CRM when the order knows which product it is. */
 function ItemName({ item }: { item: LineItem }) {
+  const linkedState = useLinkedState()
   const title = item.title || 'Item'
   return item.product_id ? (
     <Link
       to={productPath(item.product_id)}
-      state={{ linkedName: title }}
+      state={linkedState(title)}
       className="text-text hover:text-accent block truncate font-semibold hover:underline"
       title={title}
     >

@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LockIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime } from '../../../lib/format.ts'
-import { hiddenFrom, syncLabel, syncTone } from '../utils/format.ts'
+import { hiddenFrom, linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
 import { LockImage } from './LockCard.tsx'
 import { LockStatusSelect } from './LockStatusSelect.tsx'
 
@@ -38,9 +40,17 @@ interface LocksListProps {
   emptyAction?: ReactNode
 }
 
-function Chips({ values, empty }: { values: string[]; empty: string }) {
+function Chips({
+  values,
+  empty,
+  label,
+}: {
+  values: string[]
+  empty: string
+  label: string
+}) {
   if (values.length === 0) return <span className="text-text-muted">{empty}</span>
-  return <ExpandableChips values={values} centered />
+  return <ExpandableChips values={values} centered label={label} />
 }
 
 /**
@@ -69,6 +79,33 @@ function SyncBadge({ lock }: { lock: AccessLock }) {
         {syncLabel(lock.sync_status)}
       </Badge>
     </span>
+  )
+}
+
+/**
+ * The product's picture, a link to its details page (opened in this page, as a tab of Lock
+ * Management). With `hint`, a small "View product details" label shows beside it on hover or
+ * keyboard focus.
+ */
+function ProductThumb({ lock, hint = false }: { lock: AccessLock; hint?: boolean }) {
+  const linkedState = useLinkedState()
+  return (
+    <Link
+      to={linkedProductPath(lock.product_id)}
+      state={linkedState(lock.title)}
+      aria-label={`View product details of ${lock.title}`}
+      className="group focus-visible:outline-accent relative shrink-0 rounded-lg focus-visible:outline-2"
+    >
+      <LockImage src={lock.image_url} />
+      {hint && (
+        <span
+          aria-hidden="true"
+          className="bg-text text-bg pointer-events-none absolute top-1/2 left-full z-20 ml-2 hidden -translate-y-1/2 rounded-md px-2 py-1 text-[0.7rem] font-semibold whitespace-nowrap shadow-md group-hover:block group-focus-visible:block"
+        >
+          View product details
+        </span>
+      )}
+    </Link>
   )
 }
 
@@ -191,7 +228,7 @@ export function LocksList({
                 key={lock.product_id}
                 className="border-border bg-bg flex items-start gap-3 rounded-xl border p-3"
               >
-                <LockImage src={lock.image_url} />
+                <ProductThumb lock={lock} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex items-start justify-between gap-2">
                     <span className="truncate text-[0.88rem] font-semibold">
@@ -199,15 +236,12 @@ export function LocksList({
                     </span>
                     <ViewButton lock={lock} onOpen={onOpen} />
                   </span>
-                  <span className="text-text-muted truncate text-[0.78rem]">
-                    <Highlight text={lock.handle ?? ''} />
-                  </span>
                   <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <StatusBadges lock={lock} shop={shop} />
                     <SyncBadge lock={lock} />
                   </span>
                   <span className="text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem]">
-                    <Chips values={lock.tags} empty="Signed-in customers" />
+                    <Chips values={lock.tags} empty="Signed-in customers" label="Keys" />
                     <span>{count(lock.customers_with_access)} with access</span>
                   </span>
                 </div>
@@ -260,7 +294,7 @@ export function LocksList({
                 >
                   <td className={`${TD} text-left`}>
                     <span className="flex items-center gap-3">
-                      <LockImage src={lock.image_url} />
+                      <ProductThumb lock={lock} hint />
                       <span className="flex min-w-0 flex-col">
                         <button
                           type="button"
@@ -270,21 +304,15 @@ export function LocksList({
                         >
                           <Highlight text={lock.title} />
                         </button>
-                        <span
-                          className="text-text-muted max-w-72 truncate text-[0.78rem]"
-                          title={lock.handle ?? undefined}
-                        >
-                          <Highlight text={lock.handle ?? ''} />
-                        </span>
                       </span>
                     </span>
                   </td>
                   <td className={TD_CENTER}>
-                    <Chips values={lock.tags} empty="Signed-in customers" />
+                    <Chips values={lock.tags} empty="Signed-in customers" label="Keys" />
                   </td>
                   <td className={TD_CENTER}>{count(lock.customers_with_access)}</td>
                   <td className={`${TD_CENTER} ${FROM_XL}`}>
-                    <Chips values={hiddenFrom(lock)} empty="—" />
+                    <Chips values={hiddenFrom(lock)} empty="—" label="Hidden from" />
                   </td>
                   <td className={TD_CENTER}>
                     <StatusBadges lock={lock} shop={shop} />

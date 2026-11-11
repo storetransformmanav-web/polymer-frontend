@@ -1,6 +1,7 @@
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
@@ -92,6 +93,7 @@ export function OrdersList({
   onRetry,
   onClearFilters,
 }: OrdersListProps) {
+  const linkedState = useLinkedState()
   const isTable = useMediaQuery('(min-width: 1024px)')
 
   if (error) {
@@ -243,7 +245,7 @@ export function OrdersList({
                           // A customer in the CRM: their name opens their details in this page.
                           <Link
                             to={customerPath(order) as string}
-                            state={{ linkedName: name }}
+                            state={linkedState(name)}
                             title={`Open ${name}`}
                             className="text-text hover:text-accent block truncate font-medium hover:underline"
                           >

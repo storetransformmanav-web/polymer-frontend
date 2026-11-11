@@ -89,6 +89,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: UsersIcon,
         shopScoped: true,
         syncs: 'customers',
+        fillHeight: true,
       },
       {
         to: '/inventory',

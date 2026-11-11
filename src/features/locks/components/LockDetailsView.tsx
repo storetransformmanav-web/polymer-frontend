@@ -25,6 +25,7 @@ import {
 } from '../../../components/ui/icons.tsx'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { ProductLightbox } from '../../products/index.ts'
 import { linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
@@ -91,6 +92,7 @@ export function LockDetailsView({
   shopName,
   onBack,
 }: LockDetailsViewProps) {
+  const linkedState = useLinkedState()
   const [tab, setTab] = useState<TabId>('overview')
   const fillPage = tab === 'access'
   // The settings changed on the page and not saved yet (only those that differ count).
@@ -338,7 +340,7 @@ export function LockDetailsView({
         >
           <div
             // The picture sits in its own card, with no second frame around it.
-            className={`${DETAIL_CARD} p-4 [&_img]:border-0`}
+            className={`${DETAIL_CARD} overflow-hidden p-0 [&_img]:rounded-none [&_img]:border-0 [&_span]:rounded-none [&_span]:border-0`}
           >
             {pictureUrl ? (
               // The picture opens full size in the same viewer as a product's pictures.
@@ -386,7 +388,7 @@ export function LockDetailsView({
               </dl>
               <Link
                 to={linkedProductPath(lock.product_id)}
-                state={{ linkedName: lock.title }}
+                state={linkedState(lock.title)}
                 className="border-border bg-bg text-text hover:border-accent flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold no-underline transition-colors"
               >
                 <EyeIcon width={16} height={16} />

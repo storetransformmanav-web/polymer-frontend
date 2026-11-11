@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CustomerDetailsView } from '../../customers/index.ts'
+import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
 import { ProductDetailsView } from '../../products/index.ts'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -138,11 +139,10 @@ export function OrdersPage() {
     navigate(orderPathFor(ref, storeKey))
   }
 
-  // Back from a customer's or product's page goes where the person came from (the order, or the
-  // list); opened from a bare address there is nothing behind, so it goes to the list.
+  // Closing a customer's or product's page goes to the address it was opened from (the order,
+  // or the list) — never "back in history", which may be another page.
   function leaveLinked() {
-    if (location.key !== 'default') navigate(-1)
-    else navigate(LIST_PATH)
+    navigate(readLinkedFrom(location.state, LIST_PATH) ?? LIST_PATH, { replace: true })
   }
 
   function closeTab(id: string) {

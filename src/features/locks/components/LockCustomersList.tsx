@@ -8,6 +8,7 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { initials } from '../../../lib/format.ts'
 import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
@@ -55,6 +56,7 @@ export function LockCustomersList({
   onEdit: (customer: LockCustomer) => void
   onRemove: (customer: LockCustomer) => void
 }) {
+  const linkedState = useLinkedState()
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
 
@@ -147,10 +149,7 @@ export function LockCustomersList({
                                   <Avatar name={customer.name ?? customer.email ?? ''} />
                                   <Link
                                     to={linkedCustomerPath(customer.id)}
-                                    state={{
-                                      linkedName:
-                                        customer.name ?? customer.email ?? undefined,
-                                    }}
+                                    state={linkedState(customer.name ?? customer.email)}
                                     title="Open the customer's details"
                                     className="text-text hover:text-accent no-underline hover:underline"
                                   >

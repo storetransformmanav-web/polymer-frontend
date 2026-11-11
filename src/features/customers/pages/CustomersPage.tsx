@@ -80,8 +80,10 @@ export function CustomersPage() {
     if (activeId) navigate(LIST_PATH)
   }
 
+  // From `lg` the page fills the window (see `fillHeight` in navigation.ts): the table scrolls in
+  // its own box under a sticky header, with the pagination beneath it, and the page itself does not.
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {/* The figures sit above the tabs; they belong to the list, so an open customer takes
           their place (kept mounted, only hidden). */}
       <div className={activeId ? 'hidden' : undefined}>
@@ -98,22 +100,24 @@ export function CustomersPage() {
       />
 
       {activeId && (
-        <CustomerDetailsView
-          key={activeId}
-          id={activeId}
-          onBack={() => navigate(LIST_PATH)}
-          onDelete={(customer) => {
-            setNotice(null)
-            setDeleting({ id: activeId, ...customer })
-          }}
-        />
+        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <CustomerDetailsView
+            key={activeId}
+            id={activeId}
+            onBack={() => navigate(LIST_PATH)}
+            onDelete={(customer) => {
+              setNotice(null)
+              setDeleting({ id: activeId, ...customer })
+            }}
+          />
+        </div>
       )}
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       {/* Kept mounted but hidden while a customer is open (display: none also
           removes it from tab order and screen readers). */}
-      <div className={activeId ? 'hidden' : 'flex flex-col gap-4'}>
+      <div className={activeId ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'}>
         <CustomersToolbar
           filters={filters}
           hasFilters={customers.hasFilters}
@@ -134,7 +138,7 @@ export function CustomersPage() {
 
         <section
           aria-label="Customers"
-          className="border-border bg-bg relative overflow-hidden rounded-2xl border"
+          className="border-border bg-bg relative flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1"
         >
           {/* Thin activity bar: results stay on screen while a refresh runs. */}
           <div
