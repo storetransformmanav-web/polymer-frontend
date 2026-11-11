@@ -637,7 +637,7 @@ describe('LocksPage', () => {
       user.click(screen.getByRole('tab', { name }))
 
     it('opens like a product page: a header, tabs, and cards (keys and access have a pencil)', async () => {
-      const user = await openLock()
+      await openLock()
 
       expect(screen.getByRole('tablist', { name: 'Lock sections' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Back to list' })).toBeInTheDocument()
@@ -646,6 +646,7 @@ describe('LocksPage', () => {
       expect(screen.getByText(/^keys?$/)).toBeInTheDocument()
       // Like a product's Overview: the big picture links to the product page, which opens in
       // this same page (as a tab of Lock Management), not on the Products page.
+      expect(screen.queryByText('Last sent to Shopify')).toBeNull()
       expect(screen.getByRole('link', { name: 'View product' })).toHaveAttribute(
         'href',
         expect.stringMatching(/^\/locks\/product\//),
@@ -662,12 +663,12 @@ describe('LocksPage', () => {
       expect(screen.queryByLabelText('Search or add a tag')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument()
 
-      // Nor on the Settings tab: the values are shown, with no switch or box to change.
-      await tab(user, 'Settings')
+      // The settings are on the Overview too (there is no Settings tab), each a switch.
+      expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull()
       expect(screen.getByText('Hidden from navigation menus')).toBeInTheDocument()
-      expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+      expect(screen.getByText('Manual locking')).toBeInTheDocument()
+      expect(screen.getAllByRole('switch')).toHaveLength(5)
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument()
     })
 
     describe('changing settings with POST /access/locks', () => {
@@ -680,23 +681,33 @@ describe('LocksPage', () => {
           return { ...WRITE_OK, createdLocks: 0, message: 'Products: 1 updated.' }
         })
 
-      it('a setting is double-clicked into a Yes / No dropdown, then confirmed', async () => {
+      it('a setting is a switch: flipping it asks nothing; Save changes asks once, then sends', async () => {
         const user = await openLock()
-        await tab(user, 'Settings')
 
-        // A single click only shows the value; the double-click opens the choice.
-        const value = screen.getByRole('button', { name: 'Hidden from lists: No' })
-        expect(screen.queryByRole('combobox')).toBeNull()
-        await user.dblClick(value)
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: 'Hidden from lists' }),
-          'Yes',
+        // Flipping a switch only changes the page: no question, nothing sent.
+        const value = screen.getByRole('switch', { name: 'Hidden from lists' })
+        expect(value).toHaveAttribute('aria-checked', 'false')
+        await user.click(value)
+        expect(value).toHaveAttribute('aria-checked', 'true')
+        expect(screen.queryByRole('alertdialog')).toBeNull()
+        expect(lock).not.toHaveBeenCalled()
+
+        // The status in the header joins the same save.
+        await user.click(
+          screen.getByRole('button', { name: /^Status of Locked Product 1: Enabled$/ }),
         )
+        await user.click(await screen.findByRole('option', { name: /Disabled/ }))
+        expect(screen.queryByRole('alertdialog')).toBeNull()
+
+        const bar = within(screen.getByRole('region', { name: 'Unsaved changes' }))
+        expect(bar.getByText('2 unsaved changes')).toBeInTheDocument()
+        await user.click(bar.getByRole('button', { name: 'Save changes' }))
 
         const dialog = await screen.findByRole('alertdialog')
         expect(lock).not.toHaveBeenCalled()
         expect(within(dialog).getByText('Hidden from lists')).toBeInTheDocument()
-        willHold({ hide_from_lists: true })
+        expect(within(dialog).getByText('Status')).toBeInTheDocument()
+        willHold({ hide_from_lists: true, enabled: false })
         await user.click(within(dialog).getByRole('button', { name: 'Yes, update' }))
 
         await waitFor(() =>
@@ -704,44 +715,51 @@ describe('LocksPage', () => {
             shop: 'polymer-uk',
             products: ['locked-product-1'],
             tags: ['vans'],
+            enabled: false,
             hide_from_lists: true,
           }),
         )
+        expect(lock).toHaveBeenCalledTimes(1)
+        await waitFor(() =>
+          expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull(),
+        )
         expect(
-          await screen.findByRole('button', { name: 'Hidden from lists: Yes' }),
-        ).toBeInTheDocument()
+          await screen.findByRole('switch', { name: 'Hidden from lists' }),
+        ).toHaveAttribute('aria-checked', 'true')
       })
 
-      it('Status is Enabled / Disabled, and Escape leaves the value as it was', async () => {
-        const user = await openLock()
-        await tab(user, 'Settings')
-
-        await user.dblClick(screen.getByRole('button', { name: 'Status: Enabled' }))
-        expect(
-          within(screen.getByRole('combobox', { name: 'Status' }))
-            .getAllByRole('option')
-            .map((option) => option.textContent),
-        ).toEqual(['Enabled', 'Disabled'])
-        await user.keyboard('{Escape}')
+      it('Status is changed once, from the header dropdown; the settings do not repeat it', async () => {
+        await openLock()
 
         expect(
-          screen.getByRole('button', { name: 'Status: Enabled' }),
+          screen.getByRole('button', { name: /^Status of Locked Product 1: Enabled$/ }),
         ).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Status: Enabled' })).toBeNull()
+        expect(screen.getByText('Hidden from lists')).toBeInTheDocument()
+      })
+
+      it('Cancel puts the settings back and sends nothing', async () => {
+        const user = await openLock()
+
+        const value = screen.getByRole('switch', { name: 'Manual locking' })
+        await user.click(value)
+        await user.click(
+          within(screen.getByRole('region', { name: 'Unsaved changes' })).getByRole(
+            'button',
+            { name: 'Cancel' },
+          ),
+        )
+
+        expect(value).toHaveAttribute('aria-checked', 'false')
+        expect(screen.queryByRole('region', { name: 'Unsaved changes' })).toBeNull()
         expect(lock).not.toHaveBeenCalled()
       })
 
       it('the advanced settings change the same way', async () => {
         const user = await openLock()
-        await tab(user, 'Settings')
-        await user.click(screen.getByRole('button', { name: /^Advanced settings/ }))
 
-        await user.dblClick(
-          await screen.findByRole('button', { name: 'Manual locking: No' }),
-        )
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: 'Manual locking' }),
-          'Yes',
-        )
+        await user.click(await screen.findByRole('switch', { name: 'Manual locking' }))
+        await user.click(screen.getByRole('button', { name: 'Save changes' }))
         await user.click(
           within(await screen.findByRole('alertdialog')).getByRole('button', {
             name: 'Yes, update',
@@ -917,6 +935,8 @@ describe('LocksPage', () => {
           'href',
           `/locks/customer/${encodeURIComponent(ADA.id)}`,
         )
+        // There is no separate share icon: the name is the way in.
+        expect(screen.queryByRole('link', { name: /^Open details of/ })).toBeNull()
       })
 
       it('shows a customer who already has the access ticked and locked, and cannot add them', async () => {
@@ -1088,7 +1108,6 @@ describe('LocksPage', () => {
 
     it('never writes: opening a lock sends no lock or tag update', async () => {
       const user = await openLock()
-      await tab(user, 'Settings')
       await tab(user, 'Customer Access')
 
       expect(lock).not.toHaveBeenCalled()

@@ -18,7 +18,7 @@ import { PickList, type PickRow } from './PickList.tsx'
 import { PickedChips } from './PickedChips.tsx'
 
 const PRIMARY =
-  'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-transparent bg-accent px-4 text-[0.85rem] font-semibold text-accent-contrast transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-transparent bg-accent px-3.5 text-[0.82rem] font-semibold text-accent-contrast transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50'
 
 /**
  * A customer in the search list. One who already carries one of the lock's tags can already open

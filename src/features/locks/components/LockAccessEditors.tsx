@@ -76,7 +76,6 @@ export function LockKeysSection({ lock, shop }: { lock: AccessLock; shop: string
           )}
         </div>
       </div>
-
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       {editing ? (

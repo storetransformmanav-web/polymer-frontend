@@ -20,15 +20,47 @@ interface FlagInfo {
   /** The words for on and off ("Enabled" / "Disabled", "Yes" / "No"). */
   on: string
   off: string
+  /** One line saying what the setting does (shown as the ⓘ's tooltip). */
+  hint: string
 }
 
 export const FLAG_INFO: Record<LockFlag, FlagInfo> = {
-  enabled: { label: 'Status', on: 'Enabled', off: 'Disabled' },
-  hide_from_nav: { label: 'Hidden from navigation menus', on: 'Yes', off: 'No' },
-  hide_from_lists: { label: 'Hidden from lists', on: 'Yes', off: 'No' },
-  manual_locking: { label: 'Manual locking', on: 'Yes', off: 'No' },
-  hide_from_sitemap: { label: 'Hidden from sitemaps', on: 'Yes', off: 'No' },
-  noindex: { label: 'Search engines told not to index', on: 'Yes', off: 'No' },
+  enabled: {
+    label: 'Status',
+    on: 'Enabled',
+    off: 'Disabled',
+    hint: 'Turns the lock on or off.',
+  },
+  hide_from_nav: {
+    label: 'Hidden from navigation menus',
+    on: 'Yes',
+    off: 'No',
+    hint: 'Leaves the product out of the store’s navigation menus.',
+  },
+  hide_from_lists: {
+    label: 'Hidden from lists',
+    on: 'Yes',
+    off: 'No',
+    hint: 'Leaves the product out of collection and search lists.',
+  },
+  manual_locking: {
+    label: 'Manual locking',
+    on: 'Yes',
+    off: 'No',
+    hint: 'The website shows the product to everyone and leaves the lock to custom theme code.',
+  },
+  hide_from_sitemap: {
+    label: 'Hidden from sitemaps',
+    on: 'Yes',
+    off: 'No',
+    hint: 'Leaves the product out of the store’s sitemap.',
+  },
+  noindex: {
+    label: 'Search engines told not to index',
+    on: 'Yes',
+    off: 'No',
+    hint: 'Asks search engines not to list the product page.',
+  },
 }
 
 export const flagWord = (flag: LockFlag, value: boolean) =>

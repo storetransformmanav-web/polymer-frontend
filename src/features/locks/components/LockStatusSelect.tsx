@@ -31,9 +31,13 @@ export function LockStatusSelect({ lock, shop }: { lock: AccessLock; shop: strin
           setPending({
             lock,
             change: { enabled: next === 'active' },
-            label: 'Status',
-            from: flagWord('enabled', lock.enabled),
-            to: flagWord('enabled', next === 'active'),
+            lines: [
+              {
+                label: 'Status',
+                from: flagWord('enabled', lock.enabled),
+                to: flagWord('enabled', next === 'active'),
+              },
+            ],
           })
         }
       />

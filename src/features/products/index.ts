@@ -3,3 +3,5 @@
 export { ProductsPage } from './pages/ProductsPage.tsx'
 export { ProductDetailsView } from './components/ProductDetailsView.tsx'
 export { SyncProductsButton } from './components/SyncProductsButton.tsx'
+export { ProductLightbox } from './components/ProductLightbox.tsx'
+export type { LightboxSlide } from './utils/slides.ts'

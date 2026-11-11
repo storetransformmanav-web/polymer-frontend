@@ -14,8 +14,8 @@ import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
 import { canEditCustomer, customerName, linkedCustomerPath } from '../utils/format.ts'
 
 const TH =
-  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
-const TD = 'border-border border-b px-3.5 py-2.5 align-middle text-[0.85rem]'
+  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
+const TD = 'border-border border-b px-3 py-1.5 align-middle'
 const SKELETON_ROWS = 6
 
 const BUTTON =
@@ -26,7 +26,7 @@ function Avatar({ name }: { name: string }) {
   return (
     <span
       aria-hidden="true"
-      className="bg-accent-tint text-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-bold"
+      className="bg-accent-tint text-accent inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.72rem] font-bold"
     >
       {initials(name) || '?'}
     </span>
@@ -112,7 +112,7 @@ export function LockCustomersList({
                 aria-busy={customers.isPending || customers.isShowingPrevious}
                 className="min-h-0 flex-1 overflow-auto"
               >
-                <table className="w-full min-w-[860px] border-collapse">
+                <table className="w-full min-w-[860px] border-collapse text-[0.85rem]">
                   <thead>
                     <tr>
                       <th className={`${TH} w-[24%]`}>Name</th>
@@ -192,7 +192,7 @@ export function LockCustomersList({
                               </td>
                               {!loginOnly && (
                                 <td className={`${TD} text-center whitespace-nowrap`}>
-                                  <span className="inline-flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1">
                                     {canEditCustomer(lock, customer) && (
                                       <button
                                         type="button"
