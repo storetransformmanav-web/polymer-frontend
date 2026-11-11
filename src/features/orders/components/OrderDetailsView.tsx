@@ -18,7 +18,7 @@ import {
 } from '../utils/format.ts'
 import { orderPaymentMethod } from '../utils/payment.ts'
 import { notesCount } from '../utils/tracking.ts'
-import { OrderEventsPanel } from './OrderDetailPanels.tsx'
+import { OrderTimelinePanel } from './OrderTimelinePanel.tsx'
 import { OrderNotesPanel } from './OrderNotesPanel.tsx'
 import { OrderOverviewPanel } from './OrderOverviewPanel.tsx'
 import { OrderShippingPanel } from './OrderShippingPanel.tsx'
@@ -240,7 +240,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
         {tab !== 'overview' && !order && <DetailSkeleton />}
         {order && tab === 'shipping' && <OrderShippingPanel order={order} />}
         {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
-        {order && tab === 'events' && <OrderEventsPanel order={order} />}
+        {order && tab === 'events' && <OrderTimelinePanel order={order} />}
       </div>
     </article>
   )

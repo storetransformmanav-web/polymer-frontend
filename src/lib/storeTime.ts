@@ -167,3 +167,47 @@ export function formatRelativeDateTime(
   }).format(date)
   return `${day} at ${time}`
 }
+
+/** "2026-11-05" — the store's calendar day an instant falls on (to group events by day). */
+export function storeDateKey(
+  iso: string | null | undefined,
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(date)
+}
+
+/** "Nov 5, 2026" — the store's calendar day, as a heading. */
+export function formatStoreDay(
+  iso: string | null | undefined,
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
+/** "15:23:04" — the time of day on the store's clock, 24-hour, with seconds. */
+export function formatStoreClock(
+  iso: string | null | undefined,
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(date)
+}

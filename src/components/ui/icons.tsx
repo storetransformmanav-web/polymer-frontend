@@ -851,3 +851,33 @@ export function ShieldCheckIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function CreditCardIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.5" y="4.5" width="15" height="11" rx="1.8" />
+      <path d="M2.5 8.5h15" />
+      <path d="M5.5 12.5h3" />
+    </svg>
+  )
+}
+
+export function ArchiveIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.5" y="3.5" width="15" height="4" rx="1" />
+      <path d="M3.5 7.5v7.2a1.3 1.3 0 0 0 1.3 1.3h10.4a1.3 1.3 0 0 0 1.3-1.3V7.5" />
+      <path d="M8 11h4" />
+    </svg>
+  )
+}
+
+export function FileTextIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5l-4-4Z" />
+      <path d="M11.5 2.5v4h4" />
+      <path d="M7.5 10.5h5M7.5 13.5h5" />
+    </svg>
+  )
+}
