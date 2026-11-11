@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { LockIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { ProductDetailsView } from '../../products/index.ts'
 import { LockConfirmDialog } from '../components/LockConfirmDialog.tsx'
 import { LockCreateView } from '../components/LockCreateView.tsx'
 import { LockDetailsView } from '../components/LockDetailsView.tsx'
@@ -16,6 +17,9 @@ import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
 import { useLockTabs } from '../hooks/useLockTabs.ts'
 import { useSetupStore } from '../hooks/useLockWrites.ts'
 import { lockPath } from '../utils/format.ts'
+
+// Not a lock's handle: the tab of a product opened from a lock.
+const LINKED_ID = '__linked-product__'
 
 /** How long a "saved" confirmation stays on screen. */
 const NOTICE_MS = 10_000
@@ -41,12 +45,21 @@ export function LocksPage() {
   const { setup, clearError: clearSetupError } = useSetupStore()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
+  const location = useLocation()
   const { filters, data } = locks
 
   // `/locks` → the list; `/locks/new` → the Add lock form; `/locks/<handle>` → that lock.
-  const first = splat ? splat.split('/')[0] : ''
+  const segments = splat ? splat.split('/') : []
+  const first = segments[0] ?? ''
+  // `/locks/product/<id>`: the protected product's own page, opened from the lock and shown in
+  // this same page as a tab of its own.
+  const linkedProductId =
+    first === 'product' && segments[1] ? decodeURIComponent(segments[1]) || null : null
+  const rawName = (location.state as { linkedName?: unknown } | null)?.linkedName
+  const linkedName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : null
   const creating = first === 'new'
-  const activeHandle = first && !creating ? decodeURIComponent(first) : null
+  const activeHandle =
+    first && !creating && !linkedProductId ? decodeURIComponent(first) : null
   const activeRow = activeHandle
     ? (locks.items.find((item) => item.handle === activeHandle) ?? null)
     : null
@@ -91,22 +104,43 @@ export function LocksPage() {
     if (id === activeHandle) navigate(neighbour ? lockPath(neighbour.id) : LIST_PATH)
   }
 
+  // Back from the product goes where the person came from (the lock); opened from a bare
+  // address there is nothing behind, so it goes to the list.
+  function leaveLinked() {
+    if (location.key !== 'default') navigate(-1)
+    else navigate(LIST_PATH)
+  }
+
   const tabsBar = (
     <OpenTabsBar
-      tabs={lockTabs.tabs.map((tab) => ({
-        id: tab.id,
-        label: tab.title ?? tab.id,
-        title: `/products/${tab.id}`,
-      }))}
-      activeId={activeHandle}
+      tabs={[
+        ...lockTabs.tabs.map((tab) => ({
+          id: tab.id,
+          label: tab.title ?? tab.id,
+          title: `/products/${tab.id}`,
+        })),
+        ...(linkedProductId
+          ? [
+              {
+                id: LINKED_ID,
+                label: linkedName ?? 'Product',
+                kind: 'Product',
+                title: linkedName ?? 'Product',
+              },
+            ]
+          : []),
+      ]}
+      activeId={linkedProductId ? LINKED_ID : activeHandle}
       navLabel="Open locks"
       listLabel="All Locks"
       kind="Lock"
       historyLabel="Opened locks"
       icon={LockIcon}
       onShowList={() => navigate(LIST_PATH)}
-      onSelect={(id) => navigate(lockPath(id))}
-      onClose={closeLockTab}
+      onSelect={(id) => {
+        if (id !== LINKED_ID) navigate(lockPath(id))
+      }}
+      onClose={(id) => (id === LINKED_ID ? leaveLinked() : closeLockTab(id))}
       onClear={() => {
         lockTabs.clearTabs()
         if (activeHandle) navigate(LIST_PATH)
@@ -152,6 +186,21 @@ export function LocksPage() {
           />
         )}
       </>
+    )
+  }
+
+  if (linkedProductId) {
+    return (
+      <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+        {tabsBar}
+        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <ProductDetailsView
+            key={`product-${linkedProductId}`}
+            id={linkedProductId}
+            onBack={leaveLinked}
+          />
+        </div>
+      </div>
     )
   }
 

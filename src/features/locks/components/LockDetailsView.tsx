@@ -22,7 +22,7 @@ import {
 } from '../../../components/ui/icons.tsx'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
-import { syncLabel, syncTone } from '../utils/format.ts'
+import { linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
 import { FLAG_INFO, flagWord, type LockFlag } from '../utils/lockOptions.ts'
 import { LockChangeConfirm, type PendingLockChange } from './LockChangeConfirm.tsx'
 import { LockKeysSection } from './LockAccessEditors.tsx'
@@ -283,7 +283,8 @@ export function LockDetailsView({
               <div className={`${DETAIL_CARD} relative p-3`}>
                 <LockImage src={lock.image_url} size="xl" />
                 <Link
-                  to={`/products/${encodeURIComponent(lock.product_id)}`}
+                  to={linkedProductPath(lock.product_id)}
+                  state={{ linkedName: lock.title }}
                   className="border-border bg-bg text-text hover:border-accent absolute right-6 bottom-6 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.78rem] font-semibold no-underline shadow-sm transition-colors"
                 >
                   <ExternalLinkIcon width={14} height={14} />

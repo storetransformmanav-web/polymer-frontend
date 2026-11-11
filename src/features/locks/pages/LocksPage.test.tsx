@@ -644,10 +644,11 @@ describe('LocksPage', () => {
       // Like a product's header: the figures beside the name.
       expect(screen.getByText('with access')).toBeInTheDocument()
       expect(screen.getByText(/^keys?$/)).toBeInTheDocument()
-      // Like a product's Overview: the big picture links to the product page.
+      // Like a product's Overview: the big picture links to the product page, which opens in
+      // this same page (as a tab of Lock Management), not on the Products page.
       expect(screen.getByRole('link', { name: 'View product' })).toHaveAttribute(
         'href',
-        expect.stringMatching(/^\/products\//),
+        expect.stringMatching(/^\/locks\/product\//),
       )
       // The keys are chips with a pencil: no add box and no Save until the pencil is used.
       expect(

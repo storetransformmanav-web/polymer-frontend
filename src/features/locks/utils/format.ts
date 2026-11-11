@@ -83,3 +83,7 @@ export const customerName = (customer: LockCustomer) =>
 /** Whether Edit (give another of the lock's keys) makes sense for this customer. */
 export const canEditCustomer = (lock: AccessLock, customer: LockCustomer) =>
   lock.tags.length > 1 && missingKeys(lock.tags, customer.tags).length > 0
+
+/** A protected product's own page, shown inside Lock Management as a tab (`/locks/product/<id>`). */
+export const linkedProductPath = (productId: string) =>
+  `/locks/product/${encodeURIComponent(productId)}`
