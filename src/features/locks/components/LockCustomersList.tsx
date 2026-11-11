@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { DetailSection } from '../../../components/ui/DetailSection.tsx'
 import {
   AlertTriangleIcon,
   PencilIcon,
@@ -69,9 +68,19 @@ export function LockCustomersList({
     marked.has(customer.id.toLowerCase())
 
   return (
-    <DetailSection title="Customers" icon={UsersIcon} count={data?.total} flush fill>
-      <div className="flex flex-col lg:h-full">
-        <div className="flex shrink-0 flex-col gap-3 p-4 sm:p-5">
+    <section
+      aria-label="Customers with access"
+      className="border-border-strong flex min-h-[22rem] flex-col border-t lg:min-h-[16rem] lg:flex-1"
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 flex-col gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+          <h3 className="m-0 flex items-center gap-2.5 text-[0.95rem] font-semibold">
+            <UsersIcon width={18} height={18} className="text-accent shrink-0" />
+            Customers
+            <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
+              {data?.total ?? '—'}
+            </span>
+          </h3>
           {notice}
           {loginOnly && (
             <p className="text-text-muted text-[0.82rem]">
@@ -81,8 +90,8 @@ export function LockCustomersList({
           )}
         </div>
 
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-          <div className="border-border overflow-hidden rounded-lg border lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+          <div className="border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
             {customers.error ? (
               <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-12 text-center text-[0.9rem]">
                 <AlertTriangleIcon width={26} height={26} className="text-danger" />
@@ -110,17 +119,19 @@ export function LockCustomersList({
             ) : (
               <div
                 aria-busy={customers.isPending || customers.isShowingPrevious}
-                className="max-h-[min(60svh,640px)] overflow-auto lg:max-h-none lg:min-h-48 lg:flex-1"
+                className="min-h-0 flex-1 overflow-auto"
               >
                 <table className="w-full min-w-[860px] border-collapse">
                   <thead>
                     <tr>
-                      <th className={TH}>Name</th>
-                      <th className={TH}>Email</th>
-                      <th className={TH}>Phone</th>
-                      <th className={TH}>Company</th>
-                      <th className={TH}>Tags</th>
-                      {!loginOnly && <th className={`${TH} text-center`}>Actions</th>}
+                      <th className={`${TH} w-[24%]`}>Name</th>
+                      <th className={`${TH} w-[27%]`}>Email</th>
+                      <th className={`${TH} w-[12%]`}>Phone</th>
+                      <th className={`${TH} w-[20%]`}>Company</th>
+                      <th className={`${TH} w-[10%]`}>Tags</th>
+                      {!loginOnly && (
+                        <th className={`${TH} w-24 text-center`}>Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -236,6 +247,6 @@ export function LockCustomersList({
           </div>
         </div>
       </div>
-    </DetailSection>
+    </section>
   )
 }

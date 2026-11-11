@@ -28,6 +28,7 @@ import { LockChangeConfirm, type PendingLockChange } from './LockChangeConfirm.t
 import { LockKeysSection } from './LockAccessEditors.tsx'
 import { LockImage } from './LockCard.tsx'
 import { LockAccessTab } from './LockAccessTab.tsx'
+import { LockStatusSelect } from './LockStatusSelect.tsx'
 
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -190,13 +191,8 @@ export function LockDetailsView({
               </dl>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.85rem]">
-              <Badge tone={lock.enabled ? 'success' : 'neutral'}>
-                <span
-                  aria-hidden="true"
-                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"
-                />
-                {flagWord('enabled', lock.enabled)}
-              </Badge>
+              {/* Enabled / Disabled — changed here with a dropdown, after a confirmation. */}
+              <LockStatusSelect lock={lock} shop={shop} />
               <span title={lock.sync_error ?? undefined}>
                 <Badge tone={syncTone(lock.sync_status)}>
                   {syncLabel(lock.sync_status)}

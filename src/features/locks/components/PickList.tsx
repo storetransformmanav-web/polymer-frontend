@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 import { SearchIcon, SpinnerIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { LockImage } from './LockCard.tsx'
@@ -49,6 +49,8 @@ interface PickListProps {
   onRetry: () => void
   /** Tailwind max-height class of the rows' scroll box (default `max-h-80`). */
   listHeight?: string
+  /** Buttons shown to the right of the search box (they wrap under it on a narrow screen). */
+  actions?: ReactNode
 }
 
 const CHECKBOX = 'accent-accent h-4 w-4 shrink-0 cursor-pointer'
@@ -79,6 +81,7 @@ export function PickList({
   error,
   onRetry,
   listHeight = 'max-h-80',
+  actions,
 }: PickListProps) {
   const [text, setText] = useDebouncedField(search, onSearch)
   const headingId = useId()
@@ -89,30 +92,35 @@ export function PickList({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="border-border bg-surface focus-within:border-accent focus-within:outline-accent-tint flex h-10 items-center gap-2.5 rounded-lg border px-3 transition-colors focus-within:outline-2">
-        <SearchIcon className="text-text-muted shrink-0" />
-        <input
-          type="search"
-          aria-label={searchLabel ?? `Search ${noun}s`}
-          placeholder={searchPlaceholder}
-          maxLength={200}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          // Inside a form: Enter must not submit it.
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.preventDefault()
-          }}
-          className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.88rem] outline-none [&::-webkit-search-cancel-button]:hidden"
-        />
-        {text && (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={() => setText('')}
-            className="text-text-muted hover:text-text cursor-pointer border-none bg-none p-0.5"
-          >
-            <XIcon width={16} height={16} />
-          </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="border-border bg-surface focus-within:border-accent focus-within:outline-accent-tint flex h-10 min-w-0 flex-1 basis-72 items-center gap-2.5 rounded-lg border px-3 transition-colors focus-within:outline-2">
+          <SearchIcon className="text-text-muted shrink-0" />
+          <input
+            type="search"
+            aria-label={searchLabel ?? `Search ${noun}s`}
+            placeholder={searchPlaceholder}
+            maxLength={200}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            // Inside a form: Enter must not submit it.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault()
+            }}
+            className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.88rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+          {text && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setText('')}
+              className="text-text-muted hover:text-text cursor-pointer border-none bg-none p-0.5"
+            >
+              <XIcon width={16} height={16} />
+            </button>
+          )}
+        </div>
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
         )}
       </div>
 

@@ -16,13 +16,6 @@ interface DetailSectionProps {
   actions?: ReactNode
   /** Drops the body's padding, for content that draws its own edge-to-edge cells. */
   flush?: boolean
-  /**
-   * From `lg`, while open, the card fills the height left in a flex column (`min-h-0 flex-1`) and
-   * its body is a column that does the same, so something inside can scroll in its own box. It
-   * never gets shorter than about 20rem, so a tall neighbour can't squeeze it away: the column's
-   * own scroll takes over instead.
-   */
-  fill?: boolean
   children: ReactNode
 }
 
@@ -35,7 +28,6 @@ export function DetailSection({
   forceOpen = false,
   actions,
   flush = false,
-  fill = false,
   children,
 }: DetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
@@ -46,12 +38,9 @@ export function DetailSection({
     if (forceOpen) setOpen(true)
   }
   const bodyId = useId()
-  const filling = fill && open
 
   return (
-    <section
-      className={`${DETAIL_CARD} ${filling ? 'lg:flex lg:min-h-[20rem] lg:flex-1 lg:flex-col' : ''}`}
-    >
+    <section className={DETAIL_CARD}>
       {/* Only the title row takes the hover tint, not the whole card. */}
       <div
         className={`hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] pr-4 pl-5 transition-colors ${open ? '' : 'rounded-b-[0.7rem]'}`}
@@ -96,12 +85,10 @@ export function DetailSection({
         inert={!open}
         className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${
           open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-        } ${filling ? 'lg:min-h-0 lg:flex-1' : ''}`}
+        }`}
       >
         <div className="overflow-hidden">
-          <div
-            className={`border-border-strong border-t ${flush ? '' : 'p-5'} ${filling ? 'lg:h-full' : ''}`}
-          >
+          <div className={`border-border-strong border-t ${flush ? '' : 'p-5'}`}>
             {children}
           </div>
         </div>

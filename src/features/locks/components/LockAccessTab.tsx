@@ -187,8 +187,16 @@ export function LockAccessTab({
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
-      <section className={`${DETAIL_CARD} flex shrink-0 flex-col gap-4 p-4`}>
+    <section className={`${DETAIL_CARD} flex flex-col lg:min-h-0 lg:flex-1`}>
+      <div className="flex shrink-0 flex-col gap-4 p-4 sm:p-5">
+        {/* The hint makes way for the results while searching, so the table keeps its room. */}
+        {search.trim() === '' && (
+          <FormMessage tone="info">
+            Search a customer, tick them and press Add New Customer to give access. Check
+            shows whether someone can open this product; the table below lists who already
+            can.
+          </FormMessage>
+        )}
         <PickedChips
           noun="customer"
           items={picked}
@@ -196,7 +204,42 @@ export function LockAccessTab({
           onClear={() => choose([])}
         />
         <PickList
-          listHeight="max-h-56"
+          listHeight="max-h-44"
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={runCheck}
+                disabled={isChecking || picked.length === 0}
+                className={SECONDARY}
+              >
+                {isChecking ? (
+                  <SpinnerIcon width={16} height={16} className="animate-spin" />
+                ) : (
+                  <SearchIcon width={16} height={16} />
+                )}
+                Check
+              </button>
+              <button
+                type="button"
+                onClick={() => void addNow(picked.map(refOf))}
+                disabled={isSetting || picked.length === 0}
+                title={
+                  picked.length === 0
+                    ? 'Tick the customers to add in the list above'
+                    : undefined
+                }
+                className={PRIMARY}
+              >
+                {isSetting ? (
+                  <SpinnerIcon width={14} height={14} className="animate-spin" />
+                ) : (
+                  <PlusIcon width={14} height={14} />
+                )}
+                Add New Customer
+              </button>
+            </>
+          }
           label="Customers to check"
           noun="customer"
           rows={store.items.map((customer) => customerRow(customer, lock.tags))}
@@ -222,51 +265,22 @@ export function LockAccessTab({
             {`Up to ${MAX_ITEMS} customers can be checked at a time.`}
           </FormMessage>
         )}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runCheck}
-            disabled={isChecking || picked.length === 0}
-            className={SECONDARY}
-          >
-            {isChecking ? (
-              <SpinnerIcon width={16} height={16} className="animate-spin" />
-            ) : (
-              <SearchIcon width={16} height={16} />
-            )}
-            Check
-          </button>
-          <button
-            type="button"
-            onClick={() => void addNow(picked.map(refOf))}
-            disabled={isSetting || picked.length === 0}
-            title={
-              picked.length === 0
-                ? 'Tick the customers to add in the list above'
-                : undefined
-            }
-            className={PRIMARY}
-          >
-            {isSetting ? (
-              <SpinnerIcon width={14} height={14} className="animate-spin" />
-            ) : (
-              <PlusIcon width={14} height={14} />
-            )}
-            Add New Customer
-          </button>
-          {notAllowed.length > 1 && (
-            <button
-              type="button"
-              onClick={() => void addNow(notAllowed.map(({ item }) => refOf(item)))}
-              disabled={isSetting}
-              className={`${SMALL} border-border bg-bg text-text hover:border-accent ml-auto`}
-            >
-              Give access to all not allowed ({notAllowed.length})
-            </button>
-          )}
-        </div>
-
         {addError && <FormMessage tone="error">{addError}</FormMessage>}
+
+        {notAllowed.length > 1 && (
+          <div>
+            {notAllowed.length > 1 && (
+              <button
+                type="button"
+                onClick={() => void addNow(notAllowed.map(({ item }) => refOf(item)))}
+                disabled={isSetting}
+                className={`${SMALL} border-border bg-bg text-text hover:border-accent`}
+              >
+                Give access to all not allowed ({notAllowed.length})
+              </button>
+            )}
+          </div>
+        )}
 
         {answers.length > 0 && (
           <ul aria-label="Access check results" className="flex flex-col gap-2">
@@ -367,7 +381,7 @@ export function LockAccessTab({
             </button>
           </div>
         )}
-      </section>
+      </div>
 
       <LockCustomersList
         lock={lock}
@@ -402,6 +416,6 @@ export function LockAccessTab({
           />,
           document.body,
         )}
-    </div>
+    </section>
   )
 }
