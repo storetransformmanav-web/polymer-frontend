@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { CustomerDetailsView } from '../../customers/index.ts'
 import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
 import { ProductDetailsView } from '../../products/index.ts'
+import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { PlusIcon } from '../../../components/ui/icons.tsx'
@@ -16,8 +17,10 @@ import { OrdersKpis } from '../components/OrdersKpis.tsx'
 import { OrdersList } from '../components/OrdersList.tsx'
 import { OrdersToolbar } from '../components/OrdersToolbar.tsx'
 import { orderDetailsKey } from '../../../app/store/ordersSlice.ts'
+import { useOrderColumns } from '../hooks/useOrderColumns.ts'
 import { useOrders } from '../hooks/useOrders.ts'
 import { useOrderTabs } from '../hooks/useOrderTabs.ts'
+import { ORDER_COLUMNS } from '../utils/columns.ts'
 import {
   type LinkedKind,
   orderCustomer,
@@ -54,6 +57,8 @@ export function OrdersPage() {
   const { '*': splat } = useParams()
   const [search] = useSearchParams()
   const { filters, data } = orders
+  // Which columns the table shows (the Columns menu), remembered on this browser.
+  const columnChoice = useOrderColumns()
 
   // `/orders/<number>[/…]` → the order's number; `/orders/new` → the Add order form; `/orders`
   // → null (the list).
@@ -273,22 +278,40 @@ export function OrdersPage() {
         }
       >
         <OrdersToolbar
+          // Add order, then the Columns menu (only the table has columns; the cards of a narrow
+          // screen do not).
           actions={
-            <button
-              type="button"
-              onClick={openCreate}
-              className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3.5 text-[0.82rem] font-semibold shadow-sm transition-colors"
-            >
-              <PlusIcon width={16} height={16} />
-              Add order
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-3.5 text-[0.82rem] font-semibold shadow-sm transition-colors"
+              >
+                <PlusIcon width={16} height={16} />
+                Add order
+              </button>
+              <div className="hidden lg:block">
+                <ColumnsMenu
+                  config={columnChoice.config}
+                  labelOf={(id) => ORDER_COLUMNS[id].label}
+                  onToggle={columnChoice.toggle}
+                  onMove={columnChoice.move}
+                  onReset={columnChoice.reset}
+                />
+              </div>
+            </>
           }
           filters={filters}
           facets={orders.facets}
           total={data?.total ?? null}
-          hasFilters={orders.hasFilters}
+          // Clear All also puts the columns back to the default, so a changed choice counts as
+          // something to clear.
+          hasFilters={orders.hasFilters || !columnChoice.isDefault}
           onChange={orders.setFilters}
-          onReset={orders.resetFilters}
+          onReset={() => {
+            orders.resetFilters()
+            columnChoice.reset()
+          }}
         />
 
         <section
@@ -327,6 +350,7 @@ export function OrdersPage() {
               }
               onRetry={orders.retry}
               onClearFilters={orders.resetFilters}
+              columns={columnChoice.columns}
             />
           </HighlightQuery>
 

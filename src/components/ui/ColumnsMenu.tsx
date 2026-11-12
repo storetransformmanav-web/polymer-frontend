@@ -1,23 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ColumnsIcon,
-  EyeIcon,
-  EyeOffIcon,
-  GripIcon,
-} from '../../../components/ui/icons.tsx'
-import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
-import {
-  CUSTOMER_COLUMNS,
-  isColumnVisible,
-  type ColumnConfig,
-  type CustomerColumnId,
-} from '../utils/columns.ts'
+import { isColumnVisible, type ColumnConfig } from '../../lib/columnConfig.ts'
+import { ColumnsIcon, EyeIcon, EyeOffIcon, GripIcon } from './icons.tsx'
+import { PopoverButton } from './PopoverButton.tsx'
 
-interface CustomerColumnsMenuProps {
-  config: ColumnConfig
-  onToggle: (id: CustomerColumnId) => void
+interface ColumnsMenuProps<Id extends string> {
+  config: ColumnConfig<Id>
+  /** A column's name as the menu words it. */
+  labelOf: (id: Id) => string
+  onToggle: (id: Id) => void
   /** Put `id` where `target` is. */
-  onMove: (id: CustomerColumnId, target: CustomerColumnId) => void
+  onMove: (id: Id, target: Id) => void
   onReset: () => void
 }
 
@@ -25,22 +17,23 @@ const ICON_BUTTON =
   'text-text-muted hover:text-accent flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent p-0 transition-colors'
 
 /**
- * The button at the end of the search row that opens the Columns menu, after the store admin's:
- * every column with a drag handle (or ↑ / ↓ on it) to put it in
- * order and an eye to show or hide it. Customer name and Actions are always there, so they are
- * not listed. What is chosen is kept by `useCustomerColumns`.
+ * The icon button at the end of a list's search row that opens the **Columns** menu, after the
+ * store admin's: every column with a drag handle (or ↑ / ↓ on it) to put it in order and an eye to
+ * show or hide it, and a Reset. A table's first column and its Actions are always there, so they
+ * are not listed. The choice itself lives in `useColumnConfig`; this only draws it.
  */
-export function CustomerColumnsMenu({
+export function ColumnsMenu<Id extends string>({
   config,
+  labelOf,
   onToggle,
   onMove,
   onReset,
-}: CustomerColumnsMenuProps) {
-  const [dragging, setDragging] = useState<CustomerColumnId | null>(null)
-  const [over, setOver] = useState<CustomerColumnId | null>(null)
-  const handles = useRef(new Map<CustomerColumnId, HTMLButtonElement>())
+}: ColumnsMenuProps<Id>) {
+  const [dragging, setDragging] = useState<Id | null>(null)
+  const [over, setOver] = useState<Id | null>(null)
+  const handles = useRef(new Map<Id, HTMLButtonElement>())
   // After a keyboard move the row is drawn in its new place: give the handle its focus back.
-  const refocus = useRef<CustomerColumnId | null>(null)
+  const refocus = useRef<Id | null>(null)
 
   useEffect(() => {
     if (refocus.current) {
@@ -49,7 +42,7 @@ export function CustomerColumnsMenu({
     }
   }, [config.order])
 
-  function moveBy(id: CustomerColumnId, step: -1 | 1) {
+  function moveBy(id: Id, step: -1 | 1) {
     const target = config.order[config.order.indexOf(id) + step]
     if (!target) return
     refocus.current = id
@@ -79,7 +72,7 @@ export function CustomerColumnsMenu({
 
           <ul className="max-h-[min(58svh,26rem)] overflow-y-auto">
             {config.order.map((id) => {
-              const column = CUSTOMER_COLUMNS[id]
+              const label = labelOf(id)
               const visible = isColumnVisible(config, id)
               return (
                 <li
@@ -121,7 +114,7 @@ export function CustomerColumnsMenu({
                       if (element) handles.current.set(id, element)
                       else handles.current.delete(id)
                     }}
-                    aria-label={`Move ${column.label}`}
+                    aria-label={`Move ${label}`}
                     title="Drag to reorder, or press the up and down arrow keys"
                     onKeyDown={(event) => {
                       if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -136,11 +129,11 @@ export function CustomerColumnsMenu({
                   <span
                     className={`min-w-0 flex-1 truncate ${visible ? '' : 'text-text-muted'}`}
                   >
-                    {column.label}
+                    {label}
                   </span>
                   <button
                     type="button"
-                    aria-label={`${visible ? 'Hide' : 'Show'} ${column.label}`}
+                    aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
                     onClick={() => onToggle(id)}
                     className={`${ICON_BUTTON} ${visible ? 'text-text' : ''}`}
                   >

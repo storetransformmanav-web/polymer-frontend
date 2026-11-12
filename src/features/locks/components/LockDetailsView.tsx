@@ -54,7 +54,6 @@ import { LockImage } from './LockCard.tsx'
 import { LockAccessTab } from './LockAccessTab.tsx'
 import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
-import { SelectField } from '../../../components/ui/SelectField.tsx'
 
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -171,8 +170,8 @@ export function LockDetailsView({
   const back = () => (dirty ? setLeaving(true) : onBack())
 
   /**
-   * A yes/no setting as a row: its icon, its name (the tooltip says what it does) and a Yes / No
-   * dropdown. Choosing only changes the page, until Save changes.
+   * A yes/no setting as a row: its icon, its name (the tooltip says what it does) and an on/off
+   * toggle with its Yes / No word. Switching only changes the page, until Save changes.
    */
   function flagRow(flag: LockFlag, icon: ComponentType<IconProps>) {
     const info = FLAG_INFO[flag]
@@ -192,19 +191,31 @@ export function LockDetailsView({
             </Badge>
           )}
         </span>
-        <div className="w-28 shrink-0">
-          <SelectField
-            compact
-            hideLabel
+        <div className="flex shrink-0 items-center justify-end gap-2.5">
+          <span
+            aria-hidden="true"
+            className="text-text-muted w-7 text-right text-[0.78rem] font-semibold"
+          >
+            {flagWord(flag, value)}
+          </span>
+          <button
+            type="button"
+            role="switch"
             id={`lock-flag-${flag}`}
-            label={info.label}
-            value={value ? 'yes' : 'no'}
-            options={[
-              { value: 'yes', label: flagWord(flag, true) },
-              { value: 'no', label: flagWord(flag, false) },
-            ]}
-            onChange={(next) => setFlag(flag, next === 'yes')}
-          />
+            aria-checked={value}
+            aria-label={info.label}
+            onClick={() => setFlag(flag, !value)}
+            className={`focus-visible:outline-accent relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-none p-0 transition-colors focus-visible:outline-2 ${
+              value ? 'bg-accent' : 'bg-border-strong'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`bg-bg absolute top-0.5 left-0.5 h-4 w-4 rounded-full shadow-sm transition-transform ${
+                value ? 'translate-x-4' : ''
+              }`}
+            />
+          </button>
         </div>
       </div>
     )

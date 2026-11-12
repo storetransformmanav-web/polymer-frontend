@@ -12,7 +12,7 @@ import {
 import { CustomerCreateView } from '../components/CustomerCreateView.tsx'
 import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
-import { CustomerColumnsMenu } from '../components/CustomerColumnsMenu.tsx'
+import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
 import { CustomersImport } from '../components/CustomersImport.tsx'
 import { CustomersKpis } from '../components/CustomersKpis.tsx'
@@ -27,6 +27,7 @@ import type {
   CustomerCreateResult,
   CustomerListItem,
 } from '../../../lib/api/endpoints.ts'
+import { CUSTOMER_COLUMNS } from '../utils/columns.ts'
 import { DRAFT_TAB } from '../utils/customerDraft.ts'
 import { customerName } from '../utils/format.ts'
 
@@ -242,8 +243,9 @@ export function CustomersPage() {
                 </button>
               )}
               <div className="hidden md:block">
-                <CustomerColumnsMenu
+                <ColumnsMenu
                   config={columnChoice.config}
+                  labelOf={(id) => CUSTOMER_COLUMNS[id].label}
                   onToggle={columnChoice.toggle}
                   onMove={columnChoice.move}
                   onReset={columnChoice.reset}

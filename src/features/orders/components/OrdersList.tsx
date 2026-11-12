@@ -11,12 +11,19 @@ import type { OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatDateTime, formatPrice } from '../../../lib/format.ts'
 import { formatRelativeDateTime } from '../../../lib/storeTime.ts'
 import {
+  ORDER_ACTIONS_COLUMN_REM,
+  ORDER_NUMBER_COLUMN_REM,
+  orderTableMinWidthRem,
+  type OrderColumnDef,
+} from '../utils/columns.ts'
+import {
   customerPath,
   financialTone,
   fulfillmentTone,
   humanize,
   orderCustomer,
   orderLabel,
+  sourceLabel,
 } from '../utils/format.ts'
 
 const TH_BASE =
@@ -43,6 +50,8 @@ interface OrdersListProps {
   onPrefetch: (order: OrderListItem) => void
   onRetry: () => void
   onClearFilters: () => void
+  /** The columns to draw between Order and Actions, in order (the Columns menu's choice). */
+  columns: OrderColumnDef[]
 }
 
 const dateOrDash = (value: string | null | undefined) =>
@@ -76,6 +85,135 @@ function StatusBadges({ order }: { order: OrderListItem }) {
   )
 }
 
+const DASH = <span className="text-text-muted">—</span>
+
+/** Plain text, cut short with the whole text on hover; a dash when there is none. */
+function TextCell({ value, highlight }: { value: string; highlight?: boolean }) {
+  if (!value) return DASH
+  return (
+    <span className="block truncate" title={value}>
+      {highlight ? <Highlight text={value} /> : value}
+    </span>
+  )
+}
+
+/** An amount in the order's own currency; a dash when the answer has none. */
+const amount = (value: string | null | undefined, order: OrderListItem) =>
+  value == null || value === '' ? DASH : <>{formatPrice(value, order.currency)}</>
+
+/** A date and time as "Today at 10:37 am"…, the full date and time on hover; a dash when empty. */
+function DateCell({ value }: { value: string | null | undefined }) {
+  if (!value) return DASH
+  return <span title={formatDateTime(value)}>{formatRelativeDateTime(value)}</span>
+}
+
+/** What one chosen column shows for one order. */
+function ColumnCell({
+  column,
+  order,
+  linkedState,
+}: {
+  column: OrderColumnDef
+  order: OrderListItem
+  linkedState: ReturnType<typeof useLinkedState>
+}) {
+  const name = order.customer?.full_name?.trim() ?? ''
+  const email = order.customer?.email?.trim() ?? ''
+  switch (column.id) {
+    case 'created':
+      // "Today at 10:37 am" / "Yesterday at …" / "4 Nov at 10:38 am"; the full date and time on hover.
+      return <DateCell value={order.shopify_created_at} />
+    case 'customer':
+      return name ? (
+        // The name, with a small copy icon always visible beside it — the same button and 20px box
+        // as the product name's on the Products page.
+        <span className="flex min-w-0 items-center gap-1.5">
+          {customerPath(order) ? (
+            // A customer in the CRM: their name opens their details in this page.
+            <Link
+              to={customerPath(order) as string}
+              state={linkedState(name)}
+              title={`Open ${name}`}
+              className="text-text hover:text-accent min-w-0 truncate font-medium hover:underline"
+            >
+              <Highlight text={name} />
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate" title={name}>
+              <Highlight text={name} />
+            </span>
+          )}
+          <span className="flex h-5 shrink-0 items-center">
+            <CopyButton value={name} label={`Copy customer name ${name}`} />
+          </span>
+        </span>
+      ) : (
+        DASH
+      )
+    case 'email':
+      return <TextCell value={email} highlight />
+    case 'payment_status':
+      return (
+        <span className="flex flex-col items-center gap-1">
+          <Badge tone={financialTone(order.financial_status)} className={PILL}>
+            {humanize(order.financial_status) || '—'}
+          </Badge>
+          {showsCancelled(order) && (
+            <Badge tone="danger" className={PILL}>
+              Cancelled
+            </Badge>
+          )}
+        </span>
+      )
+    case 'fulfillment_status':
+      return (
+        <Badge tone={fulfillmentTone(order.fulfillment_status)} className={PILL}>
+          {humanize(order.fulfillment_status) || '—'}
+        </Badge>
+      )
+    case 'items':
+      return <>{order.items_count.toLocaleString('en-GB')}</>
+    case 'total':
+      return (
+        <span className="font-semibold">
+          {formatPrice(order.total_price, order.currency)}
+        </span>
+      )
+    case 'store':
+      return <TextCell value={order.shop?.name?.trim() ?? ''} />
+    case 'channel':
+      return <TextCell value={sourceLabel(order.source_name)} />
+    case 'payment_method':
+      return <TextCell value={order.payment_gateway_names.map(humanize).join(', ')} />
+    case 'tags':
+      return <TextCell value={order.tags.join(', ')} />
+    case 'products':
+      return <TextCell value={order.line_items_preview.join(', ')} />
+    case 'return_status':
+      return <TextCell value={humanize(order.return_status)} />
+    case 'phone':
+      return <TextCell value={order.customer?.phone?.trim() ?? ''} />
+    case 'subtotal':
+      return amount(order.subtotal_price, order)
+    case 'discounts':
+      return amount(order.total_discounts, order)
+    case 'shipping':
+      return amount(order.total_shipping, order)
+    case 'tax':
+      return amount(order.total_tax, order)
+    case 'refunded':
+      return amount(order.total_refunded, order)
+    case 'net_payment':
+      return amount(order.net_payment, order)
+    case 'updated':
+      return <DateCell value={order.shopify_updated_at} />
+    case 'closed':
+      return <DateCell value={order.closed_at} />
+    case 'cancelled':
+      return <DateCell value={order.cancelled_at} />
+  }
+}
+
 function Message({ children }: { children: ReactNode }) {
   return (
     <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.9rem]">
@@ -105,6 +243,7 @@ export function OrdersList({
   onPrefetch,
   onRetry,
   onClearFilters,
+  columns,
 }: OrdersListProps) {
   const linkedState = useLinkedState()
   const isTable = useMediaQuery('(min-width: 1024px)')
@@ -203,19 +342,32 @@ export function OrdersList({
       className="relative min-h-0 flex-1 overflow-auto"
     >
       <table
-        className={`w-full min-w-[1080px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        style={{ minWidth: `${orderTableMinWidthRem(columns)}rem` }}
+        className={`w-full table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={`${TH} w-24`}>Order</th>
-            <th className={`${TH} w-44`}>Created date</th>
-            <th className={TH}>Customer name</th>
-            <th className={TH}>Email</th>
-            <th className={`${TH_CENTER} w-40`}>Payment status</th>
-            <th className={`${TH_CENTER} w-40`}>Fulfillment status</th>
-            <th className={`${TH_RIGHT} w-20`}>Items</th>
-            <th className={`${TH_RIGHT} w-28`}>Total price</th>
-            <th className={`${TH_CENTER} w-20`}>Actions</th>
+            <th className={TH} style={{ width: `${ORDER_NUMBER_COLUMN_REM}rem` }}>
+              Order
+            </th>
+            {columns.map((column) => (
+              <th
+                key={column.id}
+                style={{ width: `${column.width}rem` }}
+                className={
+                  column.align === 'right'
+                    ? TH_RIGHT
+                    : column.align === 'center'
+                      ? TH_CENTER
+                      : TH
+                }
+              >
+                {column.label}
+              </th>
+            ))}
+            <th className={TH_CENTER} style={{ width: `${ORDER_ACTIONS_COLUMN_REM}rem` }}>
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -227,130 +379,64 @@ export function OrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 9 }, (_, cell) => (
+                  {Array.from({ length: columns.length + 2 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
                   ))}
                 </tr>
               ))
-            : items.map((order) => {
-                const name = order.customer?.full_name?.trim() ?? ''
-                const email = order.customer?.email?.trim() ?? ''
-                return (
-                  <tr
-                    key={order.id}
-                    className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
-                  >
-                    <td className={TD}>
-                      {/* The order number opens the order, like the eye button does. */}
-                      <button
-                        type="button"
-                        title={`Open order ${orderLabel(order)}`}
-                        onClick={() => onOpen(order)}
-                        onPointerEnter={() => onPrefetch(order)}
-                        onFocus={() => onPrefetch(order)}
-                        className="text-text hover:text-accent block max-w-full cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold hover:underline"
-                      >
-                        <Highlight text={orderLabel(order)} />
-                      </button>
+            : items.map((order) => (
+                <tr
+                  key={order.id}
+                  className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
+                >
+                  <td className={TD}>
+                    {/* The order number opens the order, like the eye button does. */}
+                    <button
+                      type="button"
+                      title={`Open order ${orderLabel(order)}`}
+                      onClick={() => onOpen(order)}
+                      onPointerEnter={() => onPrefetch(order)}
+                      onFocus={() => onPrefetch(order)}
+                      className="text-text hover:text-accent block max-w-full cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold hover:underline"
+                    >
+                      <Highlight text={orderLabel(order)} />
+                    </button>
+                  </td>
+                  {columns.map((column) => (
+                    <td
+                      key={column.id}
+                      className={`${TD} whitespace-nowrap ${
+                        column.align === 'right'
+                          ? 'text-right tabular-nums'
+                          : column.align === 'center'
+                            ? 'text-center'
+                            : 'text-left'
+                      }`}
+                    >
+                      <ColumnCell
+                        column={column}
+                        order={order}
+                        linkedState={linkedState}
+                      />
                     </td>
-                    <td className={`${TD} whitespace-nowrap`}>
-                      {order.shopify_created_at ? (
-                        // "Today at 10:37 am" / "Yesterday at …" / "4 Nov at 10:38 am"; the full
-                        // date and time on hover.
-                        <span title={formatDateTime(order.shopify_created_at)}>
-                          {formatRelativeDateTime(order.shopify_created_at)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className={TD}>
-                      {name ? (
-                        // The name, with a small copy icon always visible beside it — the same
-                        // button and 20px box as the product name's on the Products page.
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          {customerPath(order) ? (
-                            // A customer in the CRM: their name opens their details in this page.
-                            <Link
-                              to={customerPath(order) as string}
-                              state={linkedState(name)}
-                              title={`Open ${name}`}
-                              className="text-text hover:text-accent min-w-0 truncate font-medium hover:underline"
-                            >
-                              <Highlight text={name} />
-                            </Link>
-                          ) : (
-                            <span className="min-w-0 truncate" title={name}>
-                              <Highlight text={name} />
-                            </span>
-                          )}
-                          <span className="flex h-5 shrink-0 items-center">
-                            <CopyButton
-                              value={name}
-                              label={`Copy customer name ${name}`}
-                            />
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className={TD}>
-                      {email ? (
-                        <span className="block truncate" title={email}>
-                          <Highlight text={email} />
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <span className="flex flex-col items-center gap-1">
-                        <Badge
-                          tone={financialTone(order.financial_status)}
-                          className={PILL}
-                        >
-                          {humanize(order.financial_status) || '—'}
-                        </Badge>
-                        {showsCancelled(order) && (
-                          <Badge tone="danger" className={PILL}>
-                            Cancelled
-                          </Badge>
-                        )}
-                      </span>
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <Badge
-                        tone={fulfillmentTone(order.fulfillment_status)}
-                        className={PILL}
-                      >
-                        {humanize(order.fulfillment_status) || '—'}
-                      </Badge>
-                    </td>
-                    <td className={`${TD} text-right tabular-nums`}>
-                      {order.items_count.toLocaleString('en-GB')}
-                    </td>
-                    <td className={`${TD} text-right font-semibold tabular-nums`}>
-                      {formatPrice(order.total_price, order.currency)}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <button
-                        type="button"
-                        aria-label={`View order ${orderLabel(order)}`}
-                        title="View"
-                        onClick={() => onOpen(order)}
-                        onPointerEnter={() => onPrefetch(order)}
-                        onFocus={() => onPrefetch(order)}
-                        className={ROW_ACTION}
-                      >
-                        <EyeIcon />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+                  ))}
+                  <td className={`${TD} text-center`}>
+                    <button
+                      type="button"
+                      aria-label={`View order ${orderLabel(order)}`}
+                      title="View"
+                      onClick={() => onOpen(order)}
+                      onPointerEnter={() => onPrefetch(order)}
+                      onFocus={() => onPrefetch(order)}
+                      className={ROW_ACTION}
+                    >
+                      <EyeIcon />
+                    </button>
+                  </td>
+                </tr>
+              ))}
         </tbody>
       </table>
     </div>

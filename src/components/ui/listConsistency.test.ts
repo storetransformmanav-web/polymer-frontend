@@ -44,16 +44,14 @@ describe('Orders, Products and Customers lists look alike', () => {
     }
   })
 
-  it('give the customers table equal-width columns after the name, so the gaps are even', () => {
-    const code = source(LISTS.Customers)
-    const header = code.slice(code.indexOf('<thead>'), code.indexOf('</thead>'))
-    const widths = [
-      ...header.matchAll(/<th className=\{`\$\{TH_(?:CENTER|RIGHT)\} (w-\d+)`\}>/g),
-    ].map((match) => match[1])
-    // The plain centred columns after the name and the (wider) Email — Email verified, Role and
-    // Shopify state — are w-36 (the sortable ones, written over several lines, are too), then the
-    // narrower Actions.
-    expect(widths).toEqual(['w-36', 'w-36', 'w-36', 'w-28'])
+  it('give the customers and orders tables a width for every column, from the column list', () => {
+    // The columns are chosen in the Columns menu, so each one carries its own width (in rem) and
+    // the header draws it — no column is left to share the rest by chance.
+    for (const path of [LISTS.Customers, LISTS.Orders]) {
+      const code = source(path)
+      const header = code.slice(code.indexOf('<thead>'), code.indexOf('</thead>'))
+      expect(header, path).toContain('style={{ width: `${column.width}rem` }}')
+    }
   })
 
   it('use the shared row-action buttons (one size, one icon size) and no bare icon buttons', () => {

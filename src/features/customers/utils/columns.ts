@@ -1,4 +1,10 @@
 import type { CustomerSort } from '../../../lib/api/endpoints.ts'
+import {
+  defaultColumnConfig as baseDefault,
+  isDefaultColumnConfig as baseIsDefault,
+  normalizeColumnConfig as baseNormalize,
+  type ColumnConfig as BaseColumnConfig,
+} from '../../../lib/columnConfig.ts'
 
 /**
  * The customers table's columns. **Customer name** (always first) and **Actions** (always last)
@@ -129,82 +135,19 @@ export const DEFAULT_VISIBLE_COLUMNS: CustomerColumnId[] = [
 export const NAME_COLUMN_MIN_REM = 16
 export const ACTIONS_COLUMN_REM = 7
 
-export interface ColumnConfig {
-  /** Every column, in the order the menu lists them and the table shows the visible ones. */
-  order: CustomerColumnId[]
-  visible: CustomerColumnId[]
-}
+export type ColumnConfig = BaseColumnConfig<CustomerColumnId>
 
-const KNOWN = new Set<string>(CUSTOMER_COLUMN_IDS)
-const isColumnId = (value: unknown): value is CustomerColumnId =>
-  typeof value === 'string' && KNOWN.has(value)
+export const defaultColumnConfig = (): ColumnConfig =>
+  baseDefault(CUSTOMER_COLUMN_IDS, DEFAULT_VISIBLE_COLUMNS)
 
-export function defaultColumnConfig(): ColumnConfig {
-  const hidden = CUSTOMER_COLUMN_IDS.filter((id) => !DEFAULT_VISIBLE_COLUMNS.includes(id))
-  return {
-    order: [...DEFAULT_VISIBLE_COLUMNS, ...hidden],
-    visible: [...DEFAULT_VISIBLE_COLUMNS],
-  }
-}
+/** Reads a saved choice defensively (see `lib/columnConfig.ts`). */
+export const normalizeColumnConfig = (value: unknown): ColumnConfig =>
+  baseNormalize(value, CUSTOMER_COLUMN_IDS, DEFAULT_VISIBLE_COLUMNS)
 
-/**
- * Reads a saved configuration (it comes from storage, so it may be anything): unknown or repeated
- * names are dropped and a column the saved copy doesn't know yet is added at the end, hidden.
- * Anything unusable gives the default.
- */
-export function normalizeColumnConfig(value: unknown): ColumnConfig {
-  if (typeof value !== 'object' || value === null) return defaultColumnConfig()
-  const { order, visible } = value as { order?: unknown; visible?: unknown }
-  if (!Array.isArray(order) || !Array.isArray(visible)) return defaultColumnConfig()
+export const isDefaultColumnConfig = (config: ColumnConfig): boolean =>
+  baseIsDefault(config, CUSTOMER_COLUMN_IDS, DEFAULT_VISIBLE_COLUMNS)
 
-  const seen = new Set<CustomerColumnId>()
-  const cleanOrder: CustomerColumnId[] = []
-  for (const id of order) {
-    if (isColumnId(id) && !seen.has(id)) {
-      seen.add(id)
-      cleanOrder.push(id)
-    }
-  }
-  for (const id of CUSTOMER_COLUMN_IDS) if (!seen.has(id)) cleanOrder.push(id)
-
-  const shown = new Set(visible.filter(isColumnId))
-  return { order: cleanOrder, visible: cleanOrder.filter((id) => shown.has(id)) }
-}
-
-/** Is this the default choice (the same columns, in the same order)? */
-export function isDefaultColumnConfig(config: ColumnConfig): boolean {
-  const defaults = defaultColumnConfig()
-  const same = (a: CustomerColumnId[], b: CustomerColumnId[]) =>
-    a.length === b.length && a.every((id, index) => id === b[index])
-  return same(config.order, defaults.order) && same(config.visible, defaults.visible)
-}
-
-export function isColumnVisible(config: ColumnConfig, id: CustomerColumnId): boolean {
-  return config.visible.includes(id)
-}
-
-/** Show a hidden column or hide a shown one. */
-export function toggleColumn(config: ColumnConfig, id: CustomerColumnId): ColumnConfig {
-  const visible = isColumnVisible(config, id)
-    ? config.visible.filter((item) => item !== id)
-    : config.order.filter((item) => item === id || config.visible.includes(item))
-  return { order: config.order, visible }
-}
-
-/** Puts `id` where `target` is (the others shift); an unknown name or the same one changes nothing. */
-export function moveColumn(
-  config: ColumnConfig,
-  id: CustomerColumnId,
-  target: CustomerColumnId,
-): ColumnConfig {
-  const from = config.order.indexOf(id)
-  const to = config.order.indexOf(target)
-  if (from < 0 || to < 0 || from === to) return config
-  const order = [...config.order]
-  order.splice(from, 1)
-  order.splice(to, 0, id)
-  return { order, visible: order.filter((item) => config.visible.includes(item)) }
-}
+export { isColumnVisible, moveColumn, toggleColumn } from '../../../lib/columnConfig.ts'
 
 /** The columns to draw, in order. */
 export function shownColumns(config: ColumnConfig): CustomerColumnDef[] {

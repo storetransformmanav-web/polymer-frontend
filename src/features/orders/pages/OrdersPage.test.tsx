@@ -122,6 +122,8 @@ const callsForPage = (page: number) =>
 
 describe('OrdersPage', () => {
   beforeEach(() => {
+    // The Columns menu's choice is remembered in the browser: every test starts from the default.
+    window.localStorage.clear()
     list.mockImplementation((params) => Promise.resolve(respond(params)))
   })
 
@@ -618,7 +620,7 @@ describe('OrdersPage', () => {
     expect(box.className).toContain('flex-1')
     expect(box.className).toContain('min-h-0')
     // Wider than a narrow window: it scrolls sideways instead of squeezing.
-    expect(table.className).toMatch(/min-w-\[\d+px\]/)
+    expect(table.style.minWidth).toMatch(/^\d+(\.\d+)?rem$/)
     // The header stays put while the rows scroll.
     for (const header of within(table).getAllByRole('columnheader')) {
       expect(header.className).toContain('sticky')
@@ -669,11 +671,11 @@ describe('OrdersPage', () => {
     // (The columns are: order, created date, customer, email, then the two statuses.)
     const payment = table.getByRole('columnheader', { name: 'Payment status' })
     expect(payment.className).toContain('text-center')
-    expect(payment.className).toContain('w-40')
+    expect(payment).toHaveStyle({ width: '10rem' })
 
     const fulfillment = table.getByRole('columnheader', { name: 'Fulfillment status' })
     expect(fulfillment.className).toContain('text-center')
-    expect(fulfillment.className).toContain('w-40')
+    expect(fulfillment).toHaveStyle({ width: '10rem' })
 
     // Every pill in the two columns has the same width and is centred in its cell.
     const widths = new Set<string>()
@@ -693,5 +695,151 @@ describe('OrdersPage', () => {
       'Cancelled',
     )
     expect(cancelled.className).toContain('w-[9.5rem]')
+  })
+
+  describe('the Columns menu', () => {
+    const headerNames = () =>
+      within(screen.getByRole('table'))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent)
+
+    it('shows the usual columns to begin with', async () => {
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      expect(headerNames()).toEqual([
+        'Order',
+        'Created date',
+        'Customer name',
+        'Email',
+        'Payment status',
+        'Fulfillment status',
+        'Items',
+        'Total price',
+        'Actions',
+      ])
+    })
+
+    it('opens a list of every column, the shown ones first, with an eye on each', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+
+      for (const name of [
+        'Created date',
+        'Customer name',
+        'Email',
+        'Payment status',
+        'Fulfillment status',
+        'Items',
+        'Total price',
+      ]) {
+        expect(screen.getByRole('button', { name: `Hide ${name}` })).toBeInTheDocument()
+      }
+      for (const name of [
+        'Store',
+        'Channel',
+        'Payment method',
+        'Tags',
+        'Products',
+        'Return status',
+        'Customer phone',
+        'Subtotal',
+        'Discounts',
+        'Shipping',
+        'Tax',
+        'Refunded',
+        'Net payment',
+        'Updated date',
+        'Closed date',
+        'Cancelled date',
+      ]) {
+        expect(screen.getByRole('button', { name: `Show ${name}` })).toBeInTheDocument()
+      }
+      expect(screen.queryByRole('combobox', { name: 'Sort by' })).toBeNull()
+    })
+
+    it('shows and hides a column at once, and remembers the choice', async () => {
+      const user = userEvent.setup()
+      const { unmount } = renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Store' }))
+      await user.click(screen.getByRole('button', { name: 'Hide Items' }))
+
+      expect(headerNames()).toEqual([
+        'Order',
+        'Created date',
+        'Customer name',
+        'Email',
+        'Payment status',
+        'Fulfillment status',
+        'Total price',
+        'Store',
+        'Actions',
+      ])
+      const row = within(screen.getByRole('table')).getByText('17002').closest('tr')!
+      expect(within(row).getByText(SHOP.name)).toBeInTheDocument()
+
+      unmount()
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+      expect(headerNames()).toContain('Store')
+      expect(headerNames()).not.toContain('Items')
+    })
+
+    it('puts a column in order with the arrow keys on its handle', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      screen.getByRole('button', { name: 'Move Total price' }).focus()
+      await user.keyboard('{ArrowUp}{ArrowUp}')
+
+      expect(headerNames()).toEqual([
+        'Order',
+        'Created date',
+        'Customer name',
+        'Email',
+        'Payment status',
+        'Total price',
+        'Fulfillment status',
+        'Items',
+        'Actions',
+      ])
+    })
+
+    it('Clear All puts the default columns back (and is on while the columns are changed)', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      const clearAll = screen.getByRole('button', { name: 'Clear All' })
+      expect(clearAll).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Tags' }))
+      expect(headerNames()).toContain('Tags')
+      expect(clearAll).toBeEnabled()
+
+      await user.click(clearAll)
+      expect(headerNames()).not.toContain('Tags')
+      expect(clearAll).toBeDisabled()
+    })
+
+    it('sits after the Add order button in the search row', async () => {
+      renderWithProviders(<OrdersPage />)
+      await screen.findByText('17002')
+
+      const add = screen.getByRole('button', { name: 'Add order' })
+      const columns = screen.getByRole('button', { name: 'Columns' })
+      expect(
+        add.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    })
   })
 })
