@@ -13,6 +13,7 @@ import { OrderCreateView } from '../components/create/OrderCreateView.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { OrderDetailsView } from '../components/OrderDetailsView.tsx'
 import { OrderTabsBar } from '../components/OrderTabsBar.tsx'
+import { OrdersExport } from '../components/OrdersExport.tsx'
 import { OrdersKpis } from '../components/OrdersKpis.tsx'
 import { OrdersList } from '../components/OrdersList.tsx'
 import { OrdersToolbar } from '../components/OrdersToolbar.tsx'
@@ -312,6 +313,14 @@ export function OrdersPage() {
             orders.resetFilters()
             columnChoice.reset()
           }}
+        />
+
+        {/* The Export button sits in the top bar; it only shows while the list is on screen. */}
+        <OrdersExport
+          items={orders.items}
+          filters={filters}
+          total={data?.total ?? 0}
+          visible={!activeRef && !creatingRoute && !linked}
         />
 
         <section

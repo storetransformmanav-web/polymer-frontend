@@ -60,6 +60,8 @@ export const ENDPOINTS = {
     list: '/orders',
     /** `GET` one order, `PATCH` updates it. `ref` is the order number (17516) — add `shop` when two stores could share one. */
     detail: (ref: string) => `/orders/${encodeURIComponent(ref)}`,
+    /** `GET` the orders as a Shopify-format CSV file (no paging: one call returns every match). */
+    export: '/orders/export',
   },
   customers: {
     list: '/customers',
@@ -844,6 +846,20 @@ export type OrderAddress = z.infer<typeof orderAddressSchema>
 export type OrderLineItem = z.infer<typeof orderLineItemSchema>
 export type OrderTransaction = z.infer<typeof orderTransactionSchema>
 export type OrderListResponse = z.infer<typeof orderListResponseSchema>
+
+/**
+ * Query parameters of `GET /orders/export` (all optional). The backend's description only says
+ * "Export orders as a Shopify-format CSV", so these follow the list's own filters and the other
+ * exports (`ids` = CRM order ids, comma-separated) — **check them in the Network tab**. The
+ * answer is a CSV file, with no paging.
+ */
+export type OrderExportParams = Omit<
+  OrderListParams,
+  'sort' | 'order' | 'page' | 'page_size' | 'customer_id' | 'product_id'
+> & {
+  /** Order ids, comma-separated. */
+  ids?: string
+}
 
 /** Query parameters accepted by `GET /orders` (all optional). */
 export interface OrderListParams {
@@ -2743,6 +2759,11 @@ export const api = {
       return readOrderCreate(data)
     },
 
+    /** The orders matching `params` as the text of a Shopify-format CSV file (`GET /orders/export`). */
+    async export(params: OrderExportParams, signal?: AbortSignal): Promise<string> {
+      return readCsvFile(ENDPOINTS.orders.export, params, signal)
+    },
+
     /**
      * Updates an order in the store (`PATCH /orders/{ref}?preview=false&shop=`). `preview` is
      * always false: the change is really made. Only the answer's `message` is read — its shape
@@ -2849,7 +2870,7 @@ export const api = {
       return customerDetailResponseSchema.parse(data).customer
     },
 
-    /** The customers matching `params` as the text of a CSV file (`GET /customer/export`). */
+    /** The customers matching `params` as the text of a CSV file (`GET /customers/export`). */
     async export(params: CustomerExportParams, signal?: AbortSignal): Promise<string> {
       return readCsvFile(ENDPOINTS.customers.export, params, signal)
     },
