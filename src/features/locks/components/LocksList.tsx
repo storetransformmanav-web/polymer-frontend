@@ -41,8 +41,8 @@ function ProductLink({ lock }: { lock: AccessLock }) {
 // No alignment in the header or cell base: each column sets its own, the same for its header and
 // its cells (a `text-left` here would fight the `text-center` added next to it).
 const TH_BASE =
-  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 align-middle text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
-const TD = 'px-3.5 py-2.5 align-middle whitespace-nowrap'
+  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 align-middle text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
+const TD = 'px-3 py-1.5 align-middle whitespace-nowrap'
 // Every column but Product (a picture and a name) is centred — header and cells alike.
 const TH_CENTER = `${TH_BASE} text-center`
 const TD_CENTER = `${TD} text-center`
@@ -149,7 +149,7 @@ function ViewButton({
       onClick={() => onOpen(lock)}
       className={ROW_ACTION}
     >
-      <EyeIcon />
+      <EyeIcon width={15} height={15} />
     </button>
   )
 }

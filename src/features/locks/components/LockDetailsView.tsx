@@ -210,7 +210,6 @@ export function LockDetailsView({
     )
   }
 
-  const handle = lock.handle ?? null
   const pictureUrl = safeUrl(lock.image_url)
 
   return (
@@ -262,12 +261,6 @@ export function LockDetailsView({
         }
         chips={
           <>
-            <HeaderChip label="Product page">
-              <span className="flex items-center gap-1.5">
-                <span>/products/{handle ?? '—'}</span>
-                {handle && <CopyButton value={handle} label="Copy product handle" />}
-              </span>
-            </HeaderChip>
             <HeaderChip icon={UsersIcon} label="Customers with access">
               <span className="font-semibold">
                 {lock.customers_with_access != null
