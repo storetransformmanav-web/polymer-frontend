@@ -14,8 +14,8 @@ const POLL_MS = 3000
 const WAIT_FOR_RUN_MS = 60_000
 /** A sync that has not finished after this long is no longer followed. */
 const GIVE_UP_MS = 15 * 60_000
-/** How long the result stays beside the button. */
-const SHOW_RESULT_MS = 15_000
+/** How long the result (or the error) stays beside the button before it goes away. */
+const SHOW_RESULT_MS = 20_000
 /** Tolerance for the server's clock being a little behind this browser's. */
 const CLOCK_SLACK_MS = 15_000
 
@@ -146,7 +146,11 @@ export function useCustomersSync() {
       refreshedFor.current = tracked.startedAt
       refreshList()
     }
-    const timer = window.setTimeout(() => setTracked(null), SHOW_RESULT_MS)
+    const timer = window.setTimeout(() => {
+      setTracked(null)
+      // A message from a store that could not start goes with it.
+      setStartError(null)
+    }, SHOW_RESULT_MS)
     return () => window.clearTimeout(timer)
   }, [phase, tracked, refreshList])
 
