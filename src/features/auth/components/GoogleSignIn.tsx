@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { GoogleIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import { env } from '../../../config/env.ts'
 import { useLogin } from '../hooks/useLogin.ts'
-import { loadGoogleIdentity } from '../utils/googleIdentity.ts'
+import { createNonce, loadGoogleIdentity } from '../utils/googleIdentity.ts'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 
 /**
@@ -36,10 +36,22 @@ export function GoogleSignIn() {
         const container = containerRef.current
         if (cancelled || !container) return
 
-        google.initialize({
-          client_id: env.googleClientId,
-          callback: ({ credential }) => void onCredential.current(credential),
-        })
+        // A new nonce for every sign-in: given to Google now (it goes into the ID token), sent to
+        // the API with the credential, and replaced by a fresh one as soon as a credential comes
+        // back — so one is never used twice, whether that sign-in worked or failed.
+        let nonce = createNonce()
+        const configure = () =>
+          google.initialize({
+            client_id: env.googleClientId,
+            nonce,
+            callback: ({ credential }) => {
+              const used = nonce
+              nonce = createNonce()
+              configure()
+              void onCredential.current(credential, used)
+            },
+          })
+        configure()
         google.renderButton(container, {
           theme: 'outline',
           size: 'large',

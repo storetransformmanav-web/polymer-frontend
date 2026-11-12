@@ -2,12 +2,12 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import { env } from '../../config/env.ts'
 import { findSensitiveParams } from '../urlSecurity.ts'
 import { ApiError } from './ApiError.ts'
+import { CSRF_PATH, getCsrfToken, setCsrfToken } from './csrf.ts'
 
 /**
  * Thin Axios wrapper: a shared instance with the API base URL, a
  * consistent error shape via `ApiError`, and one place to add
- * cross-cutting concerns later (auth headers, retries, request
- * cancellation) as the app grows.
+ * cross-cutting concerns later (retries, request cancellation) as the app grows.
  *
  * Feature `api/` modules should call this instead of using `axios` or
  * `fetch` directly, e.g.:
@@ -21,28 +21,77 @@ const axiosInstance = axios.create({
   baseURL: env.apiBaseUrl,
   headers: { Accept: 'application/json' },
   timeout: 15_000,
+  // The session is the backend's own HttpOnly cookie: the browser attaches it (to the `/api`
+  // proxy, or to the backend itself when it is called directly) and no script ever holds a token.
+  withCredentials: true,
 })
 
-// The bearer token is pushed in from the Redux store (see store.ts) rather
-// than read from it here, so this module never imports the store.
-let accessToken: string | null = null
+// Whether the app thinks someone is signed in, pushed in from the Redux store (see store.ts)
+// rather than read from it here, so this module never imports the store.
+let signedIn = false
 
-export function setAccessToken(token: string | null) {
-  accessToken = token
+export function setSessionActive(active: boolean) {
+  signedIn = active
 }
 
-// Called when a request made *with* a session token comes back 401 (expired
-// or revoked). The store registers a handler that clears the session.
-let unauthorizedHandler: (() => void) | null = null
+const CSRF_HEADER = 'X-CSRF-Token'
+const SAFE_METHODS = new Set(['get', 'head', 'options'])
 
-export function setUnauthorizedHandler(handler: (() => void) | null) {
+// Every request that changes something carries the token; reads do not.
+axiosInstance.interceptors.request.use((config) => {
+  const method = (config.method ?? 'get').toLowerCase()
+  const csrfToken = getCsrfToken()
+  if (csrfToken && !SAFE_METHODS.has(method) && !config.headers.has(CSRF_HEADER)) {
+    config.headers.set(CSRF_HEADER, csrfToken)
+  }
+  return config
+})
+
+/**
+ * Asks the backend for this session's CSRF token (`GET /auth/csrf`) and keeps it. Used after a
+ * reload, and when the backend says the token we hold is missing or stale.
+ */
+export async function refreshCsrfToken(): Promise<string> {
+  const response = await axiosInstance.get<{ csrf_token?: unknown }>(CSRF_PATH)
+  const token = response.data?.csrf_token
+  if (typeof token !== 'string' || token === '') {
+    throw new ApiError('The server did not send a security token.', {
+      status: response.status,
+    })
+  }
+  setCsrfToken(token)
+  return token
+}
+
+/** A 403 whose message names the CSRF header: the token is missing or stale. */
+function isCsrfRejection(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    /x-csrf-token/i.test(error.message)
+  )
+}
+
+// Called when a request made while signed in comes back 401 (the session expired, was revoked, or
+// the server ended it after its idle limit) with the API's own message, if it sent one. The store
+// registers a handler that clears the user and opens the login page with that message.
+let unauthorizedHandler: ((message?: string) => void) | null = null
+
+export function setUnauthorizedHandler(handler: ((message?: string) => void) | null) {
   unauthorizedHandler = handler
 }
 
+// When the last request left. The server counts a session's idle time in requests, not in mouse
+// and keyboard activity, so the session guard asks `lastRequestAt()` whether the server has heard
+// from this browser lately (see `useSessionGuard`).
+let lastRequest = Date.now()
+
+export function lastRequestAt(): number {
+  return lastRequest
+}
+
 axiosInstance.interceptors.request.use((config) => {
-  if (accessToken && !config.headers.has('Authorization')) {
-    config.headers.set('Authorization', `Bearer ${accessToken}`)
-  }
+  lastRequest = Date.now()
   return config
 })
 
@@ -87,14 +136,16 @@ export function getErrorMessage(error: AxiosError<ErrorBody>): string {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ErrorBody>) => {
-    // Only a 401 on an authenticated request means "session is dead"; a 401
-    // from sign-in itself (e.g. a bad Google token) has no token attached.
-    if (error.response?.status === 401 && accessToken) unauthorizedHandler?.()
+    // Only a 401 while signed in means "session is dead"; a 401 from sign-in itself (e.g. a bad
+    // Google token, a wrong code) happens with no session.
+    if (error.response?.status === 401 && signedIn) {
+      const message = error.response.data?.message
+      unauthorizedHandler?.(typeof message === 'string' && message ? message : undefined)
+    }
 
     return Promise.reject(
       // Deliberately a *new* error carrying only the status, body and code:
-      // an AxiosError holds the full request config, including the
-      // Authorization header, which must never travel into logs or UI.
+      // an AxiosError holds the full request config, which must never travel into logs or UI.
       new ApiError(getErrorMessage(error), {
         status: error.response?.status,
         data: error.response?.data,
@@ -120,7 +171,8 @@ function isTransient(error: unknown): boolean {
 }
 
 /**
- * Sends the request. GETs are retried a couple of times (with a short
+ * Sends the request. A change refused for a missing or stale CSRF token is sent once more with a
+ * fresh token (see `isCsrfRejection`). GETs are retried a couple of times (with a short
  * backoff) on network drops and 502/503/504, so a blip doesn't surface as
  * an error. Writes (POST/PUT/PATCH/DELETE) are never retried: repeating one
  * could create or delete something twice. Timeouts, 4xx and 401s are never
@@ -128,26 +180,39 @@ function isTransient(error: unknown): boolean {
  *
  * A request whose URL would carry a credential (`?token=…`, a `token`/`access_token`/… entry in
  * `params`) is refused before anything is sent: a URL is logged, kept in history and passed on in
- * the `Referer`. The session token goes in the `Authorization` header (added above), anything
- * else secret in the body. See `lib/urlSecurity.ts`.
+ * the `Referer`. The session is a cookie, anything else secret goes in the body. See
+ * `lib/urlSecurity.ts`.
  */
 async function request<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
   const inUrl = findSensitiveParams(path, config?.params)
   if (inUrl.length > 0) {
     // Names only — never the value.
     throw new ApiError(
-      `Refused to send “${inUrl[0]}” in the URL. Credentials go in the Authorization header or the request body.`,
+      `Refused to send “${inUrl[0]}” in the URL. Credentials go in the request body, never in the address.`,
       { code: 'ERR_CREDENTIAL_IN_URL' },
     )
   }
 
   const isRead = (config?.method ?? 'GET').toUpperCase() === 'GET'
+  let csrfRetried = false
 
   for (let attempt = 0; ; attempt += 1) {
     try {
       const response = await axiosInstance.request<T>({ url: path, ...config })
       return response.data
     } catch (error) {
+      // The backend refused a change because our CSRF token is missing or stale: nothing was
+      // done, so fetch the token again and send the same request once more (a write is never
+      // retried otherwise).
+      if (!isRead && !csrfRetried && isCsrfRejection(error) && !config?.signal?.aborted) {
+        csrfRetried = true
+        try {
+          await refreshCsrfToken()
+        } catch {
+          throw error
+        }
+        continue
+      }
       const canRetry =
         isRead &&
         attempt < RETRY_DELAYS_MS.length &&

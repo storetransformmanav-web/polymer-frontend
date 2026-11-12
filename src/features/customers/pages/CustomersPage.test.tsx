@@ -201,7 +201,7 @@ describe('CustomersPage', () => {
     expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
   })
 
-  it('shows every column by default: Customer name, Email, Email verified, Orders, Amount spent, Role, Joined, Actions', async () => {
+  it('shows every column by default: Customer name, Email, Email verified, Orders, Amount spent, Role, Shopify state, Joined, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
@@ -214,6 +214,7 @@ describe('CustomersPage', () => {
       'Orders',
       'Amount spent',
       'Role',
+      'Shopify state',
       'Joined',
       'Actions',
     ])
@@ -355,9 +356,9 @@ describe('CustomersPage', () => {
     expect(screen.queryByLabelText('Min spent')).toBeNull()
     expect(screen.queryByLabelText('Max spent')).toBeNull()
     expect(screen.queryByLabelText('Account State')).toBeNull()
-    expect(
-      ['Orders', 'Sort by', 'Order'].every((name) => screen.queryByLabelText(name)),
-    ).toBe(true)
+    expect(['Orders', 'Sort by'].every((name) => screen.queryByLabelText(name))).toBe(
+      true,
+    )
   })
 
   it('sends orders and sort filters', async () => {
@@ -368,14 +369,12 @@ describe('CustomersPage', () => {
     await user.click(screen.getByRole('button', { name: 'Filters' }))
     await user.selectOptions(screen.getByLabelText('Orders'), 'no')
     await user.selectOptions(screen.getByLabelText('Sort by'), 'orders_count')
-    await user.selectOptions(screen.getByLabelText('Order'), 'asc')
 
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
           has_orders: false,
           sort: 'orders_count',
-          order: 'asc',
           page: 1,
         }),
       ),

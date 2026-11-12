@@ -4,6 +4,7 @@ import { ThemeToggle } from '../../components/ui/ThemeToggle.tsx'
 import { ChevronDownIcon, LogoutIcon, UserCogIcon } from '../../components/ui/icons.tsx'
 import { useAuth } from '../../hooks/useAuth.ts'
 import { initials, useCurrentUser } from './currentUser.ts'
+import { SignOutDevicesDialog } from './SignOutDevicesDialog.tsx'
 
 const AVATAR_BASE =
   'bg-accent text-accent-contrast inline-flex shrink-0 items-center justify-center rounded-full font-bold'
@@ -19,6 +20,8 @@ export function UserMenu() {
   const containerRef = useRef<HTMLDivElement>(null)
   const { logout } = useAuth()
   const currentUser = useCurrentUser()
+  // The question before ending sessions: the other devices only, or every one including this.
+  const [signingOut, setSigningOut] = useState<'others' | 'all' | null>(null)
 
   useEffect(() => {
     if (!open) return undefined
@@ -95,11 +98,41 @@ export function UserMenu() {
             <UserCogIcon />
             Update profile
           </button>
+          <button
+            type="button"
+            className={`${MENU_ITEM} cursor-pointer border-none bg-none`}
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setSigningOut('others')
+            }}
+          >
+            <LogoutIcon />
+            Sign out other devices
+          </button>
+          <button
+            type="button"
+            className={`${MENU_ITEM} cursor-pointer border-none bg-none`}
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              setSigningOut('all')
+            }}
+          >
+            <LogoutIcon />
+            Sign out of all devices
+          </button>
           <Link to="/login" onClick={logout} className={MENU_ITEM} role="menuitem">
             <LogoutIcon />
             Log out
           </Link>
         </div>
+      )}
+      {signingOut && (
+        <SignOutDevicesDialog
+          keepThisDevice={signingOut === 'others'}
+          onClose={() => setSigningOut(null)}
+        />
       )}
     </div>
   )

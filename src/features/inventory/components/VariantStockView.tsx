@@ -103,18 +103,12 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
       <DetailsHeader
         className="shrink-0 p-4 pb-3 sm:p-6 sm:pb-3"
         visual={<VariantImage src={source?.image_url} size="lg" />}
-        title={
-          <>
-            {title}
-            {name && (
-              <span className="text-text-muted ml-3 text-[1rem] font-semibold">
-                {name}
-              </span>
-            )}
-          </>
-        }
+        title={title}
         status={
           <>
+            {name && (
+              <span className="text-text-muted text-[1rem] font-semibold">{name}</span>
+            )}
             {source?.status && (
               <StatusPill
                 label={statusLabel(source.status)}

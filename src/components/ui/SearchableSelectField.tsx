@@ -108,7 +108,10 @@ export function SearchableSelectField({
         ...(upward
           ? { bottom: window.innerHeight - rect.top + 4 }
           : { top: rect.bottom + 4 }),
-        visible: rect.bottom > 0 && rect.top < window.innerHeight,
+        // A box that isn't laid out can't be off screen; otherwise it must be in view.
+        visible:
+          (rect.width === 0 && rect.height === 0) ||
+          (rect.bottom > 0 && rect.top < window.innerHeight),
       })
     }
     measure()

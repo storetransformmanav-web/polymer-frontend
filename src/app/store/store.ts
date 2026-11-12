@@ -1,10 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit'
 import { env } from '../../config/env.ts'
-import { setAccessToken, setUnauthorizedHandler } from '../../lib/api/client.ts'
+import { setSessionActive, setUnauthorizedHandler } from '../../lib/api/client.ts'
+import { setCsrfToken } from '../../lib/api/csrf.ts'
 import { queryClient } from '../queryClient.ts'
 import {
   authReducer,
-  sessionCleared,
+  sessionEnded,
   SESSION_ACTIVITY_KEY,
   SESSION_STORAGE_KEY,
 } from './authSlice.ts'
@@ -54,7 +55,7 @@ function waitingMedia(products: ProductsState): ProductsState['pendingMedia'] {
  */
 export function createAppStore() {
   const appStore = configureStore({
-    // The extension can read the whole state — the session token and customers included — so it
+    // The extension can read the whole state — the signed-in user and customers included — so it
     // is only connected while developing.
     devTools: env.isDev,
     reducer: {
@@ -71,8 +72,8 @@ export function createAppStore() {
   // Persist the `ui` slice to localStorage whenever it changes — the
   // single place this app writes UI preferences back to storage,
   // mirroring what each hook used to do on its own before this state
-  // moved into Redux. The auth session is persisted the same way, and
-  // its token is mirrored into apiClient for the Authorization header.
+  // moved into Redux. The signed-in user (never a token — the session is a cookie) is
+  // persisted the same way, and whether there is a session is mirrored into apiClient.
   // Images the store was still working on when the page was last left (see
   // productMediaStorage.ts) come back, so a refresh doesn't show "No images".
   if (appStore.getState().auth.session) {
@@ -99,9 +100,10 @@ export function createAppStore() {
 
   let previousUi = appStore.getState().ui
   let previousSession = appStore.getState().auth.session
-  setAccessToken(previousSession?.accessToken ?? null)
-  // A 401 on an authenticated request means the token expired or was revoked.
-  setUnauthorizedHandler(() => appStore.dispatch(sessionCleared('expired')))
+  setSessionActive(previousSession !== null)
+  // A 401 while signed in means the session expired, was revoked or was ended by the server: the
+  // user is cleared and the login page opens with the API's own message.
+  setUnauthorizedHandler((message) => appStore.dispatch(sessionEnded(message)))
 
   appStore.subscribe(() => {
     const { ui, auth, products } = appStore.getState()
@@ -109,7 +111,9 @@ export function createAppStore() {
     if (auth.session !== previousSession) {
       const signedIn = previousSession === null
       previousSession = auth.session
-      setAccessToken(auth.session?.accessToken ?? null)
+      setSessionActive(auth.session !== null)
+      // The CSRF token belongs to the session: gone with it (and never written anywhere).
+      if (!auth.session) setCsrfToken(null)
       // Signing out (or an expired session) must not leave anything the last
       // user was allowed to see — activity logs, user lists — in memory for
       // the next one. (The Redux caches reset themselves on `sessionCleared`.)

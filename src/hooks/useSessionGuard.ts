@@ -6,10 +6,18 @@ import {
   SESSION_STORAGE_KEY,
 } from '../app/store/authSlice.ts'
 import { useAppDispatch, useAppSelector } from '../app/store/hooks.ts'
+import { lastRequestAt, refreshCsrfToken } from '../lib/api/client.ts'
 
 const CHECK_INTERVAL_MS = 30_000
 /** Signed out after this long with nothing done, in any tab, whatever the session's own length. */
 export const IDLE_LIMIT_MS = 30 * 60_000
+/**
+ * The server signs a session out after 30 minutes with no *request* (it cannot see the mouse), while
+ * this guard counts mouse and keyboard activity. So when the person is here but the page has made
+ * no call for this long, one cheap call (`GET /auth/csrf`) tells the server so — the two timers then
+ * agree: the session ends 30 minutes after the last activity, as the login page says.
+ */
+export const KEEPALIVE_AFTER_MS = 10 * 60_000
 /** How often activity is written down for the other tabs (it can come many times a second). */
 const RECORD_EVERY_MS = 15_000
 /** What counts as the person being there. Background requests and polling do not. */
@@ -47,6 +55,8 @@ function writeLastActivity(time: number) {
  *  - signs out after 30 minutes with no activity in any tab, with or without "Remember me", and
  *    revokes the token. The time is kept in localStorage, so it also catches a browser that was
  *    closed and reopened later, and activity in one tab keeps the others signed in.
+ *  - while the person is active but the page makes no calls, pings the server every 10 minutes
+ *    (`KEEPALIVE_AFTER_MS`) so its idle timer, which counts only requests, agrees with this one.
  * The checks also run the moment a hidden/sleeping tab becomes visible, since browsers throttle
  * timers in background tabs. This is a browser-side limit: the backend should enforce its own.
  */
@@ -81,7 +91,19 @@ export function useSessionGuard() {
       }
       // The latest of this tab's activity and what the other tabs wrote down.
       const latest = Math.max(lastActivity ?? 0, readLastActivity() ?? 0)
-      if (now - latest >= IDLE_LIMIT_MS) dispatch(logout('idle'))
+      if (now - latest >= IDLE_LIMIT_MS) {
+        dispatch(logout('idle'))
+        return
+      }
+      // Someone is active but nothing has been asked of the server for a while: let it know. (The
+      // request itself resets `lastRequestAt`, so this goes out about every 10 minutes at most; a
+      // 401 here ends the session like any other, and a network failure is ignored.)
+      if (
+        now - latest < KEEPALIVE_AFTER_MS &&
+        now - lastRequestAt() >= KEEPALIVE_AFTER_MS
+      ) {
+        void refreshCsrfToken().catch(() => undefined)
+      }
     }
 
     function handleStorage(event: StorageEvent) {

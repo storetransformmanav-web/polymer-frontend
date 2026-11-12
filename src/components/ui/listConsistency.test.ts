@@ -50,8 +50,10 @@ describe('Orders, Products and Customers lists look alike', () => {
     const widths = [
       ...header.matchAll(/<th className=\{`\$\{TH_(?:CENTER|RIGHT)\} (w-\d+)`\}>/g),
     ].map((match) => match[1])
-    // Six columns after the name; every one is w-36 except the narrower Actions.
-    expect(widths).toEqual(['w-36', 'w-36', 'w-36', 'w-36', 'w-36', 'w-28'])
+    // The plain centred columns after the name and the (wider) Email — Email verified, Role and
+    // Shopify state — are w-36 (the sortable ones, written over several lines, are too), then the
+    // narrower Actions.
+    expect(widths).toEqual(['w-36', 'w-36', 'w-36', 'w-28'])
   })
 
   it('use the shared row-action buttons (one size, one icon size) and no bare icon buttons', () => {

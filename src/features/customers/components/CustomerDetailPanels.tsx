@@ -1,6 +1,7 @@
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { useAppSelector } from '../../../app/store/hooks.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   DetailSection,
   DetailSkeleton,
@@ -267,6 +268,19 @@ function AddressesCard({ customer }: { customer: CustomerDetail }) {
         <ul className="grid gap-3 md:grid-cols-2">
           {customer.addresses.map((address) => {
             const lines = formatAddressLines(address)
+            // The parts on one line, as on an order's address card: "212 Essex Road, Inner
+            // London, London, N1 3AP, United Kingdom".
+            const summary = [
+              address.address1,
+              address.address2,
+              address.city,
+              address.province,
+              address.zip,
+              address.country,
+            ]
+              .map((part) => part?.trim())
+              .filter(Boolean)
+              .join(', ')
             const name =
               address.name ||
               [address.first_name, address.last_name].filter(Boolean).join(' ')
@@ -284,20 +298,32 @@ function AddressesCard({ customer }: { customer: CustomerDetail }) {
                   height={18}
                   className="text-accent mt-0.5 shrink-0"
                 />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="font-semibold break-words">{name || 'Address'}</span>
-                    {address.is_default && <Badge tone="default">Default</Badge>}
+                <address className="m-0 flex min-w-0 flex-1 flex-col gap-0.5 leading-snug break-words not-italic">
+                  <span>
+                    <span className="font-semibold">{name || 'Address'}</span>
+                    {address.company && (
+                      <>
+                        <span className="text-text-muted"> · </span>
+                        <span className="text-text-muted">{address.company}</span>
+                      </>
+                    )}
                   </span>
-                  {address.company && (
-                    <span className="text-text-muted">{address.company}</span>
-                  )}
-                  {lines.map((line) => (
-                    <span key={line}>{line}</span>
-                  ))}
+                  {summary && <span>{summary}</span>}
                   {address.phone && (
-                    <span className="text-text-muted">{address.phone}</span>
+                    <span className="text-text-muted flex items-center gap-1.5">
+                      <PhoneIcon width={14} height={14} className="shrink-0" />
+                      {address.phone}
+                    </span>
                   )}
+                </address>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <CopyButton
+                    value={[name, address.company, ...lines, address.phone]
+                      .filter(Boolean)
+                      .join('\n')}
+                    label="Copy address"
+                  />
+                  {address.is_default && <Badge tone="default">Default</Badge>}
                 </div>
               </li>
             )

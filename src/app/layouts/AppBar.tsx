@@ -32,7 +32,10 @@ function ShopScope() {
  */
 export function AppBar() {
   const activeItem = useActiveNavItem()
-  const { canManage } = useAccess(activeItem?.area)
+  // The Sync buttons start a re-import from Shopify: they are for those who may use `sync` (the
+  // permission the server checks for it), whatever they may do on the page itself.
+  const syncAccess = useAccess('sync')
+  const canSync = syncAccess.canView && syncAccess.canManage
 
   return (
     <header className="border-border bg-bg sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b px-4 sm:px-6">
@@ -49,9 +52,9 @@ export function AppBar() {
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-3">
         <AppBarSlot />
-        {canManage && activeItem?.syncs === 'orders' && <SyncOrdersButton />}
-        {canManage && activeItem?.syncs === 'products' && <SyncProductsButton />}
-        {canManage && activeItem?.syncs === 'customers' && <SyncCustomersButton />}
+        {canSync && activeItem?.syncs === 'orders' && <SyncOrdersButton />}
+        {canSync && activeItem?.syncs === 'products' && <SyncProductsButton />}
+        {canSync && activeItem?.syncs === 'customers' && <SyncCustomersButton />}
         <UserMenu />
       </div>
     </header>

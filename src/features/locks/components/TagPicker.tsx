@@ -38,7 +38,7 @@ export function TagPicker({
   // A new page starts at the top of the list.
   const listRef = useRef<HTMLUListElement>(null)
   useEffect(() => {
-    listRef.current?.scrollTo({ top: 0 })
+    if (listRef.current) listRef.current.scrollTop = 0
   }, [tags.page])
 
   const chosen = new Set(selected.map((tag) => tag.toLowerCase()))

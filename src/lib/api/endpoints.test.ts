@@ -410,18 +410,20 @@ describe('api.auth sign-in', () => {
     })
   })
 
-  it('signs in with Google with the same remember_me choice', async () => {
+  it('signs in with Google with the same remember_me choice and the nonce of that sign-in', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(LOGIN)
 
-    await api.auth.google('google-id-token-0123456789', true)
+    await api.auth.google('google-id-token-0123456789', 'nonce-from-this-signin', true)
     expect(apiClient.post).toHaveBeenLastCalledWith('/auth/google', {
       credential: 'google-id-token-0123456789',
+      nonce: 'nonce-from-this-signin',
       remember_me: true,
     })
 
-    await api.auth.google('google-id-token-0123456789', false)
+    await api.auth.google('google-id-token-0123456789', 'another-nonce-0123', false)
     expect(apiClient.post).toHaveBeenLastCalledWith('/auth/google', {
       credential: 'google-id-token-0123456789',
+      nonce: 'another-nonce-0123',
       remember_me: false,
     })
   })
@@ -444,10 +446,36 @@ describe('api.auth sign-in', () => {
     expect(result.user.permissions).toBeUndefined()
   })
 
-  it('refuses an answer without a token', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, access_token: '' })
+  it('refuses an answer without a user (the session itself is a cookie, so no token is needed)', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, user: undefined })
 
     await expect(api.auth.verifyOtp('a@b.co', '123456', true)).rejects.toThrow()
+  })
+
+  it('signs out every device, or only the other ones with keep_this_device=true', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ message: 'Signed out everywhere.' })
+
+    const all = await api.auth.logoutAll(false)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/auth/logout-all', undefined, {
+      params: undefined,
+    })
+    expect(all.message).toBe('Signed out everywhere.')
+
+    await api.auth.logoutAll(true)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/auth/logout-all', undefined, {
+      params: { keep_this_device: true },
+    })
+  })
+
+  it('keeps the CSRF token a sign-in answers with, in memory', async () => {
+    const { getCsrfToken, setCsrfToken } = await import('./csrf.ts')
+    setCsrfToken(null)
+    vi.mocked(apiClient.post).mockResolvedValue({ ...LOGIN, csrf_token: 'csrf-abc-123' })
+
+    await api.auth.verifyOtp('a@b.co', '123456', true)
+
+    expect(getCsrfToken()).toBe('csrf-abc-123')
+    setCsrfToken(null)
   })
 })
 

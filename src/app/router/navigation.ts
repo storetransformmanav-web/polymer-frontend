@@ -29,8 +29,12 @@ export interface NavItem {
    */
   fillHeight?: boolean
   /**
-   * The name of this page's area in the signed-in user's `permissions`. An area the answer
-   * doesn't name is allowed: the backend is what really decides (see `hooks/useAccess.ts`).
+   * The name of this page's area in the signed-in user's `permissions` (from `GET /auth/me`; each
+   * name has `view` and `manage`): `orders`, `products`, `customers`, `inventory`, `access` (the
+   * product locks — not `locks`), `users`, `activity`. The others are `customers_export` (the
+   * Customers CSV export button), `sage_invoices`, `roles`, `shops` and `sync` (the Sync buttons).
+   * An area the answer doesn't name is allowed: the backend is what really decides, and answers
+   * 403 to a hidden screen opened by hand (see `hooks/useAccess.ts`).
    */
   area?: string
   /** A small status note shown beside the link in the sidebar (e.g. "In Progress"). */
@@ -102,7 +106,7 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/locks',
         label: 'Lock Management',
-        area: 'locks',
+        area: 'access',
         icon: LockIcon,
         shopScoped: true,
         fillHeight: true,

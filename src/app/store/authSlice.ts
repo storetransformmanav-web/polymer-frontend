@@ -6,15 +6,21 @@ import {
   type UnknownAction,
 } from '@reduxjs/toolkit'
 import { ApiError, toUserMessage } from '../../lib/api/ApiError.ts'
+import { getCsrfToken } from '../../lib/api/csrf.ts'
 import { api, type AuthUser } from '../../lib/api/endpoints.ts'
 
 export const SESSION_STORAGE_KEY = 'polymer-crm:session'
 /** When the signed-in person last did something, shared by every tab (see useSessionGuard). */
 export const SESSION_ACTIVITY_KEY = 'polymer-crm:last-activity'
 
+/**
+ * The signed-in person. There is no token here: the session is the backend's own HttpOnly cookie,
+ * which the page cannot read. What is kept (and stored in localStorage) is the user's profile, so
+ * the app can draw itself at once; whether the session is still good is asked of `GET /auth/me`
+ * every time the page loads (`restoreSession`).
+ */
 export interface Session {
-  accessToken: string
-  /** When the app ends this session: the token's expiry, or sooner (see `sessionExpiry`). */
+  /** When the app ends this session: the backend's expiry, or sooner (see `sessionExpiry`). */
   expiresAt: string
   user: AuthUser
 }
@@ -30,12 +36,12 @@ export const DEFAULT_SESSION_DAYS = 1
  * without), or when the backend's token runs out if that is sooner.
  */
 export function sessionExpiry(
-  backendExpiresAt: string,
+  backendExpiresAt: string | null | undefined,
   now = Date.now(),
   rememberMe = true,
 ): string {
   const limit = now + (rememberMe ? SESSION_DAYS : DEFAULT_SESSION_DAYS) * DAY_MS
-  const backend = Date.parse(backendExpiresAt)
+  const backend = Date.parse(backendExpiresAt ?? '')
   return new Date(
     Number.isFinite(backend) ? Math.min(backend, limit) : limit,
   ).toISOString()
@@ -43,14 +49,13 @@ export function sessionExpiry(
 
 function buildSession(
   response: {
-    access_token: string
-    expires_at: string
+    expires_at?: string | null
     user: AuthUser
   },
   rememberMe: boolean,
 ): Session {
+  // Anything else in the answer — a token, if the backend still sends one — is dropped here.
   return {
-    accessToken: response.access_token,
     expiresAt: sessionExpiry(response.expires_at, Date.now(), rememberMe),
     user: response.user,
   }
@@ -80,6 +85,8 @@ export interface AuthState {
   googleError: string | null
   /** Why the user was signed out automatically (shown once on the login page). */
   signedOutReason: SignOutReason | null
+  /** The API's own words for why the server ended the session (a 401), shown on the login page. */
+  signedOutMessage: string | null
 }
 
 /**
@@ -97,8 +104,6 @@ function isSession(value: unknown): value is Session {
   const user = candidate.user as Record<string, unknown> | null | undefined
 
   return (
-    typeof candidate.accessToken === 'string' &&
-    candidate.accessToken.length > 0 &&
     typeof candidate.expiresAt === 'string' &&
     typeof user === 'object' &&
     user !== null &&
@@ -112,11 +117,26 @@ function getStoredSession(): Session | null {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
 
-    const session: unknown = JSON.parse(raw)
-    if (!isSession(session)) return null
+    const stored: unknown = JSON.parse(raw)
+    if (!isSession(stored)) {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
 
-    const expiresAt = Date.parse(session.expiresAt)
-    return Number.isFinite(expiresAt) && expiresAt > Date.now() ? session : null
+    const expiresAt = Date.parse(stored.expiresAt)
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+
+    // Only the user's profile and the expiry are kept. A session saved by an older version of the
+    // app held an `accessToken` too: it is rewritten without it, at once, not left until the next
+    // sign-in.
+    const session: Session = { expiresAt: stored.expiresAt, user: stored.user }
+    if (Object.keys(stored).some((key) => key !== 'expiresAt' && key !== 'user')) {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+    }
+    return session
   } catch {
     return null
   }
@@ -136,6 +156,7 @@ const initialState: AuthState = {
   error: null,
   googleError: null,
   signedOutReason: null,
+  signedOutMessage: null,
 }
 
 const toMessage = toUserMessage
@@ -246,17 +267,20 @@ export const verifyOtp = createAsyncThunk<
   { condition: (_code, { getState }) => getState().auth.verifyStatus !== 'loading' },
 )
 
-/** Sign in with a Google ID token (the `credential` from Google Sign-In). */
+/**
+ * Sign in with a Google ID token (the `credential` from Google Sign-In) and the `nonce` that was
+ * given to Google for this sign-in — the API checks the token carries that same nonce.
+ */
 export const googleSignIn = createAsyncThunk<
   Session,
-  string,
+  { credential: string; nonce: string },
   { state: AuthRootState; rejectValue: string }
 >(
   'auth/googleSignIn',
-  async (credential, { getState, rejectWithValue }) => {
+  async ({ credential, nonce }, { getState, rejectWithValue }) => {
     try {
       const { rememberMe } = getState().auth
-      const response = await api.auth.google(credential, rememberMe)
+      const response = await api.auth.google(credential, nonce, rememberMe)
       return buildSession(response, rememberMe)
     } catch (error) {
       return rejectWithValue(toMessage(error))
@@ -266,6 +290,35 @@ export const googleSignIn = createAsyncThunk<
     condition: (_credential, { getState }) => getState().auth.googleStatus !== 'loading',
   },
 )
+
+/**
+ * Page load: asks the backend who is signed in (`GET /auth/me`, with the session cookie the
+ * browser sends). 200 means signed in — the answer is the user with their permissions — and 401
+ * means show the login page. Any other failure (the network, a server error) keeps what was stored,
+ * so a blip does not sign anyone out: the next request tells the truth.
+ */
+export const restoreSession = createAsyncThunk<
+  Session,
+  void,
+  { state: AuthRootState; rejectValue: 'unauthorized' | 'unreachable' }
+>('auth/restoreSession', async (_arg, { getState, rejectWithValue }) => {
+  try {
+    const me = await api.auth.me()
+    // The CSRF token is not kept anywhere: after a reload it is asked for again. If this fails the
+    // first change that needs it gets a 403 and fetches it then (see the API client).
+    await api.auth.csrf().catch(() => undefined)
+    const stored = getState().auth.session
+    return {
+      user: me.user,
+      // Keep the expiry the sign-in set; a session found only by its cookie gets the default.
+      expiresAt: stored?.expiresAt ?? sessionExpiry(me.expires_at, Date.now(), false),
+    }
+  } catch (error) {
+    return rejectWithValue(
+      error instanceof ApiError && error.status === 401 ? 'unauthorized' : 'unreachable',
+    )
+  }
+})
 
 /** Stores a fresh session and resets the login flow for next time. */
 function signedIn(state: AuthState, session: Session) {
@@ -277,6 +330,7 @@ function signedIn(state: AuthState, session: Session) {
   state.verifyStatus = 'idle'
   state.googleStatus = 'idle'
   state.signedOutReason = null
+  state.signedOutMessage = null
 }
 
 const authSlice = createSlice({
@@ -298,11 +352,23 @@ const authSlice = createSlice({
       state.error = null
       state.googleError = null
       state.signedOutReason = null
+      state.signedOutMessage = null
     },
     /** Ends the session. `reason` is set for automatic sign-outs only. */
     sessionCleared(state, action: PayloadAction<SignOutReason | undefined>) {
       state.session = null
       state.signedOutReason = action.payload ?? null
+      state.signedOutMessage = null
+    },
+    /**
+     * The server ended the session (any 401 while signed in — it signs a session out after 30 idle
+     * minutes without a request): the user is cleared from memory and the login page shows the
+     * API's own message.
+     */
+    sessionEnded(state, action: PayloadAction<string | undefined>) {
+      state.session = null
+      state.signedOutReason = 'expired'
+      state.signedOutMessage = action.payload ?? null
     },
   },
   extraReducers: (builder) => {
@@ -339,6 +405,16 @@ const authSlice = createSlice({
         state.verifyStatus = 'error'
         state.error = action.payload ?? 'Something went wrong. Please try again.'
       })
+      .addCase(restoreSession.fulfilled, (state, action) => {
+        state.session = action.payload
+      })
+      .addCase(restoreSession.rejected, (state, action) => {
+        // 401: no session — the login page (and, if one was stored, why it ended).
+        if (action.payload === 'unauthorized') {
+          if (state.session) state.signedOutReason = 'expired'
+          state.session = null
+        }
+      })
       .addCase(googleSignIn.pending, (state) => {
         state.googleStatus = 'loading'
         state.googleError = null
@@ -354,19 +430,46 @@ const authSlice = createSlice({
   },
 })
 
-export const { emailEditRequested, errorCleared, rememberMeChanged, sessionCleared } =
-  authSlice.actions
+export const {
+  emailEditRequested,
+  errorCleared,
+  rememberMeChanged,
+  sessionCleared,
+  sessionEnded,
+} = authSlice.actions
 export const authReducer = authSlice.reducer
 
 /**
+ * "Sign out of all devices" / "Sign out other devices" (`POST /auth/logout-all`). With
+ * `keepThisDevice` the other devices are signed out and this one stays; without it this one is
+ * signed out too, so once the backend has answered the local session is cleared and the login page
+ * opens. A refusal is returned as the backend's own message and nothing changes here.
+ */
+export const signOutDevices = createAsyncThunk<
+  { message: string },
+  { keepThisDevice: boolean },
+  { state: AuthRootState; rejectValue: string }
+>('auth/signOutDevices', async ({ keepThisDevice }, { dispatch, rejectWithValue }) => {
+  try {
+    const result = await api.auth.logoutAll(keepThisDevice)
+    if (!keepThisDevice) dispatch(sessionCleared())
+    return result
+  } catch (error) {
+    return rejectWithValue(toMessage(error))
+  }
+})
+
+/**
  * Signs out. The local session is cleared first so the UI reacts
- * instantly; the server-side invalidation is best-effort in the
- * background (an expired/invalid token failing there is harmless).
+ * instantly; the server-side end of the session (which also clears its cookie) is best-effort in
+ * the background — a session that is already over failing there is harmless.
  */
 export const logout =
   (reason?: SignOutReason): ThunkAction<void, AuthRootState, unknown, UnknownAction> =>
   (dispatch, getState) => {
-    const token = getState().auth.session?.accessToken
+    const hadSession = getState().auth.session !== null
+    // Taken before the session is cleared (which makes the client forget it): logout is a change.
+    const csrf = getCsrfToken()
     dispatch(sessionCleared(reason))
-    if (token) void api.auth.logout(token).catch(() => undefined)
+    if (hadSession) void api.auth.logout(csrf).catch(() => undefined)
   }

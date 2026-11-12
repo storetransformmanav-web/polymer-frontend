@@ -132,6 +132,12 @@ describe('vercel.json security headers', () => {
     expect(trial['img-src']).toContain('https://cdn.shopify.com')
   })
 
+  it('sends what either policy blocks (or would block) to the API, to be seen in the activity log', () => {
+    const trial = parseCsp(everyPage['Content-Security-Policy-Report-Only'] ?? '')
+    expect(csp['report-uri']).toEqual(['/api/security/csp-report'])
+    expect(trial['report-uri']).toEqual(['/api/security/csp-report'])
+  })
+
   it('keeps API responses out of shared caches', () => {
     expect(headersFor('/api/(.*)')['Cache-Control']).toBe('no-store')
   })

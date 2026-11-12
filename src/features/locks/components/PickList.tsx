@@ -93,7 +93,7 @@ export function PickList({
   // A new page starts at the top of the list.
   const listRef = useRef<HTMLUListElement>(null)
   useEffect(() => {
-    listRef.current?.scrollTo({ top: 0 })
+    if (listRef.current) listRef.current.scrollTop = 0
   }, [page])
 
   const choosable = rows.filter((row) => !row.locked)

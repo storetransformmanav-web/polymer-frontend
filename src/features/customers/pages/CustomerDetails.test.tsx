@@ -217,9 +217,10 @@ describe('Customer details', () => {
     await screen.findByText('Contact & Account')
 
     expect(screen.queryByRole('tab', { name: /Addresses/ })).not.toBeInTheDocument()
-    expect(screen.getByText('12 High Street')).toBeInTheDocument()
-    expect(screen.getByText('Winchester, Hampshire')).toBeInTheDocument()
-    expect(screen.getByText('SO23 9AA United Kingdom')).toBeInTheDocument()
+    // The address is written as one line, like an order's address card.
+    expect(
+      screen.getByText('12 High Street, Winchester, Hampshire, SO23 9AA, United Kingdom'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Default')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Marketing & Tax' }))

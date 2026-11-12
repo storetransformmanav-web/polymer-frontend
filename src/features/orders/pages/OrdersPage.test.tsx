@@ -145,7 +145,7 @@ describe('OrdersPage', () => {
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
   })
 
-  it('shows these columns: order number, customer name, email, store, currency, financial and fulfillment status, items, total price, and the view button', async () => {
+  it('shows these columns: order number, created date, customer name, email, financial and fulfillment status, items, total price, and the view button', async () => {
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
 
@@ -155,6 +155,7 @@ describe('OrdersPage', () => {
       table.getAllByRole('columnheader').map((header) => header.textContent),
     ).toEqual([
       'Order',
+      'Created date',
       'Customer name',
       'Email',
       'Payment status',
@@ -167,7 +168,8 @@ describe('OrdersPage', () => {
     // #3: Customer 3, paid and fulfilled, 4 items, £193.50.
     const paid = within(row('17003'))
     const cells = paid.getAllByRole('cell').map((cell) => cell.textContent)
-    expect(cells.slice(0, 7)).toEqual([
+    // (cells[1] is the created date, in the store's time: "22 Oct at 10:20 am".)
+    expect([cells[0], ...cells.slice(2, 8)]).toEqual([
       '17003',
       'Customer 3',
       'buyer3@example.com',
@@ -178,8 +180,7 @@ describe('OrdersPage', () => {
     ])
     expect(paid.getByRole('button', { name: 'View order 17003' })).toBeInTheDocument()
 
-    // Nothing else of the order is in the table: no date, source, products.
-    expect(paid.queryByText('22 Oct 2026')).toBeNull()
+    // Nothing else of the order is in the table: no source, products.
     expect(paid.queryByText('Online store')).toBeNull()
     expect(paid.queryByText(/Pizza Box/)).toBeNull()
     // #5 is pending and on hold; #4 is partly fulfilled.
@@ -225,8 +226,8 @@ describe('OrdersPage', () => {
     const guest = screen.getByText('17001').closest('tr')!
     expect(within(guest).queryByText('buyer1@example.com')).toBeNull()
     const cells = within(guest).getAllByRole('cell')
-    expect(cells[1]).toHaveTextContent('—')
     expect(cells[2]).toHaveTextContent('—')
+    expect(cells[3]).toHaveTextContent('—')
   })
 
   it('marks a cancelled order, and a part-refunded one, by its payment pill', async () => {
@@ -337,14 +338,14 @@ describe('OrdersPage', () => {
     expect(document.getElementById('order-filter-grid')).not.toHaveAttribute('inert')
   })
 
-  it('sends source, cancelled, total, sort and order filters', async () => {
+  it('sends total, sort and order filters (Source and Cancelled are not filters any more)', async () => {
     const user = userEvent.setup()
     renderWithProviders(<OrdersPage />)
     await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
-    await user.selectOptions(screen.getByLabelText('Source'), 'draft_order')
-    await user.selectOptions(screen.getByLabelText('Cancelled'), 'yes')
+    expect(screen.queryByLabelText('Source')).toBeNull()
+    expect(screen.queryByLabelText('Cancelled')).toBeNull()
     await user.type(screen.getByLabelText('Min total'), '100')
     await user.type(screen.getByLabelText('Max total'), '1000')
     await user.selectOptions(screen.getByLabelText('Sort by'), 'total')
@@ -353,8 +354,6 @@ describe('OrdersPage', () => {
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(
         expect.objectContaining({
-          source: 'draft_order',
-          cancelled: true,
           min_total: 100,
           max_total: 1000,
           sort: 'total',
@@ -363,23 +362,6 @@ describe('OrdersPage', () => {
         }),
       ),
     )
-  })
-
-  it('"Not cancelled" is sent as cancelled=false, and "Any" leaves it out', async () => {
-    const user = userEvent.setup()
-    const { store } = renderWithProviders(<OrdersPage />)
-    await screen.findByText('17002')
-    await user.click(screen.getByRole('button', { name: 'Filters' }))
-
-    await user.selectOptions(screen.getByLabelText('Cancelled'), 'no')
-    await waitFor(() =>
-      expect(list).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false })),
-    )
-
-    await user.selectOptions(screen.getByLabelText('Cancelled'), '')
-    expect(store.getState().orders.filters.cancelled).toBe('')
-    expect(screen.getByLabelText('Cancelled')).toHaveValue('')
-    expect(screen.getByText('17002')).toBeInTheDocument()
   })
 
   it('filters by a date range, sent as the first and last moment of the days', async () => {
@@ -415,9 +397,10 @@ describe('OrdersPage', () => {
     await screen.findByText('17002')
     await user.click(screen.getByRole('button', { name: 'Filters' }))
 
-    const tag = screen.getByLabelText('Tag')
-    expect(within(tag).getByRole('option', { name: 'b2b' })).toBeInTheDocument()
-    await user.selectOptions(tag, 'b2b')
+    // The Tag filter is a dropdown with a search box (every tag the store has, plus the ones seen).
+    await user.click(screen.getByRole('combobox', { name: 'Tag' }))
+    await user.type(screen.getByRole('searchbox', { name: 'Search tag' }), 'b2')
+    await user.click(await screen.findByRole('option', { name: 'b2b' }))
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ tag: 'b2b' })),
     )
@@ -635,7 +618,7 @@ describe('OrdersPage', () => {
     expect(box.className).toContain('flex-1')
     expect(box.className).toContain('min-h-0')
     // Wider than a narrow window: it scrolls sideways instead of squeezing.
-    expect(table.className).toContain('min-w-[900px]')
+    expect(table.className).toMatch(/min-w-\[\d+px\]/)
     // The header stays put while the rows scroll.
     for (const header of within(table).getAllByRole('columnheader')) {
       expect(header.className).toContain('sticky')
@@ -662,10 +645,8 @@ describe('OrdersPage', () => {
     for (const label of [
       'Fulfillment status',
       'Payment',
-      'Source',
       'Payment gateway',
       'Tag',
-      'Cancelled',
       'Sort by',
       'Order',
     ]) {
@@ -685,6 +666,7 @@ describe('OrdersPage', () => {
     await screen.findByText('17002')
 
     const table = within(screen.getByRole('table'))
+    // (The columns are: order, created date, customer, email, then the two statuses.)
     const payment = table.getByRole('columnheader', { name: 'Payment status' })
     expect(payment.className).toContain('text-center')
     expect(payment.className).toContain('w-40')
@@ -696,20 +678,20 @@ describe('OrdersPage', () => {
     // Every pill in the two columns has the same width and is centred in its cell.
     const widths = new Set<string>()
     for (const row of table.getAllByRole('row').slice(1)) {
-      for (const index of [3, 4]) {
+      for (const index of [4, 5]) {
         const cell = within(row).getAllByRole('cell')[index]
         expect(cell.className).toContain('text-center')
-        for (const pill of cell.querySelectorAll('span.rounded-full')) {
+        for (const pill of cell.querySelectorAll('span.rounded-md')) {
           expect(pill.className).toContain('justify-center')
-          widths.add(pill.className.match(/w-\d+/)![0])
+          widths.add(pill.className.match(/w-\[[\d.]+rem\]|w-\d+/)![0])
         }
       }
     }
-    expect([...widths]).toEqual(['w-32'])
+    expect([...widths]).toEqual(['w-[9.5rem]'])
     // The Cancelled pill sits under the payment one, the same size.
     const cancelled = within(table.getByText('17002').closest('tr')!).getByText(
       'Cancelled',
     )
-    expect(cancelled.className).toContain('w-32')
+    expect(cancelled.className).toContain('w-[9.5rem]')
   })
 })

@@ -20,11 +20,10 @@ const USER: AuthUser = {
 
 function signIn(store: ReturnType<typeof renderWithProviders>['store'], user: AuthUser) {
   store.dispatch(
-    googleSignIn.fulfilled(
-      { accessToken: 't', expiresAt: '2099-01-01T00:00:00Z', user },
-      'request-id',
-      'credential',
-    ),
+    googleSignIn.fulfilled({ expiresAt: '2099-01-01T00:00:00Z', user }, 'request-id', {
+      credential: 'credential',
+      nonce: 'test-nonce-0123456789',
+    }),
   )
 }
 

@@ -5,7 +5,6 @@ const FUTURE = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 const PAST = new Date(Date.now() - 60 * 60 * 1000).toISOString()
 
 const validSession = {
-  accessToken: 'token-123',
   expiresAt: FUTURE,
   user: { id: 'u1', email: 'a@b.co', role: 'admin' },
 }
@@ -26,8 +25,19 @@ describe('restoring a saved session', () => {
 
   it('restores a well-formed, unexpired session', async () => {
     expect(await loadSessionFromStorage(JSON.stringify(validSession))).toMatchObject({
-      accessToken: 'token-123',
+      user: { id: 'u1' },
     })
+  })
+
+  it('never keeps a token: a session saved by an older version is rewritten without it', async () => {
+    const restored = await loadSessionFromStorage(
+      JSON.stringify({ ...validSession, accessToken: 'old-token', refreshToken: 'r' }),
+    )
+
+    expect(restored).toEqual({ expiresAt: FUTURE, user: validSession.user })
+    const stored = JSON.parse(window.localStorage.getItem(SESSION_KEY) ?? '{}')
+    expect(stored).not.toHaveProperty('accessToken')
+    expect(stored).not.toHaveProperty('refreshToken')
   })
 
   it('has no session when nothing is stored', async () => {
@@ -45,9 +55,6 @@ describe('restoring a saved session', () => {
     ['a JSON string', JSON.stringify('token')],
     ['null', 'null'],
     ['an array', '[]'],
-    ['no token', JSON.stringify({ ...validSession, accessToken: undefined })],
-    ['an empty token', JSON.stringify({ ...validSession, accessToken: '' })],
-    ['a non-string token', JSON.stringify({ ...validSession, accessToken: 12345 })],
     ['no expiry', JSON.stringify({ ...validSession, expiresAt: undefined })],
     ['an unparseable expiry', JSON.stringify({ ...validSession, expiresAt: 'someday' })],
     ['no user', JSON.stringify({ ...validSession, user: undefined })],

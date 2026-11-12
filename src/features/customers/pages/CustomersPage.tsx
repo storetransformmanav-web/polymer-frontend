@@ -44,6 +44,9 @@ const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 export function CustomersPage() {
   const customers = useCustomers()
   const { canManage } = useAccess('customers')
+  // The CSV export has a permission of its own (`customers_export`).
+  const exportAccess = useAccess('customers_export')
+  const canExport = exportAccess.canView && exportAccess.canManage
   const tabs = useCustomerTabs()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
@@ -237,8 +240,8 @@ export function CustomersPage() {
           items={customers.items}
           filters={filters}
           total={data?.total ?? 0}
-          // The whole list of people's details: only for those who may manage customers.
-          visible={!activeId && !creatingRoute && canManage}
+          // The whole list of people's details: only for those who may export customers.
+          visible={!activeId && !creatingRoute && canExport}
         />
 
         <section

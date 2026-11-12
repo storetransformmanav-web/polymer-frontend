@@ -9,7 +9,7 @@ import { ApiError } from './ApiError.ts'
 import {
   apiClient,
   getErrorMessage,
-  setAccessToken,
+  setSessionActive,
   setUnauthorizedHandler,
   type ErrorBody,
 } from './client.ts'
@@ -137,7 +137,7 @@ describe('apiClient requests', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-    setAccessToken(null)
+    setSessionActive(false)
     setUnauthorizedHandler(null)
   })
 
@@ -234,24 +234,16 @@ describe('apiClient requests', () => {
   })
 
   describe('authentication and secrets', () => {
-    it('sends the bearer token, and an explicit Authorization header wins', async () => {
-      setAccessToken('session-token')
-      const first = scriptedAdapter(['ok'])
-      await settle(apiClient.get('/x', { adapter: first.adapter }))
-      expect(first.calls[0].headers.get('Authorization')).toBe('Bearer session-token')
+    it('sends no Authorization header: the session is a cookie the browser attaches', async () => {
+      setSessionActive(true)
+      const { adapter, calls } = scriptedAdapter(['ok'])
+      await settle(apiClient.get('/x', { adapter }))
 
-      const second = scriptedAdapter(['ok'])
-      await settle(
-        apiClient.get('/x', {
-          adapter: second.adapter,
-          headers: { Authorization: 'Bearer explicit' },
-        }),
-      )
-      expect(second.calls[0].headers.get('Authorization')).toBe('Bearer explicit')
+      expect(calls[0].headers.get('Authorization')).toBeFalsy()
+      expect(calls[0].withCredentials).toBe(true)
     })
 
-    it('never puts the token into the error that callers (and the UI) see', async () => {
-      setAccessToken('super-secret-token')
+    it('never puts the request into the error that callers (and the UI) see', async () => {
       const { adapter } = scriptedAdapter([500])
 
       const { error } = await settle(apiClient.get('/x', { adapter }))
@@ -260,15 +252,13 @@ describe('apiClient requests', () => {
       expect(apiError).toBeInstanceOf(ApiError)
       // Only these plain fields — no request config, headers or Axios internals.
       expect(Object.keys(apiError).sort()).toEqual(['code', 'data', 'name', 'status'])
-      expect(JSON.stringify(apiError)).not.toContain('super-secret-token')
-      expect(String(apiError.message)).not.toContain('super-secret-token')
       expect((apiError as unknown as { config?: unknown }).config).toBeUndefined()
     })
 
     it('treats a 401 on an authenticated request as a dead session (once, no retry)', async () => {
       const onUnauthorized = vi.fn()
       setUnauthorizedHandler(onUnauthorized)
-      setAccessToken('expired-token')
+      setSessionActive(true)
       const { adapter, calls } = scriptedAdapter([401])
 
       await settle(apiClient.get('/x', { adapter }))
@@ -277,7 +267,7 @@ describe('apiClient requests', () => {
       expect(calls).toHaveLength(1)
     })
 
-    it('ignores a 401 when no session token was sent (e.g. a bad Google token)', async () => {
+    it('ignores a 401 when nobody is signed in (e.g. a bad Google token)', async () => {
       const onUnauthorized = vi.fn()
       setUnauthorizedHandler(onUnauthorized)
       const { adapter } = scriptedAdapter([401])
@@ -352,15 +342,14 @@ describe('apiClient requests', () => {
       expect(calls).toHaveLength(1)
     })
 
-    it('keeps the session token where it belongs: in the Authorization header, not the URL', async () => {
-      setAccessToken('session-abc123')
+    it('has nothing secret to put in the URL: no token is held, none is in the address', async () => {
+      setSessionActive(true)
       const { adapter, calls } = scriptedAdapter(['ok'])
 
       await settle(apiClient.get('/products', { adapter, params: { page: 1 } }))
 
-      expect(calls[0].headers.get('Authorization')).toBe('Bearer session-abc123')
-      expect(calls[0].url).not.toContain('abc123')
-      expect(JSON.stringify(calls[0].params)).not.toContain('abc123')
+      expect(calls[0].headers.get('Authorization')).toBeFalsy()
+      expect(JSON.stringify(calls[0].params)).toBe('{"page":1}')
     })
   })
 })

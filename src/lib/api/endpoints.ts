@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ApiError } from './ApiError.ts'
-import { apiClient } from './client.ts'
+import { apiClient, refreshCsrfToken } from './client.ts'
+import { CSRF_PATH, setCsrfToken } from './csrf.ts'
 import {
   buildImportForm,
   readImportPlan,
@@ -25,7 +26,13 @@ export const ENDPOINTS = {
     requestOtp: '/auth/otp/request',
     verifyOtp: '/auth/otp/verify',
     google: '/auth/google',
+    /** `GET` the signed-in user (and their permissions): 200 = signed in, 401 = not. */
+    me: '/auth/me',
+    /** `GET` this session's CSRF token (`csrf_token`); sent as `X-CSRF-Token` on every change. */
+    csrf: CSRF_PATH,
     logout: '/auth/logout',
+    /** `POST` ends every session of this account (`?keep_this_device=true` keeps this one). */
+    logoutAll: '/auth/logout-all',
   },
   shops: {
     list: '/shops',
@@ -409,11 +416,33 @@ export interface ActivityListParams {
   page_size?: number
 }
 
+/**
+ * What a sign-in answers. The session itself is the backend's own cookie (HttpOnly — the page can't
+ * read it), so nothing here is a credential the app keeps: an `access_token` that may still be in
+ * the answer is ignored and never stored.
+ */
 const loginResponseSchema = z.object({
-  access_token: z.string().min(1),
-  expires_at: z.string(),
+  access_token: z.string().nullish(),
+  /** This session's CSRF token: kept in memory only (`setCsrfToken`), sent on every change. */
+  csrf_token: z.string().nullish(),
+  expires_at: z.string().nullish(),
   user: authUserSchema,
 })
+
+/**
+ * `GET /auth/me`: the signed-in user with their permissions — bare or under `user`. A 401 means
+ * there is no session.
+ */
+const meResponseSchema = z.preprocess(
+  (value) => {
+    if (value && typeof value === 'object' && 'user' in value) {
+      const { user, ...rest } = value as { user: unknown }
+      return { ...rest, user }
+    }
+    return { user: value }
+  },
+  z.object({ user: authUserSchema, expires_at: z.string().nullish() }),
+)
 
 export const PRODUCT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
 export const PRODUCT_SORTS = [
@@ -2549,6 +2578,7 @@ export type Shop = z.infer<typeof shopSchema>
 export type AuthUser = z.infer<typeof authUserSchema>
 export type OtpRequestResponse = z.infer<typeof otpRequestResponseSchema>
 export type LoginResponse = z.infer<typeof loginResponseSchema>
+export type MeResponse = z.infer<typeof meResponseSchema>
 
 // ---------------------------------------------------------------------------
 // Requests
@@ -2606,6 +2636,12 @@ async function readCsvFile(
     message || 'The server did not send a file. Nothing was downloaded.',
     {},
   )
+}
+
+/** Keeps the CSRF token a sign-in answered with (in memory only) and passes the answer on. */
+function keepCsrfToken(login: LoginResponse): LoginResponse {
+  setCsrfToken(login.csrf_token ?? null)
+  return login
 }
 
 /**
@@ -3320,7 +3356,7 @@ export const api = {
       return otpRequestResponseSchema.parse(data)
     },
 
-    /** Step 2 of login: exchanges the code for an access token (30 days with `rememberMe`, else 1 day). */
+    /** Step 2 of login: exchanges the code for a session (a cookie the backend sets; 30 days with `rememberMe`, else 1 day). */
     async verifyOtp(
       email: string,
       code: string,
@@ -3331,7 +3367,7 @@ export const api = {
         code,
         remember_me: rememberMe,
       })
-      return loginResponseSchema.parse(data)
+      return keepCsrfToken(loginResponseSchema.parse(data))
     },
 
     /**
@@ -3339,22 +3375,60 @@ export const api = {
      * Google Identity Services) for an access token. Only emails that
      * already belong to an active CRM user can sign in.
      */
-    async google(credential: string, rememberMe: boolean): Promise<LoginResponse> {
+    async google(
+      credential: string,
+      nonce: string,
+      rememberMe: boolean,
+    ): Promise<LoginResponse> {
       const data = await apiClient.post(ENDPOINTS.auth.google, {
         credential,
+        // The same value that was given to Google for this sign-in (8–256 characters).
+        nonce,
         remember_me: rememberMe,
       })
-      return loginResponseSchema.parse(data)
+      return keepCsrfToken(loginResponseSchema.parse(data))
     },
 
     /**
-     * Invalidates the token server-side. The token is passed explicitly
-     * because callers clear the local session first (so the UI responds
-     * instantly), which also clears the client's default token.
+     * The signed-in user, from the session cookie the browser sends with the request. 200 means
+     * signed in (the answer carries the user's permissions), 401 means it is not.
      */
-    async logout(accessToken: string): Promise<void> {
+    async me(): Promise<MeResponse> {
+      const data = await apiClient.get(ENDPOINTS.auth.me)
+      return meResponseSchema.parse(data)
+    },
+
+    /**
+     * This session's CSRF token (`GET /auth/csrf`), asked for after a reload — the sign-in answer
+     * carries it the first time. It is kept in memory only (`setCsrfToken`).
+     */
+    async csrf(): Promise<void> {
+      await refreshCsrfToken()
+    },
+
+    /**
+     * Signs the account out of every device (`POST /auth/logout-all`; the client adds the
+     * `X-CSRF-Token` header, as for every change). With `keepThisDevice` only the *other* devices
+     * are signed out (`?keep_this_device=true`); without it this one is too, so the caller goes to
+     * the login page afterwards. Returns the backend's message, if it sends one.
+     */
+    async logoutAll(keepThisDevice: boolean): Promise<{ message: string }> {
+      const data = await apiClient.post<{ message?: unknown } | undefined>(
+        ENDPOINTS.auth.logoutAll,
+        undefined,
+        { params: keepThisDevice ? { keep_this_device: true } : undefined },
+      )
+      const message = data && typeof data.message === 'string' ? data.message : ''
+      return { message }
+    },
+
+    /**
+     * Ends the session server-side (the backend also clears its cookie). The token is passed in
+     * because callers clear the local session first, which also forgets it.
+     */
+    async logout(csrfToken?: string | null): Promise<void> {
       await apiClient.post(ENDPOINTS.auth.logout, undefined, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
       })
     },
   },

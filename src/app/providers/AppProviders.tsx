@@ -6,6 +6,7 @@ import { env } from '../../config/env.ts'
 import { useDevToolsGuard } from '../../hooks/useDevToolsGuard.ts'
 import { queryClient } from '../queryClient.ts'
 import { store } from '../store/store.ts'
+import { SessionBootstrap } from './SessionBootstrap.tsx'
 
 /**
  * Composes all app-wide context providers in one place (Redux,
@@ -25,7 +26,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <SessionBootstrap>{children}</SessionBootstrap>
         {env.isDev && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </ReduxProvider>

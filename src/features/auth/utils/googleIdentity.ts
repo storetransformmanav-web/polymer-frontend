@@ -20,6 +20,8 @@ interface GoogleButtonOptions {
 export interface GoogleIdentity {
   initialize(config: {
     client_id: string
+    /** Put into the ID token Google issues; the backend checks it is the one this sign-in made. */
+    nonce?: string
     callback: (response: { credential: string }) => void
   }): void
   renderButton(parent: HTMLElement, options: GoogleButtonOptions): void
@@ -29,6 +31,21 @@ declare global {
   interface Window {
     google?: { accounts?: { id?: GoogleIdentity } }
   }
+}
+
+/**
+ * A new random value for one Google sign-in: 24 bytes from the browser's secure random generator,
+ * written in base64url (32 characters of A–Z a–z 0–9 - _, inside the API's 8–256). It is given to
+ * Google (`initialize({ nonce })`, which puts it in the ID token) and sent to the API as `nonce`,
+ * which refuses a token whose nonce is not the one sent with it. Make a new one for every sign-in,
+ * never reuse one.
+ */
+export function createNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
 }
 
 let loading: Promise<GoogleIdentity> | null = null

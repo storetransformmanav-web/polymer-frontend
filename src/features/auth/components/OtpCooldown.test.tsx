@@ -98,9 +98,7 @@ describe('requesting a code while one was just sent (backend 429)', () => {
     await waitFor(() =>
       expect(api.auth.verifyOtp).toHaveBeenCalledWith(EMAIL, '123456', false),
     )
-    await waitFor(() =>
-      expect(store.getState().auth.session?.accessToken).toBe('token-123'),
-    )
+    await waitFor(() => expect(store.getState().auth.session?.user.id).toBeTruthy())
   })
 
   it('still shows an error (and stays put) for a 429 with no readable wait, e.g. a general traffic limit', async () => {

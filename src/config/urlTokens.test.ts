@@ -86,12 +86,11 @@ describe('no credential in a URL', () => {
     expect(client).toContain('ERR_CREDENTIAL_IN_URL')
   })
 
-  it('sends the session token only as an Authorization header', () => {
+  it('builds no bearer header anywhere: the session is an HttpOnly cookie, never a token', () => {
     const uses = productionFiles
       .filter((path) => /Bearer\s*\$\{/.test(readFileSync(path, 'utf8')))
       .map(rel)
 
-    // Both put it in a header: the interceptor, and logout (which carries the token it revokes).
-    expect(uses.sort()).toEqual(['src/lib/api/client.ts', 'src/lib/api/endpoints.ts'])
+    expect(uses).toEqual([])
   })
 })

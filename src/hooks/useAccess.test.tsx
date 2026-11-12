@@ -54,12 +54,11 @@ function renderAt(route: string, permissions?: AuthUser['permissions']) {
     view.store.dispatch(
       googleSignIn.fulfilled(
         {
-          accessToken: 'session-token',
           expiresAt: new Date(Date.now() + 60_000 * 60).toISOString(),
           user: { ...USER, permissions },
         },
         'request-id',
-        'credential',
+        { credential: 'credential', nonce: 'test-nonce-0123456789' },
       ),
     )
   })
@@ -92,7 +91,7 @@ describe('visibleNavEntries', () => {
       products: { view: false },
       customers: { view: false },
       inventory: { view: false },
-      locks: { view: false },
+      access: { view: false },
     })
     expect(shown.some(isNavGroup)).toBe(false)
   })
@@ -125,24 +124,29 @@ describe('exporting customers', () => {
       view.store.dispatch(
         googleSignIn.fulfilled(
           {
-            accessToken: 'session-token',
             expiresAt: new Date(Date.now() + 60_000 * 60).toISOString(),
             user: { ...USER, permissions },
           },
           'request-id',
-          'credential',
+          { credential: 'credential', nonce: 'test-nonce-0123456789' },
         ),
       )
     })
   }
 
-  it('is for those who may manage customers', async () => {
-    renderCustomers({ customers: { view: true, manage: true } })
+  it('is for those who may use customers_export', async () => {
+    renderCustomers({
+      customers: { view: true, manage: false },
+      customers_export: { view: true, manage: true },
+    })
     expect(await screen.findByRole('button', { name: /^Export/ })).toBeInTheDocument()
   })
 
-  it('is hidden from those who may only view them', async () => {
-    renderCustomers({ customers: { view: true, manage: false } })
+  it('is hidden from those who may not (customers_export is its own permission)', async () => {
+    renderCustomers({
+      customers: { view: true, manage: true },
+      customers_export: { view: true, manage: false },
+    })
     await screen.findByRole('region', { name: 'Customers' })
     expect(screen.queryByRole('button', { name: /^Export/ })).not.toBeInTheDocument()
   })
@@ -166,8 +170,11 @@ describe('a page the user may not view', () => {
     expect(screen.getByText('the orders page')).toBeInTheDocument()
   })
 
-  it('hides the Sync button from a user who may only view', async () => {
-    renderAt('/orders', { orders: { view: true, manage: false } })
+  it('hides the Sync button from a user who may not use sync (its own permission)', async () => {
+    renderAt('/orders', {
+      orders: { view: true, manage: true },
+      sync: { view: true, manage: false },
+    })
     expect(screen.queryByRole('button', { name: /Sync orders/ })).not.toBeInTheDocument()
     expect(api.shops.list).toHaveBeenCalled()
   })

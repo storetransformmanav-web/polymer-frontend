@@ -85,7 +85,8 @@ export function EmailStep() {
       {!error && login.signedOutReason && (
         <div className="mt-3">
           <FormMessage tone="info">
-            {SIGNED_OUT_MESSAGES[login.signedOutReason]}
+            {/* The API's own words when the server ended the session, else ours. */}
+            {login.signedOutMessage ?? SIGNED_OUT_MESSAGES[login.signedOutReason]}
           </FormMessage>
         </div>
       )}

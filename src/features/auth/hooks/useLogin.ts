@@ -31,6 +31,7 @@ export function useLogin() {
     isVerifying: auth.verifyStatus === 'loading',
     googleError: auth.googleError,
     signedOutReason: auth.signedOutReason,
+    signedOutMessage: auth.signedOutMessage,
     isGoogleSigningIn: auth.googleStatus === 'loading',
 
     /**
@@ -46,9 +47,9 @@ export function useLogin() {
     async verifyCode(code: string) {
       return verifyOtp.fulfilled.match(await dispatch(verifyOtp(code)))
     },
-    async googleSignIn(credential: string) {
+    async googleSignIn(credential: string, nonce: string) {
       return googleSignInThunk.fulfilled.match(
-        await dispatch(googleSignInThunk(credential)),
+        await dispatch(googleSignInThunk({ credential, nonce })),
       )
     },
     setRememberMe: (value: boolean) => dispatch(rememberMeChanged(value)),

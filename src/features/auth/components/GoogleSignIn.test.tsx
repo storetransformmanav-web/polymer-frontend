@@ -4,7 +4,11 @@ import { env } from '../../../config/env.ts'
 import { api } from '../../../lib/api/endpoints.ts'
 import { ApiError } from '../../../lib/api/ApiError.ts'
 import { renderWithProviders } from '../../../test/renderWithProviders.tsx'
-import { loadGoogleIdentity, type GoogleIdentity } from '../utils/googleIdentity.ts'
+import {
+  createNonce,
+  loadGoogleIdentity,
+  type GoogleIdentity,
+} from '../utils/googleIdentity.ts'
 import { LoginForm } from './LoginForm.tsx'
 
 vi.mock('../../../lib/api/endpoints.ts', () => ({
@@ -12,7 +16,11 @@ vi.mock('../../../lib/api/endpoints.ts', () => ({
     auth: { requestOtp: vi.fn(), verifyOtp: vi.fn(), google: vi.fn(), logout: vi.fn() },
   },
 }))
-vi.mock('../utils/googleIdentity.ts', () => ({ loadGoogleIdentity: vi.fn() }))
+vi.mock('../utils/googleIdentity.ts', () => ({
+  loadGoogleIdentity: vi.fn(),
+  // A real-looking nonce: the button gives it to Google and sends it with the credential.
+  createNonce: vi.fn(() => 'nonce-0123456789-abcdef'),
+}))
 
 const CREDENTIAL = 'google-id-token-from-gis'
 
@@ -86,6 +94,37 @@ describe('GoogleSignIn', () => {
     )
   })
 
+  it('gives Google a nonce and sends the same one with the credential, a new one each time', async () => {
+    vi.mocked(api.auth.google).mockResolvedValue(LOGIN_RESPONSE)
+    const nonces = [
+      'nonce-first-0123456789',
+      'nonce-second-0123456789',
+      'nonce-third-012345678',
+    ]
+    vi.mocked(createNonce).mockImplementation(
+      () => nonces.shift() ?? 'nonce-spare-0123456789',
+    )
+    const { fake, signIn } = installFakeGoogle()
+    renderWithProviders(<LoginForm />)
+    await waitFor(() => expect(fake.renderButton).toHaveBeenCalled())
+
+    expect(fake.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nonce: 'nonce-first-0123456789' }),
+    )
+    signIn(CREDENTIAL)
+    await waitFor(() =>
+      expect(api.auth.google).toHaveBeenLastCalledWith(
+        CREDENTIAL,
+        'nonce-first-0123456789',
+        false,
+      ),
+    )
+    // The next sign-in is already configured with a fresh nonce.
+    expect(fake.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nonce: 'nonce-second-0123456789' }),
+    )
+  })
+
   it('exchanges the Google credential for a session', async () => {
     vi.mocked(api.auth.google).mockResolvedValue(LOGIN_RESPONSE)
     const { fake, signIn } = installFakeGoogle()
@@ -94,10 +133,11 @@ describe('GoogleSignIn', () => {
 
     signIn(CREDENTIAL)
 
-    await waitFor(() => expect(api.auth.google).toHaveBeenCalledWith(CREDENTIAL, false))
+    await waitFor(() =>
+      expect(api.auth.google).toHaveBeenCalledWith(CREDENTIAL, expect.any(String), false),
+    )
     await waitFor(() =>
       expect(store.getState().auth.session).toMatchObject({
-        accessToken: 'google-token',
         user: { email: 'admin@polymeruk.com' },
       }),
     )

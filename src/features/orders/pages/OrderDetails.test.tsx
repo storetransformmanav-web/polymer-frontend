@@ -261,29 +261,23 @@ describe('an order’s details page', () => {
     details.mockImplementation(never)
     await openFirst()
 
-    // No wait: number, payment, fulfillment, total and store come from the row already loaded.
+    // No wait: number, status and the facts come from the row already loaded.
+    // (The list stays mounted behind the page, so look inside the page only.)
+    const page = within(screen.getByRole('article'))
     expect(
       screen.getByRole('heading', { level: 1, name: 'Order #17501' }),
     ).toBeInTheDocument()
-    expect(screen.getAllByText('Authorized').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Unfulfilled').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('£26.50').length).toBeGreaterThan(0)
+    expect(page.getByText('Open')).toBeInTheDocument()
+    expect(page.getByTitle('Store')).toHaveTextContent('Packaging By Polymer')
+    expect(page.getByTitle('Shopify ID')).toHaveTextContent('14000000000001')
+    expect(page.getByTitle('Email')).toHaveTextContent('buyer1@example.com')
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    // The summary figures are there (once), the rest is a placeholder.
-    // (The list stays mounted behind the page, so look inside the page only.)
-    const page = within(screen.getByRole('article'))
-    expect(page.queryByText('Order Summary')).toBeNull()
-    // The Items card, with the totals in it, is closed to begin with.
-    expect(page.getByRole('button', { name: /^Items/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    )
-    expect(page.queryByText('Total price')).toBeNull()
-    expect(page.getByText('14000000000001')).toBeInTheDocument()
-    expect(page.queryByRole('heading', { name: 'Payment Summary' })).toBeNull()
+    // The cards wait for the details: nothing of them is drawn yet.
+    expect(page.queryByRole('heading', { name: 'Shipping address' })).toBeNull()
+    expect(page.queryByRole('tab', { name: /^Items/ })).toBeNull()
   })
 
   it('has the details ready when the eye was hovered first: nothing to wait for', async () => {
@@ -299,52 +293,40 @@ describe('an order’s details page', () => {
     await user.click(screen.getByRole('button', { name: 'View order 17502' }))
 
     // The cards are there in the same render as the click.
-    expect(screen.getByRole('heading', { name: 'Customer' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Shipping address' })).toBeInTheDocument()
     expect(screen.queryByText('Loading…')).toBeNull()
     expect(details).toHaveBeenCalledTimes(1)
   })
 
-  it('has the tabs: Overview, Shipping, Notes & Tracking', async () => {
+  it('has the tabs: Overview, Items, Notes & Tracking', async () => {
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Overview',
-      'Shipping',
+      'Items3',
       'Notes & Tracking4',
     ])
   })
 
-  it('shows the order’s money, customer, status and store in cards on the Overview', async () => {
-    const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
-    await user.click(
-      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
-    )
+  it('shows the addresses, shipping method, fulfillments and tags on the Overview — and no customer, summary or payment card', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     const page = within(screen.getByRole('article'))
+    for (const name of [
+      'Shipping address',
+      'Billing address',
+      'Shipping method',
+      'Fulfillments',
+      'Tags',
+    ]) {
+      expect(page.getByRole('heading', { name })).toBeInTheDocument()
+    }
+    expect(page.queryByRole('heading', { name: 'Customer' })).toBeNull()
     expect(page.queryByText('Order Summary')).toBeNull()
-    const rowOf = (label: string) => page.getByText(label).closest('div')!
-    // The totals are at the foot of the Items card.
-    expect(rowOf('Subtotal')).toHaveTextContent('£12.50')
-    expect(rowOf('Shipping')).toHaveTextContent('£9.58')
-    expect(rowOf('Tax')).toHaveTextContent('£4.42')
-    expect(rowOf('Total price')).toHaveTextContent('£26.50')
-
-    // The customer card: a guest checkout has no customer name or email, but the order's
-    // own email is there, labelled as such.
-    const customer = within(
-      screen.getByRole('heading', { name: 'Customer' }).closest('section')!,
-    )
-    expect(customer.getByText('Order email')).toBeInTheDocument()
-    expect(customer.getByText('buyer1@example.com')).toBeInTheDocument()
-    const name = customer.getByText('Name').closest('div')!
-    expect(name).toHaveTextContent('—')
-    // The order's Shopify ID is here, with a copy button.
-    expect(customer.getByText('14000000000001')).toBeInTheDocument()
-    expect(
-      customer.getByRole('button', { name: 'Copy order Shopify ID' }),
-    ).toBeInTheDocument()
+    expect(page.queryByRole('heading', { name: 'Payment' })).toBeNull()
+    expect(page.queryByRole('tab', { name: 'Shipping' })).toBeNull()
 
     expect(
       screen.getAllByText('Expected Delivery Day: Wednesday').length,
@@ -352,49 +334,27 @@ describe('an order’s details page', () => {
 
     // The note is only on Notes & Tracking.
     expect(page.queryByText('Leave with the neighbour')).toBeNull()
-
-    // The status & dates and store & source cards are gone.
-    expect(screen.queryByText('Status & Dates')).toBeNull()
-    expect(screen.queryByText('Store & Source')).toBeNull()
   })
 
-  it('summarises the items and the shipping on the Overview, with no payment summary', async () => {
-    const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
-    await user.click(
-      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
+  it('shows the shipping method: its name and ID, what was charged and how many items are still to ship', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Shipping address' })
+
+    const method = within(
+      screen.getByRole('heading', { name: 'Shipping method' }).closest('section')!,
     )
-    const page = within(screen.getByRole('article'))
-    const card = (name: string) =>
-      within(page.getByRole('heading', { name }).closest('section')!)
-
-    // Items: a table row per line — name, variant and SKU, price, quantity, total.
-    const items = card('Items')
-    const pizza = within(
-      items
-        .getByRole('link', { name: 'Pizza Box White Plain, Square [Alternative]' })
-        .closest('tr')!,
-    )
-    expect(pizza.getByText('14inch · PB416E')).toBeInTheDocument()
-    expect(pizza.getByText('1')).toBeInTheDocument()
-    expect(pizza.getAllByText('£12.50')).toHaveLength(2)
     expect(
-      items.getByText('Hostile image').closest('tr')!.querySelector('img'),
-    ).toBeNull()
-
-    expect(page.queryByRole('heading', { name: 'Payment Summary' })).toBeNull()
-
-    // Shipping: the method, what was charged, the status and the counts.
-    const shipping = card('Shipping Summary')
-    expect(
-      shipping.getByText('DPD Next Working Day Delivery - Orders Placed By 2pm'),
+      method.getByText('DPD Next Working Day Delivery - Orders Placed By 2pm'),
     ).toBeInTheDocument()
-    expect(shipping.getByText('Shipping charged').closest('div')).toHaveTextContent(
-      '£9.58',
-    )
-    expect(shipping.getByText('Unfulfilled')).toBeInTheDocument()
-    expect(shipping.getByText('Items to ship').closest('div')).toHaveTextContent('3')
-    expect(shipping.getByText('Fulfillments').closest('div')).toHaveTextContent('0')
+    expect(
+      method.getByText('Custom zip code base shipping · DPD_Next_Working_Day'),
+    ).toBeInTheDocument()
+    expect(method.getByText('Shipping charged').closest('div')).toHaveTextContent('£9.58')
+    // 1 + 2 items are unfulfilled lines' quantities still to ship.
+    expect(method.getByText('Items to ship').closest('div')).toHaveTextContent('3')
+    // The delivery status and the fulfillment count are not repeated in this card.
+    expect(method.queryByText('Fulfillments')).toBeNull()
+    expect(method.queryByText('Fulfillment status')).toBeNull()
   })
 
   it('names who the order is for in the header: the customer, and the company from the address', async () => {
@@ -411,32 +371,41 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
     const header = within(screen.getByRole('banner'))
-    expect(header.getByText('Jane Doe · Example Co')).toBeInTheDocument()
-    expect(header.getByText('Authorized')).toBeInTheDocument()
-    expect(header.getByText('Unfulfilled')).toBeInTheDocument()
+    expect(header.getByTitle('Customer')).toHaveTextContent('Jane Doe · Example Co')
   })
 
-  it('shows the shipping and billing addresses on the Overview, as two cards that fold', async () => {
+  it('shows the shipping and billing addresses on the Overview, as two cards that fold, each on a few lines', async () => {
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
-    const shipping = within(screen.getByRole('region', { name: 'Shipping address' }))
+    const shipping = within(
+      screen.getByRole('heading', { name: 'Shipping address' }).closest('section')!,
+    )
     expect(shipping.getByText('jane doe')).toBeInTheDocument()
     expect(shipping.getByText('Example Co')).toBeInTheDocument()
-    expect(shipping.getByText('1 Example Street')).toBeInTheDocument()
-    expect(shipping.getByText('Exampletown AB1 2CD')).toBeInTheDocument()
-    expect(shipping.getByText('United Kingdom')).toBeInTheDocument()
+    // The address on one line, as it would be said.
+    expect(
+      shipping.getByText(
+        '1 Example Street, Exampletown, England, AB1 2CD, United Kingdom',
+      ),
+    ).toBeInTheDocument()
     expect(shipping.getByText('07700900123')).toBeInTheDocument()
     expect(
       shipping.getByRole('button', { name: 'Copy shipping address' }),
     ).toBeInTheDocument()
 
     // The fixture's billing address is the same place, and says so.
-    const billing = within(screen.getByRole('region', { name: 'Billing address' }))
-    expect(billing.getByText('1 Example Street')).toBeInTheDocument()
-    expect(billing.getByText('Same as the shipping address.')).toBeInTheDocument()
+    const billing = within(
+      screen.getByRole('heading', { name: 'Billing address' }).closest('section')!,
+    )
+    expect(
+      billing.getByText(
+        '1 Example Street, Exampletown, England, AB1 2CD, United Kingdom',
+      ),
+    ).toBeInTheDocument()
+    expect(billing.getByText('Same as shipping')).toBeInTheDocument()
   })
 
   it('says so when an address is missing, and does not call two different ones the same', async () => {
@@ -448,24 +417,24 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     expect(
-      within(screen.getByRole('region', { name: 'Shipping address' })).getByText(
-        'No address.',
-      ),
+      within(
+        screen.getByRole('heading', { name: 'Shipping address' }).closest('section')!,
+      ).getByText('No address.'),
     ).toBeInTheDocument()
-    const billing = within(screen.getByRole('region', { name: 'Billing address' }))
-    expect(billing.getByText('2 Other Road')).toBeInTheDocument()
-    expect(billing.queryByText('Same as the shipping address.')).toBeNull()
+    const billing = within(
+      screen.getByRole('heading', { name: 'Billing address' }).closest('section')!,
+    )
+    expect(billing.getByText('2 Other Road, France')).toBeInTheDocument()
+    expect(billing.queryByText('Same as shipping')).toBeNull()
   })
 
-  it('lists the items on the Overview, each linking to its product, with safe pictures only', async () => {
+  it('lists the items on the Items tab, each linking to its product, with safe pictures only', async () => {
     const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Items' })
-    await user.click(
-      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
-    )
+    await screen.findByRole('heading', { name: 'Shipping address' })
+    await user.click(screen.getByRole('tab', { name: /^Items/ }))
 
     const link = await screen.findByRole('link', {
       name: 'Pizza Box White Plain, Square [Alternative]',
@@ -490,47 +459,53 @@ describe('an order’s details page', () => {
 
   it('ends the Items table with the order’s totals', async () => {
     const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Items' })
-    await user.click(
-      within(screen.getByRole('article')).getByRole('button', { name: /^Items/ }),
-    )
+    await screen.findByRole('heading', { name: 'Shipping address' })
+    await user.click(screen.getByRole('tab', { name: /^Items/ }))
 
     const page = within(screen.getByRole('article'))
+    expect(await page.findByRole('heading', { name: 'Order Items' })).toBeInTheDocument()
     const table = within(await page.findByRole('table'))
     expect(
       table.getAllByRole('columnheader').map((header) => header.textContent),
     ).toEqual(['Product', 'Price', 'Quantity', 'Total price'])
+    // The totals under the lines: subtotal, shipping, tax, then the total.
     expect(page.getAllByText('Total price')).toHaveLength(2)
-    expect(page.getByText('Subtotal').closest('div')).toHaveTextContent('£12.50')
+    const rowOf = (label: string) => page.getByText(label).closest('div')!
+    expect(rowOf('Subtotal')).toHaveTextContent('£12.50')
+    expect(rowOf('Shipping')).toHaveTextContent('£9.58')
+    expect(rowOf('Tax')).toHaveTextContent('£4.42')
+    expect(page.getAllByText('£26.50').length).toBeGreaterThan(0)
   })
 
-  it('shows the order’s status, payment method, date and store in the header', async () => {
+  it('shows the order’s status, date, customer, store, email and Shopify ID in the header', async () => {
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
     const header = within(screen.getByRole('banner'))
-    const fact = (label: string) => header.getByText(label).closest('div')!
 
-    expect(fact('Payment status')).toHaveTextContent('Authorized')
-    expect(fact('Fulfillment status')).toHaveTextContent('Unfulfilled')
-    expect(await within(fact('Payment method')).findByText(/Mastercard/)).toBeVisible()
-    expect(header.getByText('Order date')).toBeInTheDocument()
-    expect(fact('Store')).toHaveTextContent('Polymer UK')
+    // Not paid-and-fulfilled yet: the order is still open.
+    expect(header.getByText('Open')).toBeInTheDocument()
+    expect(header.getByTitle('Order date')).toHaveTextContent(/22 Oct 2026/)
+    expect(header.getByTitle('Store')).toHaveTextContent('Packaging By Polymer')
+    expect(header.getByTitle('Email')).toHaveTextContent('buyer1@example.com')
+    expect(header.getByRole('button', { name: 'Copy email' })).toBeInTheDocument()
+    expect(header.getByTitle('Shopify ID')).toHaveTextContent('14000000000001')
+    expect(header.getByRole('button', { name: 'Copy Shopify ID' })).toBeInTheDocument()
+    // The summary cards of an earlier design are not in the header.
+    expect(header.queryByText('Payment status')).toBeNull()
+    expect(header.queryByText('Fulfillment status')).toBeNull()
   })
 
-  it('shows the shipping: the method and what was fulfilled (the addresses are on the Overview)', async () => {
-    const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
-    await user.click(screen.getByRole('tab', { name: 'Shipping' }))
+  it('says so when nothing has been fulfilled yet', async () => {
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
-    expect(screen.queryByRole('region', { name: 'Shipping address' })).toBeNull()
-    expect(screen.queryByText('Billing address')).toBeNull()
-    expect(
-      screen.getByText('DPD Next Working Day Delivery - Orders Placed By 2pm'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Nothing has been fulfilled yet.')).toBeInTheDocument()
+    const fulfillments = within(
+      screen.getByRole('heading', { name: 'Fulfillments' }).closest('section')!,
+    )
+    expect(fulfillments.getByText('Nothing has been fulfilled yet.')).toBeInTheDocument()
   })
 
-  it('lays the shipping tab out in small cards: delivery, method with its price, fulfillments', async () => {
+  it('shows each fulfillment in the Fulfillments card: id, status, tracking, date, service', async () => {
     details.mockImplementation((ref) =>
       Promise.resolve({
         ...makeDetail(Number(ref) - 17500),
@@ -550,31 +525,11 @@ describe('an order’s details page', () => {
         ],
       }),
     )
-    const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
-    await user.click(screen.getByRole('tab', { name: 'Shipping' }))
-
-    const delivery = within(
-      screen.getByRole('heading', { name: 'Delivery' }).closest('section')!,
-    )
-    expect(delivery.getByText('Unfulfilled')).toBeInTheDocument()
-    expect(delivery.getByText('£9.58')).toBeInTheDocument() // charged for shipping
-    expect(delivery.getByText('3')).toBeInTheDocument() // items to ship (1 + 2)
-    expect(delivery.getByText('Fulfillments').closest('div')).toHaveTextContent('1')
-
-    const method = within(
-      screen.getByRole('heading', { name: 'Shipping method' }).closest('section')!,
-    )
-    expect(
-      method.getByText('DPD Next Working Day Delivery - Orders Placed By 2pm'),
-    ).toBeInTheDocument()
-    expect(
-      method.getByText('Custom zip code base shipping · DPD_Next_Working_Day'),
-    ).toBeInTheDocument()
-    expect(method.getByText('£9.58')).toBeInTheDocument()
+    await openFirst()
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     // The fulfillment: its name and status, the tracking number (with a copy button) and link,
-    // the date as a date, and the other readable details — no ids.
+    // the date as a date, the service and the other readable details — no ids.
     const fulfillment = within(screen.getByText('#17501.1').closest('li')!)
     expect(fulfillment.getByText('Success')).toBeInTheDocument()
     expect(fulfillment.getByText('15501234567890')).toBeInTheDocument()
@@ -593,7 +548,7 @@ describe('an order’s details page', () => {
     expect(screen.queryByText('Shopify id')).toBeNull()
   })
 
-  it('links the customer’s name to their page, and shows the order’s own email only when it differs', async () => {
+  it('links the customer’s name in the header to their page, and shows the order’s email', async () => {
     details.mockImplementation((ref) =>
       Promise.resolve({
         ...makeDetail(Number(ref) - 17500),
@@ -608,23 +563,19 @@ describe('an order’s details page', () => {
       }),
     )
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
-    const customer = within(
-      screen.getByRole('heading', { name: 'Customer' }).closest('section')!,
-    )
-    expect(customer.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
+    const header = within(screen.getByRole('banner'))
+    expect(header.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
       'href',
       '/orders/customer/cust-9',
     )
-    expect(customer.getByText('jane@example.com')).toBeInTheDocument()
-    // The same email twice (the order's differs only in case) is one row.
-    expect(customer.queryByText('Order email')).toBeNull()
+    expect(header.getByTitle('Email')).toHaveTextContent('Jane@Example.com')
   })
 
   it('lists the notes and tracking, with only http(s) values as links', async () => {
     const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
     await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
 
     // The order's note, then (none yet) the tracking, then the other details saved with it.
@@ -668,7 +619,7 @@ describe('an order’s details page', () => {
       }),
     )
     const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
     await user.click(screen.getByRole('tab', { name: /^Notes & Tracking/ }))
 
     expect(screen.getByText('No note on this order.')).toBeInTheDocument()
@@ -699,7 +650,7 @@ describe('an order’s details page', () => {
 
   it('goes back to the list, which kept its page and filters', async () => {
     const user = await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     await user.click(screen.getByRole('button', { name: 'Back to list' }))
 
@@ -719,10 +670,12 @@ describe('an order’s details page', () => {
       await screen.findByRole('heading', { level: 1, name: 'Order #17516' }),
     ).toBeInTheDocument()
     expect(details).toHaveBeenCalledWith('17516', 'polymer-uk')
-    expect(screen.queryByRole('heading', { name: 'Customer' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Shipping address' })).toBeNull()
 
     finish({ ...makeDetail(1), order_number: 17516, name: '#17516' })
-    expect(await screen.findByRole('heading', { name: 'Customer' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Shipping address' }),
+    ).toBeInTheDocument()
   })
 
   it('shows the backend’s message when the order cannot be read, and recovers on retry', async () => {
@@ -735,7 +688,9 @@ describe('an order’s details page', () => {
 
     details.mockResolvedValue({ ...makeDetail(1), order_number: 99999, name: '#99999' })
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('heading', { name: 'Customer' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Shipping address' }),
+    ).toBeInTheDocument()
   })
 
   describe('the strip of opened orders (like the products’ tabs)', () => {
@@ -750,7 +705,7 @@ describe('an order’s details page', () => {
 
     it('shows "All Orders" and a tab for the opened order, with the order’s tab active', async () => {
       await openFirst()
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
 
       expect(within(strip()).getByRole('button', { name: 'All Orders' })).toBeVisible()
       const tab = within(strip()).getByRole('button', { name: /^Order\s*17501$/ })
@@ -760,7 +715,7 @@ describe('an order’s details page', () => {
 
     it('returns to the list from "All Orders" and back to the order from its tab', async () => {
       const user = await openFirst()
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
 
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       expect(where()).toBe('/orders')
@@ -778,7 +733,7 @@ describe('an order’s details page', () => {
 
     it('keeps every order opened this way as its own tab, and switches between them', async () => {
       const user = await openFirst()
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       await user.click(screen.getByRole('button', { name: 'View order 17502' }))
       await screen.findByRole('heading', { level: 1, name: 'Order #17502' })
@@ -796,7 +751,7 @@ describe('an order’s details page', () => {
 
     it('closes a tab; closing the one you are on moves to its neighbour, then to the list', async () => {
       const user = await openFirst()
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
       await user.click(within(strip()).getByRole('button', { name: 'All Orders' }))
       await user.click(screen.getByRole('button', { name: 'View order 17502' }))
       await screen.findByRole('heading', { level: 1, name: 'Order #17502' })
@@ -814,7 +769,7 @@ describe('an order’s details page', () => {
 
     it('closes them all with Clear and goes back to the list', async () => {
       const user = await openFirst()
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
 
       await user.click(within(strip()).getByRole('button', { name: 'Clear' }))
 
@@ -824,7 +779,7 @@ describe('an order’s details page', () => {
 
     it('gives an order opened from a bare address a tab too, labelled with its number', async () => {
       renderAt('/orders/17503?shop=polymer-uk')
-      await screen.findByRole('heading', { name: 'Customer' })
+      await screen.findByRole('heading', { name: 'Shipping address' })
 
       expect(
         within(strip()).getByRole('button', { name: /^Order\s*17503$/ }),
@@ -834,7 +789,7 @@ describe('an order’s details page', () => {
 
   it('never asks for the raw Shopify payload', async () => {
     await openFirst()
-    await screen.findByRole('heading', { name: 'Customer' })
+    await screen.findByRole('heading', { name: 'Shipping address' })
 
     expect(screen.queryByRole('tab', { name: /raw/i })).toBeNull()
     // The call carries only the number and the store (include_raw=false is added by the API layer).

@@ -36,7 +36,6 @@ describe('ProtectedRoute', () => {
     store.dispatch(
       googleSignIn.fulfilled(
         {
-          accessToken: 'token',
           expiresAt: '2099-01-01T00:00:00Z',
           user: {
             id: 'u1',
@@ -49,7 +48,7 @@ describe('ProtectedRoute', () => {
           },
         },
         'request-id',
-        'credential',
+        { credential: 'credential', nonce: 'test-nonce-0123456789' },
       ),
     )
     renderAt(store)

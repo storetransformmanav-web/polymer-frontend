@@ -193,7 +193,6 @@ describe('LoginForm', () => {
       )
       await waitFor(() =>
         expect(store.getState().auth.session).toMatchObject({
-          accessToken: 'token-123',
           user: { email: EMAIL },
         }),
       )

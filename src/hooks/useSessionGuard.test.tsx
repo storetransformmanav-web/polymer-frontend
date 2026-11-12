@@ -40,12 +40,11 @@ function setup(expiresInMs = 30 * DAY) {
     store.dispatch(
       googleSignIn.fulfilled(
         {
-          accessToken: 'session-token',
           expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
           user: USER,
         },
         'request-id',
-        'credential',
+        { credential: 'credential', nonce: 'test-nonce-0123456789' },
       ),
     )
   })
@@ -67,7 +66,7 @@ describe('useSessionGuard', () => {
     window.localStorage.clear()
   })
 
-  it('signs out after 30 minutes with no activity, even in a 30-day session, and revokes the token', async () => {
+  it('signs out after 30 minutes with no activity, even in a 30-day session, and ends it on the server', async () => {
     const store = setup(30 * DAY)
 
     await advance(IDLE_LIMIT_MS - MINUTE)
@@ -76,7 +75,7 @@ describe('useSessionGuard', () => {
     await advance(2 * MINUTE)
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBe('idle')
-    expect(api.auth.logout).toHaveBeenCalledWith('session-token')
+    expect(api.auth.logout).toHaveBeenCalled()
   })
 
   it.each(['pointerDown', 'pointerMove', 'keyDown', 'wheel', 'scroll'] as const)(
@@ -113,12 +112,11 @@ describe('useSessionGuard', () => {
       store.dispatch(
         googleSignIn.fulfilled(
           {
-            accessToken: 'session-token',
             expiresAt: new Date(Date.now() + 30 * DAY).toISOString(),
             user: USER,
           },
           'request-id',
-          'credential',
+          { credential: 'credential', nonce: 'test-nonce-0123456789' },
         ),
       )
     })
@@ -159,7 +157,7 @@ describe('useSessionGuard', () => {
     await advance(6 * MINUTE)
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBe('expired')
-    expect(api.auth.logout).toHaveBeenCalledWith('session-token')
+    expect(api.auth.logout).toHaveBeenCalled()
   })
 
   it('signs out when the token expires, without waiting for a request to fail', async () => {
@@ -172,7 +170,7 @@ describe('useSessionGuard', () => {
     expect(auth(store).session).toBeNull()
     expect(auth(store).signedOutReason).toBe('expired')
     // The token is revoked too (the app's own limit can be sooner than the backend's).
-    expect(api.auth.logout).toHaveBeenCalledWith('session-token')
+    expect(api.auth.logout).toHaveBeenCalled()
   })
 
   it('signs out here when the session is removed in another tab', () => {
