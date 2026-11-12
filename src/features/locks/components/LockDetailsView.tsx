@@ -3,7 +3,11 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { DETAIL_CARD, DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import {
+  DETAIL_CARD,
+  DetailSection,
+  DetailSkeleton,
+} from '../../../components/ui/DetailSection.tsx'
 import {
   DetailsHeader,
   HeaderChip,
@@ -21,7 +25,11 @@ import {
   InfoIcon,
   GridIcon,
   type IconProps,
+  LayersIcon,
+  ListChecksIcon,
   LockIcon,
+  ProductsIcon,
+  SearchIcon,
   SlidersIcon,
   TagIcon,
   UsersIcon,
@@ -46,6 +54,7 @@ import { LockImage } from './LockCard.tsx'
 import { LockAccessTab } from './LockAccessTab.tsx'
 import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
+import { SelectField } from '../../../components/ui/SelectField.tsx'
 
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
@@ -98,7 +107,6 @@ export function LockDetailsView({
 }: LockDetailsViewProps) {
   const linkedState = useLinkedState()
   const [tab, setTab] = useState<TabId>('overview')
-  const fillPage = tab === 'access'
   // The settings changed on the page and not saved yet (only those that differ count).
   const [draft, setDraft] = useState<LockOptionChange>({})
   // The changes being saved, waiting for "Yes, update".
@@ -162,42 +170,41 @@ export function LockDetailsView({
 
   const back = () => (dirty ? setLeaving(true) : onBack())
 
-  /** A yes/no setting as a switch: flipping it only changes the page, until Save changes. */
-  function flagField(flag: LockFlag) {
+  /**
+   * A yes/no setting as a row: its icon, its name (the tooltip says what it does) and a Yes / No
+   * dropdown. Choosing only changes the page, until Save changes.
+   */
+  function flagRow(flag: LockFlag, icon: ComponentType<IconProps>) {
     const info = FLAG_INFO[flag]
+    const Icon = icon
     const value = valueOf(flag)
     return (
-      <div className="flex min-w-0 flex-col gap-2">
-        <p className="m-0 flex items-center gap-2 text-[0.85rem] font-semibold">
-          {info.label}
-          <span title={info.hint} className="text-text-muted inline-flex">
-            <InfoIcon width={15} height={15} />
+      <div className="border-border flex items-center gap-3 border-b py-2.5 last:border-b-0">
+        <Icon width={18} height={18} className="text-text-muted shrink-0" />
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-[0.88rem] font-medium">
+          <span className="truncate">{info.label}</span>
+          <span title={info.hint} className="text-text-muted inline-flex shrink-0">
+            <InfoIcon width={14} height={14} />
           </span>
-        </p>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={value}
-            aria-label={info.label}
-            onClick={() => setFlag(flag, !value)}
-            className={`focus-visible:outline-accent relative h-6 w-11 shrink-0 cursor-pointer rounded-full border-none transition-colors focus-visible:outline-2 ${
-              value ? 'bg-accent' : 'bg-border-strong'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`bg-bg absolute top-0.5 left-0.5 h-5 w-5 rounded-full shadow-sm transition-transform ${
-                value ? 'translate-x-5' : ''
-              }`}
-            />
-          </button>
-          <span className="text-[0.85rem]">{flagWord(flag, value)}</span>
           {changed.includes(flag) && (
-            <Badge tone="warning" className="text-[0.7rem]">
+            <Badge tone="warning" className="shrink-0">
               Not saved
             </Badge>
           )}
+        </span>
+        <div className="w-28 shrink-0">
+          <SelectField
+            compact
+            hideLabel
+            id={`lock-flag-${flag}`}
+            label={info.label}
+            value={value ? 'yes' : 'no'}
+            options={[
+              { value: 'yes', label: flagWord(flag, true) },
+              { value: 'no', label: flagWord(flag, false) },
+            ]}
+            onChange={(next) => setFlag(flag, next === 'yes')}
+          />
         </div>
       </div>
     )
@@ -208,11 +215,9 @@ export function LockDetailsView({
 
   return (
     <article
-      // Customer Access fills the height of the page (its table scrolls in its own box), so the
-      // page itself does not scroll; the Overview is as tall as its content.
-      className={`border-border bg-bg overflow-hidden rounded-2xl border ${
-        fillPage ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : 'shrink-0'
-      }`}
+      // From `lg` the lock fills the window and the page does not scroll as a whole: the header and
+      // the tabs stay put and the tab's content scrolls inside its own box.
+      className="border-border bg-bg overflow-hidden rounded-2xl border lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
     >
       <DetailsHeader
         className="border-border mx-4 mt-4 shrink-0 border-b pb-3 sm:mx-5"
@@ -317,162 +322,133 @@ export function LockDetailsView({
       />
 
       <div
-        className={`flex flex-col gap-4 p-4 sm:p-5 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-x-4 ${
-          fillPage ? 'lg:min-h-0 lg:flex-1 lg:items-stretch' : ''
-        }`}
+        role="tablist"
+        aria-label="Lock sections"
+        className="border-border mx-4 flex shrink-0 [scrollbar-width:none] gap-1 overflow-x-auto border-b sm:mx-5 [&::-webkit-scrollbar]:hidden"
       >
-        {/* The side column: the picture (it opens full size) and the product's facts. Each fact
-            is shown once on the page. */}
-        <aside
-          className={`flex min-w-0 flex-col gap-3 ${fillPage ? 'lg:min-h-0 lg:overflow-y-auto' : ''}`}
-        >
-          <div
-            // The picture sits in its own card, with no second frame around it.
-            className={`${DETAIL_CARD} overflow-hidden p-0 [&_img]:rounded-none [&_img]:border-0 [&_span]:rounded-none [&_span]:border-0`}
-          >
-            {pictureUrl ? (
-              // The picture opens full size in the same viewer as a product's pictures.
-              <button
-                type="button"
-                onClick={() => setViewing(true)}
-                aria-label={`View picture of ${lock.title}`}
-                title="View picture"
-                className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
-              >
-                <LockImage src={lock.image_url} size="xl" />
-              </button>
-            ) : (
-              <LockImage src={lock.image_url} size="xl" />
-            )}
-          </div>
-
-          <section className={`${DETAIL_CARD} overflow-hidden`}>
-            <h2 className="bg-accent-tint/60 text-accent border-border-strong m-0 border-b px-4 py-3 text-[0.95rem] font-bold">
-              Quick info
-            </h2>
-            <div className="flex flex-col gap-3 p-4">
-              <dl className="m-0 flex flex-col gap-2.5 text-[0.82rem]">
-                <FactRow label="Product ID">
-                  <span className="flex items-center justify-end gap-1.5">
-                    <span className="font-semibold break-all">
-                      {lock.shopify_id ?? lock.product_id}
-                    </span>
-                    <CopyButton
-                      value={String(lock.shopify_id ?? lock.product_id)}
-                      label="Copy product ID"
-                    />
-                  </span>
-                </FactRow>
-                {shopName && (
-                  <FactRow label="Store">
-                    <span className="font-semibold">{shopName}</span>
-                  </FactRow>
-                )}
-                <FactRow label="Product status">
-                  <Badge tone="neutral" className="tracking-wide uppercase">
-                    {lock.status ?? '—'}
-                  </Badge>
-                </FactRow>
-              </dl>
-              <Link
-                to={linkedProductPath(lock.product_id)}
-                state={linkedState(lock.title)}
-                className="border-border bg-bg text-text hover:border-accent flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold no-underline transition-colors"
-              >
-                <EyeIcon width={16} height={16} />
-                View product
-                <ExternalLinkIcon width={14} height={14} />
-              </Link>
-            </div>
-          </section>
-        </aside>
-
-        <div className={`flex min-w-0 flex-col ${fillPage ? 'lg:min-h-0' : ''}`}>
-          <div
-            role="tablist"
-            aria-label="Lock sections"
-            className="border-border flex shrink-0 [scrollbar-width:none] gap-1 overflow-x-auto border-b [&::-webkit-scrollbar]:hidden"
-          >
-            {TABS.map((item) => {
-              const selected = item.id === tab
-              return (
-                <button
-                  key={item.id}
-                  id={`lock-tab-${item.id}`}
-                  role="tab"
-                  type="button"
-                  aria-selected={selected}
-                  aria-controls="lock-tabpanel"
-                  onClick={() => setTab(item.id)}
-                  className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-4 py-3 text-[0.88rem] font-semibold whitespace-nowrap transition-colors ${
-                    selected
-                      ? 'border-accent text-accent'
-                      : 'text-text-muted hover:text-text border-transparent'
-                  }`}
-                >
-                  <item.icon width={17} height={17} />
-                  {item.label}
-                </button>
-              )
-            })}
-          </div>
-
-          <div
-            id="lock-tabpanel"
-            role="tabpanel"
-            aria-labelledby={`lock-tab-${tab}`}
-            className={`pt-3 ${
-              fillPage
-                ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto'
-                : ''
-            }`}
-          >
-            <div
-              className={`flex flex-col gap-3 ${fillPage ? 'lg:min-h-0 lg:flex-1' : ''}`}
+        {TABS.map((item) => {
+          const selected = item.id === tab
+          return (
+            <button
+              key={item.id}
+              id={`lock-tab-${item.id}`}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              aria-controls="lock-tabpanel"
+              onClick={() => setTab(item.id)}
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-4 py-3 text-[0.88rem] font-semibold whitespace-nowrap transition-colors ${
+                selected
+                  ? 'border-accent text-accent'
+                  : 'text-text-muted hover:text-text border-transparent'
+              }`}
             >
-              {lock.sync_status === 'error' && (
-                <FormMessage tone="error">
-                  {`This lock was saved but could not be sent to the store${lock.sync_error ? `: ${lock.sync_error}` : '.'} Use “Set up store” on the list to push it again.`}
-                </FormMessage>
-              )}
+              <item.icon width={17} height={17} />
+              {item.label}
+            </button>
+          )
+        })}
+      </div>
 
-              {tab === 'overview' && (
-                // Three cards: the keys (the tags that give access, with a pencil), then the
-                // settings. Status is the header's dropdown, so it is not repeated here.
-                <>
-                  <div className={`${DETAIL_CARD} p-3`}>
-                    <LockKeysSection lock={lock} shop={shop} />
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <SettingsCard
-                      icon={LockIcon}
-                      title="Access & visibility"
-                      description="Who can access the product and where it is visible."
-                    >
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        {flagField('hide_from_nav')}
-                        {flagField('hide_from_lists')}
-                      </div>
-                    </SettingsCard>
-                    <SettingsCard
-                      icon={SlidersIcon}
-                      title="Advanced settings"
-                      description="Extra lock options and indexing behavior."
-                    >
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 xl:grid-cols-3">
-                        {flagField('manual_locking')}
-                        {flagField('hide_from_sitemap')}
-                        {flagField('noindex')}
-                      </div>
-                    </SettingsCard>
-                  </div>
-                </>
-              )}
+      <div
+        id="lock-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`lock-tab-${tab}`}
+        className="flex flex-col gap-3 p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+      >
+        {lock.sync_status === 'error' && (
+          <FormMessage tone="error">
+            {`This lock was saved but could not be sent to the store${lock.sync_error ? `: ${lock.sync_error}` : '.'} Use “Set up store” on the list to push it again.`}
+          </FormMessage>
+        )}
 
-              {tab === 'access' && <LockAccessTab lock={lock} shop={shop} />}
+        {tab === 'overview' && (
+          // The picture (with a way to the product's page) and the product's details on the left;
+          // on the right the keys (the tags that give access, with a pencil) and the settings.
+          <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+            <aside className="flex min-w-0 flex-col gap-4">
+              <div
+                // The picture sits in its own card, with the product link over its foot.
+                className={`${DETAIL_CARD} relative overflow-hidden p-0 [&_img]:rounded-none [&_img]:border-0 [&_span]:rounded-none [&_span]:border-0`}
+              >
+                {pictureUrl ? (
+                  // The picture opens full size in the same viewer as a product's pictures.
+                  <button
+                    type="button"
+                    onClick={() => setViewing(true)}
+                    aria-label={`View picture of ${lock.title}`}
+                    title="View picture"
+                    className="focus-visible:outline-accent block w-full cursor-zoom-in border-none bg-transparent p-0 focus-visible:outline-2"
+                  >
+                    <LockImage src={lock.image_url} size="xl" />
+                  </button>
+                ) : (
+                  <LockImage src={lock.image_url} size="xl" />
+                )}
+                <Link
+                  to={linkedProductPath(lock.product_id)}
+                  state={linkedState(lock.title)}
+                  className="bg-bg text-text hover:text-accent absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-1.5 text-[0.82rem] font-semibold whitespace-nowrap no-underline shadow-md transition-colors"
+                >
+                  <EyeIcon width={16} height={16} />
+                  View Product
+                  <ExternalLinkIcon width={14} height={14} />
+                </Link>
+              </div>
+
+              <DetailSection title="Product Details" icon={ProductsIcon} compact>
+                <dl className="m-0 flex flex-col gap-2.5 text-[0.85rem]">
+                  <FactRow label="Product ID">
+                    <span className="flex items-center justify-end gap-1.5">
+                      <span className="font-semibold break-all">
+                        {lock.shopify_id ?? lock.product_id}
+                      </span>
+                      <CopyButton
+                        value={String(lock.shopify_id ?? lock.product_id)}
+                        label="Copy product ID"
+                      />
+                    </span>
+                  </FactRow>
+                  {shopName && (
+                    <FactRow label="Store">
+                      <span className="font-semibold">{shopName}</span>
+                    </FactRow>
+                  )}
+                  <FactRow label="Status">
+                    <Badge tone="neutral">{lock.status ?? '—'}</Badge>
+                  </FactRow>
+                </dl>
+              </DetailSection>
+            </aside>
+
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className={`${DETAIL_CARD} p-3`}>
+                <LockKeysSection lock={lock} shop={shop} />
+              </div>
+              <div className="grid items-start gap-4 xl:grid-cols-2">
+                <SettingsCard
+                  icon={EyeIcon}
+                  title="Access & Visibility"
+                  description="Who can access the product and where it is visible."
+                >
+                  {flagRow('hide_from_nav', ListChecksIcon)}
+                  {flagRow('hide_from_lists', ListChecksIcon)}
+                </SettingsCard>
+                <SettingsCard
+                  icon={SlidersIcon}
+                  title="Advanced Settings"
+                  description="Extra lock options and indexing behavior."
+                >
+                  {flagRow('manual_locking', LockIcon)}
+                  {flagRow('hide_from_sitemap', LayersIcon)}
+                  {flagRow('noindex', SearchIcon)}
+                </SettingsCard>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {tab === 'access' && <LockAccessTab lock={lock} shop={shop} />}
       </div>
       {pictureUrl && (
         <ProductLightbox
@@ -510,7 +486,7 @@ export function LockDetailsView({
   )
 }
 
-/** A settings card: a tinted header (icon tile, title, one line about it) over its fields. */
+/** A settings card: a tinted header (icon, title, one line about it) over its rows. */
 function SettingsCard({
   icon: Icon,
   title,
@@ -523,22 +499,20 @@ function SettingsCard({
   children: ReactNode
 }) {
   return (
-    <section className={`${DETAIL_CARD} overflow-hidden`}>
-      <div className="bg-accent-tint/60 border-border-strong flex items-center gap-2.5 border-b px-4 py-2">
-        <span className="bg-accent-tint text-accent border-accent/20 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
-          <Icon width={18} height={18} />
-        </span>
+    <section className={`${DETAIL_CARD} min-w-0 overflow-hidden`}>
+      <div className="bg-accent-tint/60 border-border-strong flex items-center gap-3 border-b px-4 py-3">
+        <Icon width={22} height={22} className="text-accent shrink-0" />
         <div className="min-w-0">
-          <h3 className="m-0 text-[0.95rem] font-semibold">{title}</h3>
+          <h3 className="m-0 text-[1rem] font-semibold">{title}</h3>
           <p className="text-text-muted m-0 text-[0.78rem]">{description}</p>
         </div>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="px-4 py-1">{children}</div>
     </section>
   )
 }
 
-/** One label / value line of the Quick info card. */
+/** One label / value line of the Product Details card. */
 function FactRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">

@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
-import { AlertTriangleIcon, EyeIcon, LockIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  ExternalLinkIcon,
+  EyeIcon,
+  LockIcon,
+} from '../../../components/ui/icons.tsx'
 import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
@@ -12,6 +17,26 @@ import { formatDate, formatDateTime } from '../../../lib/format.ts'
 import { hiddenFrom, linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
 import { LockImage } from './LockCard.tsx'
 import { LockStatusSelect } from './LockStatusSelect.tsx'
+
+/**
+ * A small link icon after the product's name, in the same 20px box with a 15px icon as the
+ * Products list's: it opens the product's details page (inside Lock Management, as a tab of its
+ * own), the same place the picture opens.
+ */
+function ProductLink({ lock }: { lock: AccessLock }) {
+  const linkedState = useLinkedState()
+  return (
+    <Link
+      to={linkedProductPath(lock.product_id)}
+      state={linkedState(lock.title)}
+      aria-label={`View product details of ${lock.title}`}
+      title="View product details"
+      className="text-text-muted hover:text-text focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 items-center justify-center leading-none transition-colors focus-visible:outline-2"
+    >
+      <ExternalLinkIcon width={15} height={15} />
+    </Link>
+  )
+}
 
 // No alignment in the header or cell base: each column sets its own, the same for its header and
 // its cells (a `text-left` here would fight the `text-center` added next to it).
@@ -295,7 +320,7 @@ export function LocksList({
                   <td className={`${TD} text-left`}>
                     <span className="flex items-center gap-3">
                       <ProductThumb lock={lock} hint />
-                      <span className="flex min-w-0 flex-col">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => onOpen(lock)}
@@ -304,6 +329,7 @@ export function LocksList({
                         >
                           <Highlight text={lock.title} />
                         </button>
+                        <ProductLink lock={lock} />
                       </span>
                     </span>
                   </td>
