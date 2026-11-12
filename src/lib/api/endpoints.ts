@@ -65,12 +65,15 @@ export const ENDPOINTS = {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
-    /** `GET` the customers as a CSV file. Singular `/customer`, unlike the rest of this group. */
-    export: '/customer/export',
+    /**
+     * `GET` the customers as a CSV file. Plural, like `/products/export` and the rest of this group:
+     * the singular `/customer/export` the request first named answers 404 "Not Found".
+     */
+    export: '/customers/export',
     /** `POST` a customers CSV (multipart): checks it (`dry_run`) or starts the import. */
-    import: '/customer/import',
+    import: '/customers/import',
     /** `GET` how a started import is going; `id` is the `import_id` its plan answered with. */
-    importStatus: (id: string) => `/customer/import/${encodeURIComponent(id)}`,
+    importStatus: (id: string) => `/customers/import/${encodeURIComponent(id)}`,
   },
   inventory: {
     /** `GET` the stock list (paged, with `totals` and the stores' `locations`). */

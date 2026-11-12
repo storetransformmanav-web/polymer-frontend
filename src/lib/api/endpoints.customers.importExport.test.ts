@@ -14,7 +14,7 @@ beforeEach(() => {
   post.mockReset()
 })
 
-describe('GET /customer/export (api.customers.export)', () => {
+describe('GET /customers/export (api.customers.export)', () => {
   it('asks for a CSV with the given query and returns its text', async () => {
     get.mockResolvedValue('Email\na@example.com\n')
 
@@ -23,7 +23,7 @@ describe('GET /customer/export (api.customers.export)', () => {
     )
 
     expect(get).toHaveBeenCalledWith(
-      '/customer/export',
+      '/customers/export',
       expect.objectContaining({
         params: { role: 'all', shop: 'polymer-uk' },
         headers: { Accept: 'text/csv, application/json;q=0.5' },
@@ -42,7 +42,7 @@ describe('GET /customer/export (api.customers.export)', () => {
   })
 })
 
-describe('POST /customer/import (api.customers.import)', () => {
+describe('POST /customers/import (api.customers.import)', () => {
   it('sends the file and the choices as a form, and reads the plan', async () => {
     post.mockResolvedValue({
       message: 'Checked.',
@@ -62,7 +62,7 @@ describe('POST /customer/import (api.customers.import)', () => {
     })
 
     const [path, form] = post.mock.calls[0]
-    expect(path).toBe('/customer/import')
+    expect(path).toBe('/customers/import')
     const sent = form as FormData
     expect((sent.get('file') as File).name).toBe('customers.csv')
     expect(sent.get('shop')).toBe('polymer-uk')
@@ -82,7 +82,7 @@ describe('POST /customer/import (api.customers.import)', () => {
 
     const progress = await api.customers.importStatus('imp/1')
 
-    expect(get).toHaveBeenCalledWith('/customer/import/imp%2F1')
+    expect(get).toHaveBeenCalledWith('/customers/import/imp%2F1')
     expect(progress.state).toBe('done')
   })
 })
