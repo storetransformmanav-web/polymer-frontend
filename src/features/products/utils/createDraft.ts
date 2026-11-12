@@ -1,3 +1,4 @@
+import { sanitizeHtml } from '../../../lib/sanitizeHtml.ts'
 import type {
   InventoryPolicy,
   ProductCreateBody,
@@ -599,7 +600,9 @@ export function buildCreateBody(draft: CreateDraft): ProductCreateBody {
     }),
   }
 
-  if (draft.descriptionHtml.trim()) body.description_html = draft.descriptionHtml
+  // Cleaned before it leaves: the store shows it to its customers (lib/sanitizeHtml.ts).
+  if (draft.descriptionHtml.trim())
+    body.description_html = sanitizeHtml(draft.descriptionHtml)
   if (trimmed(draft.vendor)) body.vendor = trimmed(draft.vendor)
   if (trimmed(draft.productType)) body.product_type = trimmed(draft.productType)
   if (trimmed(draft.handle)) body.handle = trimmed(draft.handle)

@@ -26,6 +26,15 @@ const LINKED_ID = '__linked__'
 /** How long a "saved" confirmation stays on screen. */
 const NOTICE_MS = 10_000
 
+/** The product or customer opened from a lock, remembered so its tab stays open. */
+interface LinkedTab {
+  kind: 'product' | 'customer'
+  id: string
+  name: string | null
+  /** The address it was opened from (the lock), where its Back and ✕ return. */
+  from: string | null
+}
+
 // The page itself does not scroll from `lg` up (`fillHeight` in navigation.ts): the table has
 // its own scrollbar, and the Add lock form and a lock's page scroll inside this box.
 const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
@@ -69,6 +78,35 @@ export function LocksPage() {
     : null
   const details = useLockDetails(shop, activeHandle, activeRow)
   const lockTabs = useLockTabs()
+
+  // The product or customer opened from a lock keeps its tab while the person goes back to the
+  // lock (or another lock) — it is only closed by its own ✕ or Clear, not by switching tabs.
+  const linkedFrom = readLinkedFrom(location.state, LIST_PATH)
+  const [linkedTab, setLinkedTab] = useState<LinkedTab | null>(null)
+  // While it is on screen the address is the truth; what it lacks (no router state after a
+  // reload) is taken from the remembered tab of the same record.
+  const sameAsRemembered =
+    !!linked && linkedTab?.kind === linked.kind && linkedTab.id === linked.id
+  const shownLinked: LinkedTab | null = linked
+    ? {
+        kind: linked.kind,
+        id: linked.id,
+        name: linkedName ?? (sameAsRemembered ? linkedTab.name : null),
+        from: linkedFrom ?? (sameAsRemembered ? linkedTab.from : null),
+      }
+    : linkedTab
+  // Remember it (adjusting state while rendering, React's pattern for state derived from props).
+  if (
+    linked &&
+    shownLinked &&
+    !(
+      sameAsRemembered &&
+      linkedTab.name === shownLinked.name &&
+      linkedTab.from === shownLinked.from
+    )
+  ) {
+    setLinkedTab(shownLinked)
+  }
   const { openTab, closeTab } = lockTabs
   const openedTitle = details.lock?.title ?? null
 
@@ -129,7 +167,20 @@ export function LocksPage() {
   // Closing the product or customer goes to the address it was opened from (the lock, or the
   // list) — never "back in history", which may be another page if the person left and returned.
   function leaveLinked() {
-    navigate(readLinkedFrom(location.state, LIST_PATH) ?? LIST_PATH, { replace: true })
+    navigate(shownLinked?.from ?? LIST_PATH, { replace: true })
+  }
+
+  /** ✕ on the product's / customer's tab: forget it, and leave it when it is on screen. */
+  function closeLinked() {
+    setLinkedTab(null)
+    if (linked) leaveLinked()
+  }
+
+  /** Back to the product / customer opened from a lock, from its tab. */
+  function showLinked(tab: LinkedTab) {
+    navigate(`${LIST_PATH}/${tab.kind}/${encodeURIComponent(tab.id)}`, {
+      state: { linkedName: tab.name ?? undefined, from: tab.from ?? undefined },
+    })
   }
 
   const tabsBar = (
@@ -140,14 +191,15 @@ export function LocksPage() {
           label: tab.title ?? tab.id,
           title: `/products/${tab.id}`,
         })),
-        ...(linked
+        ...(shownLinked
           ? [
               {
                 id: LINKED_ID,
                 label:
-                  linkedName ?? (linked.kind === 'customer' ? 'Customer' : 'Product'),
-                kind: linked.kind === 'customer' ? 'Customer' : 'Product',
-                title: linkedName ?? undefined,
+                  shownLinked.name ??
+                  (shownLinked.kind === 'customer' ? 'Customer' : 'Product'),
+                kind: shownLinked.kind === 'customer' ? 'Customer' : 'Product',
+                title: shownLinked.name ?? undefined,
               },
             ]
           : []),
@@ -161,11 +213,13 @@ export function LocksPage() {
       onShowList={() => navigate(LIST_PATH)}
       onSelect={(id) => {
         if (id !== LINKED_ID) navigate(lockPath(id))
+        else if (linkedTab && !linked) showLinked(linkedTab)
       }}
-      onClose={(id) => (id === LINKED_ID ? leaveLinked() : closeLockTab(id))}
+      onClose={(id) => (id === LINKED_ID ? closeLinked() : closeLockTab(id))}
       onClear={() => {
         lockTabs.clearTabs()
-        if (activeHandle) navigate(LIST_PATH)
+        setLinkedTab(null)
+        if (activeHandle || linked) navigate(LIST_PATH)
       }}
     />
   )

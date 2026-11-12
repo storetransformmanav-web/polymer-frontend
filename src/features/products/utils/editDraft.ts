@@ -1,3 +1,4 @@
+import { sanitizeHtml } from '../../../lib/sanitizeHtml.ts'
 import {
   INVENTORY_POLICIES,
   PRODUCT_EDIT_STATUSES,
@@ -599,7 +600,8 @@ export function buildUpdateBody(
 
   if (draft.title.trim() !== product.title) body.title = draft.title.trim()
   if (draft.descriptionHtml !== (product.description_html ?? '')) {
-    body.description_html = draft.descriptionHtml
+    // Cleaned before it leaves: the store shows it to its customers (lib/sanitizeHtml.ts).
+    body.description_html = sanitizeHtml(draft.descriptionHtml)
   }
   if (draft.vendor.trim() !== (product.vendor ?? '')) body.vendor = draft.vendor.trim()
   if (draft.productType.trim() !== (product.product_type ?? '')) {

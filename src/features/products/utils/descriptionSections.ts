@@ -1,3 +1,4 @@
+import { sanitizeHtml } from '../../../lib/sanitizeHtml.ts'
 import { z } from 'zod'
 import type { ProductDetail, ProductMetafieldInput } from '../../../lib/api/endpoints.ts'
 
@@ -67,7 +68,8 @@ export const DEFAULT_APD_SETTINGS = {
 /** A section as the app saves a new one: title, HTML, position, and the two flags it keeps. */
 const newSection = (draft: SectionDraft, index: number) => ({
   title: draft.title.trim(),
-  content: draft.content,
+  // Cleaned before it leaves (lib/sanitizeHtml.ts).
+  content: sanitizeHtml(draft.content),
   position: index,
   chosen: false,
   selected: false,
@@ -285,7 +287,8 @@ export function buildSectionsMetafield(
         // A section that was there keeps everything of its own; a new one gets the app's flags.
         ...(draft.source ?? { chosen: false, selected: false }),
         title: draft.title.trim(),
-        content: draft.content,
+        // Cleaned before it leaves (lib/sanitizeHtml.ts).
+        content: sanitizeHtml(draft.content),
         position: index,
       })),
     }),

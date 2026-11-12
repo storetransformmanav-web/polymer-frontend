@@ -1,4 +1,5 @@
 import { createElement, Fragment, type ReactNode } from 'react'
+import { sanitizeHtml } from '../../lib/sanitizeHtml.ts'
 
 /**
  * Shows a piece of HTML (a product description from the store) with its structure —
@@ -147,7 +148,9 @@ function convert(node: Node, key: string): ReactNode {
 }
 
 export function SafeHtml({ html, className }: { html: string; className?: string }) {
-  const doc = new DOMParser().parseFromString(html, 'text/html')
+  // Cleaned first (see lib/sanitizeHtml.ts), then parsed into an inert document and rebuilt as
+  // React elements from the allow-list below: two layers, and never put on the page as markup.
+  const doc = new DOMParser().parseFromString(sanitizeHtml(html), 'text/html')
   return (
     <div className={className}>
       {Array.from(doc.body.childNodes).map((node, index) => convert(node, String(index)))}
