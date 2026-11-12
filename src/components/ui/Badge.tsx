@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BADGE_TONE_CLASSES, type BadgeTone } from './badgeTones.ts'
+import { BADGE_OUTLINE_CLASSES, BADGE_PILL_BASE, type BadgeTone } from './badgeTones.ts'
 
 export type { BadgeTone }
 
@@ -11,14 +11,13 @@ export interface BadgeProps {
 }
 
 /**
- * Small status pill (order/fulfillment/product status, etc). Generic
- * tone-based coloring, same tone vocabulary as StatCard.
+ * Small status pill (order/fulfillment/product status, etc): a tinted box with a thin border of
+ * the tone's colour and bold capitals — RECEIVED, SELLABLE, NON-SELLABLE. Generic tone-based
+ * coloring, same tone vocabulary as StatCard.
  */
 export function Badge({ tone = 'default', children, className = '' }: BadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${BADGE_TONE_CLASSES[tone]} ${className}`}
-    >
+    <span className={`${BADGE_PILL_BASE} ${BADGE_OUTLINE_CLASSES[tone]} ${className}`}>
       {children}
     </span>
   )

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { BADGE_TONE_CLASSES, type BadgeTone } from './badgeTones.ts'
+import { BADGE_OUTLINE_CLASSES, BADGE_PILL_BASE, type BadgeTone } from './badgeTones.ts'
 import { CheckIcon, ChevronDownIcon, SpinnerIcon } from './icons.tsx'
 
 export interface PillOption {
@@ -27,8 +27,7 @@ interface PillSelectProps {
 
 /** Room the menu needs below the button, to decide whether to open upward. */
 const MENU_HEIGHT = 150
-const PILL =
-  'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap'
+const PILL = BADGE_PILL_BASE
 
 /**
  * A value as a coloured pill with a dropdown: pick another and `onChange` is called (the caller
@@ -158,7 +157,7 @@ export function PillSelect({
             if (!open) openMenu()
           }
         }}
-        className={`${PILL} focus-visible:outline-accent ${widthClass} cursor-pointer justify-center gap-1.5 border-none focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_TONE_CLASSES[current?.tone ?? 'neutral']}`}
+        className={`${PILL} focus-visible:outline-accent ${widthClass} cursor-pointer justify-center gap-1.5 focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_OUTLINE_CLASSES[current?.tone ?? 'neutral']}`}
       >
         {current?.label ?? value}
         {saving ? (
@@ -212,7 +211,7 @@ export function PillSelect({
                   index === active ? 'bg-surface' : ''
                 }`}
               >
-                <span className={`${PILL} ${BADGE_TONE_CLASSES[option.tone]}`}>
+                <span className={`${PILL} ${BADGE_OUTLINE_CLASSES[option.tone]}`}>
                   {option.label}
                 </span>
                 {option.value === value && (

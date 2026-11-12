@@ -28,7 +28,7 @@ const TH_CENTER = `${TH_BASE} text-center`
 const TD = 'overflow-hidden px-3 py-3 align-middle'
 const SKELETON_ROWS = 8
 // The payment pills: one width, centred in their column, so they line up.
-const PILL = 'w-32 justify-center'
+const PILL = 'w-[9.5rem]'
 
 interface OrdersListProps {
   items: OrderListItem[]

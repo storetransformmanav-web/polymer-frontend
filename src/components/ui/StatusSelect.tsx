@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { BADGE_TONE_CLASSES, type BadgeTone } from './badgeTones.ts'
+import { BADGE_OUTLINE_CLASSES, BADGE_PILL_BASE, type BadgeTone } from './badgeTones.ts'
 import { CheckIcon, ChevronDownIcon, SpinnerIcon } from './icons.tsx'
 
 export interface StatusOption {
@@ -28,8 +28,7 @@ interface StatusSelectProps {
 
 /** Room the menu needs below the button (three rows and padding), to decide whether to open upward. */
 const MENU_HEIGHT = 150
-const PILL =
-  'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap'
+const PILL = BADGE_PILL_BASE
 
 /**
  * A status as a coloured pill with a dropdown — generic: the caller gives the choices, their
@@ -162,7 +161,7 @@ export function StatusSelect({
             if (!open) openMenu()
           }
         }}
-        className={`${PILL} focus-visible:outline-accent w-[5.5rem] cursor-pointer justify-center gap-1.5 border-none focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_TONE_CLASSES[valueTone]}`}
+        className={`${PILL} focus-visible:outline-accent w-[5.5rem] cursor-pointer justify-center gap-1.5 focus-visible:outline-2 disabled:cursor-progress disabled:opacity-70 ${BADGE_OUTLINE_CLASSES[valueTone]}`}
       >
         {valueLabel}
         {saving ? (
@@ -217,7 +216,7 @@ export function StatusSelect({
                   option.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
                 } ${index === active ? 'bg-surface' : ''}`}
               >
-                <span className={`${PILL} ${BADGE_TONE_CLASSES[option.tone]}`}>
+                <span className={`${PILL} ${BADGE_OUTLINE_CLASSES[option.tone]}`}>
                   {option.label}
                 </span>
                 {option.value === value && (
