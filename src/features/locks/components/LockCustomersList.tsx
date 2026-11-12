@@ -83,8 +83,10 @@ export function LockCustomersList({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
-          <div className="border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
+        {/* The table runs the whole width of the card and fills its height, like the Products
+            list's: sticky header, rows of the same size, the paging footer fixed under it. */}
+        <div className="flex min-h-0 flex-1 flex-col pt-3">
+          <div className="border-border bg-bg relative flex min-h-0 flex-1 flex-col overflow-hidden border-t">
             {customers.error ? (
               <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-12 text-center text-[0.9rem]">
                 <AlertTriangleIcon width={26} height={26} className="text-danger" />
@@ -114,7 +116,7 @@ export function LockCustomersList({
                 aria-busy={customers.isPending || customers.isShowingPrevious}
                 className="min-h-0 flex-1 overflow-auto"
               >
-                <table className="w-full min-w-[860px] border-collapse text-[0.85rem]">
+                <table className="w-full min-w-[960px] table-fixed border-collapse text-[0.85rem]">
                   <thead>
                     <tr>
                       <th className={`${TH} w-[24%]`}>Name</th>
@@ -142,7 +144,7 @@ export function LockCustomersList({
                           return (
                             <tr
                               key={customer.id}
-                              className="hover:bg-accent-tint/40 transition-colors"
+                              className="even:bg-surface hover:bg-accent-tint/60 transition-colors"
                             >
                               <td className={`${TD} font-medium`}>
                                 <span className="flex flex-wrap items-center gap-3">
