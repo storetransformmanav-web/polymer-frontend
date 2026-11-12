@@ -14,6 +14,13 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CustomerListItem, CustomerSort } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice, initials } from '../../../lib/format.ts'
 import {
+  ACTIONS_COLUMN_REM,
+  tableMinWidthRem,
+  type CustomerColumnDef,
+} from '../utils/columns.ts'
+import {
+  asFlag,
+  asText,
   capitalize,
   customerLocation,
   customerName,
@@ -53,6 +60,8 @@ interface CustomersListProps {
   order: 'asc' | 'desc'
   /** A header's sort button was clicked. */
   onSort: (sort: CustomerSort) => void
+  /** The columns to draw between Customer name and Actions, in order (the Columns menu's choice). */
+  columns: CustomerColumnDef[]
 }
 
 function Avatar({ name }: { name: string }) {
@@ -121,6 +130,135 @@ const money = (customer: CustomerListItem) =>
   formatPrice(customer.total_spent ?? '0', customer.currency)
 const dateOrDash = (value: string | null | undefined) => (value ? formatDate(value) : '—')
 
+const DASH = <span className="text-text-muted">—</span>
+
+/** Plain text, cut short with the whole text on hover; a dash when there is none. */
+function TextCell({ value, highlight }: { value: string; highlight?: boolean }) {
+  if (!value) return DASH
+  return (
+    <span className="block truncate" title={value}>
+      {highlight ? <Highlight text={value} /> : value}
+    </span>
+  )
+}
+
+function FlagCell({ value }: { value: unknown }) {
+  const flag = asFlag(value)
+  return flag === null ? DASH : <span>{flag ? 'Yes' : 'No'}</span>
+}
+
+/** A marketing state ("SUBSCRIBED", "NOT_SUBSCRIBED"…) as a pill. */
+function MarketingCell({ value }: { value: unknown }) {
+  const state = asText(value)
+  if (!state) return DASH
+  return (
+    <Badge
+      tone={state.toUpperCase() === 'SUBSCRIBED' ? 'success' : 'neutral'}
+      className={PILL}
+    >
+      {humanize(state)}
+    </Badge>
+  )
+}
+
+/** What one chosen column shows for one customer. */
+function ColumnCell({
+  column,
+  customer,
+  name,
+}: {
+  column: CustomerColumnDef
+  customer: CustomerListItem
+  name: string
+}) {
+  switch (column.id) {
+    case 'note':
+      return <TextCell value={customer.note?.trim() ?? ''} />
+    case 'email_subscription':
+      return customer.accepts_marketing == null ? (
+        DASH
+      ) : (
+        <Badge tone={customer.accepts_marketing ? 'success' : 'neutral'} className={PILL}>
+          {customer.accepts_marketing ? 'Subscribed' : 'Not subscribed'}
+        </Badge>
+      )
+    case 'location':
+      return <TextCell value={customerLocation(customer)} />
+    case 'orders':
+      return <>{customer.orders_count.toLocaleString('en-GB')}</>
+    case 'amount_spent':
+      return <span className="font-semibold">{money(customer)}</span>
+    case 'email':
+      return customer.email ? (
+        // The address, with a copy button always visible beside it — the same button and box as
+        // the product name's on the Products page.
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={customer.email}>
+            <Highlight text={customer.email} />
+          </span>
+          <span className="flex h-5 shrink-0 items-center">
+            <CopyButton value={customer.email} label={`Copy email of ${name}`} />
+          </span>
+        </span>
+      ) : (
+        DASH
+      )
+    case 'phone':
+      return <TextCell value={customer.phone?.trim() ?? ''} highlight />
+    case 'first_name':
+      return <TextCell value={customer.first_name?.trim() ?? ''} />
+    case 'last_name':
+      return <TextCell value={customer.last_name?.trim() ?? ''} />
+    case 'postal_code':
+      return <TextCell value={asText(customer.zip)} />
+    case 'language':
+      return <TextCell value={asText(customer.locale)} />
+    case 'id': {
+      const id = String(customer.shopify_id ?? customer.id)
+      return (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={id}>
+            {id}
+          </span>
+          <span className="flex h-5 shrink-0 items-center">
+            <CopyButton value={id} label={`Copy id of ${name}`} />
+          </span>
+        </span>
+      )
+    }
+    case 'added':
+      return <>{dateOrDash(customer.shopify_created_at)}</>
+    case 'updated':
+      return <>{dateOrDash(asText(customer.updated_at))}</>
+    case 'sms_subscription':
+      return <MarketingCell value={customer.sms_marketing_state} />
+    case 'whatsapp_subscription':
+      return <MarketingCell value={customer.whatsapp_marketing_state} />
+    case 'tax_exempt':
+      return <FlagCell value={customer.tax_exempt} />
+    case 'deletable':
+      return <FlagCell value={customer.can_delete} />
+    case 'mergeable':
+      return <FlagCell value={customer.mergeable} />
+    case 'email_verified':
+      return <EmailVerified customer={customer} />
+    case 'role':
+      return (
+        <Badge tone={roleTone(customer.role)} className={PILL}>
+          {capitalize(customer.role)}
+        </Badge>
+      )
+    case 'shopify_state':
+      return customer.shopify_state ? (
+        <Badge tone={stateTone(customer.shopify_state)} className={PILL}>
+          {capitalize(customer.shopify_state)}
+        </Badge>
+      ) : (
+        DASH
+      )
+  }
+}
+
 function Message({ children }: { children: ReactNode }) {
   return (
     <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.9rem]">
@@ -151,6 +289,7 @@ export function CustomersList({
   sort,
   order,
   onSort,
+  columns,
 }: CustomersListProps) {
   const sortHeader = (label: string, column: CustomerSort) => (
     <SortButton
@@ -161,8 +300,8 @@ export function CustomersList({
     />
   )
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  // name, email, email verified, orders, spent, role, account state, joined, actions.
-  const columnCount = 9
+  // Customer name, the chosen columns and Actions.
+  const columnCount = columns.length + 2
 
   if (error) {
     return (
@@ -269,38 +408,35 @@ export function CustomersList({
       className="max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
-        className={`w-full min-w-[1480px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        style={{ minWidth: `${tableMinWidthRem(columns)}rem` }}
+        className={`w-full table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={TH} aria-sort={ariaSort(sort === 'name', order)}>
               {sortHeader('Customer name', 'name')}
             </th>
-            <th className={`${TH} w-72`} aria-sort={ariaSort(sort === 'email', order)}>
-              {sortHeader('Email', 'email')}
+            {columns.map((column) => (
+              <th
+                key={column.id}
+                style={{ width: `${column.width}rem` }}
+                className={
+                  column.align === 'right'
+                    ? TH_RIGHT
+                    : column.align === 'center'
+                      ? TH_CENTER
+                      : TH
+                }
+                aria-sort={
+                  column.sort ? ariaSort(sort === column.sort, order) : undefined
+                }
+              >
+                {column.sort ? sortHeader(column.label, column.sort) : column.label}
+              </th>
+            ))}
+            <th className={TH_CENTER} style={{ width: `${ACTIONS_COLUMN_REM}rem` }}>
+              Actions
             </th>
-            <th className={`${TH_CENTER} w-36`}>Email verified</th>
-            <th
-              className={`${TH_RIGHT} w-36`}
-              aria-sort={ariaSort(sort === 'orders_count', order)}
-            >
-              {sortHeader('Orders', 'orders_count')}
-            </th>
-            <th
-              className={`${TH_RIGHT} w-36`}
-              aria-sort={ariaSort(sort === 'total_spent', order)}
-            >
-              {sortHeader('Amount spent', 'total_spent')}
-            </th>
-            <th className={`${TH_CENTER} w-36`}>Role</th>
-            <th className={`${TH_CENTER} w-36`}>Shopify state</th>
-            <th
-              className={`${TH_CENTER} w-36`}
-              aria-sort={ariaSort(sort === 'created_at', order)}
-            >
-              {sortHeader('Joined', 'created_at')}
-            </th>
-            <th className={`${TH_CENTER} w-28`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -334,51 +470,20 @@ export function CustomersList({
                         </span>
                       </span>
                     </td>
-                    <td className={TD}>
-                      {customer.email ? (
-                        // The address, with a copy button always visible beside it — the same
-                        // button and box as the product name's on the Products page.
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate" title={customer.email}>
-                            <Highlight text={customer.email} />
-                          </span>
-                          <span className="flex h-5 shrink-0 items-center">
-                            <CopyButton
-                              value={customer.email}
-                              label={`Copy email of ${name}`}
-                            />
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <EmailVerified customer={customer} />
-                    </td>
-                    <td className={`${TD} text-right`}>
-                      {customer.orders_count.toLocaleString('en-GB')}
-                    </td>
-                    <td className={`${TD} text-right font-semibold`}>
-                      {money(customer)}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <Badge tone={roleTone(customer.role)} className={PILL}>
-                        {capitalize(customer.role)}
-                      </Badge>
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      {customer.shopify_state ? (
-                        <Badge tone={stateTone(customer.shopify_state)} className={PILL}>
-                          {capitalize(customer.shopify_state)}
-                        </Badge>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      {dateOrDash(customer.shopify_created_at)}
-                    </td>
+                    {columns.map((column) => (
+                      <td
+                        key={column.id}
+                        className={`${TD} ${
+                          column.align === 'right'
+                            ? 'text-right'
+                            : column.align === 'center'
+                              ? 'text-center'
+                              : 'text-left'
+                        }`}
+                      >
+                        <ColumnCell column={column} customer={customer} name={name} />
+                      </td>
+                    ))}
                     <td className={`${TD} text-center`}>
                       <span className="inline-flex items-center justify-center gap-0.5">
                         <button

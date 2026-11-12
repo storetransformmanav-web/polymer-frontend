@@ -925,6 +925,17 @@ const customerListItemSchema = z.object({
   last_order_name: z.string().nullish(),
   shopify_created_at: z.string().nullish(),
   last_login_at: z.string().nullish(),
+  // Extra details the Columns menu can show. The list answer may not carry them yet (the
+  // details do, for some), so each is read leniently — a value of an unexpected kind must never
+  // fail the whole list — and the table shows a dash for one that is missing.
+  zip: z.unknown().nullish(),
+  locale: z.unknown().nullish(),
+  tax_exempt: z.unknown().nullish(),
+  sms_marketing_state: z.unknown().nullish(),
+  whatsapp_marketing_state: z.unknown().nullish(),
+  can_delete: z.unknown().nullish(),
+  mergeable: z.unknown().nullish(),
+  updated_at: z.unknown().nullish(),
 })
 
 const customerListResponseSchema = z.object({

@@ -95,6 +95,8 @@ const callsForPage = (page: number) =>
 
 describe('CustomersPage', () => {
   beforeEach(() => {
+    // The Columns menu's choice is remembered in the browser: every test starts from the default.
+    window.localStorage.clear()
     list.mockImplementation((params) => Promise.resolve(respond(params)))
   })
 
@@ -198,58 +200,176 @@ describe('CustomersPage', () => {
       page_size: 25,
     })
     expect(screen.getByText(/Showing/)).toHaveTextContent('Showing 1 to 25 of 60 entries')
-    expect(screen.getByText('customer2@example.com')).toBeInTheDocument()
+    expect(screen.getByText('Customer 2')).toBeInTheDocument()
   })
 
-  it('shows every column by default: Customer name, Email, Email verified, Orders, Amount spent, Role, Shopify state, Joined, Actions', async () => {
+  const headerNames = () =>
+    within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+
+  it('shows these columns by default: Customer name, Email, Email subscription, Location, Orders, Amount spent, Actions', async () => {
     renderWithProviders(<CustomersPage />)
     await screen.findByText('Customer 2')
 
     const table = within(screen.getByRole('table'))
-    const headers = table.getAllByRole('columnheader').map((header) => header.textContent)
-    expect(headers).toEqual([
+    expect(headerNames()).toEqual([
       'Customer name',
       'Email',
-      'Email verified',
+      'Email subscription',
+      'Location',
       'Orders',
       'Amount spent',
-      'Role',
-      'Shopify state',
-      'Joined',
       'Actions',
     ])
     expect(table.queryByRole('checkbox')).toBeNull()
 
-    // #2: Shopify subscriber with money spent and a verified email.
+    // #2: a subscriber with money spent, living in the United Kingdom.
     const row = table.getByText('Customer 2').closest('tr')!
     expect(within(row).getByText('customer2@example.com')).toBeInTheDocument()
-    expect(within(row).getByText('Verified')).toBeInTheDocument()
+    expect(within(row).getByText('Subscribed')).toBeInTheDocument()
+    expect(within(row).getByText('United Kingdom')).toBeInTheDocument()
     expect(within(row).getByText('£45.70')).toBeInTheDocument()
-    // #3 has not verified; #1 (CRM) has no flag at all.
+    // #3 is not subscribed.
     expect(
-      within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not verified'),
+      within(table.getByText('Ian Rayner').closest('tr')!).getByText('Not subscribed'),
     ).toBeInTheDocument()
-    // The old Email subscription column is gone.
-    expect(table.queryByRole('columnheader', { name: 'Email subscription' })).toBeNull()
-    // Store, note, location, state and tags are not columns at all.
-    for (const name of ['Store', 'Note', 'Location', 'State', 'Tags']) {
+    // The other columns are in the Columns menu, hidden.
+    for (const name of ['Note', 'Phone', 'Email verified', 'Role', 'Shopify state']) {
       expect(table.queryByRole('columnheader', { name })).toBeNull()
     }
-    expect(within(row).queryByText('United Kingdom')).toBeNull()
-    expect(within(row).getByText('Subscriber')).toBeInTheDocument()
   })
 
-  it('has no Columns menu: every column is always shown', async () => {
-    renderWithProviders(<CustomersPage />)
-    await screen.findByText('Customer 2')
+  describe('the Columns menu', () => {
+    it('opens a list of every column, the shown ones first, with no Sort by', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
 
-    expect(screen.queryByRole('button', { name: 'Columns' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
 
-    const table = within(screen.getByRole('table'))
-    const crmRow = table.getByText('Customer 1').closest('tr')!
-    expect(within(crmRow).getByText('Administrator')).toBeInTheDocument()
-    expect(table.queryByRole('columnheader', { name: 'Last login' })).toBeNull()
+      expect(screen.queryByRole('combobox', { name: 'Sort by' })).toBeNull()
+      const hide = (name: string) => screen.getByRole('button', { name: `Hide ${name}` })
+      for (const name of [
+        'Email',
+        'Email subscription',
+        'Location',
+        'Orders',
+        'Amount spent',
+      ]) {
+        expect(hide(name)).toBeInTheDocument()
+      }
+      for (const name of [
+        'Note',
+        'Phone',
+        'First name',
+        'Last name',
+        'Postal code',
+        'Customer language',
+        'Id',
+        'Customer added date',
+        'Date customer updated',
+        'SMS subscription',
+        'WhatsApp subscription',
+        'Tax exempt',
+        'Deletable',
+        'Mergeable',
+        'Email verified',
+        'Role',
+        'Shopify state',
+      ]) {
+        expect(screen.getByRole('button', { name: `Show ${name}` })).toBeInTheDocument()
+      }
+    })
+
+    it('shows and hides a column at once, and remembers the choice', async () => {
+      const user = userEvent.setup()
+      const { unmount } = renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Phone' }))
+      await user.click(screen.getByRole('button', { name: 'Hide Orders' }))
+
+      expect(headerNames()).toEqual([
+        'Customer name',
+        'Email',
+        'Email subscription',
+        'Location',
+        'Amount spent',
+        'Phone',
+        'Actions',
+      ])
+
+      // Opened again later (a new visit): the same columns.
+      unmount()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+      expect(headerNames()).toContain('Phone')
+      expect(headerNames()).not.toContain('Orders')
+    })
+
+    it('puts a column in order with the arrow keys on its handle', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      screen.getByRole('button', { name: 'Move Orders' }).focus()
+      await user.keyboard('{ArrowUp}{ArrowUp}')
+
+      expect(headerNames()).toEqual([
+        'Customer name',
+        'Email',
+        'Orders',
+        'Email subscription',
+        'Location',
+        'Amount spent',
+        'Actions',
+      ])
+    })
+
+    it('Reset puts the default columns back', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Role' }))
+      expect(headerNames()).toContain('Role')
+
+      await user.click(screen.getByRole('button', { name: 'Reset' }))
+      expect(headerNames()).not.toContain('Role')
+    })
+
+    it('Clear All also puts the default columns back (and is on while the columns are changed)', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      const clearAll = screen.getByRole('button', { name: 'Clear All' })
+      expect(clearAll).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Role' }))
+      expect(headerNames()).toContain('Role')
+      expect(clearAll).toBeEnabled()
+
+      await user.click(clearAll)
+      expect(headerNames()).not.toContain('Role')
+      expect(clearAll).toBeDisabled()
+    })
+
+    it('sits after the Add customer button in the search row', async () => {
+      renderWithProviders(<CustomersPage />)
+      await screen.findByText('Customer 2')
+
+      const add = screen.getByRole('button', { name: 'Add customer' })
+      const columns = screen.getByRole('button', { name: 'Columns' })
+      expect(
+        add.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    })
   })
 
   it('falls back to first + last name, then the email, when there is no full name', async () => {

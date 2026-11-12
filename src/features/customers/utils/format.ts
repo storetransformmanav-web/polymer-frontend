@@ -57,6 +57,24 @@ export function humanize(value: string | null | undefined): string {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
+/** A piece of text from a value of unknown kind (a list answer's optional extras); '' when it is none. */
+export function asText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return ''
+}
+
+/** true / false from a value of unknown kind ("true" / "false" text too); null when it says neither. */
+export function asFlag(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase()
+    if (text === 'true') return true
+    if (text === 'false') return false
+  }
+  return null
+}
+
 /** One-line postal address from whichever parts exist. */
 export function formatAddressLines(address: {
   address1?: string | null

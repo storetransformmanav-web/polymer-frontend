@@ -436,6 +436,20 @@ export function ColumnsIcon(props: IconProps) {
   )
 }
 
+/** Six dots in two columns: the handle a row is dragged by. */
+export function GripIcon(props: IconProps) {
+  return (
+    <svg {...base} fill="currentColor" stroke="none" {...props}>
+      <circle cx="7.5" cy="5" r="1.3" />
+      <circle cx="12.5" cy="5" r="1.3" />
+      <circle cx="7.5" cy="10" r="1.3" />
+      <circle cx="12.5" cy="10" r="1.3" />
+      <circle cx="7.5" cy="15" r="1.3" />
+      <circle cx="12.5" cy="15" r="1.3" />
+    </svg>
+  )
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

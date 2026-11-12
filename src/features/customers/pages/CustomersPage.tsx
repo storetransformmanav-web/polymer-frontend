@@ -12,12 +12,14 @@ import {
 import { CustomerCreateView } from '../components/CustomerCreateView.tsx'
 import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
+import { CustomerColumnsMenu } from '../components/CustomerColumnsMenu.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
 import { CustomersImport } from '../components/CustomersImport.tsx'
 import { CustomersKpis } from '../components/CustomersKpis.tsx'
 import { CustomersList } from '../components/CustomersList.tsx'
 import { CustomersToolbar } from '../components/CustomersToolbar.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
+import { useCustomerColumns } from '../hooks/useCustomerColumns.ts'
 import { useCustomerFigures } from '../hooks/useCustomerFigures.ts'
 import { useCustomers } from '../hooks/useCustomers.ts'
 import { useCustomerTabs } from '../hooks/useCustomerTabs.ts'
@@ -52,6 +54,8 @@ export function CustomersPage() {
   const { '*': splat } = useParams()
   const { filters, data } = customers
   const figures = useCustomerFigures(filters, data)
+  // Which columns the table shows (the Columns menu), remembered on this browser.
+  const columnChoice = useCustomerColumns()
 
   // `/customers/<id>[/…]` → the customer id; `/customers` and `/customers/new` → null.
   const first = splat ? splat.split('/')[0] : ''
@@ -215,21 +219,37 @@ export function CustomersPage() {
       >
         <CustomersToolbar
           filters={filters}
-          hasFilters={customers.hasFilters}
+          // Clear All also puts the columns back to the default, so a changed choice counts
+          // as something to clear.
+          hasFilters={customers.hasFilters || !columnChoice.isDefault}
           onChange={customers.setFilters}
-          onReset={customers.resetFilters}
-          // Add customer sits in the search row, to the right of Filters and Clear All.
+          onReset={() => {
+            customers.resetFilters()
+            columnChoice.reset()
+          }}
+          // Add customer and then the Columns menu sit in the search row, to the right of Filters
+          // and Clear All. The cards of a narrow screen have no columns, so the menu is for the table.
           actions={
-            canManage ? (
-              <button
-                type="button"
-                onClick={openForm}
-                className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors"
-              >
-                <PlusIcon width={16} height={16} />
-                Add customer
-              </button>
-            ) : undefined
+            <>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={openForm}
+                  className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors"
+                >
+                  <PlusIcon width={16} height={16} />
+                  Add customer
+                </button>
+              )}
+              <div className="hidden md:block">
+                <CustomerColumnsMenu
+                  config={columnChoice.config}
+                  onToggle={columnChoice.toggle}
+                  onMove={columnChoice.move}
+                  onReset={columnChoice.reset}
+                />
+              </div>
+            </>
           }
         />
 
@@ -278,6 +298,7 @@ export function CustomersPage() {
               }}
               onRetry={customers.retry}
               onClearFilters={customers.resetFilters}
+              columns={columnChoice.columns}
               sort={filters.sort}
               order={filters.order}
               // A new column starts ascending; the same column flips direction.
