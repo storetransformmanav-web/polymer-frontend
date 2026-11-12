@@ -4,20 +4,29 @@ export interface PaginationProps {
   page: number
   totalPages: number
   onPageChange: (page: number) => void
+  /** Smaller buttons, for a card or a picker (default: the full-size ones of a list's footer). */
+  compact?: boolean
 }
 
 const BUTTON =
   'inline-flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-lg border px-3 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+const COMPACT = '!h-8 !min-w-8 !px-2.5 !text-[0.78rem]'
 const BUTTON_IDLE = 'border-border bg-bg text-text hover:border-accent'
 const BUTTON_CURRENT = 'border-text bg-text text-bg'
 
 /** Previous / numbered pages / Next. Generic: knows nothing about what it pages. */
-export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+export function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+  compact = false,
+}: PaginationProps) {
+  const size = compact ? COMPACT : ''
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1.5">
       <button
         type="button"
-        className={`${BUTTON} ${BUTTON_IDLE}`}
+        className={`${BUTTON} ${BUTTON_IDLE} ${size}`}
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
@@ -35,7 +44,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
             type="button"
             aria-label={`Page ${item}`}
             aria-current={item === page ? 'page' : undefined}
-            className={`${BUTTON} ${item === page ? BUTTON_CURRENT : BUTTON_IDLE}`}
+            className={`${BUTTON} ${item === page ? BUTTON_CURRENT : BUTTON_IDLE} ${size}`}
             onClick={() => item !== page && onPageChange(item)}
           >
             {item}
@@ -45,7 +54,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
 
       <button
         type="button"
-        className={`${BUTTON} ${BUTTON_IDLE}`}
+        className={`${BUTTON} ${BUTTON_IDLE} ${size}`}
         disabled={page >= totalPages}
         onClick={() => onPageChange(page + 1)}
       >

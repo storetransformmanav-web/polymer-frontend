@@ -210,9 +210,10 @@ export function LockCreateView({
                 total={products.total}
                 isPending={products.isPending}
                 isFetching={products.isFetching}
-                isLoadingMore={products.isLoadingMore}
-                hasMore={products.hasMore}
-                onLoadMore={products.loadMore}
+                page={products.page}
+                totalPages={products.totalPages}
+                pageSize={products.pageSize}
+                onPageChange={products.setPage}
                 error={products.error}
                 onRetry={products.retry}
               />
@@ -289,9 +290,10 @@ export function LockCreateView({
                   total={customers.total}
                   isPending={customers.isPending}
                   isFetching={customers.isFetching}
-                  isLoadingMore={customers.isLoadingMore}
-                  hasMore={customers.hasMore}
-                  onLoadMore={customers.loadMore}
+                  page={customers.page}
+                  totalPages={customers.totalPages}
+                  pageSize={customers.pageSize}
+                  onPageChange={customers.setPage}
                   error={customers.error}
                   onRetry={customers.retry}
                 />

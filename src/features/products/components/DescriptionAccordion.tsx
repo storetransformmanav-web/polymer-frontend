@@ -5,8 +5,8 @@ import type { DescriptionSections } from '../utils/descriptionSections.ts'
 
 /**
  * The product's description sections (Product Description, Product Information…) as
- * an accordion: one bordered row per section with its title, opening to show the
- * section's text. All start closed. When the store's setting says only one section
+ * an accordion: one bordered card per section with its title — a gap between them — opening to
+ * show the section's text. All start closed. When the store's setting says only one section
  * stays open at a time (`multi` false), opening one closes the others.
  */
 export function DescriptionAccordion({ sections, multi }: DescriptionSections) {
@@ -23,12 +23,15 @@ export function DescriptionAccordion({ sections, multi }: DescriptionSections) {
   }
 
   return (
-    <div className="border-border-strong divide-border-strong bg-bg divide-y overflow-hidden rounded-xl border">
+    <div className="flex flex-col gap-3">
       {sections.map((section, index) => {
         const isOpen = open.has(index)
         const bodyId = `${base}-${index}`
         return (
-          <div key={`${section.title}-${index}`}>
+          <div
+            key={`${section.title}-${index}`}
+            className="border-border-strong bg-bg overflow-hidden rounded-xl border"
+          >
             <h4 className="m-0">
               <button
                 type="button"

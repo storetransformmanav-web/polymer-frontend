@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { SearchIcon, SpinnerIcon, TagIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { useEffect, useRef, useState } from 'react'
+import { SearchIcon, TagIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { Pagination } from '../../../components/ui/Pagination.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useAccessTags } from '../hooks/usePickers.ts'
 import { parseTags } from '../utils/lockDraft.ts'
@@ -34,6 +35,11 @@ export function TagPicker({
   const [query, setQuery] = useState('')
   const [text, setText] = useDebouncedField(query, setQuery)
   const tags = useAccessTags(shop, query)
+  // A new page starts at the top of the list.
+  const listRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 })
+  }, [tags.page])
 
   const chosen = new Set(selected.map((tag) => tag.toLowerCase()))
   const typed = parseTags(text)
@@ -103,7 +109,11 @@ export function TagPicker({
       </div>
 
       <div className="border-border overflow-hidden rounded-lg border">
-        <ul aria-label="Tags in the store" className="max-h-64 overflow-auto">
+        <ul
+          ref={listRef}
+          aria-label="Tags in the store"
+          className="max-h-64 overflow-auto"
+        >
           {addable.map((tag) => (
             <li key={`new-${tag}`} className="border-border border-b">
               <button
@@ -189,22 +199,19 @@ export function TagPicker({
           )}
         </ul>
 
-        {tags.hasMore && !tags.error && (
-          <div className="border-border-strong bg-accent-tint/40 flex items-center justify-between gap-3 border-t px-3.5 py-2">
-            <span className="text-text-muted text-[0.75rem]">
-              Showing {count(tags.items.length)} of {count(tags.total)} tags
+        {tags.totalPages > 1 && !tags.error && (
+          <div className="border-border-strong bg-accent-tint/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t px-3.5 py-2">
+            <span className="text-text-muted text-[0.75rem]" aria-live="polite">
+              Showing {count((tags.page - 1) * tags.pageSize + 1)}–
+              {count(Math.min(tags.page * tags.pageSize, tags.total))} of{' '}
+              {count(tags.total)} tags
             </span>
-            <button
-              type="button"
-              disabled={tags.isLoadingMore}
-              onClick={tags.loadMore}
-              className="border-border bg-bg text-text hover:border-accent inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-60"
-            >
-              {tags.isLoadingMore && (
-                <SpinnerIcon width={14} height={14} className="animate-spin" />
-              )}
-              Load more
-            </button>
+            <Pagination
+              compact
+              page={tags.page}
+              totalPages={tags.totalPages}
+              onPageChange={tags.setPage}
+            />
           </div>
         )}
       </div>

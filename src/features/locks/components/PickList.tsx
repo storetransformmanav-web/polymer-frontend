@@ -1,5 +1,6 @@
-import { useId, type ReactNode } from 'react'
-import { SearchIcon, SpinnerIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { SearchIcon, XIcon } from '../../../components/ui/icons.tsx'
+import { Pagination } from '../../../components/ui/Pagination.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { LockImage } from './LockCard.tsx'
 
@@ -42,9 +43,11 @@ interface PickListProps {
   total: number
   isPending: boolean
   isFetching: boolean
-  isLoadingMore: boolean
-  hasMore: boolean
-  onLoadMore: () => void
+  /** The page on screen, how many there are, and how many rows a page holds. */
+  page: number
+  totalPages: number
+  pageSize: number
+  onPageChange: (page: number) => void
   error: string | null
   onRetry: () => void
   /** Tailwind max-height class of the rows' scroll box (default `max-h-80`). */
@@ -57,8 +60,9 @@ const CHECKBOX = 'accent-accent h-4 w-4 shrink-0 cursor-pointer'
 
 /**
  * A searchable list of everything the API has, one checkbox per row — for choosing many at
- * once. The header checkbox ticks every row shown, "Load more" brings the next page, and a
- * choice stays ticked through searches and pages (the parent keeps the picked items).
+ * once. The header checkbox ticks every row shown, the paging buttons move between the pages
+ * (the list scrolls back to its top), and a choice stays ticked through searches and pages (the
+ * parent keeps the picked items).
  */
 export function PickList({
   label,
@@ -75,9 +79,10 @@ export function PickList({
   total,
   isPending,
   isFetching,
-  isLoadingMore,
-  hasMore,
-  onLoadMore,
+  page,
+  totalPages,
+  pageSize,
+  onPageChange,
   error,
   onRetry,
   listHeight = 'max-h-80',
@@ -85,6 +90,11 @@ export function PickList({
 }: PickListProps) {
   const [text, setText] = useDebouncedField(search, onSearch)
   const headingId = useId()
+  // A new page starts at the top of the list.
+  const listRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 })
+  }, [page])
 
   const choosable = rows.filter((row) => !row.locked)
   const ticked = choosable.filter((row) => selectedIds.has(row.id)).length
@@ -143,11 +153,11 @@ export function PickList({
             </label>
             <span className="text-text-muted ml-auto text-[0.75rem]" aria-live="polite">
               {isPending ? 'Loading…' : `${total.toLocaleString('en-GB')} found`}
-              {isFetching && !isPending && !isLoadingMore ? ' · updating…' : ''}
+              {isFetching && !isPending ? ' · updating…' : ''}
             </span>
           </div>
 
-          <ul aria-label={label} className={`${listHeight} overflow-auto`}>
+          <ul ref={listRef} aria-label={label} className={`${listHeight} overflow-auto`}>
             {error ? (
               <li className="text-danger flex flex-col items-center gap-2 px-4 py-8 text-center text-[0.85rem]">
                 {error}
@@ -242,23 +252,19 @@ export function PickList({
             )}
           </ul>
 
-          {hasMore && !error && (
-            <div className="border-border-strong bg-accent-tint/40 flex items-center justify-between gap-3 border-t px-3.5 py-2">
-              <span className="text-text-muted text-[0.75rem]">
-                Showing {rows.length.toLocaleString('en-GB')} of{' '}
+          {totalPages > 1 && !error && (
+            <div className="border-border-strong bg-accent-tint/40 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t px-3.5 py-2">
+              <span className="text-text-muted text-[0.75rem]" aria-live="polite">
+                Showing {((page - 1) * pageSize + 1).toLocaleString('en-GB')}–
+                {Math.min(page * pageSize, total).toLocaleString('en-GB')} of{' '}
                 {total.toLocaleString('en-GB')}
               </span>
-              <button
-                type="button"
-                disabled={isLoadingMore}
-                onClick={onLoadMore}
-                className="border-border bg-bg text-text hover:border-accent inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-60"
-              >
-                {isLoadingMore && (
-                  <SpinnerIcon width={14} height={14} className="animate-spin" />
-                )}
-                Load more
-              </button>
+              <Pagination
+                compact
+                page={page}
+                totalPages={totalPages}
+                onPageChange={onPageChange}
+              />
             </div>
           )}
         </div>

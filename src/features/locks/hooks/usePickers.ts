@@ -1,8 +1,5 @@
-import {
-  useInfiniteQuery,
-  type UseInfiniteQueryResult,
-  type InfiniteData,
-} from '@tanstack/react-query'
+import { useState } from 'react'
+import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
@@ -15,79 +12,100 @@ const STALE_MS = 30_000
 
 interface PageOf<T> {
   total: number
-  has_next: boolean
+  total_pages: number
   page: number
   items: T[]
 }
 
-/** What a "pick from a long list" box needs from a paged query: the rows so far and a Load more. */
-function loadMoreState<T>(query: UseInfiniteQueryResult<InfiniteData<PageOf<T>>>) {
-  const pages = query.data?.pages ?? []
+/**
+ * The page the picker is on. It goes back to the first page whenever what is asked changes (the
+ * store, the search text) — the key says which — and keeps the page while only the page moves.
+ */
+function usePageState(resetKey: string) {
+  const [state, setState] = useState({ key: resetKey, page: 1 })
+  const page = state.key === resetKey ? state.page : 1
+  return [page, (next: number) => setState({ key: resetKey, page: next })] as const
+}
+
+/**
+ * What a "pick from a long list" box needs from a paged query: the rows of the page on screen and
+ * the paging (page, pages, how many match in all). The previous page stays on screen while the
+ * next one loads, so the list never blanks out.
+ */
+function pagedState<T>(
+  query: UseQueryResult<PageOf<T>>,
+  page: number,
+  setPage: (page: number) => void,
+  pageSize: number,
+) {
+  const data = query.data
   return {
-    items: pages.flatMap((page) => page.items),
-    /** How many match in all (not just the pages loaded). */
-    total: pages[0]?.total ?? 0,
+    items: data?.items ?? [],
+    /** How many match in all (not just this page). */
+    total: data?.total ?? 0,
+    page,
+    pageSize,
+    totalPages: Math.max(1, data?.total_pages ?? 1),
+    setPage,
     isPending: query.isPending,
     isFetching: query.isFetching,
-    isLoadingMore: query.isFetchingNextPage,
-    hasMore: query.hasNextPage,
-    loadMore: () => void query.fetchNextPage(),
-    error: query.isError && pages.length === 0 ? toUserMessage(query.error) : null,
+    error: query.isError && !data ? toUserMessage(query.error) : null,
     retry: () => void query.refetch(),
   }
 }
 
-const nextPage = (last: { has_next: boolean; page: number }) =>
-  last.has_next ? last.page + 1 : undefined
+const PRODUCT_PAGE_SIZE = 25
+const CUSTOMER_PAGE_SIZE = 25
+const TAG_PAGE_SIZE = 50
 
 /**
  * The products to choose from: every product of the store, A–Z, narrowed by what is typed.
- * Asked for when the picker is shown, not before; "Load more" brings the next page.
+ * Asked for when the picker is shown, not before; the paging buttons move between its pages.
  */
 export function usePickProducts(shop: string, search: string, enabled = true) {
   const text = search.trim()
-  const query = useInfiniteQuery({
-    queryKey: ['lock-picker', 'products', shop, text],
-    queryFn: async ({ pageParam }) => {
+  const [page, setPage] = usePageState(`${shop}|${text}`)
+  const query = useQuery({
+    queryKey: ['lock-picker', 'products', shop, text, page],
+    queryFn: async () => {
       const answer = await api.products.list({
         shop,
         search: text || undefined,
         sort: 'title',
         order: 'asc',
-        page: pageParam,
-        page_size: 25,
+        page,
+        page_size: PRODUCT_PAGE_SIZE,
       })
       return { ...answer, items: answer.items satisfies ProductListItem[] }
     },
-    initialPageParam: 1,
-    getNextPageParam: nextPage,
+    placeholderData: keepPreviousData,
     enabled: enabled && shop !== '',
     staleTime: STALE_MS,
   })
-  return loadMoreState(query)
+  return pagedState(query, page, setPage, PRODUCT_PAGE_SIZE)
 }
 
 /** The customers to give tags to (every role — the API's own default would hide administrators). */
 export function usePickCustomers(shop: string, search: string, enabled = true) {
   const text = search.trim()
-  const query = useInfiniteQuery({
-    queryKey: ['lock-picker', 'customers', shop, text],
-    queryFn: async ({ pageParam }) => {
+  const [page, setPage] = usePageState(`${shop}|${text}`)
+  const query = useQuery({
+    queryKey: ['lock-picker', 'customers', shop, text, page],
+    queryFn: async () => {
       const answer = await api.customers.list({
         shop,
         role: 'all',
         search: text || undefined,
-        page: pageParam,
-        page_size: 25,
+        page,
+        page_size: CUSTOMER_PAGE_SIZE,
       })
       return { ...answer, items: answer.items satisfies CustomerListItem[] }
     },
-    initialPageParam: 1,
-    getNextPageParam: nextPage,
+    placeholderData: keepPreviousData,
     enabled: enabled && shop !== '',
     staleTime: STALE_MS,
   })
-  return loadMoreState(query)
+  return pagedState(query, page, setPage, CUSTOMER_PAGE_SIZE)
 }
 
 /**
@@ -101,22 +119,22 @@ export function useAccessTags(
   { lockOnly = false, enabled = true }: { lockOnly?: boolean; enabled?: boolean } = {},
 ) {
   const text = search.trim()
-  const query = useInfiniteQuery({
-    queryKey: ['access-tags', shop, text, lockOnly],
-    queryFn: async ({ pageParam }) => {
+  const [page, setPage] = usePageState(`${shop}|${text}|${lockOnly}`)
+  const query = useQuery({
+    queryKey: ['access-tags', shop, text, lockOnly, page],
+    queryFn: async () => {
       const answer = await api.access.tags({
         shop,
         search: text || undefined,
         lock_only: lockOnly || undefined,
-        page: pageParam,
-        page_size: 50,
+        page,
+        page_size: TAG_PAGE_SIZE,
       })
       return { ...answer, items: answer.tags satisfies AccessTag[] }
     },
-    initialPageParam: 1,
-    getNextPageParam: nextPage,
+    placeholderData: keepPreviousData,
     enabled: enabled && shop !== '',
     staleTime: STALE_MS,
   })
-  return loadMoreState(query)
+  return pagedState(query, page, setPage, TAG_PAGE_SIZE)
 }

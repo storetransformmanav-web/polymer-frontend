@@ -155,9 +155,10 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
           total={store.total}
           isPending={store.isPending}
           isFetching={store.isFetching}
-          isLoadingMore={store.isLoadingMore}
-          hasMore={store.hasMore}
-          onLoadMore={store.loadMore}
+          page={store.page}
+          totalPages={store.totalPages}
+          pageSize={store.pageSize}
+          onPageChange={store.setPage}
           error={store.error}
           onRetry={store.retry}
           actions={

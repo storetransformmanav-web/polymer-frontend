@@ -1,3 +1,4 @@
+import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -267,21 +268,31 @@ export function OrdersList({
                     </td>
                     <td className={TD}>
                       {name ? (
-                        customerPath(order) ? (
-                          // A customer in the CRM: their name opens their details in this page.
-                          <Link
-                            to={customerPath(order) as string}
-                            state={linkedState(name)}
-                            title={`Open ${name}`}
-                            className="text-text hover:text-accent block truncate font-medium hover:underline"
-                          >
-                            <Highlight text={name} />
-                          </Link>
-                        ) : (
-                          <span className="block truncate" title={name}>
-                            <Highlight text={name} />
+                        // The name, with a small copy icon always visible beside it — the same
+                        // button and 20px box as the product name's on the Products page.
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {customerPath(order) ? (
+                            // A customer in the CRM: their name opens their details in this page.
+                            <Link
+                              to={customerPath(order) as string}
+                              state={linkedState(name)}
+                              title={`Open ${name}`}
+                              className="text-text hover:text-accent min-w-0 truncate font-medium hover:underline"
+                            >
+                              <Highlight text={name} />
+                            </Link>
+                          ) : (
+                            <span className="min-w-0 truncate" title={name}>
+                              <Highlight text={name} />
+                            </span>
+                          )}
+                          <span className="flex h-5 shrink-0 items-center">
+                            <CopyButton
+                              value={name}
+                              label={`Copy customer name ${name}`}
+                            />
                           </span>
-                        )
+                        </span>
                       ) : (
                         <span className="text-text-muted">—</span>
                       )}

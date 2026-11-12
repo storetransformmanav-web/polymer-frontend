@@ -8,6 +8,7 @@ import { useSessionGuard } from '../../hooks/useSessionGuard.ts'
 import { AppBar } from './AppBar.tsx'
 import { Navbar } from './Navbar.tsx'
 import { NoAccessPage } from './NoAccessPage.tsx'
+import { SystemNote } from './SystemNote.tsx'
 import { useActiveNavItem } from './useActiveNavItem.ts'
 
 /**
@@ -56,6 +57,7 @@ export function DashboardLayout() {
     >
       <Navbar />
       <div className={`flex min-w-0 flex-1 flex-col ${fill ? 'lg:min-h-0' : ''}`}>
+        <SystemNote />
         <AppBar />
         <main
           className={`bg-page flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
