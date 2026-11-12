@@ -183,6 +183,8 @@ function renderPage(route = '/products') {
 
 describe('ProductsPage list', () => {
   beforeEach(() => {
+    // The Columns menu's choice is remembered in the browser: every test starts from the default.
+    window.localStorage.clear()
     list.mockImplementation((params) => Promise.resolve(respond(params)))
     details.mockImplementation((id, raw) => Promise.resolve(makeDetail(id, raw)))
   })
@@ -836,6 +838,137 @@ describe('ProductsPage list', () => {
 
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Product 1')).toBeInTheDocument()
+  })
+
+  describe('the Columns menu', () => {
+    const headerNames = () =>
+      within(screen.getByRole('table'))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent)
+
+    it('opens a list of every column, the shown ones first, with an eye on each and no Sort by', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Product 1')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+
+      for (const name of ['Variants', 'Status', 'Inventory', 'Price']) {
+        expect(screen.getByRole('button', { name: `Hide ${name}` })).toBeInTheDocument()
+      }
+      for (const name of [
+        'Category',
+        'Product type',
+        'Vendor',
+        'Tags',
+        'Handle',
+        'Store',
+        'Created',
+        'Updated',
+        'Last synced',
+      ]) {
+        expect(screen.getByRole('button', { name: `Show ${name}` })).toBeInTheDocument()
+      }
+      expect(screen.queryByRole('combobox', { name: 'Sort by' })).toBeNull()
+    })
+
+    it('shows and hides a column at once, and remembers the choice', async () => {
+      const user = userEvent.setup()
+      const { unmount } = renderPage()
+      await screen.findByText('Product 1')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Vendor' }))
+      await user.click(screen.getByRole('button', { name: 'Hide Variants' }))
+
+      expect(headerNames()).toEqual([
+        '',
+        'Image',
+        'Product',
+        'Status',
+        'Inventory',
+        'Price',
+        'Vendor',
+        'Actions',
+      ])
+      expect(within(screen.getByRole('table')).getByText('Vendor 2')).toBeInTheDocument()
+
+      unmount()
+      renderPage()
+      await screen.findByText('Product 1')
+      expect(headerNames()).toContain('Vendor')
+      expect(headerNames()).not.toContain('Variants')
+    })
+
+    it('puts a column in order with the arrow keys on its handle', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Product 1')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      screen.getByRole('button', { name: 'Move Price' }).focus()
+      await user.keyboard('{ArrowUp}{ArrowUp}')
+
+      expect(headerNames()).toEqual([
+        '',
+        'Image',
+        'Product',
+        'Variants',
+        'Price',
+        'Status',
+        'Inventory',
+        'Actions',
+      ])
+    })
+
+    it('Clear All puts the default columns back (and is on while the columns are changed)', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Product 1')
+
+      const clearAll = screen.getByRole('button', { name: 'Clear All' })
+      expect(clearAll).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Vendor' }))
+      expect(headerNames()).toContain('Vendor')
+      expect(clearAll).toBeEnabled()
+
+      await user.click(clearAll)
+      expect(headerNames()).not.toContain('Vendor')
+      expect(clearAll).toBeDisabled()
+    })
+
+    it('sorts from the Created header, like the Sort by box does', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Product 1')
+
+      await user.click(screen.getByRole('button', { name: 'Columns' }))
+      await user.click(screen.getByRole('button', { name: 'Show Created' }))
+      await user.click(
+        within(screen.getByRole('columnheader', { name: /^Created/ })).getByRole(
+          'button',
+        ),
+      )
+
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ sort: 'created_at', order: 'asc', page: 1 }),
+        ),
+      )
+    })
+
+    it('sits after the Add product and Edit in bulk buttons in the search row', async () => {
+      renderPage()
+      await screen.findByText('Product 1')
+
+      const bulk = screen.getByRole('button', { name: 'Edit in bulk' })
+      const columns = screen.getByRole('button', { name: 'Columns' })
+      expect(
+        bulk.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    })
   })
 })
 

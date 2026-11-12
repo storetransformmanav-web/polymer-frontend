@@ -44,10 +44,10 @@ describe('Orders, Products and Customers lists look alike', () => {
     }
   })
 
-  it('give the customers and orders tables a width for every column, from the column list', () => {
+  it('give the customers, orders and products tables a width for every column, from the column list', () => {
     // The columns are chosen in the Columns menu, so each one carries its own width (in rem) and
     // the header draws it — no column is left to share the rest by chance.
-    for (const path of [LISTS.Customers, LISTS.Orders]) {
+    for (const path of [LISTS.Customers, LISTS.Orders, LISTS.Products]) {
       const code = source(path)
       const header = code.slice(code.indexOf('<thead>'), code.indexOf('</thead>'))
       expect(header, path).toContain('style={{ width: `${column.width}rem` }}')

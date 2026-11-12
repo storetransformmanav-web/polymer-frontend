@@ -1,6 +1,7 @@
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import type {
   ProductCreateResult,
@@ -32,9 +33,11 @@ import { ProductsKpis } from '../components/ProductsKpis.tsx'
 import { ProductsToolbar } from '../components/ProductsToolbar.tsx'
 import { usePrefetchDetails, type BulkSavedItem } from '../hooks/useBulkEdit.ts'
 import type { NewCollectionsOutcome } from '../hooks/useCreateProduct.ts'
+import { useProductColumns } from '../hooks/useProductColumns.ts'
 import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
+import { PRODUCT_COLUMNS } from '../utils/columns.ts'
 import { statusLabel } from '../utils/format.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 import { useStockSummary } from '../hooks/useStockSummary.ts'
@@ -89,6 +92,8 @@ const CREATE_PATH = `${LIST_PATH}/new`
  */
 export function ProductsPage() {
   const products = useProducts()
+  // Which columns the table shows (the Columns menu), remembered on this browser.
+  const columnChoice = useProductColumns()
   const tabs = useProductTabs()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
@@ -143,10 +148,12 @@ export function ProductsPage() {
     })
   }
 
-  // Clear All: the filters back to their defaults, and any ticked rows unticked.
+  // Clear All: the filters back to their defaults, any ticked rows unticked and the columns
+  // back to the default ones.
   function clearAll() {
     products.resetFilters()
     setSelected(new Set())
+    columnChoice.reset()
   }
 
   function openBulk(items: ProductListItem[]) {
@@ -500,28 +507,41 @@ export function ProductsPage() {
           filters={filters}
           facets={products.facets}
           total={data?.total ?? null}
-          hasFilters={products.hasFilters}
+          // A changed column choice counts as something to clear (Clear All puts it back).
+          hasFilters={products.hasFilters || !columnChoice.isDefault}
           hasSelection={selected.size > 0}
           onChange={products.setFilters}
           onReset={clearAll}
           actions={
-            !products.isPending && !products.error ? (
-              <ProductsBulkActions
-                onAdd={openCreate}
-                onAddIntent={preloadRichTextEditor}
-                pageCount={products.items.length}
-                selectedCount={selectedItems.length}
-                onEditPage={() => openBulk(products.items)}
-                onEditSelected={() => openBulk(selectedItems)}
-                onPrepare={() =>
-                  prefetchMany(
-                    (selectedItems.length > 0 ? selectedItems : products.items).map(
-                      (item) => item.id,
-                    ),
-                  )
-                }
-              />
-            ) : null
+            <>
+              {!products.isPending && !products.error ? (
+                <ProductsBulkActions
+                  onAdd={openCreate}
+                  onAddIntent={preloadRichTextEditor}
+                  pageCount={products.items.length}
+                  selectedCount={selectedItems.length}
+                  onEditPage={() => openBulk(products.items)}
+                  onEditSelected={() => openBulk(selectedItems)}
+                  onPrepare={() =>
+                    prefetchMany(
+                      (selectedItems.length > 0 ? selectedItems : products.items).map(
+                        (item) => item.id,
+                      ),
+                    )
+                  }
+                />
+              ) : null}
+              {/* Only the table has columns; the cards of a narrow screen do not. */}
+              <div className="hidden md:block">
+                <ColumnsMenu
+                  config={columnChoice.config}
+                  labelOf={(id) => PRODUCT_COLUMNS[id].label}
+                  onToggle={columnChoice.toggle}
+                  onMove={columnChoice.move}
+                  onReset={columnChoice.reset}
+                />
+              </div>
+            </>
           }
         />
 
@@ -574,6 +594,7 @@ export function ProductsPage() {
               }
               onRetry={products.retry}
               onClearFilters={products.resetFilters}
+              columns={columnChoice.columns}
             />
           </HighlightQuery>
 

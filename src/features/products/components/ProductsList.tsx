@@ -13,6 +13,12 @@ import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem, ProductSort } from '../../../lib/api/endpoints.ts'
+import { formatDate } from '../../../lib/format.ts'
+import {
+  PRODUCT_ACTIONS_COLUMN_REM,
+  productTableMinWidthRem,
+  type ProductColumnDef,
+} from '../utils/columns.ts'
 import {
   formatPriceRange,
   storefrontProductUrl,
@@ -68,6 +74,8 @@ interface ProductsListProps {
   onSort: (sort: ProductSort) => void
   onRetry: () => void
   onClearFilters: () => void
+  /** The columns to draw between Product and Actions, in order (the Columns menu's choice). */
+  columns: ProductColumnDef[]
 }
 
 function Stock({ value, suffix = '' }: { value: number | null; suffix?: string }) {
@@ -79,6 +87,72 @@ function Stock({ value, suffix = '' }: { value: number | null; suffix?: string }
       {suffix}
     </span>
   )
+}
+
+const DASH = <span className="text-text-muted">—</span>
+
+/** Plain text, cut short with the whole text on hover; a dash when there is none. */
+function TextCell({ value }: { value: string }) {
+  if (!value) return DASH
+  return (
+    <span className="block truncate" title={value}>
+      {value}
+    </span>
+  )
+}
+
+const dateOrDash = (value: string | null | undefined) => (value ? formatDate(value) : '—')
+
+/** What one chosen column shows for one product. */
+function ColumnCell({
+  column,
+  product,
+  statusPending,
+  statusErrors,
+  onStatusChange,
+}: {
+  column: ProductColumnDef
+  product: ProductListItem
+  statusPending: ProductsListProps['statusPending']
+  statusErrors: ProductsListProps['statusErrors']
+  onStatusChange: ProductsListProps['onStatusChange']
+}) {
+  switch (column.id) {
+    case 'variants':
+      return <>{product.variants_count.toLocaleString('en-GB')}</>
+    case 'status':
+      return (
+        <ProductStatusSelect
+          title={product.title}
+          value={statusPending[product.id] ?? product.status}
+          saving={product.id in statusPending}
+          error={statusErrors[product.id]}
+          onChange={(status) => onStatusChange(product, status)}
+        />
+      )
+    case 'inventory':
+      return <Stock value={product.total_inventory} />
+    case 'price':
+      return <span className="font-semibold">{formatPriceRange(product)}</span>
+    case 'category':
+      return <TextCell value={product.category_name?.trim() ?? ''} />
+    case 'product_type':
+      return <TextCell value={product.product_type?.trim() ?? ''} />
+    case 'vendor':
+      return <TextCell value={product.vendor?.trim() ?? ''} />
+    case 'tags':
+      return <TextCell value={product.tags.join(', ')} />
+    case 'handle':
+      return <TextCell value={product.handle} />
+    case 'store':
+      return <TextCell value={product.shop?.name?.trim() ?? ''} />
+    case 'created':
+      return <>{dateOrDash(product.shopify_created_at)}</>
+    case 'updated':
+      return <>{dateOrDash(product.shopify_updated_at)}</>
+    case 'synced':
+      return <>{dateOrDash(product.synced_at)}</>
+  }
 }
 
 function Message({ children }: { children: ReactNode }) {
@@ -143,6 +217,7 @@ export function ProductsList({
   onSort,
   onRetry,
   onClearFilters,
+  columns,
 }: ProductsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const selectedOnPage = items.filter((product) => selected.has(product.id)).length
@@ -253,11 +328,12 @@ export function ProductsList({
       className="relative max-h-[min(68svh,760px)] min-h-0 flex-1 overflow-auto lg:max-h-none"
     >
       <table
-        className={`w-full min-w-[1100px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        style={{ minWidth: `${productTableMinWidthRem(columns)}rem` }}
+        className={`w-full table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            {/* Every column has a share of the width, so the gaps between them are even. */}
+            {/* Every column but the product's name has a width of its own; the name takes the rest. */}
             <th className={`${TH} w-12`}>
               <input
                 ref={pageBox}
@@ -270,7 +346,7 @@ export function ProductsList({
               />
             </th>
             <th className={`${TH} w-16`}>Image</th>
-            <th className={`${TH} w-[37%]`} aria-sort={ariaSort(sort === 'title', order)}>
+            <th className={TH} aria-sort={ariaSort(sort === 'title', order)}>
               <SortButton
                 label="Product"
                 active={sort === 'title'}
@@ -278,31 +354,39 @@ export function ProductsList({
                 onClick={() => onSort('title')}
               />
             </th>
-            <th className={`${TH_CENTER} w-[9%]`}>Variants</th>
-            <th className={`${TH_CENTER} w-[10%]`}>Status</th>
+            {columns.map((column) => (
+              <th
+                key={column.id}
+                style={{ width: `${column.width}rem` }}
+                className={
+                  column.align === 'right'
+                    ? TH_RIGHT
+                    : column.align === 'center'
+                      ? TH_CENTER
+                      : TH
+                }
+                aria-sort={
+                  column.sort ? ariaSort(sort === column.sort, order) : undefined
+                }
+              >
+                {column.sort ? (
+                  <SortButton
+                    label={column.label}
+                    active={sort === column.sort}
+                    order={order}
+                    onClick={() => onSort(column.sort as ProductSort)}
+                  />
+                ) : (
+                  column.label
+                )}
+              </th>
+            ))}
             <th
-              className={`${TH_RIGHT} w-[11%]`}
-              aria-sort={ariaSort(sort === 'inventory', order)}
+              className={TH_CENTER}
+              style={{ width: `${PRODUCT_ACTIONS_COLUMN_REM}rem` }}
             >
-              <SortButton
-                label="Inventory"
-                active={sort === 'inventory'}
-                order={order}
-                onClick={() => onSort('inventory')}
-              />
+              Actions
             </th>
-            <th
-              className={`${TH_RIGHT} w-[13%]`}
-              aria-sort={ariaSort(sort === 'price', order)}
-            >
-              <SortButton
-                label="Price"
-                active={sort === 'price'}
-                order={order}
-                onClick={() => onSort('price')}
-              />
-            </th>
-            <th className={`${TH_CENTER} w-[8%]`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -314,7 +398,7 @@ export function ProductsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: columns.length + 4 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -384,24 +468,26 @@ export function ProductsList({
                       </span>
                     </div>
                   </td>
-                  <td className={`${TD} text-center`}>
-                    {product.variants_count.toLocaleString('en-GB')}
-                  </td>
-                  <td className={`${TD} text-center`}>
-                    <ProductStatusSelect
-                      title={product.title}
-                      value={statusPending[product.id] ?? product.status}
-                      saving={product.id in statusPending}
-                      error={statusErrors[product.id]}
-                      onChange={(status) => onStatusChange(product, status)}
-                    />
-                  </td>
-                  <td className={`${TD} text-right`}>
-                    <Stock value={product.total_inventory} />
-                  </td>
-                  <td className={`${TD} text-right font-semibold`}>
-                    {formatPriceRange(product)}
-                  </td>
+                  {columns.map((column) => (
+                    <td
+                      key={column.id}
+                      className={`${TD} ${
+                        column.align === 'right'
+                          ? 'text-right'
+                          : column.align === 'center'
+                            ? 'text-center'
+                            : 'text-left'
+                      }`}
+                    >
+                      <ColumnCell
+                        column={column}
+                        product={product}
+                        statusPending={statusPending}
+                        statusErrors={statusErrors}
+                        onStatusChange={onStatusChange}
+                      />
+                    </td>
+                  ))}
                   <td className={`${TD} text-center`}>
                     <span className="inline-flex items-center justify-center gap-0.5">
                       <button
