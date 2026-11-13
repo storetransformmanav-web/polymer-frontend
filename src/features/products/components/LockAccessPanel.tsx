@@ -6,13 +6,11 @@ import {
   AlertTriangleIcon,
   BulletListIcon,
   CheckCircleIcon,
-  ChevronRightIcon,
   ClockIcon,
   CodeIcon,
-  EyeOffIcon,
+  EyeIcon,
   GlobeIcon,
   type IconProps,
-  ListChecksIcon,
   LockIcon,
   PlusIcon,
   SearchIcon,
@@ -23,6 +21,8 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import type {
@@ -34,7 +34,6 @@ import type {
 import { formatDateTimeAmPm, initials } from '../../../lib/format.ts'
 import {
   customerRefOf,
-  LOCK_ACCESS_PAGE_SIZE,
   type LockAccessChange,
   type LockSwitch,
   useProductLock,
@@ -81,13 +80,13 @@ const SETTING_GROUPS: { title: string; items: SettingDef[] }[] = [
         name: 'hide_from_nav',
         label: 'Hide from navigation menus',
         hint: 'They don’t see it in the store’s menus.',
-        icon: BulletListIcon,
+        icon: EyeIcon,
       },
       {
         name: 'hide_from_lists',
         label: 'Hide from lists',
         hint: 'Left out of collections, search results and related products.',
-        icon: ListChecksIcon,
+        icon: BulletListIcon,
       },
     ],
   },
@@ -467,7 +466,7 @@ function LockedProduct({
               </div>
             )}
 
-            <div className="relative overflow-x-auto">
+            <div className="relative max-h-[22rem] overflow-auto">
               <div
                 aria-hidden="true"
                 className={`bg-accent absolute inset-x-0 top-0 z-[1] h-0.5 transition-opacity ${
@@ -477,7 +476,7 @@ function LockedProduct({
                 }`}
               />
               <table className="w-full min-w-[760px] border-collapse text-[0.82rem]">
-                <thead className="bg-table-head border-border-strong border-b">
+                <thead className="bg-table-head border-border-strong sticky top-0 z-[2] border-b">
                   <tr>
                     <th className={`${TH} w-10`}>
                       {!loginOnly && (
@@ -662,14 +661,18 @@ function LockedProduct({
             </div>
 
             {data && data.total > 0 && (
-              <Pager
+              <PaginationFooter
                 page={data.page}
-                totalPages={data.total_pages}
+                pageSize={list.pageSize}
                 total={data.total}
-                shown={list.customers.length}
-                onPage={(page) => {
+                totalPages={data.total_pages}
+                onPageChange={(page) => {
                   setSelected(new Set())
                   list.setPage(page)
+                }}
+                onPageSizeChange={(size) => {
+                  setSelected(new Set())
+                  list.setPageSize(size)
                 }}
               />
             )}
@@ -908,7 +911,15 @@ function AskedQuestion({
   }
 }
 
-/** "Lock Access" title card: the lock's on/off switch, its Shopify state and its last change. */
+const LOCK_STATUS: PillOption[] = [
+  { value: 'on', label: 'Enabled', tone: 'success' },
+  { value: 'off', label: 'Disabled', tone: 'neutral' },
+]
+
+/**
+ * "Lock Access" bar: a slim row with a small Enabled / Disabled dropdown (picking the other one
+ * asks first), the lock's Shopify state and its last change.
+ */
 function LockHeader({
   lock,
   busy,
@@ -932,48 +943,42 @@ function LockHeader({
         ? 'Needs attention'
         : 'Sending to Shopify…'
   return (
-    <section
-      className={`${CARD} from-accent-tint to-bg flex items-center gap-3 bg-linear-to-r p-3 sm:px-4`}
-    >
-      <span aria-hidden="true" className={`${TILE} h-11 w-11`}>
-        <LockIcon width={20} height={20} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="m-0 text-[1rem] font-bold">Lock Access</h2>
-          <span
-            title={lock.sync_error ?? undefined}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${tone}`}
-          >
-            {state === 'synced' ? (
-              <CheckCircleIcon width={12} height={12} />
-            ) : state === 'error' ? (
-              <AlertTriangleIcon width={12} height={12} />
-            ) : (
-              <ClockIcon width={12} height={12} />
-            )}
-            {label}
-          </span>
-        </div>
-        <p className="text-text-muted m-0 text-[0.76rem]">
-          {lock.enabled
-            ? 'The lock is on: only customers with access can open this product.'
-            : 'The lock is off: everyone can see this product.'}
-          {lock.updated_at && ` Last updated ${formatDateTimeAmPm(lock.updated_at)}.`}
-        </p>
-      </div>
-      <ToggleSwitch
-        label="Lock"
-        checked={lock.enabled}
-        disabled={busy}
-        onChange={onToggle}
-        large
+    <section className={`${CARD} flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2`}>
+      <LockIcon width={18} height={18} className="text-accent shrink-0" />
+      <h2 className="m-0 text-[0.95rem] font-bold">Lock Access</h2>
+      <PillSelect
+        label={`Lock status: ${lock.enabled ? 'Enabled' : 'Disabled'}`}
+        menuLabel="Lock status"
+        options={LOCK_STATUS}
+        widthClass="w-28"
+        value={lock.enabled ? 'on' : 'off'}
+        saving={busy}
+        onChange={(next) => onToggle(next === 'on')}
       />
+      <span
+        title={lock.sync_error ?? undefined}
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${tone}`}
+      >
+        {state === 'synced' ? (
+          <CheckCircleIcon width={12} height={12} />
+        ) : state === 'error' ? (
+          <AlertTriangleIcon width={12} height={12} />
+        ) : (
+          <ClockIcon width={12} height={12} />
+        )}
+        {label}
+      </span>
+      <p className="text-text-muted m-0 ml-auto text-[0.74rem]">
+        {lock.enabled
+          ? 'Only customers with access can open this product.'
+          : 'Everyone can see this product.'}
+        {lock.updated_at && ` Updated ${formatDateTimeAmPm(lock.updated_at)}.`}
+      </p>
     </section>
   )
 }
 
-/** The lock's other settings as switches, grouped by what they do, each in plain words. */
+/** The lock's other settings as switches, grouped by what they do. */
 function SettingsCard({
   lock,
   busy,
@@ -983,35 +988,27 @@ function SettingsCard({
   busy: boolean
   onToggle: (name: Exclude<LockSwitch, 'enabled'>, value: boolean) => void
 }) {
-  const on = SETTINGS.filter((setting) => lock[setting.name]).length
   return (
     <section
       className={`${CARD} flex flex-col gap-3 p-3 sm:p-4`}
       aria-label="Lock settings"
     >
-      <div className="flex items-center gap-3">
-        <span aria-hidden="true" className={TILE}>
-          <EyeOffIcon width={17} height={17} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="m-0 text-[0.92rem] font-bold">Visibility settings</h2>
-          <p className="text-text-muted m-0 truncate text-[0.76rem]">
-            How the product shows to customers who don’t have access.
-          </p>
-        </div>
-        <span
-          className={COUNT_BADGE}
-          title={`${on} of ${SETTINGS.length} settings are on`}
-        >
-          {on} of {SETTINGS.length} on
-        </span>
-      </div>
+      <h2 className="m-0 flex items-center gap-2.5 text-[0.95rem] font-bold">
+        <EyeIcon width={19} height={19} className="text-accent" />
+        Visibility Settings
+      </h2>
 
       {SETTING_GROUPS.map((group) => (
-        <fieldset key={group.title} className="m-0 flex flex-col gap-1.5 border-none p-0">
-          <legend className="text-accent mb-1 p-0 text-[0.66rem] font-bold tracking-wider uppercase">
+        <div
+          key={group.title}
+          role="group"
+          aria-label={group.title}
+          className="flex flex-col gap-2"
+        >
+          <p className="text-accent m-0 flex items-center gap-3 text-[0.7rem] font-bold tracking-wide uppercase">
             {group.title}
-          </legend>
+            <span aria-hidden="true" className="bg-accent/25 h-px flex-1" />
+          </p>
           {group.items.map((setting) => {
             const checked = lock[setting.name]
             const Icon = setting.icon
@@ -1019,30 +1016,26 @@ function SettingsCard({
             return (
               <div
                 key={setting.name}
-                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors ${
+                title={setting.hint}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition-colors ${
                   warn
                     ? 'border-warning/50 bg-warning-bg'
                     : checked
-                      ? 'border-accent/40 bg-accent-tint/40'
-                      : 'border-border bg-bg hover:bg-accent-tint/20'
+                      ? 'border-accent/50 bg-accent-tint/50'
+                      : 'border-border bg-surface'
                 }`}
               >
                 <span
                   aria-hidden="true"
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center ${
-                    warn ? 'text-warning' : checked ? 'text-accent' : 'text-text-muted'
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    warn ? 'bg-warning-bg text-warning' : 'bg-accent-tint text-accent'
                   }`}
                 >
                   <Icon width={18} height={18} />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="m-0 text-[0.82rem] leading-snug font-semibold">
-                    {setting.label}
-                  </p>
-                  <p className="text-text-muted m-0 text-[0.72rem] leading-snug">
-                    {setting.hint}
-                  </p>
-                </div>
+                <p className="m-0 min-w-0 flex-1 text-[0.88rem] leading-snug font-semibold">
+                  {setting.label}
+                </p>
                 <ToggleSwitch
                   label={setting.label}
                   checked={checked}
@@ -1052,7 +1045,7 @@ function SettingsCard({
               </div>
             )
           })}
-        </fieldset>
+        </div>
       ))}
 
       {lock.manual_locking && (
@@ -1156,59 +1149,6 @@ function StateRow({ children }: { children: ReactNode }) {
         </span>
       </td>
     </tr>
-  )
-}
-
-function Pager({
-  page,
-  totalPages,
-  total,
-  shown,
-  onPage,
-}: {
-  page: number
-  totalPages: number
-  total: number
-  shown: number
-  onPage: (page: number) => void
-}) {
-  const first = (page - 1) * LOCK_ACCESS_PAGE_SIZE + 1
-  const last = first + shown - 1
-  const step = `${OUTLINE} h-8 w-8 p-0`
-  return (
-    <div className="border-border flex items-center justify-between gap-3 border-t px-4 py-3 text-[0.82rem] sm:px-5">
-      <span className="text-text-muted">
-        Showing {first.toLocaleString('en-GB')}–{last.toLocaleString('en-GB')} of{' '}
-        {total.toLocaleString('en-GB')} customer{total === 1 ? '' : 's'}
-      </span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Previous page"
-          disabled={page <= 1}
-          onClick={() => onPage(page - 1)}
-          className={step}
-        >
-          <ChevronRightIcon width={14} height={14} className="rotate-180" />
-        </button>
-        <span
-          aria-current="page"
-          className="border-accent text-accent flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 font-semibold"
-        >
-          {page}
-        </span>
-        <span className="text-text-muted">of {totalPages}</span>
-        <button
-          type="button"
-          aria-label="Next page"
-          disabled={page >= totalPages}
-          onClick={() => onPage(page + 1)}
-          className={step}
-        >
-          <ChevronRightIcon width={14} height={14} />
-        </button>
-      </div>
-    </div>
   )
 }
 

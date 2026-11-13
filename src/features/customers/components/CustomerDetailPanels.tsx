@@ -12,32 +12,28 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import {
   CheckIcon,
-  ClockIcon,
-  GlobeIcon,
+  ChevronRightIcon,
   ListChecksIcon,
   MailIcon,
   MapPinIcon,
   OrdersIcon,
   PencilIcon,
   PhoneIcon,
-  ShieldCheckIcon,
-  StoreIcon,
   UsersIcon,
   XIcon,
   type IconProps,
 } from '../../../components/ui/icons.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
-import type { CustomerDetail, CustomerListItem } from '../../../lib/api/endpoints.ts'
+import type {
+  CustomerAddress,
+  CustomerDetail,
+  CustomerListItem,
+} from '../../../lib/api/endpoints.ts'
 import { formatDate, formatPrice } from '../../../lib/format.ts'
 import { mergeTags, TagsInput, useStoreTags } from '../../products/index.ts'
 import { useUpdateCustomer } from '../hooks/useUpdateCustomer.ts'
 import { CustomerUpdateDialog } from './CustomerUpdateDialog.tsx'
-import {
-  customerSource,
-  formatAddressLines,
-  customerName,
-  humanize,
-} from '../utils/format.ts'
+import { formatAddressLines, customerName, humanize } from '../utils/format.ts'
 
 const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? null : value ? 'Yes' : 'No'
@@ -219,115 +215,159 @@ function Fact({
   )
 }
 
+/** The customer's default address: the one marked default, else the first saved one. */
+function defaultAddressOf(customer: CustomerDetail): CustomerAddress | null {
+  return (
+    customer.addresses.find((address) => address.is_default) ??
+    customer.addresses[0] ??
+    null
+  )
+}
+
 /**
- * Contact & Account. What the header already shows (name, email, role, Shopify account state,
- * created and updated dates) is not repeated here.
+ * Contact & Account: only what matters at a glance — the customer's name, a phone number and the
+ * Shopify ID. (Email, role, state and dates are in the header, marketing is on its own tab.) When
+ * the customer has no phone of their own, the default address's phone is shown instead.
  */
 function ContactCard({ customer }: { customer: CustomerDetail }) {
+  const own = customer.phone?.trim()
+  const fromAddress = defaultAddressOf(customer)?.phone?.trim()
+  const phone = own || fromAddress
   return (
     <DetailSection title="Contact & Account" icon={UsersIcon}>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-5 min-[520px]:grid-cols-2 xl:grid-cols-4 xl:[&>*:not(:nth-child(4n+1))]:border-l xl:[&>*:not(:nth-child(4n+1))]:pl-4">
-        <Fact icon={PhoneIcon} label="Phone">
-          {customer.phone}
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-5 min-[520px]:grid-cols-3 min-[520px]:[&>*:not(:first-child)]:border-l min-[520px]:[&>*:not(:first-child)]:pl-4">
+        <Fact icon={UsersIcon} label="Name">
+          {customerName(customer)}
         </Fact>
-        <Fact icon={ShieldCheckIcon} label="Email verified">
-          {customer.verified_email === true ? (
-            <Badge tone="success">Yes</Badge>
-          ) : (
-            (yesNo(customer.verified_email) ?? date(customer.email_verified_at))
+        <Fact icon={PhoneIcon} label="Phone">
+          {phone && (
+            <>
+              {phone}
+              {!own && <span className="text-text-muted"> · default address</span>}
+            </>
           )}
         </Fact>
-        <Fact icon={GlobeIcon} label="Locale">
-          {customer.locale}
-        </Fact>
-        <Fact icon={StoreIcon} label="Source">
-          {customerSource(customer)}
-        </Fact>
         <Fact icon={ListChecksIcon} label="Shopify ID">
-          {customer.shopify_id}
-        </Fact>
-        <Fact icon={ClockIcon} label="Last login">
-          {date(customer.last_login_at)}
-        </Fact>
-        <Fact icon={UsersIcon} label="Status">
-          <Badge tone={customer.is_active ? 'success' : 'danger'}>
-            {customer.is_active ? 'Active' : 'Inactive'}
-          </Badge>
+          {customer.shopify_id != null && (
+            <span className="flex items-center gap-1.5">
+              <span className="break-all">{customer.shopify_id}</span>
+              <CopyButton value={String(customer.shopify_id)} label="Copy Shopify ID" />
+            </span>
+          )}
         </Fact>
       </dl>
     </DetailSection>
   )
 }
 
-function AddressesCard({ customer }: { customer: CustomerDetail }) {
+/** One saved address as a card: name, company, the address on one line, phone, copy, Default. */
+function AddressCard({ address }: { address: CustomerAddress }) {
+  const lines = formatAddressLines(address)
+  // The parts on one line, as on an order's address card: "212 Essex Road, Inner
+  // London, London, N1 3AP, United Kingdom".
+  const summary = [
+    address.address1,
+    address.address2,
+    address.city,
+    address.province,
+    address.zip,
+    address.country,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(', ')
+  const name =
+    address.name || [address.first_name, address.last_name].filter(Boolean).join(' ')
+  return (
+    <li
+      className={`flex gap-3 rounded-xl border p-4 text-[0.85rem] ${
+        address.is_default ? 'border-accent bg-accent-tint/40' : 'border-border bg-bg'
+      }`}
+    >
+      <MapPinIcon width={18} height={18} className="text-accent mt-0.5 shrink-0" />
+      <address className="m-0 flex min-w-0 flex-1 flex-col gap-0.5 leading-snug break-words not-italic">
+        <span>
+          <span className="font-semibold">{name || 'Address'}</span>
+          {address.company && (
+            <>
+              <span className="text-text-muted"> · </span>
+              <span className="text-text-muted">{address.company}</span>
+            </>
+          )}
+        </span>
+        {summary && <span>{summary}</span>}
+        {address.phone && (
+          <span className="text-text-muted flex items-center gap-1.5">
+            <PhoneIcon width={14} height={14} className="shrink-0" />
+            {address.phone}
+          </span>
+        )}
+      </address>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <CopyButton
+          value={[name, address.company, ...lines, address.phone]
+            .filter(Boolean)
+            .join('\n')}
+          label="Copy address"
+        />
+        {address.is_default && <Badge tone="default">Default</Badge>}
+      </div>
+    </li>
+  )
+}
+
+/**
+ * Addresses on the Overview: only the default address. When the customer has more, a
+ * "Show more addresses" button opens the Addresses tab, which lists all of them.
+ */
+function AddressesCard({
+  customer,
+  onShowMore,
+}: {
+  customer: CustomerDetail
+  onShowMore?: () => void
+}) {
+  const main = defaultAddressOf(customer)
+  const more = customer.addresses.length - 1
   return (
     <DetailSection title="Addresses" count={customer.addresses.length} icon={MapPinIcon}>
-      {customer.addresses.length === 0 ? (
+      {!main ? (
+        <p className="text-text-muted m-0 text-[0.85rem]">No saved addresses.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <ul className="grid gap-3">
+            <AddressCard address={main} />
+          </ul>
+          {more > 0 && onShowMore && (
+            <button
+              type="button"
+              onClick={onShowMore}
+              className="border-border bg-bg text-accent hover:border-accent inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[0.82rem] font-semibold transition-colors"
+            >
+              Show more addresses ({more})
+              <ChevronRightIcon width={14} height={14} />
+            </button>
+          )}
+        </div>
+      )}
+    </DetailSection>
+  )
+}
+
+/** The Addresses tab: every saved address, the default first. */
+export function CustomerAddressesPanel({ customer }: { customer: CustomerDetail }) {
+  const ordered = [...customer.addresses].sort(
+    (a, b) => Number(Boolean(b.is_default)) - Number(Boolean(a.is_default)),
+  )
+  return (
+    <DetailSection title="All addresses" count={ordered.length} icon={MapPinIcon}>
+      {ordered.length === 0 ? (
         <p className="text-text-muted m-0 text-[0.85rem]">No saved addresses.</p>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
-          {customer.addresses.map((address) => {
-            const lines = formatAddressLines(address)
-            // The parts on one line, as on an order's address card: "212 Essex Road, Inner
-            // London, London, N1 3AP, United Kingdom".
-            const summary = [
-              address.address1,
-              address.address2,
-              address.city,
-              address.province,
-              address.zip,
-              address.country,
-            ]
-              .map((part) => part?.trim())
-              .filter(Boolean)
-              .join(', ')
-            const name =
-              address.name ||
-              [address.first_name, address.last_name].filter(Boolean).join(' ')
-            return (
-              <li
-                key={address.id}
-                className={`flex gap-3 rounded-xl border p-4 text-[0.85rem] ${
-                  address.is_default
-                    ? 'border-accent bg-accent-tint/40'
-                    : 'border-border bg-bg'
-                }`}
-              >
-                <MapPinIcon
-                  width={18}
-                  height={18}
-                  className="text-accent mt-0.5 shrink-0"
-                />
-                <address className="m-0 flex min-w-0 flex-1 flex-col gap-0.5 leading-snug break-words not-italic">
-                  <span>
-                    <span className="font-semibold">{name || 'Address'}</span>
-                    {address.company && (
-                      <>
-                        <span className="text-text-muted"> · </span>
-                        <span className="text-text-muted">{address.company}</span>
-                      </>
-                    )}
-                  </span>
-                  {summary && <span>{summary}</span>}
-                  {address.phone && (
-                    <span className="text-text-muted flex items-center gap-1.5">
-                      <PhoneIcon width={14} height={14} className="shrink-0" />
-                      {address.phone}
-                    </span>
-                  )}
-                </address>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <CopyButton
-                    value={[name, address.company, ...lines, address.phone]
-                      .filter(Boolean)
-                      .join('\n')}
-                    label="Copy address"
-                  />
-                  {address.is_default && <Badge tone="default">Default</Badge>}
-                </div>
-              </li>
-            )
-          })}
+          {ordered.map((address) => (
+            <AddressCard key={address.id} address={address} />
+          ))}
         </ul>
       )}
     </DetailSection>
@@ -338,6 +378,8 @@ interface OverviewProps {
   customer: CustomerDetail | null
   /** The matching list row, so the summary can draw before details arrive. */
   preview: CustomerListItem | null
+  /** "Show more addresses": opens the Addresses tab. */
+  onShowAddresses?: () => void
 }
 
 const MINI_LABEL = 'text-text-muted text-[0.68rem] font-bold tracking-wide uppercase'
@@ -346,7 +388,11 @@ const MINI_LABEL = 'text-text-muted text-[0.68rem] font-bold tracking-wide upper
  * The Overview tab: on the left Contact & Account, Addresses, Tags (and the note); on the right
  * Orders & Spend. The right card draws from the list row while the full record loads.
  */
-export function CustomerOverviewPanel({ customer, preview }: OverviewProps) {
+export function CustomerOverviewPanel({
+  customer,
+  preview,
+  onShowAddresses,
+}: OverviewProps) {
   const source = customer ?? preview
   const orders = source?.orders_count ?? 0
   const lastOrder = source?.last_order_name
@@ -358,7 +404,7 @@ export function CustomerOverviewPanel({ customer, preview }: OverviewProps) {
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
           <ContactCard customer={customer} />
-          <AddressesCard customer={customer} />
+          <AddressesCard customer={customer} onShowMore={onShowAddresses} />
           <CustomerTagsCard customer={customer} />
 
           {customer.note && (

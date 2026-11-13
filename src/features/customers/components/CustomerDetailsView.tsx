@@ -17,10 +17,14 @@ import {
 import { formatDate, initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
 import { capitalize, customerName, customerSource, stateTone } from '../utils/format.ts'
-import { CustomerMarketingPanel, CustomerOverviewPanel } from './CustomerDetailPanels.tsx'
+import {
+  CustomerAddressesPanel,
+  CustomerMarketingPanel,
+  CustomerOverviewPanel,
+} from './CustomerDetailPanels.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
-type TabId = 'overview' | 'marketing' | 'metafields'
+type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -52,7 +56,12 @@ export function CustomerDetailsView({
 }: CustomerDetailsViewProps) {
   const details = useCustomerDetails(id)
   const { customer, preview } = details
-  const [tab, setTab] = useState<TabId>('overview')
+  const [selectedTab, setTab] = useState<TabId>('overview')
+  // The Addresses tab is opened by "Show more addresses" on the Overview (for this customer).
+  const [addressesFor, setAddressesFor] = useState<string | null>(null)
+  const addressesOpen = addressesFor === id
+  const tab: TabId =
+    selectedTab === 'addresses' && !addressesOpen ? 'overview' : selectedTab
 
   const known = customer ?? preview
   const name = known ? customerName(known) : 'Loading customer…'
@@ -65,6 +74,15 @@ export function CustomerDetailsView({
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
+    ...(addressesOpen
+      ? [
+          {
+            id: 'addresses' as const,
+            label: 'Addresses',
+            count: customer?.addresses.length ?? 0,
+          },
+        ]
+      : []),
     { id: 'marketing', label: 'Marketing & Tax' },
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
@@ -221,7 +239,17 @@ export function CustomerDetailsView({
         className="bg-surface p-3 sm:p-5"
       >
         {tab === 'overview' && (
-          <CustomerOverviewPanel customer={customer} preview={preview} />
+          <CustomerOverviewPanel
+            customer={customer}
+            preview={preview}
+            onShowAddresses={() => {
+              setAddressesFor(id)
+              setTab('addresses')
+            }}
+          />
+        )}
+        {customer && tab === 'addresses' && (
+          <CustomerAddressesPanel customer={customer} />
         )}
         {tab !== 'overview' && !customer && <DetailSkeleton />}
         {customer && tab === 'marketing' && (

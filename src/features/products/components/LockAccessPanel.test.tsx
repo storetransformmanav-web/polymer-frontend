@@ -246,12 +246,11 @@ describe('the Keys (tags) card', () => {
 })
 
 describe('the Visibility settings card', () => {
-  it('shows every setting with its state and how many are on', async () => {
+  it('shows every setting, grouped, with its state', async () => {
     renderWithProviders(<LockAccessPanel product={PRODUCT} />)
     const card = await screen.findByRole('region', { name: 'Lock settings' })
-    expect(within(card).getByText('Visibility settings')).toBeInTheDocument()
+    expect(within(card).getByText('Visibility Settings')).toBeInTheDocument()
     // Only "Hide from lists" is on in the fixture.
-    expect(within(card).getByText('1 of 5 on')).toBeInTheDocument()
     expect(within(card).getByRole('switch', { name: 'Hide from lists' })).toBeChecked()
     expect(
       within(card).getByRole('switch', { name: 'Hide from navigation menus' }),

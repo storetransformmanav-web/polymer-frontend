@@ -109,10 +109,19 @@ export const ENDPOINTS = {
   collections: {
     /** `GET` one page of collections (search, type, sort, order, shop, page). */
     list: '/collections',
-    /** `GET` one collection with its products; `id` is its CRM UUID. */
+    /**
+     * `GET` one collection with one page of its products; `PUT` changes it. `id` is its CRM UUID,
+     * Shopify id or handle.
+     */
     detail: (id: string) => `/collections/${encodeURIComponent(id)}`,
-    /** `POST` makes a manual collection in the store (and the CRM), optionally with products in it. */
+    /** `POST` makes a collection in the store (and the CRM): manual (products) or smart (rules). */
     create: '/collections',
+    /** `GET` the choices of a smart collection's conditions form (match, columns, sort orders). */
+    ruleOptions: '/collections/rule-options',
+    /** `GET` one page of a collection's products. */
+    products: (id: string) => `/collections/${encodeURIComponent(id)}/products`,
+    /** `POST` re-reads a collection and all its products from Shopify (nothing changes there). */
+    refresh: (id: string) => `/collections/${encodeURIComponent(id)}/refresh`,
   },
   sync: {
     /** `POST` starts a background sync of every product of one store. */
@@ -2220,26 +2229,65 @@ const collectionListResponseSchema = z.object({
   has_next: z.boolean(),
 })
 
-/** `GET /collections/{id}` answers `{ collection }`, with the collection's products. */
+/** A price as the API sends it: a decimal string ("12.50") or a number. */
+const priceSchema = z.union([z.string(), z.number()]).nullish()
+
+/** One product of a collection (the details answer's `products`, `GET …/products`'s `items`). */
+const collectionProductSchema = z.object({
+  id: z.string(),
+  shopify_id: z.number().nullish(),
+  title: z.string(),
+  handle: z.string().nullish(),
+  status: z.string().nullish(),
+  total_inventory: z.number().nullish(),
+  image_url: z.string().nullish(),
+  /** Its place in the collection's own order in Shopify. */
+  position: z.number().nullish(),
+  vendor: z.string().nullish(),
+  product_type: z.string().nullish(),
+  sku: z.string().nullish(),
+  price_min: priceSchema,
+  price_max: priceSchema,
+})
+
+/** One condition of a smart collection, with the backend's own wording ("Price is greater than 10"). */
+const collectionConditionSchema = z.object({
+  column: z.string(),
+  relation: z.string(),
+  condition: z.union([z.string(), z.number()]).transform(String).nullish(),
+  label: z.string().nullish(),
+})
+
+/** Which page of a collection's products the details answer holds. */
+const collectionProductsPageSchema = z.object({
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean().nullish(),
+  sort: z.string().nullish(),
+})
+
+/**
+ * `GET /collections/{id}` answers `{ collection }`, with **one page** of its products
+ * (`products` + `products_page`); a smart collection also has its `rule_set`.
+ */
 const collectionDetailSchema = collectionListItemSchema.extend({
   shopify_gid: z.string().nullish(),
   description_html: z.string().nullish(),
   rules: z.unknown().nullish(),
+  /** A smart collection's conditions (null for a manual one). */
+  rule_set: z
+    .object({
+      match: z.string().nullish(),
+      conditions: z.array(collectionConditionSchema).default([]),
+    })
+    .nullish(),
   seo_title: z.string().nullish(),
   seo_description: z.string().nullish(),
-  products: z
-    .array(
-      z.object({
-        id: z.string(),
-        shopify_id: z.number().nullish(),
-        title: z.string(),
-        handle: z.string().nullish(),
-        status: z.string().nullish(),
-        total_inventory: z.number().nullish(),
-        image_url: z.string().nullish(),
-      }),
-    )
-    .default([]),
+  image_alt: z.string().nullish(),
+  products: z.array(collectionProductSchema).default([]),
+  products_page: collectionProductsPageSchema.nullish(),
 })
 
 const collectionDetailResponseSchema = z.object({ collection: collectionDetailSchema })
@@ -2253,15 +2301,132 @@ const collectionCreateResponseSchema = z.object({
   collection: collectionDetailSchema,
 })
 
-/** The body of `POST /collections` (manual collections only). */
+/** One condition of a smart collection, as sent (`condition` is "" for a yes/no column). */
+export interface CollectionRuleCondition {
+  column: string
+  relation: string
+  condition: string
+}
+
+/** A smart collection's conditions: products must match `all` or `any` of them (1–60). */
+export interface CollectionRules {
+  match: 'all' | 'any'
+  conditions: CollectionRuleCondition[]
+}
+
+/**
+ * The body of `POST /collections`. A **manual** collection sends `products` (CRM ids, ≤ 250), a
+ * **smart** one sends `rules` — never both. Only `shop` and `title` are required.
+ */
 export interface CollectionCreateBody {
-  /** The new collection's name. */
+  /** The new collection's name (unique in the store). */
   title: string
   /** The store's key (`polymer-uk`). */
   shop: string
-  /** CRM ids of the products to put in it straight away. */
+  /** CRM ids of the products to put in it straight away (manual collections). */
   products?: string[]
+  /** The conditions that pick its products (smart collections). */
+  rules?: CollectionRules
+  description_html?: string
+  image_url?: string
+  image_alt?: string
+  /** ≤ 70 characters. */
+  seo_title?: string
+  /** ≤ 320 characters. */
+  seo_description?: string
+  /** How its products are ordered (`ALPHA_ASC`, `BEST_SELLING`, `MANUAL`…). */
+  sort_order?: string
 }
+
+/**
+ * The body of `PUT /collections/{id}?shop=` — only what changes. `products_add` /
+ * `products_remove` are for a manual collection, `rules` (the whole new set) for a smart one.
+ */
+export interface CollectionUpdateBody {
+  title?: string
+  handle?: string
+  /** With a new handle: also redirect the old address (the API's default is true). */
+  redirect_old_handle?: boolean
+  description_html?: string
+  image_url?: string
+  image_alt?: string
+  remove_image?: boolean
+  /** "" clears it. */
+  seo_title?: string
+  /** "" clears it. */
+  seo_description?: string
+  sort_order?: string
+  products_add?: string[]
+  products_remove?: string[]
+  rules?: CollectionRules
+}
+
+/** How a collection's products are sorted on its page (`position` = Shopify's own order). */
+export const COLLECTION_PRODUCT_SORTS = [
+  'position',
+  'title',
+  'price',
+  'inventory',
+  'created',
+  'updated',
+] as const
+export type CollectionProductSort = (typeof COLLECTION_PRODUCT_SORTS)[number]
+
+/** Query parameters of a collection's products (details and `GET …/products`). */
+export interface CollectionProductsParams {
+  page?: number
+  /** 1–100 (the API's default is 20). */
+  page_size?: number
+  /** Product title or SKU contains this text (≤ 200). */
+  search?: string
+  sort?: CollectionProductSort
+  order?: 'asc' | 'desc'
+  shop?: string
+}
+
+/** `GET /collections/{id}/products`: one page of a collection's products. */
+const collectionProductsResponseSchema = z.object({
+  items: z.array(collectionProductSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean().nullish(),
+  sort: z.string().nullish(),
+})
+
+/** `GET /collections/rule-options` answers `{ options }`: what the conditions form offers. */
+const collectionRuleOptionsSchema = z.object({
+  options: z.object({
+    match: z.array(z.object({ value: z.string(), label: z.string() })).default([]),
+    columns: z
+      .array(
+        z.object({
+          column: z.string(),
+          label: z.string(),
+          /** `text`, `number` or `boolean` (no value box). */
+          value_type: z.string(),
+          relations: z
+            .array(z.object({ value: z.string(), label: z.string() }))
+            .default([]),
+        }),
+      )
+      .default([]),
+    sort_orders: z.array(z.string()).default([]),
+  }),
+})
+
+/** `PUT`, `POST …/refresh`: `{ message, collection }` (the collection with its first products page). */
+const collectionWriteResponseSchema = z.object({
+  message: z.string().nullish(),
+  collection: collectionDetailSchema,
+})
+
+export type CollectionProduct = z.infer<typeof collectionProductSchema>
+export type CollectionCondition = z.infer<typeof collectionConditionSchema>
+export type CollectionProductsResponse = z.infer<typeof collectionProductsResponseSchema>
+export type CollectionRuleOptions = z.infer<typeof collectionRuleOptionsSchema>['options']
+export type CollectionRuleColumn = CollectionRuleOptions['columns'][number]
 
 export interface CollectionCreateResult {
   /** What the backend says it did, e.g. "Collection 'Juice Bottles' created in Shopify with 1 product(s).". */
@@ -3043,13 +3208,62 @@ export const api = {
       return collectionListResponseSchema.parse(data)
     },
 
-    /** One collection with its products; `id` is its CRM UUID. */
-    async detail(id: string): Promise<CollectionDetail> {
-      const data = await apiClient.get(ENDPOINTS.collections.detail(id))
+    /**
+     * One collection with **one page** of its products (`products` + `products_page`); `id` is its
+     * CRM UUID, Shopify id or handle.
+     */
+    async detail(
+      id: string,
+      params: CollectionProductsParams = {},
+    ): Promise<CollectionDetail> {
+      const data = await apiClient.get(ENDPOINTS.collections.detail(id), { params })
       return collectionDetailResponseSchema.parse(data).collection
     },
 
-    /** Makes a manual collection in the store with the given products in it. Never retried. */
+    /** One page of a collection's products (lighter than the details call). */
+    async products(
+      id: string,
+      params: CollectionProductsParams = {},
+    ): Promise<CollectionProductsResponse> {
+      const data = await apiClient.get(ENDPOINTS.collections.products(id), { params })
+      return collectionProductsResponseSchema.parse(data)
+    },
+
+    /** The choices of a smart collection's conditions form. */
+    async ruleOptions(): Promise<CollectionRuleOptions> {
+      const data = await apiClient.get(ENDPOINTS.collections.ruleOptions)
+      return collectionRuleOptionsSchema.parse(data).options
+    },
+
+    /** Changes a collection in Shopify, then in the CRM — only the fields sent. Never retried. */
+    async update(
+      id: string,
+      body: CollectionUpdateBody,
+      shop?: string | null,
+    ): Promise<CollectionCreateResult> {
+      const data = await apiClient.put(ENDPOINTS.collections.detail(id), body, {
+        params: shop ? { shop } : undefined,
+      })
+      const parsed = collectionWriteResponseSchema.parse(data)
+      return {
+        message: parsed.message ?? 'Collection updated.',
+        collection: parsed.collection,
+      }
+    },
+
+    /** Re-reads a collection and all its products from Shopify (Shopify is not changed). */
+    async refresh(id: string, shop?: string | null): Promise<CollectionCreateResult> {
+      const data = await apiClient.post(ENDPOINTS.collections.refresh(id), undefined, {
+        params: shop ? { shop } : undefined,
+      })
+      const parsed = collectionWriteResponseSchema.parse(data)
+      return {
+        message: parsed.message ?? 'Collection refreshed from Shopify.',
+        collection: parsed.collection,
+      }
+    },
+
+    /** Makes a collection in the store: manual (products) or smart (rules). Never retried. */
     async create(body: CollectionCreateBody): Promise<CollectionCreateResult> {
       const data = await apiClient.post(ENDPOINTS.collections.create, body)
       const parsed = collectionCreateResponseSchema.parse(data)

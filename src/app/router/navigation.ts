@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   DashboardIcon,
   InventoryIcon,
+  LayersIcon,
   LockIcon,
   OrdersIcon,
   ProductsIcon,
@@ -85,6 +86,15 @@ export const NAV_ENTRIES: NavEntry[] = [
         shopScoped: true,
         fillHeight: true,
         syncs: 'products',
+      },
+      {
+        // Collections belong to the products area: `products` view to see them, manage to change.
+        to: '/collections',
+        label: 'Collections',
+        area: 'products',
+        icon: LayersIcon,
+        shopScoped: true,
+        fillHeight: true,
       },
       {
         to: '/customers',

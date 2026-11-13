@@ -85,11 +85,12 @@ export function useProductLockCustomers(shop: string, product: string) {
   const [search, setSearchState] = useState('')
   const [sort, setSortState] = useState<LockCustomerSort>('name')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSizeState] = useState(LOCK_ACCESS_PAGE_SIZE)
   const params: LockCustomersParams = {
     shop,
     sort,
     page,
-    page_size: LOCK_ACCESS_PAGE_SIZE,
+    page_size: pageSize,
     ...(search.trim() ? { search: search.trim() } : {}),
   }
   const query = useQuery({
@@ -118,6 +119,11 @@ export function useProductLockCustomers(shop: string, product: string) {
       setPage(1)
     },
     setPage,
+    pageSize,
+    setPageSize: (value: number) => {
+      setPageSizeState(value)
+      setPage(1)
+    },
   }
 }
 

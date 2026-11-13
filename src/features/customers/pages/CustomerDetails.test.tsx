@@ -218,7 +218,6 @@ describe('Customer details', () => {
     ).toBeInTheDocument()
     expect(await screen.findByText('Contact & Account')).toBeInTheDocument()
     expect(screen.getByText('+44 20 7946 0000')).toBeInTheDocument()
-    expect(screen.getByText('en-GB')).toBeInTheDocument()
     expect(screen.getByText('Loyal')).toBeInTheDocument() // RFM group, humanised
     expect(screen.getByText('High')).toBeInTheDocument()
     expect(screen.getByText('VIP')).toBeInTheDocument() // tag chip
@@ -240,6 +239,38 @@ describe('Customer details', () => {
     await user.click(screen.getByRole('tab', { name: 'Marketing & Tax' }))
     expect(screen.getByText('Single opt in')).toBeInTheDocument()
     expect(screen.getByText('GB123456789')).toBeInTheDocument()
+  })
+
+  it('shows only the default address, and opens an Addresses tab with all of them', async () => {
+    details.mockImplementation(async (ref) => {
+      const base = makeDetail(String(ref))
+      const first = base.addresses[0]
+      return {
+        ...base,
+        addresses: [
+          { ...first, id: 'addr-2', is_default: false, name: 'Second Place' },
+          first,
+          { ...first, id: 'addr-3', is_default: false, name: 'Third Place' },
+        ],
+      }
+    })
+    const user = userEvent.setup()
+    renderPage('/customers/cust-7')
+    await screen.findByText('Contact & Account')
+
+    // Only the default address on the Overview, and no Addresses tab yet.
+    expect(screen.getByText('Ian Rayner')).toBeInTheDocument()
+    expect(screen.queryByText('Second Place')).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /Addresses/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Show more addresses \(2\)/ }))
+
+    expect(
+      screen.getByRole('tab', { name: /Addresses/, selected: true }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Second Place')).toBeInTheDocument()
+    expect(screen.getByText('Third Place')).toBeInTheDocument()
+    expect(screen.getByText('Ian Rayner')).toBeInTheDocument()
   })
 
   it('says so when a CRM customer has no saved addresses', async () => {

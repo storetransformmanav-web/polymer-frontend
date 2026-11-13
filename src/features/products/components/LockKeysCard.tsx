@@ -111,34 +111,6 @@ export function LockKeysCard({
         </span>
       </div>
 
-      {lock.tags.length === 0 ? (
-        <p className="text-text-muted m-0 text-[0.82rem]">
-          No keys: any customer who is signed in can open it.
-        </p>
-      ) : (
-        <ul
-          aria-label="Keys of this product"
-          className="m-0 flex list-none flex-wrap gap-1.5 p-0"
-        >
-          {lock.tags.map((tag) => (
-            <li key={tag} className={`${CHIP} py-1 text-[0.78rem]`}>
-              <LockIcon width={11} height={11} />
-              {tag}
-              <button
-                type="button"
-                aria-label={`Remove the key ${tag}`}
-                title="Remove this key"
-                disabled={busy}
-                onClick={() => onRemove(tag)}
-                className={`${CHIP_X} disabled:pointer-events-none disabled:opacity-50`}
-              >
-                <XIcon width={10} height={10} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
       <div
         className="relative flex gap-2"
         onBlur={(event) => {
@@ -334,6 +306,33 @@ export function LockKeysCard({
                 aria-label={`Don’t add ${tag}`}
                 onClick={() => drop(tag)}
                 className={CHIP_X}
+              >
+                <XIcon width={10} height={10} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {lock.tags.length === 0 ? (
+        <p className="text-text-muted m-0 text-[0.82rem]">
+          No keys: any customer who is signed in can open it.
+        </p>
+      ) : (
+        <ul
+          aria-label="Keys of this product"
+          className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+        >
+          {lock.tags.map((tag) => (
+            <li key={tag} className={`${CHIP} py-1 text-[0.78rem]`}>
+              <LockIcon width={11} height={11} />
+              {tag}
+              <button
+                type="button"
+                aria-label={`Remove the key ${tag}`}
+                title="Remove this key"
+                disabled={busy}
+                onClick={() => onRemove(tag)}
+                className={`${CHIP_X} disabled:pointer-events-none disabled:opacity-50`}
               >
                 <XIcon width={10} height={10} />
               </button>
