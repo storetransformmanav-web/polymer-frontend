@@ -32,22 +32,3 @@ export const MAX_KEYS = 20
 
 export const lowerSet = (tags: readonly string[]) =>
   new Set(tags.map((tag) => tag.toLowerCase()))
-
-/**
- * Soft colour washes for the stat cards. Mixed with the page's own `--color-bg`, so they stay
- * subtle (and right) in the dark theme too.
- */
-export const STAT_TONES = {
-  green: {
-    card: 'from-accent-tint to-bg',
-    tile: 'bg-accent-tint text-accent border-accent/20',
-  },
-  blue: {
-    card: 'from-[color-mix(in_srgb,#3b82f6_10%,var(--color-bg))] to-bg',
-    tile: 'bg-[color-mix(in_srgb,#3b82f6_16%,var(--color-bg))] text-[#3b82f6] border-[#3b82f6]/20',
-  },
-  violet: {
-    card: 'from-[color-mix(in_srgb,#8b5cf6_10%,var(--color-bg))] to-bg',
-    tile: 'bg-[color-mix(in_srgb,#8b5cf6_16%,var(--color-bg))] text-[#8b5cf6] border-[#8b5cf6]/20',
-  },
-} as const

@@ -14,6 +14,7 @@ import {
   TrashIcon,
   UsersIcon,
 } from '../../../components/ui/icons.tsx'
+import { useAccess } from '../../../hooks/useAccess.ts'
 import { formatDate, initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
 import { capitalize, customerName, customerSource, stateTone } from '../utils/format.ts'
@@ -22,9 +23,10 @@ import {
   CustomerMarketingPanel,
   CustomerOverviewPanel,
 } from './CustomerDetailPanels.tsx'
+import { CustomerLockAccessPanel } from './CustomerLockAccessPanel.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
-type TabId = 'overview' | 'addresses' | 'marketing' | 'metafields'
+type TabId = 'overview' | 'addresses' | 'marketing' | 'lock' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -56,6 +58,8 @@ export function CustomerDetailsView({
 }: CustomerDetailsViewProps) {
   const details = useCustomerDetails(id)
   const { customer, preview } = details
+  // Lock Access is for people who may view lock management (the backend still decides).
+  const canSeeLocks = useAccess('access').canView
   const [selectedTab, setTab] = useState<TabId>('overview')
   // The Addresses tab is opened by "Show more addresses" on the Overview (for this customer).
   const [addressesFor, setAddressesFor] = useState<string | null>(null)
@@ -84,6 +88,7 @@ export function CustomerDetailsView({
         ]
       : []),
     { id: 'marketing', label: 'Marketing & Tax' },
+    ...(canSeeLocks ? [{ id: 'lock' as const, label: 'Lock Access' }] : []),
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
       : []),
@@ -255,6 +260,7 @@ export function CustomerDetailsView({
         {customer && tab === 'marketing' && (
           <CustomerMarketingPanel customer={customer} />
         )}
+        {customer && tab === 'lock' && <CustomerLockAccessPanel customer={customer} />}
         {customer && tab === 'metafields' && (
           <CustomerMetafieldsPanel customer={customer} />
         )}

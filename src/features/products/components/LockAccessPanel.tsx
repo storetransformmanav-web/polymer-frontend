@@ -15,13 +15,13 @@ import {
   LockIcon,
   PlusIcon,
   SearchIcon,
-  SlidersIcon,
   SpinnerIcon,
   TagIcon,
   TrashIcon,
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
@@ -41,6 +41,9 @@ import {
   useProductLockCustomers,
   useProductLockWrites,
 } from '../hooks/useProductLockAccess.ts'
+import { LockAddTagsSection } from './LockAddTagsSection.tsx'
+import { LockKeysSearch } from './LockKeysSearch.tsx'
+import { LockRemoveTagsSection } from './LockRemoveTagsSection.tsx'
 import { LockCustomerSearch, type ChosenCustomer } from './LockCustomerSearch.tsx'
 import {
   CARD,
@@ -52,7 +55,6 @@ import {
   MAX_KEYS,
   OUTLINE,
   PRIMARY,
-  STAT_TONES,
   TILE,
 } from './lockAccessStyles.ts'
 
@@ -321,15 +323,36 @@ type Asked =
   | { kind: 'unlock' }
   | { kind: 'addKeys'; tags: string[] }
   | { kind: 'removeKey'; tag: string }
+  | { kind: 'setKeys'; add: string[]; remove: string[] }
+
+/**
+ * The customer-access part of the tab on its own — the product's tags, Add / Remove tags, the
+ * customer search and the customers table — for Lock Management's lock page (Customer Access tab),
+ * which has its own header, settings and figures. The same component as the product page's, so
+ * both pages work the same way.
+ */
+export function LockCustomerAccess({ lock, shop }: { lock: AccessLock; shop: string }) {
+  return (
+    <LockedProduct
+      lock={lock}
+      shop={shop}
+      handle={lock.handle ?? lock.product_id}
+      accessOnly
+    />
+  )
+}
 
 function LockedProduct({
   lock,
   shop,
   handle,
+  accessOnly = false,
 }: {
   lock: AccessLock
   shop: string
   handle: string
+  /** Only the access sections: no header, settings or "Remove the lock" (Lock Management). */
+  accessOnly?: boolean
 }) {
   const product = lock.handle ?? lock.product_id
   // The lock's own tag (made with it): its holders are the customers chosen for this lock, and the
@@ -343,16 +366,23 @@ function LockedProduct({
   const [giving, setGiving] = useState<ChosenCustomer[] | null>(null)
   const [pickerKey, setPickerKey] = useState(0)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // The customer whose "Add tag" window is open.
+  // The tags ticked in that section, waiting for "Yes".
+  // Bumped after tags are added: the Add tags card starts empty again.
+  const [tagsKey, setTagsKey] = useState(0)
+  // The tags ticked in the Remove tags dropdown, waiting for "Yes".
+  const [removingTags, setRemovingTags] = useState<{
+    customers: LockCustomer[]
+    tags: string[]
+  } | null>(null)
+  const [addingTags, setAddingTags] = useState<{
+    customers: LockCustomer[]
+    tags: string[]
+  } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
   const data = list.data
   const total = data?.total ?? lock.customers_with_access ?? 0
-  // Tags held by the customers on this page (the API counts customers, not their tags).
-  const tagsShown = list.customers.reduce(
-    (sum, customer) => sum + withoutOwnTag(customer.tags, ownTag).length,
-    0,
-  )
-  const morePages = (data?.total_pages ?? 1) > 1
   const loginOnly = data?.login_only ?? lock.tags.length === 0
   const picked = list.customers.filter((customer) => selected.has(customer.id))
   const allPicked = list.customers.length > 0 && picked.length === list.customers.length
@@ -375,40 +405,96 @@ function LockedProduct({
 
   return (
     <div className="flex flex-col gap-3">
-      <LockHeader
-        lock={lock}
-        busy={writes.isWriting}
-        onToggle={(value) => ask({ kind: 'switch', name: 'enabled', value })}
-      />
+      {!accessOnly && (
+        <LockHeader
+          lock={lock}
+          customers={total}
+          keys={keys.length}
+          busy={writes.isWriting}
+          onToggle={(value) => ask({ kind: 'switch', name: 'enabled', value })}
+        />
+      )}
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat
-          tone="green"
-          icon={UsersIcon}
-          value={total.toLocaleString('en-GB')}
-          label="Customers with access"
-          hint={loginOnly ? 'Any signed-in customer' : 'Hold one of the product’s keys'}
-        />
-        <Stat
-          tone="blue"
-          icon={TagIcon}
-          value={keys.length.toLocaleString('en-GB')}
-          label={keys.length === 1 ? 'Key (tag)' : 'Keys (tags)'}
-          hint={keys.length > 0 ? keys.join(', ') : 'No keys: login only'}
-        />
-        <Stat
-          tone="violet"
-          icon={SlidersIcon}
-          value={tagsShown.toLocaleString('en-GB')}
-          label="Tags assigned"
-          hint={morePages ? 'To the customers on this page' : 'To these customers in all'}
-        />
-      </div>
-
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      <div
+        className={
+          accessOnly
+            ? 'grid items-start gap-3'
+            : 'grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]'
+        }
+      >
         <div className="flex min-w-0 flex-col gap-3">
+          {/* The product's tags: one search bar, every tag with a tick box (ticked = on the product). */}
+          <LockKeysSearch
+            key={lock.tags.join('|')}
+            lock={lock}
+            shop={shop}
+            busy={writes.isWriting}
+            onSave={(change) => ask({ kind: 'setKeys', ...change })}
+          />
+
+          {!loginOnly && (
+            // Add / Remove tags for the customers ticked in the table below: each button opens a
+            // dropdown where several tags are ticked; Add / Remove closes it and asks first.
+            <div
+              role="group"
+              aria-label="Tags of the ticked customers"
+              className={`${CARD} flex flex-wrap items-center gap-2 p-3 sm:px-4`}
+            >
+              <TagIcon width={16} height={16} className="text-accent shrink-0" />
+              <span className="text-text-muted min-w-0 flex-1 text-[0.8rem]">
+                {picked.length > 0
+                  ? `${picked.length} ${picked.length === 1 ? 'customer' : 'customers'} ticked`
+                  : 'Tick customers in the table below to add or remove their tags.'}
+              </span>
+              <PopoverButton
+                key={`add-${tagsKey}`}
+                label="Add tags"
+                icon={PlusIcon}
+                tone="primary"
+                align="right"
+                disabled={picked.length === 0 || writes.isWriting}
+              >
+                {(close) => (
+                  <LockAddTagsSection
+                    lock={lock}
+                    shop={shop}
+                    customers={picked}
+                    busy={writes.isWriting}
+                    onCancel={close}
+                    onAdd={(tags) => {
+                      close()
+                      setNotice(null)
+                      setAddingTags({ customers: picked, tags })
+                    }}
+                  />
+                )}
+              </PopoverButton>
+              <PopoverButton
+                key={`remove-${tagsKey}`}
+                label="Remove tags"
+                icon={TrashIcon}
+                align="right"
+                disabled={picked.length === 0 || writes.isWriting}
+              >
+                {(close) => (
+                  <LockRemoveTagsSection
+                    lock={lock}
+                    customers={picked}
+                    busy={writes.isWriting}
+                    onCancel={close}
+                    onRemove={(tags) => {
+                      close()
+                      setNotice(null)
+                      setRemovingTags({ customers: picked, tags })
+                    }}
+                  />
+                )}
+              </PopoverButton>
+            </div>
+          )}
+
           <section className={CARD} aria-label="Customer Access">
             <div className="flex items-center gap-3 p-3 sm:p-4">
               <span aria-hidden="true" className={TILE}>
@@ -595,8 +681,21 @@ function LockedProduct({
                             ) : (
                               <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
                                 {shownTags.map((tag) => (
-                                  <li key={tag} className={`${CHIP} pr-2.5`}>
+                                  <li key={tag} className={CHIP}>
                                     {tag}
+                                    {!loginOnly && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Remove tag ${tag} from ${name}`}
+                                        title="Remove this tag"
+                                        onClick={() =>
+                                          ask({ kind: 'untag', customer, tag })
+                                        }
+                                        className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                                      >
+                                        <XIcon width={10} height={10} />
+                                      </button>
+                                    )}
                                   </li>
                                 ))}
                               </ul>
@@ -651,37 +750,41 @@ function LockedProduct({
           </section>
         </div>
 
-        <SettingsCard
-          lock={lock}
-          busy={writes.isWriting}
-          onToggle={(name, value) => ask({ kind: 'switch', name, value })}
-        />
+        {!accessOnly && (
+          <SettingsCard
+            lock={lock}
+            busy={writes.isWriting}
+            onToggle={(name, value) => ask({ kind: 'switch', name, value })}
+          />
+        )}
       </div>
 
-      <section
-        className={`${CARD} border-danger/40 bg-danger-bg/40 flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:px-4`}
-      >
-        <span
-          aria-hidden="true"
-          className="bg-danger-bg text-danger border-danger/20 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border sm:flex"
+      {!accessOnly && (
+        <section
+          className={`${CARD} border-danger/40 bg-danger-bg/40 flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:px-4`}
         >
-          <TrashIcon width={17} height={17} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-danger m-0 text-[0.88rem] font-bold">Remove the lock</h2>
-          <p className="text-text-muted m-0 text-[0.76rem]">
-            The product becomes visible to everyone again. Customers keep their tags.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => ask({ kind: 'unlock' })}
-          className={`${DANGER_OUTLINE} bg-bg h-9 px-3.5 text-[0.82rem]`}
-        >
-          <TrashIcon width={15} height={15} />
-          Remove lock
-        </button>
-      </section>
+          <span
+            aria-hidden="true"
+            className="bg-danger-bg text-danger border-danger/20 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border sm:flex"
+          >
+            <TrashIcon width={17} height={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-danger m-0 text-[0.88rem] font-bold">Remove the lock</h2>
+            <p className="text-text-muted m-0 text-[0.76rem]">
+              The product becomes visible to everyone again. Customers keep their tags.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => ask({ kind: 'unlock' })}
+            className={`${DANGER_OUTLINE} bg-bg h-9 px-3.5 text-[0.82rem]`}
+          >
+            <TrashIcon width={15} height={15} />
+            Remove lock
+          </button>
+        </section>
+      )}
 
       {giving && (
         <GiveAccessDialog
@@ -696,6 +799,90 @@ function LockedProduct({
             setPickerKey((key) => key + 1)
           }}
         />
+      )}
+      {removingTags && (
+        <AccessQuestion
+          title={`Remove ${removingTags.tags.length} ${
+            removingTags.tags.length === 1 ? 'tag' : 'tags'
+          } from ${
+            removingTags.customers.length === 1
+              ? customerLabel(removingTags.customers[0])
+              : `${removingTags.customers.length} customers`
+          }?`}
+          confirmLabel={removingTags.tags.length === 1 ? 'Remove tag' : 'Remove tags'}
+          danger
+          onClose={() => setRemovingTags(null)}
+          onConfirm={async () => {
+            await run({
+              kind: 'takeTags',
+              refs: removingTags.customers.map(customerRefOf),
+              tags: removingTags.tags,
+            })
+            setRemovingTags(null)
+            setTagsKey((key) => key + 1)
+          }}
+        >
+          <ul
+            className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+            aria-label="Tags to remove"
+          >
+            {removingTags.tags.map((tag) => (
+              <li key={tag} className={`${CHIP} pr-2.5`}>
+                {tag}
+              </li>
+            ))}
+          </ul>
+          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
+            Their other tags stay, and they stay customers of this lock. These changes
+            will also be updated in Shopify.
+          </p>
+          <SharedNote note={sharedNote(list.tags, removingTags.tags)} />
+        </AccessQuestion>
+      )}
+      {addingTags && (
+        <AccessQuestion
+          title={`Add ${addingTags.tags.length} ${
+            addingTags.tags.length === 1 ? 'tag' : 'tags'
+          } to ${
+            addingTags.customers.length === 1
+              ? customerLabel(addingTags.customers[0])
+              : `${addingTags.customers.length} customers`
+          }?`}
+          confirmLabel={addingTags.tags.length === 1 ? 'Add tag' : 'Add tags'}
+          onClose={() => setAddingTags(null)}
+          onConfirm={async () => {
+            await run({
+              kind: 'giveTags',
+              refs: addingTags.customers.map(customerRefOf),
+              tags: addingTags.tags,
+            })
+            setAddingTags(null)
+            setTagsKey((key) => key + 1)
+          }}
+        >
+          <ul
+            className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+            aria-label="Tags to add"
+          >
+            {addingTags.tags.map((tag) => (
+              <li key={tag} className={`${CHIP} pr-2.5`}>
+                {tag}
+              </li>
+            ))}
+          </ul>
+          {addingTags.tags.some(
+            (tag) => !lock.tags.some((key) => key.toLowerCase() === tag.toLowerCase()),
+          ) && (
+            <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
+              Tags the product doesn’t have yet are added to it as keys too, so they give
+              access.
+            </p>
+          )}
+          <SharedNote note={sharedNote(list.tags, addingTags.tags)} />
+          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
+            These changes will also be updated in Shopify.
+          </p>
+        </AccessQuestion>
       )}
       {asked && (
         <AskedQuestion
@@ -833,6 +1020,40 @@ function AskedQuestion({
         </AccessQuestion>
       )
     }
+    case 'setKeys': {
+      const remaining = lock.tags.length + asked.add.length - asked.remove.length
+      return (
+        <AccessQuestion
+          title={`Update the tags of “${lock.title}”?`}
+          confirmLabel="Save tags"
+          danger={asked.add.length === 0}
+          onClose={onClose}
+          onConfirm={onConfirm}
+        >
+          {asked.add.length > 0 && (
+            <p className="m-0 text-[0.85rem]">
+              <span className="text-text-muted">Add: </span>
+              <strong>{asked.add.join(', ')}</strong>
+            </p>
+          )}
+          {asked.remove.length > 0 && (
+            <p className="mt-1 mb-0 text-[0.85rem]">
+              <span className="text-text-muted">Take off: </span>
+              <strong>{asked.remove.join(', ')}</strong>
+            </p>
+          )}
+          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
+            {asked.remove.length > 0
+              ? 'Customers who only have a tag taken off will no longer be able to open the product. '
+              : 'Customers with an added tag will be able to open the product. '}
+            {remaining <= 0
+              ? 'With no tag left, any customer who is signed in can open it. '
+              : ''}
+            {footer}
+          </p>
+        </AccessQuestion>
+      )
+    }
     case 'removeKey': {
       const last = lock.tags.length <= 1
       return (
@@ -877,15 +1098,20 @@ const LOCK_STATUS: PillOption[] = [
 ]
 
 /**
- * "Lock Access" bar: a slim row with a small Enabled / Disabled dropdown (picking the other one
- * asks first), the lock's Shopify state and its last change.
+ * The Lock Access bar, one slim row: the lock icon and title, a small Enabled / Disabled dropdown
+ * (picking the other one asks first), the Shopify state, how many customers and keys the lock has,
+ * and — at the right — when it last changed.
  */
 function LockHeader({
   lock,
+  customers,
+  keys,
   busy,
   onToggle,
 }: {
   lock: AccessLock
+  customers: number
+  keys: number
   busy: boolean
   onToggle: (value: boolean) => void
 }) {
@@ -902,10 +1128,14 @@ function LockHeader({
       : state === 'error'
         ? 'Needs attention'
         : 'Sending to Shopify…'
+  const count =
+    'border-border bg-bg inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[0.8rem]'
   return (
-    <section className={`${CARD} flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2`}>
-      <LockIcon width={18} height={18} className="text-accent shrink-0" />
-      <h2 className="m-0 text-[0.95rem] font-bold">Lock Access</h2>
+    <section
+      className={`${CARD} from-accent-tint/60 to-bg flex flex-wrap items-center gap-x-3 gap-y-2 bg-linear-to-r px-3 py-2`}
+    >
+      <LockIcon width={20} height={20} className="text-accent shrink-0" />
+      <h2 className="m-0 text-[0.98rem] font-bold">Lock Access</h2>
       <PillSelect
         label={`Lock status: ${lock.enabled ? 'Enabled' : 'Disabled'}`}
         menuLabel="Lock status"
@@ -917,23 +1147,33 @@ function LockHeader({
       />
       <span
         title={lock.sync_error ?? undefined}
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${tone}`}
+        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[0.78rem] font-semibold ${tone}`}
       >
         {state === 'synced' ? (
-          <CheckCircleIcon width={12} height={12} />
+          <CheckCircleIcon width={14} height={14} />
         ) : state === 'error' ? (
-          <AlertTriangleIcon width={12} height={12} />
+          <AlertTriangleIcon width={14} height={14} />
         ) : (
-          <ClockIcon width={12} height={12} />
+          <ClockIcon width={14} height={14} />
         )}
         {label}
       </span>
-      <p className="text-text-muted m-0 ml-auto text-[0.74rem]">
-        {lock.enabled
-          ? 'Only customers with access can open this product.'
-          : 'Everyone can see this product.'}
-        {lock.updated_at && ` Updated ${formatDateTimeAmPm(lock.updated_at)}.`}
-      </p>
+      <span aria-hidden="true" className="bg-border hidden h-6 w-px sm:block" />
+      <span className={count} title="Customers who can open this product">
+        <UsersIcon width={16} height={16} className="text-text-muted" />
+        <strong>{customers.toLocaleString('en-GB')}</strong>
+        {customers === 1 ? 'Customer' : 'Customers'}
+      </span>
+      <span className={count} title="Tags that give access to this product">
+        <TagIcon width={16} height={16} className="text-text-muted" />
+        <strong>{keys.toLocaleString('en-GB')}</strong>
+        {keys === 1 ? 'Key' : 'Keys'}
+      </span>
+      {lock.updated_at && (
+        <p className="text-text-muted m-0 ml-auto text-[0.78rem]">
+          Updated {formatDateTimeAmPm(lock.updated_at)}.
+        </p>
+      )}
     </section>
   )
 }
@@ -1060,43 +1300,6 @@ function ToggleSwitch({
         />
       </button>
     </span>
-  )
-}
-
-function Stat({
-  icon: Icon,
-  value,
-  label,
-  hint,
-  tone,
-}: {
-  icon: ComponentType<IconProps>
-  value: string
-  label: string
-  hint?: string
-  tone: keyof typeof STAT_TONES
-}) {
-  const colours = STAT_TONES[tone]
-  return (
-    <div
-      className={`${CARD} flex items-center gap-3 bg-linear-to-br p-3 ${colours.card}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${colours.tile}`}
-      >
-        <Icon width={20} height={20} />
-      </span>
-      <div className="min-w-0">
-        <p className="m-0 text-[1.35rem] leading-tight font-bold">{value}</p>
-        <p className="m-0 text-[0.82rem] leading-snug font-semibold">{label}</p>
-        {hint && (
-          <p className="text-text-muted m-0 truncate text-[0.72rem]" title={hint}>
-            {hint}
-          </p>
-        )}
-      </div>
-    </div>
   )
 }
 

@@ -39,7 +39,7 @@ import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDateTimeAmPm } from '../../../lib/format.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
-import { ProductLightbox } from '../../products/index.ts'
+import { LockCustomerAccess, ProductLightbox } from '../../products/index.ts'
 import { linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
 import {
   FLAG_INFO,
@@ -51,7 +51,6 @@ import {
 import { LockChangeConfirm, type PendingLockChange } from './LockChangeConfirm.tsx'
 import { LockKeysSection } from './LockAccessEditors.tsx'
 import { LockImage } from './LockCard.tsx'
-import { LockAccessTab } from './LockAccessTab.tsx'
 import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 
@@ -461,7 +460,8 @@ export function LockDetailsView({
           </div>
         )}
 
-        {tab === 'access' && <LockAccessTab lock={lock} shop={shop} />}
+        {/* The same customer access as a product's Lock Access tab (one shared component). */}
+        {tab === 'access' && <LockCustomerAccess lock={lock} shop={shop} />}
       </div>
       {pictureUrl && (
         <ProductLightbox

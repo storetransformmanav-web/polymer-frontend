@@ -204,6 +204,10 @@ export function usePickStoreTags(
 export type LockAccessChange =
   /** Give customers one tag (a tag the product doesn't have yet becomes one of its keys first). */
   | { kind: 'give'; refs: string[]; tag: string }
+  /** Give customers several tags at once (the "Add tags" section of a row). */
+  | { kind: 'giveTags'; refs: string[]; tags: string[] }
+  /** Take several tags away from customers at once (the "Remove tags" dropdown). */
+  | { kind: 'takeTags'; refs: string[]; tags: string[] }
   /** Take one tag away from one customer. */
   | { kind: 'take'; customer: LockCustomer; tag: string }
   /** Take every key of this product away from these customers. */
@@ -212,6 +216,8 @@ export type LockAccessChange =
   | { kind: 'switch'; name: LockSwitch; value: boolean }
   /** Add keys (tags) to the product: customers with one of them can then open it. */
   | { kind: 'addKeys'; tags: string[] }
+  /** Add and take off several keys (tags) of the product in one save (the tag search bar). */
+  | { kind: 'setKeys'; add: string[]; remove: string[] }
   /** Take one key (tag) off the product (`PUT /access/tags` `tags_remove`). */
   | { kind: 'removeKey'; tag: string }
   /** Lock a product that is not locked yet (no tags = any signed-in customer). */
@@ -250,6 +256,39 @@ export function useProductLockWrites(
   const mutation = useMutation({
     mutationFn: async (change: LockAccessChange): Promise<string> => {
       switch (change.kind) {
+        case 'takeTags': {
+          // Every other tag stays; the lock's own tag is never taken here, so they stay listed.
+          const result = await api.access.customerTags({
+            shop,
+            customers: change.refs,
+            tags_remove: change.tags,
+          })
+          return result.message
+        }
+        case 'giveTags': {
+          const tags = change.tags.map((tag) => tag.trim()).filter(Boolean)
+          // A tag only opens the product once the product has it: new ones become keys first.
+          const fresh = tags.filter((tag) => !isKey(tag))
+          if (fresh.length > 0) {
+            await api.access.lock({
+              shop,
+              products: [product],
+              tags: [...keys, ...fresh],
+            })
+          }
+          // Then the customers get the tags (and the lock's own tag, so they stay its customers).
+          const own = findOwnTag(keys, lock?.handle ?? handle)
+          const add =
+            own && !tags.some((tag) => tag.toLowerCase() === own.toLowerCase())
+              ? [own, ...tags]
+              : tags
+          const result = await api.access.customerTags({
+            shop,
+            customers: change.refs,
+            tags_add: add,
+          })
+          return result.message
+        }
         case 'give': {
           const tag = change.tag.trim()
           const isNew = tag !== '' && !isKey(tag)
@@ -323,6 +362,34 @@ export function useProductLockWrites(
             tags: [...keys, ...added],
           })
           return result.message
+        }
+        case 'setKeys': {
+          const messages: string[] = []
+          const added = change.add
+            .map((tag) => tag.trim())
+            .filter((tag) => tag && !isKey(tag))
+          if (added.length > 0) {
+            const result = await api.access.lock({
+              shop,
+              products: [product],
+              tags: [...keys, ...added],
+            })
+            messages.push(result.message)
+          }
+          // The lock's own tag is never taken off (it keeps the lock's customers listed).
+          const own = findOwnTag(keys, lock?.handle ?? handle)
+          const removed = change.remove.filter(
+            (tag) => isKey(tag) && (!own || tag.toLowerCase() !== own.toLowerCase()),
+          )
+          if (removed.length > 0) {
+            const result = await api.access.updateTags({
+              shop,
+              products: [product],
+              tags_remove: removed,
+            })
+            messages.push(result.message)
+          }
+          return messages.join(' ') || 'Nothing to change.'
         }
         case 'removeKey': {
           const result = await api.access.updateTags({
