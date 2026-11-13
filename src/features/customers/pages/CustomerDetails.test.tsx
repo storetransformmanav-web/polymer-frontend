@@ -151,12 +151,26 @@ describe('Customer details', () => {
     expect(details).toHaveBeenCalledWith('cust-2', false) // raw payload not requested up front
   })
 
-  it('does not open details when a row is clicked anywhere but the View button', async () => {
+  it('opens a customer on the same page from the customer name too', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Customer 2')
+
+    await user.click(screen.getByRole('button', { name: 'Customer 2' }))
+
+    expect(screen.getByTestId('path')).toHaveTextContent('/customers/cust-2')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Customer 2' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not open details when a row is clicked anywhere but the name or the View button', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Customer 3')
 
-    await user.click(screen.getByText('Customer 3'))
+    // The row itself (its cell), not the name inside it.
+    await user.click(screen.getByText('Customer 3').closest('tr')!)
 
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/customers$/)
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()

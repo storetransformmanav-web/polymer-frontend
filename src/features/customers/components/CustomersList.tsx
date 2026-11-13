@@ -465,9 +465,17 @@ export function CustomersList({
                     <td className={TD}>
                       <span className="flex min-w-0 items-center gap-3">
                         <Avatar name={name} />
-                        <span className="truncate font-semibold" title={name}>
+                        {/* The name opens the customer's details, like the View button. */}
+                        <button
+                          type="button"
+                          onClick={() => onOpen(customer)}
+                          onPointerEnter={() => onPrefetch(customer.id)}
+                          onFocus={() => onPrefetch(customer.id)}
+                          title={`Open ${name}`}
+                          className="text-text hover:text-accent min-w-0 cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold transition-colors hover:underline"
+                        >
                           <Highlight text={name} />
-                        </span>
+                        </button>
                       </span>
                     </td>
                     {columns.map((column) => (

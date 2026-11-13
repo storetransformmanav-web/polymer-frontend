@@ -8,7 +8,7 @@ export function SystemNote() {
   return (
     <div
       role="note"
-      className="bg-warning-bg text-warning border-border flex shrink-0 items-center justify-center gap-2 border-b px-3 py-1.5 text-center text-[0.78rem] leading-snug font-semibold sm:px-6"
+      className="bg-red-50 text-red-700 border border-red-300 flex shrink-0 items-center justify-center gap-2 px-3 py-1.5 text-center text-[0.78rem] leading-snug font-semibold sm:px-6"
     >
       <InfoIcon width={14} height={14} className="shrink-0" />
       <span>

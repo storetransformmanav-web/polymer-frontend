@@ -36,7 +36,7 @@ import {
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
-import { formatDateTime } from '../../../lib/format.ts'
+import { formatDateTimeAmPm } from '../../../lib/format.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { ProductLightbox } from '../../products/index.ts'
@@ -58,6 +58,11 @@ import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.
 const BUTTON =
   'inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 const SECONDARY = `${BUTTON} border-border bg-bg text-text hover:border-accent`
+
+// The Enabled / Disabled dropdown and the Shopify state pill beside it are the same height; the
+// dropdown is narrower, since "Enabled" needs far less room than "Synced with Shopify".
+const HEADER_PILL = 'h-7 w-[11.5rem]'
+const STATUS_PILL = 'h-7 w-28'
 
 const STATUS_OPTIONS: PillOption[] = [
   { value: 'active', label: flagWord('enabled', true), tone: 'success' },
@@ -245,6 +250,7 @@ export function LockDetailsView({
               label={`Status of ${lock.title}: ${flagWord('enabled', valueOf('enabled'))}`}
               menuLabel={`Status of ${lock.title}`}
               options={STATUS_OPTIONS}
+              widthClass={STATUS_PILL}
               value={valueOf('enabled') ? 'active' : 'inactive'}
               onChange={(next) => setFlag('enabled', next === 'active')}
             />
@@ -254,7 +260,10 @@ export function LockDetailsView({
               </Badge>
             )}
             <span title={lock.sync_error ?? undefined}>
-              <Badge tone={syncTone(lock.sync_status)} className="gap-1.5 py-1">
+              <Badge
+                tone={syncTone(lock.sync_status)}
+                className={`${HEADER_PILL} gap-1.5`}
+              >
                 {lock.sync_status === 'synced' && (
                   <CheckCircleIcon width={14} height={14} />
                 )}
@@ -287,7 +296,7 @@ export function LockDetailsView({
               </span>
             </HeaderChip>
             <HeaderChip icon={ClockIcon} label="Last updated">
-              {lock.updated_at ? formatDateTime(lock.updated_at) : '—'}
+              {lock.updated_at ? formatDateTimeAmPm(lock.updated_at) : '—'}
             </HeaderChip>
           </>
         }

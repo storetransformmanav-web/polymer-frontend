@@ -193,7 +193,17 @@ export function CustomerDetailsView({
                   : 'text-text-muted hover:text-text border-transparent'
               }`}
             >
-              {item.label}
+              {item.id === 'metafields' ? (
+                // The same small red note under the label as a product's Metafields tab.
+                <span className="flex flex-col items-start leading-tight">
+                  {item.label}
+                  <span className="text-danger text-[0.65rem] font-normal">
+                    Under Progress
+                  </span>
+                </span>
+              ) : (
+                item.label
+              )}
               {item.count !== undefined && (
                 <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
                   {item.count}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
@@ -14,10 +15,12 @@ import { LockDetailsView } from '../components/LockDetailsView.tsx'
 import { LocksList } from '../components/LocksList.tsx'
 import { LocksToolbar } from '../components/LocksToolbar.tsx'
 import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
+import { useLockColumns } from '../hooks/useLockColumns.ts'
 import { useLockShop } from '../hooks/useLockShop.ts'
 import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
 import { lockMemory, useLockTabs } from '../hooks/useLockTabs.ts'
 import { useSetupStore } from '../hooks/useLockWrites.ts'
+import { LOCK_COLUMNS } from '../utils/columns.ts'
 import { lockPath } from '../utils/format.ts'
 
 // Not a lock's handle: the tab of a product or customer opened from a lock.
@@ -53,6 +56,8 @@ const NEW_PATH = '/locks/new'
 export function LocksPage() {
   const { shop, shopName } = useLockShop()
   const locks = useLocks(shop)
+  // Which columns the table shows (the Columns menu), remembered on this browser.
+  const columnChoice = useLockColumns()
   const { setup, clearError: clearSetupError } = useSetupStore()
   const navigate = useNavigate()
   const { '*': splat } = useParams()
@@ -317,9 +322,14 @@ export function LocksPage() {
       <LocksToolbar
         shop={shop}
         filters={filters}
-        hasFilters={locks.hasFilters}
+        // Clear All also puts the columns back to the default, so a changed choice counts as
+        // something to clear.
+        hasFilters={locks.hasFilters || !columnChoice.isDefault}
         onChange={locks.setFilters}
-        onReset={locks.resetFilters}
+        onReset={() => {
+          locks.resetFilters()
+          columnChoice.reset()
+        }}
         actions={
           <>
             <button
@@ -336,6 +346,16 @@ export function LocksPage() {
               Set up store
             </button>
             {addButton}
+            {/* Only the table has columns; the cards of a narrow screen do not. */}
+            <div className="hidden md:block">
+              <ColumnsMenu
+                config={columnChoice.config}
+                labelOf={(id) => LOCK_COLUMNS[id].label}
+                onToggle={columnChoice.toggle}
+                onMove={columnChoice.move}
+                onReset={columnChoice.reset}
+              />
+            </div>
           </>
         }
       />
@@ -384,6 +404,7 @@ export function LocksPage() {
             onRetry={locks.retry}
             onClearFilters={locks.resetFilters}
             emptyAction={addButton}
+            columns={columnChoice.columns}
           />
         </HighlightQuery>
 

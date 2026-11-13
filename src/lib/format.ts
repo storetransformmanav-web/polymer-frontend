@@ -64,6 +64,26 @@ export function formatDateTime(isoString: string): string {
   return formatStoreDate(isoString)
 }
 
+/**
+ * "11 Nov 2026, 06:20 AM" — a timestamp with its time on the store's clock, **12-hour with AM / PM**.
+ * The same moment `formatDateTime` shows in 24-hour form, for places that read better with AM / PM
+ * (a lock's details header).
+ */
+export function formatDateTimeAmPm(isoString: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: getStoreTimeZone(),
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(new Date(isoString))
+    .replace(/\s/g, ' ')
+    .replace(/(am|pm)/i, (marker) => marker.toUpperCase())
+}
+
 /** "14 Oct 2026, 11:04:03" — down to the second, for log entries; on the store's clock. */
 export function formatTimestamp(isoString: string): string {
   return new Intl.DateTimeFormat('en-GB', {

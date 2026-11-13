@@ -14,6 +14,13 @@ import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime } from '../../../lib/format.ts'
+import {
+  LOCK_ACTIONS_COLUMN_REM,
+  LOCK_PRODUCT_COLUMN_REM,
+  lockTableMinWidthRem,
+  type LockColumnDef,
+  type LockColumnId,
+} from '../utils/columns.ts'
 import { hiddenFrom, linkedProductPath, syncLabel, syncTone } from '../utils/format.ts'
 import { LockImage } from './LockCard.tsx'
 import { LockStatusSelect } from './LockStatusSelect.tsx'
@@ -43,10 +50,10 @@ function ProductLink({ lock }: { lock: AccessLock }) {
 const TH_BASE =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 align-middle text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TD = 'px-3 py-1.5 align-middle whitespace-nowrap'
-// Every column but Product (a picture and a name) is centred — header and cells alike.
+// Product (a picture and a name) is left-aligned; the other columns are centred unless their
+// definition says otherwise — header and cells alike.
 const TH_CENTER = `${TH_BASE} text-center`
 const TD_CENTER = `${TD} text-center`
-const FROM_XL = 'hidden xl:table-cell'
 const SKELETON_ROWS = 8
 
 interface LocksListProps {
@@ -63,6 +70,8 @@ interface LocksListProps {
   onClearFilters: () => void
   /** The empty list's own call to action (Add lock). */
   emptyAction?: ReactNode
+  /** The columns to draw between Product and Actions, in order (the Columns menu's choice). */
+  columns: LockColumnDef[]
 }
 
 function Chips({
@@ -100,6 +109,7 @@ function StatusBadges({ lock, shop }: { lock: AccessLock; shop: string }) {
 function SyncBadge({ lock }: { lock: AccessLock }) {
   return (
     <span title={lock.sync_error ?? undefined}>
+      {/* The same size as the status dropdown (`w-32`). */}
       <Badge tone={syncTone(lock.sync_status)} className="w-32 justify-center">
         {syncLabel(lock.sync_status)}
       </Badge>
@@ -160,6 +170,61 @@ const count = (value: number | null | undefined) =>
 const updated = (value: string | null | undefined) =>
   value ? <span title={formatDateTime(value)}>{formatDate(value)}</span> : '—'
 
+const yesNo = (value: boolean) => (value ? 'Yes' : 'No')
+
+const productStatusTone = (status: string) =>
+  status.toUpperCase() === 'ACTIVE'
+    ? 'success'
+    : status.toUpperCase() === 'ARCHIVED'
+      ? 'danger'
+      : 'neutral'
+
+/** What one cell of the table holds, by column. */
+function cellOf(id: LockColumnId, lock: AccessLock, shop: string): ReactNode {
+  switch (id) {
+    case 'keys':
+      return <Chips values={lock.tags} empty="Signed-in customers" label="Keys" />
+    case 'with_access':
+      return count(lock.customers_with_access)
+    case 'hidden_from':
+      return <Chips values={hiddenFrom(lock)} empty="—" label="Hidden from" />
+    case 'status':
+      return <StatusBadges lock={lock} shop={shop} />
+    case 'shopify':
+      return <SyncBadge lock={lock} />
+    case 'updated':
+      return updated(lock.updated_at)
+    case 'handle':
+      return lock.handle ? (
+        <span className="text-text-muted block truncate" title={lock.handle}>
+          {lock.handle}
+        </span>
+      ) : (
+        '—'
+      )
+    case 'product_status':
+      return lock.status ? (
+        <Badge tone={productStatusTone(lock.status)}>{lock.status}</Badge>
+      ) : (
+        '—'
+      )
+    case 'store':
+      return lock.shop?.name ?? '—'
+    case 'manual_locking':
+      return yesNo(lock.manual_locking)
+    case 'hide_from_lists':
+      return yesNo(lock.hide_from_lists)
+    case 'hide_from_nav':
+      return yesNo(lock.hide_from_nav)
+    case 'hide_from_sitemap':
+      return yesNo(lock.hide_from_sitemap)
+    case 'noindex':
+      return yesNo(lock.noindex)
+    case 'last_pushed':
+      return updated(lock.last_pushed_at)
+  }
+}
+
 function Message({ children }: { children: ReactNode }) {
   return (
     <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.9rem]">
@@ -186,6 +251,7 @@ export function LocksList({
   onRetry,
   onClearFilters,
   emptyAction,
+  columns,
 }: LocksListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
 
@@ -282,18 +348,30 @@ export function LocksList({
       className="relative max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
-        className={`w-full min-w-[820px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        style={{ minWidth: `${lockTableMinWidthRem(columns)}rem` }}
+        className={`w-full table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={`${TH_BASE} text-left`}>Product</th>
-            <th className={TH_CENTER}>Keys (tags)</th>
-            <th className={TH_CENTER}>With access</th>
-            <th className={`${TH_CENTER} ${FROM_XL}`}>Hidden from</th>
-            <th className={TH_CENTER}>Status</th>
-            <th className={TH_CENTER}>Shopify</th>
-            <th className={`${TH_CENTER} ${FROM_XL}`}>Updated</th>
-            <th className={`${TH_CENTER} w-24`}>Actions</th>
+            {/* Product takes what the others leave; every other column has its own width. */}
+            <th
+              className={`${TH_BASE} text-left`}
+              style={{ minWidth: `${LOCK_PRODUCT_COLUMN_REM}rem` }}
+            >
+              Product
+            </th>
+            {columns.map((column) => (
+              <th
+                key={column.id}
+                className={column.align === 'left' ? `${TH_BASE} text-left` : TH_CENTER}
+                style={{ width: `${column.width}rem` }}
+              >
+                {column.label}
+              </th>
+            ))}
+            <th className={TH_CENTER} style={{ width: `${LOCK_ACTIONS_COLUMN_REM}rem` }}>
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -305,7 +383,7 @@ export function LocksList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 6 }, (_, cell) => (
+                  {Array.from({ length: columns.length + 2 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -333,22 +411,16 @@ export function LocksList({
                       </span>
                     </span>
                   </td>
-                  <td className={TD_CENTER}>
-                    <Chips values={lock.tags} empty="Signed-in customers" label="Keys" />
-                  </td>
-                  <td className={TD_CENTER}>{count(lock.customers_with_access)}</td>
-                  <td className={`${TD_CENTER} ${FROM_XL}`}>
-                    <Chips values={hiddenFrom(lock)} empty="—" label="Hidden from" />
-                  </td>
-                  <td className={TD_CENTER}>
-                    <StatusBadges lock={lock} shop={shop} />
-                  </td>
-                  <td className={TD_CENTER}>
-                    <SyncBadge lock={lock} />
-                  </td>
-                  <td className={`${TD_CENTER} ${FROM_XL}`}>
-                    {updated(lock.updated_at)}
-                  </td>
+                  {columns.map((column) => (
+                    <td
+                      key={column.id}
+                      className={`overflow-hidden ${
+                        column.align === 'left' ? `${TD} text-left` : TD_CENTER
+                      }`}
+                    >
+                      {cellOf(column.id, lock, shop)}
+                    </td>
+                  ))}
                   <td className={TD_CENTER}>
                     <ViewButton lock={lock} onOpen={onOpen} />
                   </td>

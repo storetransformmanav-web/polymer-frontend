@@ -232,6 +232,8 @@ function renderPage(route = '/locks') {
 
 describe('LocksPage', () => {
   beforeEach(() => {
+    // The Columns menu's choice is remembered in the browser: every test starts from the default.
+    window.localStorage.clear()
     vi.mocked(api.shops.list).mockResolvedValue(SHOPS)
     locks.mockResolvedValue(locksAnswer([makeLock(1), makeLock(2, { enabled: false })]))
     tags.mockResolvedValue(TAGS)
@@ -317,6 +319,95 @@ describe('LocksPage', () => {
         expect(header).toHaveClass(side)
         expect(cells[index]).toHaveClass(side)
       })
+    })
+
+    describe('the Columns menu', () => {
+      const headerNames = () =>
+        within(screen.getByRole('table'))
+          .getAllByRole('columnheader')
+          .map((header) => header.textContent)
+
+      it('lists every column with an eye, the shown ones first', async () => {
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('Locked Product 1')
+
+        await user.click(screen.getByRole('button', { name: 'Columns' }))
+
+        for (const name of [
+          'Keys (tags)',
+          'With access',
+          'Hidden from',
+          'Status',
+          'Shopify',
+          'Updated',
+        ]) {
+          expect(screen.getByRole('button', { name: `Hide ${name}` })).toBeInTheDocument()
+        }
+        for (const name of ['Handle', 'Product status', 'Store', 'Manual locking']) {
+          expect(screen.getByRole('button', { name: `Show ${name}` })).toBeInTheDocument()
+        }
+      })
+
+      it('hides a column and shows another, and remembers the choice in this browser', async () => {
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('Locked Product 1')
+
+        await user.click(screen.getByRole('button', { name: 'Columns' }))
+        await user.click(screen.getByRole('button', { name: 'Hide With access' }))
+        await user.click(screen.getByRole('button', { name: 'Show Handle' }))
+
+        expect(headerNames()).toEqual([
+          'Product',
+          'Keys (tags)',
+          'Hidden from',
+          'Status',
+          'Shopify',
+          'Updated',
+          'Handle',
+          'Actions',
+        ])
+        expect(screen.getByText('locked-product-1')).toBeInTheDocument()
+        expect(window.localStorage.getItem('polymer-crm:lock-columns')).toContain(
+          'handle',
+        )
+      })
+
+      it('Clear All puts the default columns back', async () => {
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('Locked Product 1')
+        await user.click(screen.getByRole('button', { name: 'Columns' }))
+        await user.click(screen.getByRole('button', { name: 'Hide Updated' }))
+        expect(headerNames()).not.toContain('Updated')
+
+        await user.click(screen.getByRole('button', { name: 'Clear All' }))
+
+        expect(headerNames()).toEqual([
+          'Product',
+          'Keys (tags)',
+          'With access',
+          'Hidden from',
+          'Status',
+          'Shopify',
+          'Updated',
+          'Actions',
+        ])
+      })
+    })
+
+    it('draws the Enabled dropdown and the Shopify pill the same width', async () => {
+      renderPage()
+      await screen.findByText('Locked Product 1')
+
+      const row = within(
+        screen.getByText('Locked Product 1').closest('tr') as HTMLElement,
+      )
+      expect(
+        row.getByRole('button', { name: /^Status of Locked Product 1/ }),
+      ).toHaveClass('w-32')
+      expect(row.getByText('Synced')).toHaveClass('w-32')
     })
 
     it('shows the status from the API’s enabled flag: true is Enabled, false is Disabled', async () => {
@@ -1001,13 +1092,33 @@ describe('LocksPage', () => {
         expect(screen.queryByRole('button', { name: /^Edit access of/ })).toBeNull()
       })
 
-      it('has no search box, Tag filter or Sort by on the customers list', async () => {
+      it('has a search box on the customers list, but no Tag filter or Sort by', async () => {
         locks.mockResolvedValue(locksAnswer([makeLock(1, { tags: ['vans', 'b2b'] })]))
         await openAccess()
 
-        expect(screen.queryByLabelText('Search customers')).toBeNull()
+        expect(screen.getByLabelText('Search customers with access')).toBeInTheDocument()
         expect(screen.queryByLabelText('Tag')).toBeNull()
         expect(screen.queryByLabelText('Sort by')).toBeNull()
+      })
+
+      it('searches the customers with access by what is typed, and Clear undoes it', async () => {
+        const user = await openAccess()
+
+        await user.type(screen.getByLabelText('Search customers with access'), 'ada')
+        await waitFor(() =>
+          expect(lockCustomers).toHaveBeenLastCalledWith(
+            'locked-product-1',
+            expect.objectContaining({ shop: 'polymer-uk', search: 'ada' }),
+          ),
+        )
+
+        await user.click(screen.getByRole('button', { name: 'Clear customer search' }))
+        await waitFor(() =>
+          expect(lockCustomers).toHaveBeenLastCalledWith(
+            'locked-product-1',
+            expect.not.objectContaining({ search: expect.anything() }),
+          ),
+        )
       })
 
       it('says so when nobody can see the product yet', async () => {

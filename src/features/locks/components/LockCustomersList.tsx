@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom'
 import {
   AlertTriangleIcon,
   PencilIcon,
+  SearchIcon,
   TrashIcon,
   UsersIcon,
+  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { initials } from '../../../lib/format.ts'
 import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
@@ -59,6 +62,11 @@ export function LockCustomersList({
   const linkedState = useLinkedState()
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
+  // Typing is instant here and sent to the API once the person pauses; Check also sets this
+  // search (to the customer's email), so the box follows it.
+  const [search, setSearch] = useDebouncedField(filters.search, (value) =>
+    customers.setFilters({ search: value }),
+  )
 
   return (
     <section
@@ -67,13 +75,37 @@ export function LockCustomersList({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex shrink-0 flex-col gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
-          <h3 className="m-0 flex items-center gap-2.5 text-[0.95rem] font-semibold">
-            <UsersIcon width={18} height={18} className="text-accent shrink-0" />
-            Customers
-            <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
-              {data?.total ?? '—'}
-            </span>
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="m-0 flex items-center gap-2.5 text-[0.95rem] font-semibold">
+              <UsersIcon width={18} height={18} className="text-accent shrink-0" />
+              Customers
+              <span className="bg-surface text-text-muted border-border rounded-full border px-2 py-0.5 text-[0.68rem] font-bold">
+                {data?.total ?? '—'}
+              </span>
+            </h3>
+            <div className="border-border bg-surface focus-within:border-accent focus-within:outline-accent-tint flex h-10 w-full min-w-0 items-center gap-2.5 rounded-lg border px-3 transition-colors focus-within:outline-2 sm:w-96">
+              <SearchIcon className="text-text-muted shrink-0" />
+              <input
+                type="search"
+                aria-label="Search customers with access"
+                placeholder="Search customers by name, email or company…"
+                maxLength={200}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.88rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+              />
+              {search && (
+                <button
+                  type="button"
+                  aria-label="Clear customer search"
+                  onClick={() => setSearch('')}
+                  className="text-text-muted hover:text-text cursor-pointer border-none bg-none p-0.5"
+                >
+                  <XIcon width={16} height={16} />
+                </button>
+              )}
+            </div>
+          </div>
           {notice}
           {loginOnly && (
             <p className="text-text-muted text-[0.82rem]">

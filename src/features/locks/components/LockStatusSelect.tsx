@@ -17,7 +17,16 @@ const OPTIONS: PillOption[] = [
  * see `useSaveLockOptions`); the row changes at once and goes back if the backend refuses. The
  * question is drawn on the page body, so the table's `whitespace-nowrap` cells never squeeze it.
  */
-export function LockStatusSelect({ lock, shop }: { lock: AccessLock; shop: string }) {
+export function LockStatusSelect({
+  lock,
+  shop,
+  widthClass = 'w-32',
+}: {
+  lock: AccessLock
+  shop: string
+  /** The pill's size (a Tailwind class); the default matches the Shopify pill beside it. */
+  widthClass?: string
+}) {
   const [pending, setPending] = useState<PendingLockChange | null>(null)
 
   return (
@@ -26,6 +35,7 @@ export function LockStatusSelect({ lock, shop }: { lock: AccessLock; shop: strin
         label={`Status of ${lock.title}: ${flagWord('enabled', lock.enabled)}`}
         menuLabel={`Status of ${lock.title}`}
         options={OPTIONS}
+        widthClass={widthClass}
         value={lock.enabled ? 'active' : 'inactive'}
         onChange={(next) =>
           setPending({
