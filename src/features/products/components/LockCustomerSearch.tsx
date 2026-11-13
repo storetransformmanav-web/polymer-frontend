@@ -1,3 +1,4 @@
+import { findOwnTag } from '../../../lib/lockOwnTag.ts'
 import { useId, useState } from 'react'
 import {
   PlusIcon,
@@ -70,7 +71,9 @@ export function LockCustomerSearch({
   const page = paging.query === query ? paging.page : 1
   const store = usePickStoreCustomers(shop, query, page)
 
-  const keys = lowerSet(lock.tags)
+  // With the lock's own tag, "has access" means already chosen for this lock (holds that tag).
+  const ownTag = findOwnTag(lock.tags, lock.handle)
+  const keys = lowerSet(ownTag ? [ownTag] : lock.tags)
   const chosenRefs = lowerSet(chosen.map((item) => item.ref))
   const showList = open && text.trim() !== ''
   const choosable = store.items.filter((customer) => !hasAccess(customer, keys))

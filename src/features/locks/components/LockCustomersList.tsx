@@ -16,7 +16,7 @@ import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { initials } from '../../../lib/format.ts'
 import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
-import { customerName, linkedCustomerPath } from '../utils/format.ts'
+import { customerName, customerRef, linkedCustomerPath } from '../utils/format.ts'
 
 const TH =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
@@ -66,17 +66,43 @@ export function LockCustomersList({
   customers,
   notice,
   onRemove,
+  selected,
+  onSelect,
+  onRemoveMany,
 }: {
   lock: AccessLock
   customers: LockCustomersState
   /** The backend's message about the last change. */
   notice?: ReactNode
   onRemove: (customer: LockCustomer) => void
+  /** The ticked customers, by `customerRef` in lower case (just-added ones come back ticked). */
+  selected: ReadonlySet<string>
+  onSelect: (next: Set<string>) => void
+  /** "Remove access (N)": the ticked customers on this page. */
+  onRemoveMany: (customers: LockCustomer[]) => void
 }) {
   const linkedState = useLinkedState()
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
   const ownTag = findOwnTag(lock.tags, lock.handle)
+  const keyOf = (customer: LockCustomer) => customerRef(customer).toLowerCase()
+  const rows = customers.customers
+  const picked = rows.filter((customer) => selected.has(keyOf(customer)))
+  const allPicked = rows.length > 0 && picked.length === rows.length
+  function toggleOne(customer: LockCustomer) {
+    const next = new Set(selected)
+    if (next.has(keyOf(customer))) next.delete(keyOf(customer))
+    else next.add(keyOf(customer))
+    onSelect(next)
+  }
+  function toggleAll() {
+    const next = new Set(selected)
+    for (const customer of rows) {
+      if (allPicked) next.delete(keyOf(customer))
+      else next.add(keyOf(customer))
+    }
+    onSelect(next)
+  }
   // Typing is instant here and sent to the API once the person pauses; Check also sets this
   // search (to the customer's email), so the box follows it.
   const [search, setSearch] = useDebouncedField(filters.search, (value) =>
@@ -122,6 +148,26 @@ export function LockCustomersList({
             </div>
           </div>
           {notice}
+          {!loginOnly && picked.length > 0 && (
+            <div className="border-border bg-accent-tint/40 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-[0.82rem]">
+              <span className="font-semibold">{picked.length} selected</span>
+              <button
+                type="button"
+                onClick={() => onSelect(new Set())}
+                className="text-text-muted hover:text-text cursor-pointer border-none bg-transparent p-0 font-semibold underline"
+              >
+                Clear selection
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemoveMany(picked)}
+                className="border-danger text-danger hover:bg-danger-bg ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border bg-transparent px-3 text-[0.8rem] font-semibold transition-colors"
+              >
+                <TrashIcon width={14} height={14} />
+                Remove access ({picked.length})
+              </button>
+            </div>
+          )}
           {loginOnly && (
             <p className="text-text-muted text-[0.82rem]">
               This lock has no keys, so every customer with an account can see the
@@ -167,6 +213,18 @@ export function LockCustomersList({
                   <table className="w-full min-w-[960px] table-fixed border-collapse text-[0.78rem]">
                     <thead>
                       <tr>
+                        {!loginOnly && (
+                          <th className={`${TH} w-10`}>
+                            <input
+                              type="checkbox"
+                              aria-label="Select every customer on this page"
+                              checked={allPicked}
+                              disabled={rows.length === 0}
+                              onChange={toggleAll}
+                              className="accent-accent h-4 w-4 cursor-pointer"
+                            />
+                          </th>
+                        )}
                         <th className={`${TH} w-[24%]`}>Name</th>
                         <th className={`${TH} w-[27%]`}>Email</th>
                         <th className={`${TH} w-[12%]`}>Phone</th>
@@ -181,7 +239,7 @@ export function LockCustomersList({
                       {customers.isPending
                         ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                             <tr key={row} aria-hidden="true">
-                              {Array.from({ length: loginOnly ? 5 : 6 }, (_, cell) => (
+                              {Array.from({ length: loginOnly ? 5 : 7 }, (_, cell) => (
                                 <td key={cell} className={TD}>
                                   <span className="bg-surface block h-4 animate-pulse rounded" />
                                 </td>
@@ -196,8 +254,23 @@ export function LockCustomersList({
                             return (
                               <tr
                                 key={customer.id}
-                                className="even:bg-surface hover:bg-accent-tint/60 transition-colors"
+                                className={`transition-colors ${
+                                  selected.has(keyOf(customer))
+                                    ? 'bg-accent-tint/50'
+                                    : 'even:bg-surface hover:bg-accent-tint/60'
+                                }`}
                               >
+                                {!loginOnly && (
+                                  <td className={TD}>
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Select ${customerName(customer)}`}
+                                      checked={selected.has(keyOf(customer))}
+                                      onChange={() => toggleOne(customer)}
+                                      className="accent-accent h-4 w-4 cursor-pointer"
+                                    />
+                                  </td>
+                                )}
                                 <td className={`${TD} font-medium`}>
                                   <span className="flex min-w-0 items-center gap-2.5">
                                     <Avatar

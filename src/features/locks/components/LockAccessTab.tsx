@@ -12,6 +12,8 @@ import { useLockCustomers } from '../hooks/useLockCustomers.ts'
 import { useSetCustomerTags, useSetLockCustomers } from '../hooks/useLockWrites.ts'
 import { usePickCustomers } from '../hooks/usePickers.ts'
 import { findOwnTag, MAX_ITEMS, type PickedItem } from '../utils/lockDraft.ts'
+import { customerName, customerRef } from '../utils/format.ts'
+import { LockConfirmDialog } from './LockConfirmDialog.tsx'
 import { RemoveCustomerDialog } from './LockCustomerDialogs.tsx'
 import { LockCustomersList } from './LockCustomersList.tsx'
 import { PickList, type PickRow } from './PickList.tsx'
@@ -70,6 +72,10 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
   const isSetting = isGiving || isTagging
   const addError = giveError ?? tagError
   const [removing, setRemoving] = useState<LockCustomer | null>(null)
+  // Ticked rows of the customer table (by email, else id, in lower case): for "Remove access (N)".
+  // Customers just added come back ticked, so they are easy to see.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [removingMany, setRemovingMany] = useState<LockCustomer[] | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [limitHit, setLimitHit] = useState(false)
 
@@ -124,6 +130,7 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
             },
           })
       setNotice(result.message)
+      setSelected(new Set(refs.map((ref) => ref.toLowerCase())))
       choose([])
     } catch {
       // The message is shown from `addError`; the choice stays so it can be tried again.
@@ -208,6 +215,12 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
           setNotice(null)
           setRemoving(customer)
         }}
+        selected={selected}
+        onSelect={setSelected}
+        onRemoveMany={(many) => {
+          setNotice(null)
+          setRemovingMany(many)
+        }}
       />
 
       {removing &&
@@ -217,6 +230,38 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
             customer={removing}
             onClose={() => setRemoving(null)}
           />,
+          document.body,
+        )}
+      {removingMany &&
+        createPortal(
+          <LockConfirmDialog
+            title={`Remove access of ${removingMany.length} ${
+              removingMany.length === 1 ? 'customer' : 'customers'
+            }?`}
+            confirmLabel="Remove access"
+            danger
+            onClose={() => setRemovingMany(null)}
+            onConfirm={async () => {
+              const result = await set({
+                product,
+                body: { shop, remove: removingMany.map(customerRef) },
+              })
+              setNotice(result.message)
+              setSelected(new Set())
+              setRemovingMany(null)
+            }}
+          >
+            <p className="text-[0.95rem] font-semibold">
+              Are you sure you want to update this?
+            </p>
+            <p className="text-text-muted mt-1 text-[0.85rem]">
+              They will no longer be able to open “{lock.title}”. These changes will also
+              be updated in Shopify.
+            </p>
+            <p className="text-text-muted mt-3 max-h-32 overflow-auto text-[0.82rem] break-words">
+              {removingMany.map(customerName).join(', ')}
+            </p>
+          </LockConfirmDialog>,
           document.body,
         )}
     </section>

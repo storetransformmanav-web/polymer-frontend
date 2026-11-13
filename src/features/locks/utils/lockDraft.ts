@@ -1,3 +1,4 @@
+import { ownLockTag } from '../../../lib/lockOwnTag.ts'
 import type { AccessLockBody } from '../../../lib/api/endpoints.ts'
 
 /** The backend's limits for one call of `POST /access/locks`. */
@@ -204,33 +205,8 @@ export function validateLockDraft(draft: LockDraft): LockProblems {
   return problems
 }
 
-/**
- * A lock's **own tag**: `lock-<product handle>`. Tags are shared (a `b2b` key opens the product to
- * everyone who has `b2b`), so a lock made with chosen customers also gets a tag only those
- * customers hold — the lock's page lists the holders of this tag as "Selected customers".
- */
-export const OWN_TAG_PREFIX = 'lock-'
-
-export function ownLockTag(handle: string): string {
-  const slug = handle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return `${OWN_TAG_PREFIX}${slug || 'products'}`.slice(0, MAX_TAG_LENGTH)
-}
-
-/** The lock's own tag among its keys (the one made with it), or null for a lock without one. */
-export function findOwnTag(
-  tags: readonly string[],
-  handle?: string | null,
-): string | null {
-  const own = handle ? ownLockTag(handle).toLowerCase() : null
-  return (
-    tags.find((tag) => tag.toLowerCase() === own) ??
-    tags.find((tag) => tag.toLowerCase().startsWith(OWN_TAG_PREFIX)) ??
-    null
-  )
-}
+// The lock's own tag lives in lib/ (the product page uses it too).
+export { findOwnTag, OWN_TAG_PREFIX, ownLockTag } from '../../../lib/lockOwnTag.ts'
 
 /**
  * The one `POST /access/locks` call for a draft; every option is sent, so what you see is what is

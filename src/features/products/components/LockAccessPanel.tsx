@@ -1,3 +1,4 @@
+import { findOwnTag, withoutOwnTag } from '../../../lib/lockOwnTag.ts'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
@@ -41,7 +42,6 @@ import {
   useProductLockWrites,
 } from '../hooks/useProductLockAccess.ts'
 import { LockCustomerSearch, type ChosenCustomer } from './LockCustomerSearch.tsx'
-import { LockKeysCard } from './LockKeysCard.tsx'
 import {
   CARD,
   CHECKBOX,
@@ -332,13 +332,16 @@ function LockedProduct({
   handle: string
 }) {
   const product = lock.handle ?? lock.product_id
-  const list = useProductLockCustomers(shop, product)
+  // The lock's own tag (made with it): its holders are the customers chosen for this lock, and the
+  // tag itself is internal — it is never shown.
+  const ownTag = findOwnTag(lock.tags, lock.handle ?? handle)
+  const keys = withoutOwnTag(lock.tags, ownTag)
+  const list = useProductLockCustomers(shop, product, ownTag ?? '')
   const writes = useProductLockWrites(shop, handle, lock)
   const [notice, setNotice] = useState<string | null>(null)
   // The customers picked in the search box, waiting for "Yes" (and the box is emptied after it).
   const [giving, setGiving] = useState<ChosenCustomer[] | null>(null)
   const [pickerKey, setPickerKey] = useState(0)
-  const [taggingFor, setTaggingFor] = useState<LockCustomer | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
@@ -346,7 +349,7 @@ function LockedProduct({
   const total = data?.total ?? lock.customers_with_access ?? 0
   // Tags held by the customers on this page (the API counts customers, not their tags).
   const tagsShown = list.customers.reduce(
-    (sum, customer) => sum + customer.tags.length,
+    (sum, customer) => sum + withoutOwnTag(customer.tags, ownTag).length,
     0,
   )
   const morePages = (data?.total_pages ?? 1) > 1
@@ -391,9 +394,9 @@ function LockedProduct({
         <Stat
           tone="blue"
           icon={TagIcon}
-          value={lock.tags.length.toLocaleString('en-GB')}
-          label={lock.tags.length === 1 ? 'Key (tag)' : 'Keys (tags)'}
-          hint={lock.tags.length > 0 ? lock.tags.join(', ') : 'No keys: login only'}
+          value={keys.length.toLocaleString('en-GB')}
+          label={keys.length === 1 ? 'Key (tag)' : 'Keys (tags)'}
+          hint={keys.length > 0 ? keys.join(', ') : 'No keys: login only'}
         />
         <Stat
           tone="violet"
@@ -406,14 +409,6 @@ function LockedProduct({
 
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3">
-          <LockKeysCard
-            lock={lock}
-            shop={shop}
-            busy={writes.isWriting}
-            onAdd={(tags) => ask({ kind: 'addKeys', tags })}
-            onRemove={(tag) => ask({ kind: 'removeKey', tag })}
-          />
-
           <section className={CARD} aria-label="Customer Access">
             <div className="flex items-center gap-3 p-3 sm:p-4">
               <span aria-hidden="true" className={TILE}>
@@ -542,6 +537,7 @@ function LockedProduct({
                     list.customers.map((customer) => {
                       const name = customer.name ?? customer.email ?? 'Unnamed customer'
                       const isPicked = selected.has(customer.id)
+                      const shownTags = withoutOwnTag(customer.tags, ownTag)
                       return (
                         <tr
                           key={customer.id}
@@ -594,26 +590,13 @@ function LockedProduct({
                             )}
                           </td>
                           <td className={TD}>
-                            {customer.tags.length === 0 ? (
+                            {shownTags.length === 0 ? (
                               <span className="text-text-muted">—</span>
                             ) : (
                               <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-                                {customer.tags.map((tag) => (
-                                  <li key={tag} className={CHIP}>
+                                {shownTags.map((tag) => (
+                                  <li key={tag} className={`${CHIP} pr-2.5`}>
                                     {tag}
-                                    {!loginOnly && (
-                                      <button
-                                        type="button"
-                                        aria-label={`Remove tag ${tag} from ${name}`}
-                                        title="Remove this tag"
-                                        onClick={() =>
-                                          ask({ kind: 'untag', customer, tag })
-                                        }
-                                        className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
-                                      >
-                                        <XIcon width={10} height={10} />
-                                      </button>
-                                    )}
                                   </li>
                                 ))}
                               </ul>
@@ -621,23 +604,12 @@ function LockedProduct({
                           </td>
                           <td className={`${TD} text-center`}>
                             <span className="bg-accent-tint text-accent inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[0.78rem] font-bold">
-                              {customer.tags.length}
+                              {shownTags.length}
                             </span>
                           </td>
                           <td className={TD}>
                             {!loginOnly && (
                               <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className={`${OUTLINE} h-8 px-2.5 text-[0.8rem]`}
-                                  onClick={() => {
-                                    setNotice(null)
-                                    setTaggingFor(customer)
-                                  }}
-                                >
-                                  <PlusIcon width={14} height={14} />
-                                  Add tag
-                                </button>
                                 <button
                                   type="button"
                                   aria-label={`Remove access of ${name}`}
@@ -722,18 +694,6 @@ function LockedProduct({
             setGiving(null)
             // Empties the search box and its chosen customers.
             setPickerKey((key) => key + 1)
-          }}
-        />
-      )}
-      {taggingFor && (
-        <AddTagDialog
-          lock={lock}
-          customer={taggingFor}
-          sharedTags={list.tags}
-          onClose={() => setTaggingFor(null)}
-          onConfirm={async (tag) => {
-            await run({ kind: 'give', refs: [customerRefOf(taggingFor)], tag })
-            setTaggingFor(null)
           }}
         />
       )}
@@ -1354,54 +1314,6 @@ function TagChoice({
   )
 }
 
-function AddTagDialog({
-  lock,
-  customer,
-  sharedTags,
-  onClose,
-  onConfirm,
-}: {
-  lock: AccessLock
-  customer: LockCustomer
-  sharedTags: readonly LockCustomerTag[]
-  onClose: () => void
-  onConfirm: (tag: string) => Promise<void>
-}) {
-  const held = lowerSet(customer.tags)
-  const keys = lock.tags.filter((tag) => !held.has(tag.toLowerCase()))
-  const [tag, setTag] = useState(keys[0] ?? '')
-  const clean = tag.trim()
-  const alreadyHeld = held.has(clean.toLowerCase())
-  const name = customerLabel(customer)
-  return (
-    <AccessQuestion
-      title={`Add a tag to ${name}`}
-      confirmLabel="Add tag"
-      disabled={!clean || alreadyHeld}
-      onClose={onClose}
-      onConfirm={() => onConfirm(clean)}
-    >
-      <p className="m-0 text-[0.85rem]">
-        <span className="text-text-muted">Customer: </span>
-        <strong>{customer.email ?? customer.id}</strong>
-        {customer.tags.length > 0 && (
-          <span className="text-text-muted"> · holds {customer.tags.join(', ')}</span>
-        )}
-      </p>
-      <TagChoice keys={keys} value={tag} onChange={setTag} />
-      {alreadyHeld && (
-        <p className="text-danger mt-2 mb-0 text-[0.8rem]">
-          {name} already has this tag.
-        </p>
-      )}
-      <SharedNote note={sharedNote(sharedTags, clean ? [clean] : [])} />
-      <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
-        These changes will also be updated in Shopify.
-      </p>
-    </AccessQuestion>
-  )
-}
-
 /**
  * "Give access": the question after Add customer. It names the customers picked in the search box;
  * when the product has several keys it asks which tag they get (or a new one, which also becomes a
@@ -1420,15 +1332,18 @@ function GiveAccessDialog({
   onClose: () => void
   onConfirm: (tag: string) => Promise<void>
 }) {
-  const [tag, setTag] = useState(lock.tags[0] ?? '')
-  const several = lock.tags.length > 1
-  const clean = (several ? tag : (lock.tags[0] ?? tag)).trim()
+  // The tags people chose (the lock's own `lock-…` tag is given on its own, never offered).
+  const keys = withoutOwnTag(lock.tags, findOwnTag(lock.tags, lock.handle))
+  const [tag, setTag] = useState(keys[0] ?? '')
+  const several = keys.length > 1
+  const clean = (several ? tag : (keys[0] ?? tag)).trim()
+  const hasOwnTag = keys.length < lock.tags.length
   const many = customers.length > 1
   return (
     <AccessQuestion
       title={many ? `Give access to ${customers.length} customers?` : 'Give access?'}
       confirmLabel={many ? `Give access (${customers.length})` : 'Give access'}
-      disabled={!clean}
+      disabled={!clean && !hasOwnTag}
       onClose={onClose}
       onConfirm={() => onConfirm(clean)}
     >
@@ -1443,11 +1358,15 @@ function GiveAccessDialog({
         ))}
       </ul>
       {several ? (
-        <TagChoice keys={lock.tags} value={tag} onChange={setTag} />
+        <TagChoice keys={keys} value={tag} onChange={setTag} />
+      ) : keys[0] ? (
+        <p className="mt-3 mb-0 text-[0.85rem]">
+          They will get the key <strong>“{keys[0]}”</strong> and be able to open “
+          {lock.title}”.
+        </p>
       ) : (
         <p className="mt-3 mb-0 text-[0.85rem]">
-          They will get the key <strong>“{lock.tags[0]}”</strong> and be able to open “
-          {lock.title}”.
+          They will be able to open “{lock.title}”.
         </p>
       )}
       <SharedNote note={sharedNote(sharedTags, clean ? [clean] : [])} />

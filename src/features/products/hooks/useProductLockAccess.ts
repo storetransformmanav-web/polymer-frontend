@@ -7,6 +7,7 @@ import {
 import { useState } from 'react'
 import { invalidateAccessQueries } from '../../../lib/accessQueries.ts'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
+import { findOwnTag } from '../../../lib/lockOwnTag.ts'
 import {
   api,
   type AccessLock,
@@ -81,7 +82,7 @@ export function useProductLock(
  * `GET /access/locks/{product}/customers` (and the same `['lock-customers', …]` key) as Lock
  * Management's Customer Access tab, so both show one list.
  */
-export function useProductLockCustomers(shop: string, product: string) {
+export function useProductLockCustomers(shop: string, product: string, tag = '') {
   const [search, setSearchState] = useState('')
   const [sort, setSortState] = useState<LockCustomerSort>('name')
   const [page, setPage] = useState(1)
@@ -92,6 +93,8 @@ export function useProductLockCustomers(shop: string, product: string) {
     page,
     page_size: pageSize,
     ...(search.trim() ? { search: search.trim() } : {}),
+    // A lock with its own tag lists only the customers chosen for it (the holders of that tag).
+    ...(tag ? { tag } : {}),
   }
   const query = useQuery({
     queryKey: ['lock-customers', shop, product, params],
@@ -249,9 +252,21 @@ export function useProductLockWrites(
       switch (change.kind) {
         case 'give': {
           const tag = change.tag.trim()
-          const isNew = !isKey(tag)
+          const isNew = tag !== '' && !isKey(tag)
           if (isNew) {
             await api.access.lock({ shop, products: [product], tags: [...keys, tag] })
+          }
+          // A lock with its own tag: the customers get it (and the chosen tag), so they show as
+          // the lock's customers — even when a shared tag already lets them in.
+          const own = findOwnTag(keys, lock?.handle ?? handle)
+          if (own) {
+            const result = await api.access.customerTags({
+              shop,
+              customers: change.refs,
+              tags_add:
+                tag && tag.toLowerCase() !== own.toLowerCase() ? [own, tag] : [own],
+            })
+            return result.message
           }
           const result = await api.access.setLockCustomers(product, {
             shop,
