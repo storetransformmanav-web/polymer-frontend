@@ -296,6 +296,27 @@ describe('the Tags block on the product page', () => {
     )
   })
 
+  it('marks the Lock Management reads stale after a tag is saved, so the tag shows there too', async () => {
+    const user = userEvent.setup()
+    const view = renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'Sushi Tray' })
+    await screen.findByRole('region', { name: 'Tags' })
+    // A cached read of Lock Management (the lock list).
+    view.queryClient.setQueryData(['locks', 'list', { shop: 'polymer-uk' }], { total: 1 })
+
+    await startEditing(user)
+    await user.keyboard('Food Packaging{Enter}')
+    await user.click(save())
+    await confirmUpdate(user)
+
+    await waitFor(() =>
+      expect(
+        view.queryClient.getQueryState(['locks', 'list', { shop: 'polymer-uk' }])
+          ?.isInvalidated,
+      ).toBe(true),
+    )
+  })
+
   it('adds several tags at once from commas, ignoring blanks and duplicates', async () => {
     const user = await openPage()
     await startEditing(user)
@@ -342,10 +363,31 @@ describe('the Tags block on the product page', () => {
       })
     })
 
-    it('does not ask the tags API until a product is being edited', async () => {
+    it('does not read the store’s whole tag list until a product is being edited (only its lock keys, to mark them)', async () => {
       await openPage()
 
-      expect(storeTags).not.toHaveBeenCalled()
+      await waitFor(() =>
+        expect(storeTags).toHaveBeenCalledWith({
+          shop: 'polymer-uk',
+          lock_only: true,
+          page: 1,
+          page_size: 200,
+        }),
+      )
+      expect(storeTags).not.toHaveBeenCalledWith({
+        shop: 'polymer-uk',
+        page: 1,
+        page_size: 200,
+      })
+    })
+
+    it('marks the tags that are lock keys with a small lock', async () => {
+      details.mockResolvedValue(product(['b2b', 'Material_Foil']))
+      await openPage()
+
+      const key = await screen.findByTitle(/A lock key/)
+      expect(key).toHaveTextContent('b2b')
+      expect(within(block()).getByText('Material_Foil')).not.toHaveAttribute('title')
     })
 
     it('narrows the list to the tags containing what is typed, leaving out the ones already on the product', async () => {

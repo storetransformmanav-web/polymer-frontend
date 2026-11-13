@@ -7,6 +7,7 @@ import {
   ImageIcon,
   LayersIcon,
   ListChecksIcon,
+  LockIcon,
   PencilIcon,
   PlusIcon,
   SpinnerIcon,
@@ -57,6 +58,7 @@ import { ScrollRow } from '../../../components/ui/ScrollRow.tsx'
 import { useAddLocalMedia, useLocalMedia } from '../hooks/useLocalMedia.ts'
 import { usePendingMedia } from '../hooks/usePendingMedia.ts'
 import { useImageAltSave } from '../hooks/useImageAltSave.ts'
+import { useLockKeys } from '../hooks/useLockKeys.ts'
 import {
   useSectionEdit,
   type SavedHandler,
@@ -194,6 +196,8 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
   const heroSrc = safeUrl(imageUrl)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const altEditor = useImageAltSave(product, onSaved)
+  // Which of the product's tags are lock keys (marked with a small lock).
+  const lockKeys = useLockKeys(product?.shop?.key)
 
   // Collections are added and removed straight away (each after its own question), not with
   // the card's Save, so their dialogs live here, outside the card being edited — an Escape in
@@ -342,7 +346,7 @@ export function OverviewPanel({ product, preview, onSaved }: OverviewProps) {
                 </FieldGrid>
                 {/* Tags are shown here, but can only be changed while the card is edited. */}
                 <TagsBlock>
-                  <TagsView tags={product.tags} />
+                  <TagsView tags={product.tags} lockKeys={lockKeys} />
                 </TagsBlock>
                 {/* Collections too: shown here, added and removed while the card is edited. */}
                 <CollectionsBlock
@@ -581,14 +585,34 @@ function TagsBlock({ children }: { children: ReactNode }) {
   )
 }
 
-function TagsView({ tags }: { tags: string[] }) {
+/**
+ * The product's tags. The ones that are **lock keys** (tags Lock Management uses to decide who can
+ * see a locked product) carry a small lock and say so on hover; the other tags are plain.
+ */
+function TagsView({ tags, lockKeys }: { tags: string[]; lockKeys: ReadonlySet<string> }) {
   return tags.length > 0 ? (
     <ul className="border-border bg-bg flex flex-wrap gap-1.5 rounded-xl border p-2.5">
-      {tags.map((tag) => (
-        <li key={tag} className={TAG_CHIP}>
-          {tag}
-        </li>
-      ))}
+      {tags.map((tag) => {
+        const isKey = lockKeys.has(tag.toLowerCase())
+        return (
+          <li
+            key={tag}
+            className={
+              isKey
+                ? `${TAG_CHIP} border-accent/30 bg-accent-tint text-accent inline-flex items-center gap-1.5`
+                : TAG_CHIP
+            }
+            title={
+              isKey
+                ? 'A lock key: customers with this tag can see the locked products that use it.'
+                : undefined
+            }
+          >
+            {isKey && <LockIcon width={12} height={12} aria-hidden="true" />}
+            {tag}
+          </li>
+        )
+      })}
     </ul>
   ) : (
     <p className="border-border bg-bg text-text-muted rounded-xl border p-2.5 text-[0.85rem]">

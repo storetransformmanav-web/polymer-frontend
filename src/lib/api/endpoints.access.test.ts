@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from './ApiError.ts'
 import { apiClient } from './client.ts'
 import { api } from './endpoints.ts'
 
 vi.mock('./client.ts', () => ({
-  apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
 }))
 
 const get = vi.mocked(apiClient.get)
 const post = vi.mocked(apiClient.post)
 const put = vi.mocked(apiClient.put)
+const patch = vi.mocked(apiClient.patch)
 
 const SHOP = {
   key: 'polymer-uk',
@@ -217,6 +225,80 @@ describe('api.access', () => {
       tags_remove: ['boxes'],
     })
     expect(result).toMatchObject({ removedLocks: 1, createdLocks: 0, queued: 1 })
+  })
+
+  describe('when the server refuses PUT /access/tags with 405', () => {
+    const refused = () => new ApiError('Method Not Allowed', { status: 405 })
+
+    it('sends the same change with PATCH', async () => {
+      put.mockRejectedValue(refused())
+      patch.mockResolvedValue({ code: 200, status: 'OK', message: 'Tags updated.' })
+
+      const body = {
+        shop: 'polymer-uk',
+        products: ['locked-product-1'],
+        tags_remove: ['b2b-credit'],
+      }
+      const result = await api.access.updateTags(body)
+
+      expect(patch).toHaveBeenCalledWith('/access/tags', body)
+      expect(result.message).toBe('Tags updated.')
+    })
+
+    it('adds keys to products with POST /access/locks when PATCH is refused too', async () => {
+      put.mockRejectedValue(refused())
+      patch.mockRejectedValue(refused())
+      post.mockResolvedValue({ code: 200, status: 'OK', message: 'Products: 1 updated.' })
+
+      const result = await api.access.updateTags({
+        shop: 'polymer-uk',
+        products: ['locked-product-1'],
+        tags_add: ['b2b-credit'],
+        tags_remove: [],
+      })
+
+      expect(post).toHaveBeenCalledWith('/access/locks', {
+        shop: 'polymer-uk',
+        products: ['locked-product-1'],
+        tags: ['b2b-credit'],
+      })
+      expect(result.message).toBe('Products: 1 updated.')
+    })
+
+    it('shows the 405 as it is when nothing else can make the change (a key taken off, or given to a customer)', async () => {
+      put.mockRejectedValue(refused())
+      patch.mockRejectedValue(refused())
+
+      await expect(
+        api.access.updateTags({
+          shop: 'polymer-uk',
+          products: ['locked-product-1'],
+          tags_remove: ['b2b-credit'],
+        }),
+      ).rejects.toMatchObject({ status: 405 })
+      await expect(
+        api.access.updateTags({
+          shop: 'polymer-uk',
+          customers: ['cust-1'],
+          tags_add: ['b2b-credit'],
+        }),
+      ).rejects.toMatchObject({ status: 405 })
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('does not try another way for any other failure', async () => {
+      put.mockRejectedValue(new ApiError('Forbidden', { status: 403 }))
+
+      await expect(
+        api.access.updateTags({
+          shop: 'polymer-uk',
+          products: ['locked-product-1'],
+          tags_add: ['b2b-credit'],
+        }),
+      ).rejects.toMatchObject({ status: 403 })
+      expect(patch).not.toHaveBeenCalled()
+      expect(post).not.toHaveBeenCalled()
+    })
   })
 
   it('lists the customers who can see a product: the path, the query and every field', async () => {

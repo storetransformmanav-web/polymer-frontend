@@ -101,6 +101,10 @@ export const ENDPOINTS = {
     /** `product` is a CRM id, Shopify id or handle: `GET` who can see it, `PUT` adds / removes customers. */
     lockCustomers: (product: string) =>
       `/access/locks/${encodeURIComponent(product)}/customers`,
+    /** `DELETE` takes the lock off one product (CRM id, Shopify id or handle). */
+    lock: (product: string) => `/access/locks/${encodeURIComponent(product)}`,
+    /** `PUT` adds / removes tags on customers. */
+    customerTags: '/access/customers/tags',
   },
   collections: {
     /** `GET` one page of collections (search, type, sort, order, shop, page). */
@@ -2428,6 +2432,18 @@ export interface AccessTagListParams {
   page_size?: number
 }
 
+/**
+ * The body of `PUT /access/customers/tags` ("Customer Tags"): add and/or remove tags on
+ * customers (emails, CRM ids or Shopify ids). **The field names are an assumption** (the same as
+ * `PUT /access/tags`): check the backend's description and the Network tab.
+ */
+export interface AccessCustomerTagsBody {
+  shop: string
+  customers: string[]
+  tags_add?: string[]
+  tags_remove?: string[]
+}
+
 /** The body of `PUT /access/tags`: add and/or remove tags on products and customers. */
 export interface AccessTagsUpdateBody {
   shop: string
@@ -2593,6 +2609,16 @@ const accessSetupResponseSchema = z.object({
     })
     .nullish(),
 })
+
+/** A tag change that only adds tags to products (no customers, nothing removed). */
+function addsKeysToProductsOnly(body: AccessTagsUpdateBody): boolean {
+  return (
+    (body.products?.length ?? 0) > 0 &&
+    (body.customers?.length ?? 0) === 0 &&
+    (body.tags_add?.length ?? 0) > 0 &&
+    (body.tags_remove?.length ?? 0) === 0
+  )
+}
 
 function toAccessWriteResult(data: unknown): AccessWriteResult {
   const parsed = accessWriteResponseSchema.parse(data)
@@ -2923,10 +2949,34 @@ export const api = {
       await apiClient.post(ENDPOINTS.access.tags, body)
     },
 
-    /** Adds and/or removes tags on products and customers. Never retried. */
+    /**
+     * Adds and/or removes tags on products and customers. Never retried — with one exception: when
+     * the server answers **405 Method Not Allowed** (it does not take `PUT` on this address) it did
+     * nothing, so the same change is offered the other ways in, in turn: `PATCH` on the same
+     * address, then — for keys that are only being *added to products* — `POST /access/locks` with
+     * the products and the tags (the call that locks products and adds their tags, which Add lock
+     * uses). Removing a key, or giving a customer one, has no other documented call: when `PATCH`
+     * is refused too, the 405 is shown as it is.
+     */
     async updateTags(body: AccessTagsUpdateBody): Promise<AccessWriteResult> {
-      const data = await apiClient.put(ENDPOINTS.access.tags, body)
-      return toAccessWriteResult(data)
+      const refused = (error: unknown) =>
+        error instanceof ApiError && error.status === 405
+      try {
+        return toAccessWriteResult(await apiClient.put(ENDPOINTS.access.tags, body))
+      } catch (putError) {
+        if (!refused(putError)) throw putError
+        try {
+          return toAccessWriteResult(await apiClient.patch(ENDPOINTS.access.tags, body))
+        } catch (patchError) {
+          if (!refused(patchError) || !addsKeysToProductsOnly(body)) throw patchError
+          const data = await apiClient.post(ENDPOINTS.access.locks, {
+            shop: body.shop,
+            products: body.products,
+            tags: body.tags_add,
+          } satisfies AccessLockBody)
+          return toAccessWriteResult(data)
+        }
+      }
     },
 
     /** Would this customer (CRM id, Shopify id or email) see this product (id, Shopify id or handle)? */
@@ -2949,6 +2999,23 @@ export const api = {
         params,
       })
       return readAnswer(lockCustomersResponseSchema, data, 'lock customers')
+    },
+
+    /**
+     * `DELETE /access/locks/{product}?shop=`: takes the lock off one product (it is then visible
+     * to everyone again). The answer is read only for its message. Never retried.
+     */
+    async removeLock(product: string, shop: string): Promise<AccessWriteResult> {
+      const data = await apiClient.delete(ENDPOINTS.access.lock(product), {
+        params: { shop },
+      })
+      return toAccessWriteResult(data)
+    },
+
+    /** `PUT /access/customers/tags`: adds and/or removes tags on customers. Never retried. */
+    async customerTags(body: AccessCustomerTagsBody): Promise<AccessWriteResult> {
+      const data = await apiClient.put(ENDPOINTS.access.customerTags, body)
+      return toAccessWriteResult(data)
     },
 
     /** Gives and/or takes customers' access to one locked product. Never retried. */

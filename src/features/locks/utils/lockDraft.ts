@@ -77,6 +77,53 @@ export function parseTags(text: string, existing: readonly string[] = []): strin
   return out
 }
 
+/**
+ * Adds the tags of an already-locked product to the ones chosen (compared without case, no
+ * repeats), up to `MAX_TAGS`; `skipped` counts the ones that did not fit.
+ */
+export function mergeKeys(
+  current: readonly string[],
+  incoming: readonly string[],
+): { tags: string[]; skipped: number } {
+  const tags = [...current]
+  const seen = new Set(tags.map((tag) => tag.toLowerCase()))
+  let skipped = 0
+  for (const tag of incoming) {
+    if (seen.has(tag.toLowerCase())) continue
+    if (tags.length >= MAX_TAGS) {
+      skipped += 1
+      continue
+    }
+    seen.add(tag.toLowerCase())
+    tags.push(tag)
+  }
+  return { tags, skipped }
+}
+
+/**
+ * Adds the customers (or products) of an already-locked product to the ones ticked (by id, no
+ * repeats), up to `max` (`MAX_ITEMS`); `skipped` counts the ones that did not fit.
+ */
+export function mergePicked(
+  current: readonly PickedItem[],
+  incoming: readonly PickedItem[],
+  max: number = MAX_ITEMS,
+): { items: PickedItem[]; skipped: number } {
+  const items = [...current]
+  const seen = new Set(items.map((item) => item.id))
+  let skipped = 0
+  for (const item of incoming) {
+    if (!item.id || seen.has(item.id)) continue
+    if (items.length >= max) {
+      skipped += 1
+      continue
+    }
+    seen.add(item.id)
+    items.push(item)
+  }
+  return { items, skipped }
+}
+
 /** What changed between a lock's keys and an edited list (a tag compares without case). */
 export function diffTags(
   original: readonly string[],

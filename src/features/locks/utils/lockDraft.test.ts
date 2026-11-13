@@ -7,6 +7,10 @@ import {
   blankLockDraft,
   buildLockBody,
   isLockDraftDirty,
+  mergeKeys,
+  mergePicked,
+  MAX_ITEMS,
+  MAX_TAGS,
   parseTags,
   validateLockDraft,
   type LockDraft,
@@ -141,5 +145,36 @@ describe('parseCustomerRefs', () => {
 
   it('leaves out what is already listed', () => {
     expect(parseCustomerRefs('a@x.com b@x.com', ['A@x.com'])).toEqual(['b@x.com'])
+  })
+})
+
+describe('mergeKeys', () => {
+  it('adds the keys of an already-locked product without repeats (any case)', () => {
+    expect(mergeKeys(['vans'], ['VANS', 'b2b', 'b2b'])).toEqual({
+      tags: ['vans', 'b2b'],
+      skipped: 0,
+    })
+  })
+
+  it('stops at the most tags a lock can take and counts what did not fit', () => {
+    const many = Array.from({ length: MAX_TAGS + 3 }, (_, index) => `tag-${index}`)
+    const merged = mergeKeys([], many)
+    expect(merged.tags).toHaveLength(MAX_TAGS)
+    expect(merged.skipped).toBe(3)
+  })
+})
+
+describe('mergePicked', () => {
+  it('adds the customers of an already-locked product by id, without repeats', () => {
+    const merged = mergePicked([item('a')], [item('a'), item('b'), item('b'), item('')])
+    expect(merged.items.map((picked) => picked.id)).toEqual(['a', 'b'])
+    expect(merged.skipped).toBe(0)
+  })
+
+  it('stops at the limit and counts what did not fit', () => {
+    const many = Array.from({ length: MAX_ITEMS + 2 }, (_, index) => item(`c-${index}`))
+    const merged = mergePicked([], many)
+    expect(merged.items).toHaveLength(MAX_ITEMS)
+    expect(merged.skipped).toBe(2)
   })
 })

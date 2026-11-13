@@ -4,6 +4,9 @@ import {
   type QueryClient,
   type QueryKey,
 } from '@tanstack/react-query'
+import { useAppDispatch } from '../../../app/store/hooks.ts'
+import { productTagsSynced } from '../../../app/store/productsSlice.ts'
+import { invalidateAccessQueries } from '../../../lib/accessQueries.ts'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
@@ -27,21 +30,26 @@ import {
  */
 function useRefreshAfterWrite() {
   const queryClient = useQueryClient()
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['locks'] }),
-      queryClient.invalidateQueries({ queryKey: ['access-tags'] }),
-      queryClient.invalidateQueries({ queryKey: ['lock-picker'] }),
-      queryClient.invalidateQueries({ queryKey: ['lock-customers'] }),
-    ])
+  return () => invalidateAccessQueries(queryClient)
 }
 
 /** `POST /access/locks`: lock products, give customers tags, set options — in one call. */
 export function useSaveLock() {
   const refresh = useRefreshAfterWrite()
+  const dispatch = useAppDispatch()
   const mutation = useMutation({
     mutationFn: (body: AccessLockBody) => api.access.lock(body),
-    onSuccess: refresh,
+    onSuccess: (_result, body) => {
+      // The lock's tags are now on its products: show them in the Products pages too.
+      dispatch(
+        productTagsSynced({
+          refs: body.products ?? [],
+          add: body.tags ?? [],
+          remove: [],
+        }),
+      )
+      return refresh()
+    },
   })
   return {
     save: mutation.mutateAsync,
@@ -98,10 +106,19 @@ function patchLockCaches(
  */
 export function useUpdateAccessTags() {
   const queryClient = useQueryClient()
+  const dispatch = useAppDispatch()
   const refresh = useRefreshAfterWrite()
   const mutation = useMutation({
     mutationFn: (body: AccessTagsUpdateBody) => api.access.updateTags(body),
     onSuccess: (_result, body) => {
+      // A key added to / taken from a lock is added to / taken from the product's own tags.
+      dispatch(
+        productTagsSynced({
+          refs: body.products ?? [],
+          add: body.tags_add ?? [],
+          remove: body.tags_remove ?? [],
+        }),
+      )
       for (const handle of body.products ?? []) {
         patchLockCaches(queryClient, body.shop, handle, (lock) => ({
           ...lock,

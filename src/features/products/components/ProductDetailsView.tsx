@@ -32,9 +32,11 @@ import {
 } from './ProductDetailPanels.tsx'
 import { productStock } from '../utils/stock.ts'
 import { ProductImage } from './ProductImage.tsx'
+import { LockAccessPanel } from './LockAccessPanel.tsx'
 import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
-type TabId = 'overview' | 'variants' | 'inventory' | 'media' | 'seo' | 'metafields'
+type TabId =
+  'overview' | 'variants' | 'inventory' | 'media' | 'seo' | 'metafields' | 'lock'
 
 interface ProductDetailsViewProps {
   id: string
@@ -119,6 +121,8 @@ export function ProductDetailsView({
     { id: 'seo', label: 'SEO & Online' },
     // Always there, even with none yet, so a first metafield can be added.
     { id: 'metafields', label: 'Metafields', count: metafieldCount || undefined },
+    // Who can open the product when it is locked (the same data as Lock Management).
+    { id: 'lock', label: 'Lock Access' },
   ]
 
   if (details.error) {
@@ -334,6 +338,7 @@ export function ProductDetailsView({
         {product && tab === 'metafields' && (
           <MetafieldsPanel product={product} onSaved={onSaved} />
         )}
+        {product && tab === 'lock' && <LockAccessPanel product={product} />}
       </div>
 
       {askedStatus && product && (

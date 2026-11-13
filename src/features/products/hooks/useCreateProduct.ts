@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { invalidateAccessQueries } from '../../../lib/accessQueries.ts'
 import { useCallback, useState } from 'react'
 import { useAppDispatch } from '../../../app/store/hooks.ts'
 import {
@@ -108,6 +109,10 @@ export function useCreateProduct() {
         } catch (failure) {
           collections.failed.push({ title, message: toUserMessage(failure) })
         }
+      }
+      if (draft.tags.length > 0) {
+        // The new product's tags count in the store's tag list (and may be lock keys).
+        void invalidateAccessQueries(queryClient)
       }
       if (draft.newCollections.length > 0) {
         // The new names are now in the store: offer them in every collection search.

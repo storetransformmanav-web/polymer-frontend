@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { useAppDispatch } from '../../../app/store/hooks.ts'
 import { fetchProductDetails, updateProduct } from '../../../app/store/productsSlice.ts'
+import { invalidateAccessQueries } from '../../../lib/accessQueries.ts'
 import type { ProductUpdateBody, ProductWriteResult } from '../../../lib/api/endpoints.ts'
 import { productSyncPrefix } from './useProductSyncHistory.ts'
 import { useRefreshProductList } from './useRefreshProductList.ts'
@@ -10,7 +11,9 @@ import { useRefreshProductList } from './useRefreshProductList.ts'
  * What to refresh quietly once a save is confirmed: the sync history (the edit
  * starts a push to the store), the product's details, the list and — when the
  * status changed — every status tab's count. The new values are already on
- * screen (the slice patched them), so none of this shows a loader.
+ * screen (the slice patched them), so none of this shows a loader. **A changed tag list also
+ * refreshes Lock Management** (the locks, the tags and which of them are keys), so a tag added to or
+ * taken from a product shows there too.
  */
 export function useRefreshAfterSave() {
   const dispatch = useAppDispatch()
@@ -22,6 +25,9 @@ export function useRefreshAfterSave() {
       void queryClient.invalidateQueries({ queryKey: productSyncPrefix(id) })
       void dispatch(fetchProductDetails({ id, force: true }))
       refreshList(Boolean(body.status))
+      if (body.tags || body.tags_add?.length || body.tags_remove?.length) {
+        void invalidateAccessQueries(queryClient)
+      }
     },
     [dispatch, queryClient, refreshList],
   )

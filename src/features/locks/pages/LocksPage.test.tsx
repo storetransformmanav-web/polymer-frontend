@@ -595,6 +595,96 @@ describe('LocksPage', () => {
       )
     })
 
+    describe('a product that already has a lock', () => {
+      // Alpha Box (p-1) is already locked: two keys, and two customers can see it.
+      const ALPHA_LOCK = () =>
+        makeLock(1, {
+          product_id: 'p-1',
+          handle: 'alpha-box',
+          tags: ['vans', 'b2b'],
+        })
+
+      beforeEach(() => {
+        locks.mockResolvedValue(locksAnswer([ALPHA_LOCK()]))
+      })
+
+      it('is marked “Already locked”, with its number of keys, in the product list', async () => {
+        await openForm()
+
+        const row = (await screen.findByLabelText('Alpha Box')).closest('li')!
+        expect(within(row).getByText(/Already locked · 2 keys/)).toBeInTheDocument()
+        const other = screen.getByLabelText('Beta Bag').closest('li')!
+        expect(within(other).queryByText(/Already locked/)).toBeNull()
+      })
+
+      it('brings its keys and customers into the form, ticked, when it is ticked', async () => {
+        const user = await openForm()
+        await user.click(await screen.findByLabelText('Alpha Box'))
+
+        // Its keys are chosen, and its customers ticked (read from the lock's own customers).
+        const keys = await screen.findByRole('list', { name: 'Chosen tags' })
+        expect(within(keys).getByText('vans')).toBeInTheDocument()
+        expect(within(keys).getByText('b2b')).toBeInTheDocument()
+        const picked = await screen.findByRole('list', { name: 'Selected customers' })
+        expect(within(picked).getByText('Ada Buyer')).toBeInTheDocument()
+        expect(within(picked).getByText('Bo Trade')).toBeInTheDocument()
+        expect(
+          await screen.findByText(
+            /“Alpha Box” is already locked: its 2 keys and 2 customers/,
+          ),
+        ).toBeInTheDocument()
+        expect(lockCustomers).toHaveBeenCalledWith(
+          'alpha-box',
+          expect.objectContaining({ shop: 'polymer-uk' }),
+        )
+      })
+
+      it('adds to what is already chosen, never repeating it, and creates the lock with all of it', async () => {
+        const user = await openForm()
+        await screen.findByLabelText('Alpha Box')
+        await user.click(await screen.findByLabelText('b2b'))
+        await user.click(await screen.findByLabelText('Beta Bag'))
+
+        await user.click(screen.getByLabelText('Alpha Box'))
+        await screen.findByRole('list', { name: 'Selected customers' })
+        await user.click(screen.getAllByRole('button', { name: 'Create lock' })[0])
+        await user.click(await screen.findByRole('button', { name: 'Yes, create lock' }))
+
+        await waitFor(() =>
+          expect(lock).toHaveBeenCalledWith(
+            expect.objectContaining({
+              shop: 'polymer-uk',
+              products: ['p-2', 'p-1'],
+              customers: ['c1', 'c2'],
+              // "b2b" was chosen already: it is not added twice.
+              tags: ['b2b', 'vans'],
+            }),
+          ),
+        )
+      })
+
+      it('leaves a product with no lock just ticked, with nothing added', async () => {
+        const user = await openForm()
+        await user.click(await screen.findByLabelText('Beta Bag'))
+
+        expect(screen.getByText('1 product selected')).toBeInTheDocument()
+        expect(screen.queryByRole('list', { name: 'Chosen tags' })).toBeNull()
+        expect(screen.queryByRole('list', { name: 'Selected customers' })).toBeNull()
+        expect(screen.queryByText(/is already locked/)).toBeNull()
+      })
+
+      it('keeps the product ticked and says so when its keys and customers cannot be read', async () => {
+        lockCustomers.mockRejectedValue(new Error('network'))
+        const user = await openForm()
+        await user.click(await screen.findByLabelText('Alpha Box'))
+
+        expect(
+          await screen.findByText(/Could not read the keys and customers/),
+        ).toBeInTheDocument()
+        expect(screen.getByText('1 product selected')).toBeInTheDocument()
+      })
+    })
+
     it('selects every product shown with one box and sends one lock call for it all', async () => {
       const user = await openForm()
       await screen.findByLabelText('Alpha Box')
@@ -1116,11 +1206,10 @@ describe('LocksPage', () => {
         expect(await screen.findByText('Ada', { selector: 'mark' })).toBeInTheDocument()
 
         await user.click(screen.getByRole('button', { name: 'Clear customer search' }))
+        expect(screen.getByLabelText('Search customers with access')).toHaveValue('')
+        // The list is the full one again (it was cached), so nothing is marked any more.
         await waitFor(() =>
-          expect(lockCustomers).toHaveBeenLastCalledWith(
-            'locked-product-1',
-            expect.not.objectContaining({ search: expect.anything() }),
-          ),
+          expect(screen.queryByText('Ada', { selector: 'mark' })).toBeNull(),
         )
       })
 

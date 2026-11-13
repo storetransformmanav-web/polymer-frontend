@@ -630,6 +630,37 @@ const productsSlice = createSlice({
     productCreated(state, action: PayloadAction<ProductListItem>) {
       insertCreatedProduct(state, action.payload)
     },
+    /**
+     * A lock changed tags on products (Lock Management: a lock created, a key added or taken
+     * away): show it on those products at once — in the cached list rows and details, matched by
+     * their id or handle — so a product's Tags carry the lock's keys, and mark the copies stale so
+     * each is read again quietly. Products that are not cached are simply read fresh when opened.
+     */
+    productTagsSynced(
+      state,
+      action: PayloadAction<{ refs: string[]; add: string[]; remove: string[] }>,
+    ) {
+      const { refs, add, remove } = action.payload
+      if (add.length === 0 && remove.length === 0) return
+      const wanted = new Set(refs.map((ref) => ref.toLowerCase()))
+      if (wanted.size === 0) return
+      const matches = (item: { id: string; handle?: string | null }) =>
+        wanted.has(item.id.toLowerCase()) ||
+        (item.handle ? wanted.has(item.handle.toLowerCase()) : false)
+
+      const ids = new Set<string>()
+      for (const entry of Object.values(state.entries)) {
+        for (const item of entry.data?.items ?? []) if (matches(item)) ids.add(item.id)
+      }
+      for (const entry of Object.values(state.details)) {
+        if (entry.data && matches(entry.data)) ids.add(entry.data.id)
+      }
+      for (const item of state.lastData?.items ?? []) if (matches(item)) ids.add(item.id)
+
+      for (const id of ids)
+        patchCachedProduct(state, id, { tags_add: add, tags_remove: remove })
+      addSorted(state.facets.tags, add)
+    },
     /** "Clear all": drops every narrowing filter, keeps sort and page size. */
     filtersReset(state) {
       // The top-bar store isn't one of this page's filters, so it survives "Clear all".
@@ -943,6 +974,7 @@ export const {
   filtersChanged,
   filtersReset,
   productCreated,
+  productTagsSynced,
   tabOpened,
   tabClosed,
   tabsCleared,

@@ -19,6 +19,8 @@ export interface PickRow {
    * with this text beside it, can't be chosen, and is left out of "Select all shown".
    */
   locked?: string
+  /** More about the row, drawn at its right end (a note such as "Already locked"). */
+  trailing?: ReactNode
 }
 
 interface PickListProps {
@@ -224,6 +226,7 @@ export function PickList({
                         </span>
                       )}
                     </span>
+                    {row.trailing}
                     {row.locked && (
                       <span className="bg-accent-tint text-accent border-accent/30 shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold">
                         {row.locked}
