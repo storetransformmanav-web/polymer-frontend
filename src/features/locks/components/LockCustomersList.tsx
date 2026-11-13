@@ -8,6 +8,7 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
+import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
@@ -19,11 +20,26 @@ import { canEditCustomer, customerName, linkedCustomerPath } from '../utils/form
 
 const TH =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
-const TD = 'border-border border-b px-3 py-1.5 align-middle'
+// Smaller type than before, and one line per cell: a long name, email or company is cut with "…"
+// (see `Cell`) and its full text is the hover text, so every row is the same height.
+const TD = 'border-border overflow-hidden border-b px-3 py-1.5 align-middle'
 const SKELETON_ROWS = 6
 
 const BUTTON =
   'inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors'
+
+/**
+ * One line of text, cut with "…" when the cell is too narrow; hovering shows the full text. What was
+ * searched for is still marked in yellow.
+ */
+function Cell({ text }: { text: string | null | undefined }) {
+  if (!text) return <>—</>
+  return (
+    <span className="block truncate" title={text}>
+      <Highlight text={text} />
+    </span>
+  )
+}
 
 /** The customer's initials in a round tile, as the Customers list draws them. */
 function Avatar({ name }: { name: string }) {
@@ -148,112 +164,122 @@ export function LockCustomersList({
                 aria-busy={customers.isPending || customers.isShowingPrevious}
                 className="min-h-0 flex-1 overflow-auto"
               >
-                <table className="w-full min-w-[960px] table-fixed border-collapse text-[0.85rem]">
-                  <thead>
-                    <tr>
-                      <th className={`${TH} w-[24%]`}>Name</th>
-                      <th className={`${TH} w-[27%]`}>Email</th>
-                      <th className={`${TH} w-[12%]`}>Phone</th>
-                      <th className={`${TH} w-[20%]`}>Company</th>
-                      <th className={`${TH} w-[10%]`}>Tags</th>
-                      {!loginOnly && (
-                        <th className={`${TH} w-24 text-center`}>Actions</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {customers.isPending
-                      ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
-                          <tr key={row} aria-hidden="true">
-                            {Array.from({ length: loginOnly ? 5 : 6 }, (_, cell) => (
-                              <td key={cell} className={TD}>
-                                <span className="bg-surface block h-4 animate-pulse rounded" />
-                              </td>
-                            ))}
-                          </tr>
-                        ))
-                      : customers.customers.map((customer) => {
-                          return (
-                            <tr
-                              key={customer.id}
-                              className="even:bg-surface hover:bg-accent-tint/60 transition-colors"
-                            >
-                              <td className={`${TD} font-medium`}>
-                                <span className="flex flex-wrap items-center gap-3">
-                                  <Avatar name={customer.name ?? customer.email ?? ''} />
-                                  <Link
-                                    to={linkedCustomerPath(customer.id)}
-                                    state={linkedState(customer.name ?? customer.email)}
-                                    title="Open the customer's details"
-                                    className="text-text hover:text-accent no-underline hover:underline"
-                                  >
-                                    {customer.name ?? customer.email ?? '—'}
-                                  </Link>
-                                </span>
-                              </td>
-                              <td className={TD}>{customer.email ?? '—'}</td>
-                              <td className={`${TD} whitespace-nowrap`}>
-                                {customer.phone ?? '—'}
-                              </td>
-                              <td className={TD}>{customer.company ?? '—'}</td>
-                              <td className={TD}>
-                                {customer.tags.length === 0 ? (
-                                  <span className="text-text-muted">—</span>
-                                ) : (
-                                  <span className="flex flex-wrap gap-1">
-                                    {customer.tags.map((tag) => {
-                                      const shared = customers.tags.find(
-                                        (item) =>
-                                          item.tag.toLowerCase() === tag.toLowerCase(),
-                                      )?.locked_products
-                                      return (
-                                        <span
-                                          key={tag}
-                                          title={
-                                            shared
-                                              ? `Shared by ${shared} locked ${shared === 1 ? 'product' : 'products'}`
-                                              : undefined
-                                          }
-                                          className="bg-surface border-border rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
-                                        >
-                                          {tag}
-                                        </span>
-                                      )
-                                    })}
-                                  </span>
-                                )}
-                              </td>
-                              {!loginOnly && (
-                                <td className={`${TD} text-center whitespace-nowrap`}>
-                                  <span className="inline-flex items-center gap-1">
-                                    {canEditCustomer(lock, customer) && (
-                                      <button
-                                        type="button"
-                                        aria-label={`Edit access of ${customerName(customer)}`}
-                                        title="Edit access"
-                                        onClick={() => onEdit(customer)}
-                                        className={ROW_ACTION}
-                                      >
-                                        <PencilIcon />
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      aria-label={`Remove access of ${customerName(customer)}`}
-                                      title="Remove access"
-                                      onClick={() => onRemove(customer)}
-                                      className={ROW_ACTION_DANGER}
+                <HighlightQuery query={filters.search}>
+                  <table className="w-full min-w-[960px] table-fixed border-collapse text-[0.78rem]">
+                    <thead>
+                      <tr>
+                        <th className={`${TH} w-[24%]`}>Name</th>
+                        <th className={`${TH} w-[27%]`}>Email</th>
+                        <th className={`${TH} w-[12%]`}>Phone</th>
+                        <th className={`${TH} w-[20%]`}>Company</th>
+                        <th className={`${TH} w-[10%]`}>Tags</th>
+                        {!loginOnly && (
+                          <th className={`${TH} w-24 text-center`}>Actions</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customers.isPending
+                        ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
+                            <tr key={row} aria-hidden="true">
+                              {Array.from({ length: loginOnly ? 5 : 6 }, (_, cell) => (
+                                <td key={cell} className={TD}>
+                                  <span className="bg-surface block h-4 animate-pulse rounded" />
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        : customers.customers.map((customer) => {
+                            return (
+                              <tr
+                                key={customer.id}
+                                className="even:bg-surface hover:bg-accent-tint/60 transition-colors"
+                              >
+                                <td className={`${TD} font-medium`}>
+                                  <span className="flex min-w-0 items-center gap-2.5">
+                                    <Avatar
+                                      name={customer.name ?? customer.email ?? ''}
+                                    />
+                                    <Link
+                                      to={linkedCustomerPath(customer.id)}
+                                      state={linkedState(customer.name ?? customer.email)}
+                                      title={customer.name ?? customer.email ?? undefined}
+                                      className="text-text hover:text-accent min-w-0 truncate no-underline hover:underline"
                                     >
-                                      <TrashIcon />
-                                    </button>
+                                      <Highlight
+                                        text={customer.name ?? customer.email ?? '—'}
+                                      />
+                                    </Link>
                                   </span>
                                 </td>
-                              )}
-                            </tr>
-                          )
-                        })}
-                  </tbody>
-                </table>
+                                <td className={TD}>
+                                  <Cell text={customer.email} />
+                                </td>
+                                <td className={`${TD} whitespace-nowrap`}>
+                                  {customer.phone ?? '—'}
+                                </td>
+                                <td className={TD}>
+                                  <Cell text={customer.company} />
+                                </td>
+                                <td className={TD}>
+                                  {customer.tags.length === 0 ? (
+                                    <span className="text-text-muted">—</span>
+                                  ) : (
+                                    <span className="flex flex-wrap gap-1">
+                                      {customer.tags.map((tag) => {
+                                        const shared = customers.tags.find(
+                                          (item) =>
+                                            item.tag.toLowerCase() === tag.toLowerCase(),
+                                        )?.locked_products
+                                        return (
+                                          <span
+                                            key={tag}
+                                            title={
+                                              shared
+                                                ? `Shared by ${shared} locked ${shared === 1 ? 'product' : 'products'}`
+                                                : undefined
+                                            }
+                                            className="bg-surface border-border rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold"
+                                          >
+                                            {tag}
+                                          </span>
+                                        )
+                                      })}
+                                    </span>
+                                  )}
+                                </td>
+                                {!loginOnly && (
+                                  <td className={`${TD} text-center whitespace-nowrap`}>
+                                    <span className="inline-flex items-center gap-1">
+                                      {canEditCustomer(lock, customer) && (
+                                        <button
+                                          type="button"
+                                          aria-label={`Edit access of ${customerName(customer)}`}
+                                          title="Edit access"
+                                          onClick={() => onEdit(customer)}
+                                          className={ROW_ACTION}
+                                        >
+                                          <PencilIcon />
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        aria-label={`Remove access of ${customerName(customer)}`}
+                                        title="Remove access"
+                                        onClick={() => onRemove(customer)}
+                                        className={ROW_ACTION_DANGER}
+                                      >
+                                        <TrashIcon />
+                                      </button>
+                                    </span>
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })}
+                    </tbody>
+                  </table>
+                </HighlightQuery>
               </div>
             )}
 

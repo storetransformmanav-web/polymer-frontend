@@ -13,7 +13,7 @@ import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatDateTime } from '../../../lib/format.ts'
+import { formatDate, formatDateTime, formatDateTimeAmPm } from '../../../lib/format.ts'
 import {
   LOCK_ACTIONS_COLUMN_REM,
   LOCK_PRODUCT_COLUMN_REM,
@@ -218,10 +218,9 @@ function cellOf(id: LockColumnId, lock: AccessLock, shop: string): ReactNode {
       return yesNo(lock.hide_from_nav)
     case 'hide_from_sitemap':
       return yesNo(lock.hide_from_sitemap)
-    case 'noindex':
-      return yesNo(lock.noindex)
     case 'last_pushed':
-      return updated(lock.last_pushed_at)
+      // The date with its time, 12-hour with AM / PM, on the store's clock.
+      return lock.last_pushed_at ? formatDateTimeAmPm(lock.last_pushed_at) : '—'
   }
 }
 

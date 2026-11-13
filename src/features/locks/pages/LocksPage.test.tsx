@@ -1112,6 +1112,9 @@ describe('LocksPage', () => {
           ),
         )
 
+        // What was searched for is marked in yellow in the rows, as on the product list.
+        expect(await screen.findByText('Ada', { selector: 'mark' })).toBeInTheDocument()
+
         await user.click(screen.getByRole('button', { name: 'Clear customer search' }))
         await waitFor(() =>
           expect(lockCustomers).toHaveBeenLastCalledWith(

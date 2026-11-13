@@ -20,7 +20,6 @@ export const LOCK_COLUMN_IDS = [
   'hide_from_lists',
   'hide_from_nav',
   'hide_from_sitemap',
-  'noindex',
   'last_pushed',
 ] as const
 
@@ -59,8 +58,7 @@ export const LOCK_COLUMNS: Record<LockColumnId, LockColumnDef> = Object.fromEntr
   column('hide_from_lists', 'Hidden from lists', 9),
   column('hide_from_nav', 'Hidden from menus', 9),
   column('hide_from_sitemap', 'Hidden from sitemaps', 9),
-  column('noindex', 'Not indexed', 8),
-  column('last_pushed', 'Last sent to Shopify', 10),
+  column('last_pushed', 'Last sent to Shopify', 12),
 ]) as Record<LockColumnId, LockColumnDef>
 
 /** Shown to begin with, in this order: Product, then these, then Actions. */
