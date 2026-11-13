@@ -17,6 +17,16 @@ interface DialogProps {
   icon?: ReactNode
   /** A round ✕ at the heading's right (Escape and the backdrop close it either way). */
   closeButton?: boolean
+  /**
+   * A tinted header band running edge to edge (the icon, the heading with a line under it, a ✕),
+   * and a footer set off by a rule — the look of the update questions. `title` is still the
+   * dialog's accessible name.
+   */
+  banded?: boolean
+  /** With `banded`: the heading shown instead of `title` (which stays the accessible name). */
+  heading?: ReactNode
+  /** With `banded`: the line under the heading (what the question is about). */
+  subtitle?: ReactNode
   /** The action buttons, pinned under the content. */
   footer: ReactNode
   children: ReactNode
@@ -37,6 +47,9 @@ export function Dialog({
   extraWide = false,
   closeButton = false,
   icon,
+  banded = false,
+  heading,
+  subtitle,
   footer,
   children,
 }: DialogProps) {
@@ -79,14 +92,40 @@ export function Dialog({
         className="absolute inset-0 cursor-default border-none bg-black/40 transition-opacity duration-200 starting:opacity-0"
       />
 
+      {/* `text-left whitespace-normal`: a dialog opened from inside a table cell would otherwise
+          inherit the cell's right/centre alignment and `nowrap`, which is how its text ended up
+          clipped and pushed to one side. */}
       <div
         ref={panel}
         role={role}
         aria-modal="true"
         aria-label={title}
-        className={`bg-bg border-border relative flex max-h-[90svh] w-full flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-2xl border p-5 ${extraWide ? 'max-w-2xl' : wide ? 'max-w-xl' : 'max-w-md'} shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0`}
+        className={`bg-bg border-border relative flex max-h-[90svh] w-full flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-2xl border p-5 text-left whitespace-normal ${extraWide ? 'max-w-2xl' : wide ? 'max-w-xl' : 'max-w-md'} shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-all duration-200 motion-reduce:transition-none starting:scale-95 starting:opacity-0`}
       >
-        {closeButton || icon ? (
+        {banded ? (
+          <div className="border-border bg-accent-tint/60 -mx-5 -mt-5 flex items-center gap-3 border-b px-4 py-3">
+            {icon}
+            <div className="min-w-0 flex-1">
+              <h2 className="m-0 text-[0.98rem] leading-tight font-semibold break-words">
+                {heading ?? title}
+              </h2>
+              {subtitle && (
+                <p className="text-text-muted m-0 mt-0.5 text-[0.8rem] leading-snug break-words">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label={`Close ${title}`}
+              disabled={closeDisabled}
+              onClick={onClose}
+              className="text-text-muted hover:text-text inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors disabled:pointer-events-none disabled:opacity-50"
+            >
+              <XIcon width={16} height={16} />
+            </button>
+          </div>
+        ) : closeButton || icon ? (
           <div className={`flex gap-3 ${icon ? 'items-center' : 'items-start'}`}>
             {icon}
             <h2 className="min-w-0 flex-1 text-[1.05rem] leading-snug font-semibold break-words">
@@ -110,7 +149,15 @@ export function Dialog({
         <div className="text-text-muted flex min-w-0 flex-col gap-3 text-[0.88rem] leading-relaxed">
           {children}
         </div>
-        <div className="flex flex-wrap justify-end gap-2 pt-1">{footer}</div>
+        <div
+          className={
+            banded
+              ? 'border-border -mx-5 -mb-5 flex flex-wrap justify-end gap-2 border-t px-4 py-3'
+              : 'flex flex-wrap justify-end gap-2 pt-1'
+          }
+        >
+          {footer}
+        </div>
       </div>
     </div>
   )
