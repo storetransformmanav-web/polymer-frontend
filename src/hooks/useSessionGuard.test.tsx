@@ -7,7 +7,7 @@ import {
 } from '../app/store/authSlice.ts'
 import { api, type AuthUser } from '../lib/api/endpoints.ts'
 import { renderWithProviders } from '../test/renderWithProviders.tsx'
-import { IDLE_LIMIT_MS, useSessionGuard } from './useSessionGuard.ts'
+import { useSessionGuard } from './useSessionGuard.ts'
 
 vi.mock('../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/api/endpoints.ts')>()),
@@ -16,6 +16,8 @@ vi.mock('../lib/api/endpoints.ts', async (importOriginal) => ({
 
 const MINUTE = 60_000
 const DAY = 24 * 60 * MINUTE
+/** The limit most tests below give the session (as the backend's `idle_timeout_minutes`). */
+const IDLE_LIMIT_MS = 30 * MINUTE
 const USER: AuthUser = {
   id: 'u1',
   email: 'a@b.co',
@@ -33,8 +35,11 @@ function Probe() {
 
 type Store = ReturnType<typeof renderWithProviders>['store']
 
-/** Mounts the guard and signs in; the token expires `expiresInMs` from (fake) now. */
-function setup(expiresInMs = 30 * DAY) {
+/**
+ * Mounts the guard and signs in; the token expires `expiresInMs` from (fake) now and the backend
+ * allows `idleMinutes` of inactivity (`undefined` = the answer did not say: the 1440 default).
+ */
+function setup(expiresInMs = 30 * DAY, idleMinutes: number | undefined = 30) {
   const { store } = renderWithProviders(<Probe />)
   act(() => {
     store.dispatch(
@@ -42,6 +47,7 @@ function setup(expiresInMs = 30 * DAY) {
         {
           expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
           user: USER,
+          ...(idleMinutes !== undefined ? { idleTimeoutMinutes: idleMinutes } : {}),
         },
         'request-id',
         { credential: 'credential', nonce: 'test-nonce-0123456789' },
@@ -66,7 +72,30 @@ describe('useSessionGuard', () => {
     window.localStorage.clear()
   })
 
-  it('signs out after 30 minutes with no activity, even in a 30-day session, and ends it on the server', async () => {
+  it('follows the limit the backend sent: 40+ idle minutes do not sign anyone out under the 24-hour default', async () => {
+    // The answer carried no `idle_timeout_minutes`, so the 1440-minute (24-hour) default applies.
+    const store = setup(30 * DAY, undefined)
+
+    await advance(45 * MINUTE)
+    expect(auth(store).session).not.toBeNull()
+    expect(api.auth.logout).not.toHaveBeenCalled()
+
+    await advance(23 * 60 * MINUTE)
+    expect(auth(store).session).toBeNull()
+    expect(auth(store).signedOutReason).toBe('idle')
+  })
+
+  it('uses any other number of minutes the backend sends', async () => {
+    const store = setup(30 * DAY, 90)
+
+    await advance(80 * MINUTE)
+    expect(auth(store).session).not.toBeNull()
+
+    await advance(15 * MINUTE)
+    expect(auth(store).signedOutReason).toBe('idle')
+  })
+
+  it('signs out after the idle limit with no activity, even in a 30-day session, and ends it on the server', async () => {
     const store = setup(30 * DAY)
 
     await advance(IDLE_LIMIT_MS - MINUTE)
@@ -114,6 +143,7 @@ describe('useSessionGuard', () => {
           {
             expiresAt: new Date(Date.now() + 30 * DAY).toISOString(),
             user: USER,
+            idleTimeoutMinutes: 30,
           },
           'request-id',
           { credential: 'credential', nonce: 'test-nonce-0123456789' },

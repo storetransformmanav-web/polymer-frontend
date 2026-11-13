@@ -41,6 +41,8 @@ type TabId =
 interface ProductDetailsViewProps {
   id: string
   onBack: () => void
+  /** What the back button says; "Back to list" by default. */
+  backLabel?: string
   /** Called after any section of this product is saved in place (the page shows the notice). */
   onSaved?: SavedHandler
   /**
@@ -60,6 +62,7 @@ interface ProductDetailsViewProps {
 export function ProductDetailsView({
   id,
   onBack,
+  backLabel = 'Back to list',
   onSaved,
   savedStatus = null,
 }: ProductDetailsViewProps) {
@@ -146,7 +149,7 @@ export function ProductDetailsView({
             onClick={onBack}
             className="border-border bg-bg text-text-muted hover:text-text cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors"
           >
-            Back to list
+            {backLabel}
           </button>
         </div>
       </section>
@@ -258,12 +261,12 @@ export function ProductDetailsView({
           <button
             type="button"
             onClick={onBack}
-            aria-label="Back to list"
+            aria-label={backLabel}
             className="border-border bg-bg text-text hover:border-accent flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[0.82rem] font-semibold transition-colors"
           >
             <ArrowLeftIcon width={16} height={16} />
             <span className="hidden sm:inline" aria-hidden="true">
-              Back to list
+              {backLabel}
             </span>
           </button>
         </div>

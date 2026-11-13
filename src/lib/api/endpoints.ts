@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ApiError } from './ApiError.ts'
-import { apiClient, refreshCsrfToken } from './client.ts'
+import { apiClient, refreshCsrfSession } from './client.ts'
 import { CSRF_PATH, setCsrfToken } from './csrf.ts'
 import {
   buildImportForm,
@@ -444,6 +444,11 @@ const loginResponseSchema = z.object({
   /** This session's CSRF token: kept in memory only (`setCsrfToken`), sent on every change. */
   csrf_token: z.string().nullish(),
   expires_at: z.string().nullish(),
+  /**
+   * How many minutes without activity the session lasts (the backend's own number, 1440 now). Read
+   * with `readIdleTimeoutMinutes`; `unknown` so an odd value can never fail a sign-in.
+   */
+  idle_timeout_minutes: z.unknown().optional(),
   user: authUserSchema,
 })
 
@@ -459,7 +464,11 @@ const meResponseSchema = z.preprocess(
     }
     return { user: value }
   },
-  z.object({ user: authUserSchema, expires_at: z.string().nullish() }),
+  z.object({
+    user: authUserSchema,
+    expires_at: z.string().nullish(),
+    idle_timeout_minutes: z.unknown().optional(),
+  }),
 )
 
 export const PRODUCT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const
@@ -3815,10 +3824,12 @@ export const api = {
 
     /**
      * This session's CSRF token (`GET /auth/csrf`), asked for after a reload — the sign-in answer
-     * carries it the first time. It is kept in memory only (`setCsrfToken`).
+     * carries it the first time. It is kept in memory only (`setCsrfToken`). The answer also says
+     * how many idle minutes the session lasts (`idle_timeout_minutes`), which is returned.
      */
-    async csrf(): Promise<void> {
-      await refreshCsrfToken()
+    async csrf(): Promise<{ idleTimeoutMinutes: number | null }> {
+      const { idleTimeoutMinutes } = await refreshCsrfSession()
+      return { idleTimeoutMinutes }
     },
 
     /**

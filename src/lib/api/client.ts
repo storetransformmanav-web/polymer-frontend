@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import { env } from '../../config/env.ts'
+import { readIdleTimeoutMinutes } from '../idleTimeout.ts'
 import { findSensitiveParams } from '../urlSecurity.ts'
 import { ApiError } from './ApiError.ts'
 import { CSRF_PATH, getCsrfToken, setCsrfToken } from './csrf.ts'
@@ -52,7 +53,21 @@ axiosInstance.interceptors.request.use((config) => {
  * reload, and when the backend says the token we hold is missing or stale.
  */
 export async function refreshCsrfToken(): Promise<string> {
-  const response = await axiosInstance.get<{ csrf_token?: unknown }>(CSRF_PATH)
+  return (await refreshCsrfSession()).token
+}
+
+/**
+ * The same call, also returning the session's idle limit (`idle_timeout_minutes`, null when the
+ * answer has none): the backend's own number, which the app's idle timer follows.
+ */
+export async function refreshCsrfSession(): Promise<{
+  token: string
+  idleTimeoutMinutes: number | null
+}> {
+  const response = await axiosInstance.get<{
+    csrf_token?: unknown
+    idle_timeout_minutes?: unknown
+  }>(CSRF_PATH)
   const token = response.data?.csrf_token
   if (typeof token !== 'string' || token === '') {
     throw new ApiError('The server did not send a security token.', {
@@ -60,7 +75,10 @@ export async function refreshCsrfToken(): Promise<string> {
     })
   }
   setCsrfToken(token)
-  return token
+  return {
+    token,
+    idleTimeoutMinutes: readIdleTimeoutMinutes(response.data?.idle_timeout_minutes),
+  }
 }
 
 /** A 403 whose message names the CSRF header: the token is missing or stale. */

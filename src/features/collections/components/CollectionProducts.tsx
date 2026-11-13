@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -7,6 +6,7 @@ import { HighlightQuery, Highlight } from '../../../components/ui/Highlight.tsx'
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
+  EyeIcon,
   PlusIcon,
   ProductsIcon,
   SearchIcon,
@@ -14,7 +14,7 @@ import {
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
-import { ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import type {
@@ -23,6 +23,7 @@ import type {
   CollectionProductSort,
 } from '../../../lib/api/endpoints.ts'
 import { formatPrice } from '../../../lib/format.ts'
+import { ProductDetailsView } from '../../products/index.ts'
 import type {
   CollectionProductsState,
   useCollectionDetails,
@@ -97,8 +98,23 @@ export function CollectionProducts({
   const [picked, setPicked] = useState<PickedProduct[]>([])
   const [confirmAdd, setConfirmAdd] = useState(false)
   const [removing, setRemoving] = useState<CollectionProduct | null>(null)
+  // The product being looked at: its own page opens in place of this table (same page).
+  const [viewing, setViewing] = useState<CollectionProduct | null>(null)
   const inCollection = new Set(details.products.map((product) => product.id))
   const shop = collection.shop?.key ?? ''
+
+  if (viewing) {
+    return (
+      <div className="relative">
+        <ProductDetailsView
+          key={viewing.id}
+          id={viewing.id}
+          backLabel="Back to collection"
+          onBack={() => setViewing(null)}
+        />
+      </div>
+    )
+  }
 
   return (
     <section
@@ -254,14 +270,14 @@ export function CollectionProducts({
                   <th className={`${TH} text-center`}>Status</th>
                   <th className={`${TH} text-right`}>Inventory</th>
                   <th className={`${TH} text-right`}>Price</th>
-                  {editable && <th className={`${TH} w-20 text-center`}>Actions</th>}
+                  <th className={`${TH} w-24 text-center`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {details.productsPending
                   ? Array.from({ length: 6 }, (_, row) => (
                       <tr key={row} aria-hidden="true" className="border-border border-b">
-                        {Array.from({ length: editable ? 7 : 6 }, (_, cell) => (
+                        {Array.from({ length: 7 }, (_, cell) => (
                           <td key={cell} className={TD}>
                             <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                           </td>
@@ -280,13 +296,14 @@ export function CollectionProducts({
                           <span className="flex items-center gap-3">
                             <CollectionImage src={product.image_url} />
                             <span className="flex min-w-0 flex-col">
-                              <Link
-                                to={`/products/${encodeURIComponent(product.id)}`}
-                                className="text-text hover:text-accent truncate font-semibold no-underline"
-                                title={product.title}
+                              <button
+                                type="button"
+                                onClick={() => setViewing(product)}
+                                className="text-text hover:text-accent cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold transition-colors hover:underline"
+                                title={`Open ${product.title}`}
                               >
                                 <Highlight text={product.title} />
-                              </Link>
+                              </button>
                               <span className="text-text-muted truncate text-[0.75rem]">
                                 {[product.vendor, product.product_type]
                                   .filter(Boolean)
@@ -313,19 +330,30 @@ export function CollectionProducts({
                         <td className={`${TD} text-right font-semibold`}>
                           {priceOf(product, currency)}
                         </td>
-                        {editable && (
-                          <td className={`${TD} text-center`}>
+                        <td className={`${TD} text-center`}>
+                          <span className="inline-flex items-center gap-1">
                             <button
                               type="button"
-                              aria-label={`Remove ${product.title} from the collection`}
-                              title="Remove from collection"
-                              onClick={() => setRemoving(product)}
-                              className={ROW_ACTION_DANGER}
+                              aria-label={`View ${product.title}`}
+                              title="View"
+                              onClick={() => setViewing(product)}
+                              className={ROW_ACTION}
                             >
-                              <TrashIcon width={15} height={15} />
+                              <EyeIcon />
                             </button>
-                          </td>
-                        )}
+                            {editable && (
+                              <button
+                                type="button"
+                                aria-label={`Remove ${product.title} from the collection`}
+                                title="Remove from collection"
+                                onClick={() => setRemoving(product)}
+                                className={ROW_ACTION_DANGER}
+                              >
+                                <TrashIcon width={15} height={15} />
+                              </button>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                     ))}
               </tbody>
@@ -336,6 +364,7 @@ export function CollectionProducts({
 
       {page && page.total > 0 && (
         <PaginationFooter
+          compact
           page={page.page}
           pageSize={table.pageSize}
           total={page.total}

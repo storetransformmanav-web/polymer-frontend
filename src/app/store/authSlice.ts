@@ -7,6 +7,10 @@ import {
 } from '@reduxjs/toolkit'
 import { ApiError, toUserMessage } from '../../lib/api/ApiError.ts'
 import { getCsrfToken } from '../../lib/api/csrf.ts'
+import {
+  DEFAULT_IDLE_TIMEOUT_MINUTES,
+  readIdleTimeoutMinutes,
+} from '../../lib/idleTimeout.ts'
 import { api, type AuthUser } from '../../lib/api/endpoints.ts'
 
 export const SESSION_STORAGE_KEY = 'polymer-crm:session'
@@ -23,6 +27,12 @@ export interface Session {
   /** When the app ends this session: the backend's expiry, or sooner (see `sessionExpiry`). */
   expiresAt: string
   user: AuthUser
+  /**
+   * How many minutes without activity the session lasts — the backend's `idle_timeout_minutes`
+   * (sent when signing in with a code or Google, and by `GET /auth/csrf` after a reload). The idle
+   * timer follows it (`useSessionGuard`); a session without it uses the default (1440).
+   */
+  idleTimeoutMinutes?: number
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -50,6 +60,7 @@ export function sessionExpiry(
 function buildSession(
   response: {
     expires_at?: string | null
+    idle_timeout_minutes?: unknown
     user: AuthUser
   },
   rememberMe: boolean,
@@ -58,6 +69,9 @@ function buildSession(
   return {
     expiresAt: sessionExpiry(response.expires_at, Date.now(), rememberMe),
     user: response.user,
+    idleTimeoutMinutes:
+      readIdleTimeoutMinutes(response.idle_timeout_minutes) ??
+      DEFAULT_IDLE_TIMEOUT_MINUTES,
   }
 }
 
@@ -132,8 +146,14 @@ function getStoredSession(): Session | null {
     // Only the user's profile and the expiry are kept. A session saved by an older version of the
     // app held an `accessToken` too: it is rewritten without it, at once, not left until the next
     // sign-in.
-    const session: Session = { expiresAt: stored.expiresAt, user: stored.user }
-    if (Object.keys(stored).some((key) => key !== 'expiresAt' && key !== 'user')) {
+    const idleTimeoutMinutes = readIdleTimeoutMinutes(stored.idleTimeoutMinutes)
+    const session: Session = {
+      expiresAt: stored.expiresAt,
+      user: stored.user,
+      ...(idleTimeoutMinutes !== null ? { idleTimeoutMinutes } : {}),
+    }
+    const kept = new Set(['expiresAt', 'user', 'idleTimeoutMinutes'])
+    if (Object.keys(stored).some((key) => !kept.has(key))) {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
     }
     return session
@@ -305,13 +325,19 @@ export const restoreSession = createAsyncThunk<
   try {
     const me = await api.auth.me()
     // The CSRF token is not kept anywhere: after a reload it is asked for again. If this fails the
-    // first change that needs it gets a 403 and fetches it then (see the API client).
-    await api.auth.csrf().catch(() => undefined)
+    // first change that needs it gets a 403 and fetches it then (see the API client). The same
+    // answer says how long the session may sit idle, which is what the idle timer follows.
+    const fromCsrf = await api.auth.csrf().catch(() => undefined)
     const stored = getState().auth.session
     return {
       user: me.user,
       // Keep the expiry the sign-in set; a session found only by its cookie gets the default.
       expiresAt: stored?.expiresAt ?? sessionExpiry(me.expires_at, Date.now(), false),
+      idleTimeoutMinutes:
+        fromCsrf?.idleTimeoutMinutes ??
+        readIdleTimeoutMinutes(me.idle_timeout_minutes) ??
+        stored?.idleTimeoutMinutes ??
+        DEFAULT_IDLE_TIMEOUT_MINUTES,
     }
   } catch (error) {
     return rejectWithValue(
@@ -361,14 +387,20 @@ const authSlice = createSlice({
       state.signedOutMessage = null
     },
     /**
-     * The server ended the session (any 401 while signed in — it signs a session out after 30 idle
-     * minutes without a request): the user is cleared from memory and the login page shows the
-     * API's own message.
+     * The server ended the session (any 401 while signed in — it has really ended: idle past its own
+     * limit, revoked or expired): the user is cleared from memory and the login page shows the
+     * API's own message. This is the only thing that signs a person out because of the server.
      */
     sessionEnded(state, action: PayloadAction<string | undefined>) {
       state.session = null
       state.signedOutReason = 'expired'
       state.signedOutMessage = action.payload ?? null
+    },
+    /** The server's idle limit (in minutes) changed — `GET /auth/csrf` said so while signed in. */
+    idleTimeoutUpdated(state, action: PayloadAction<number>) {
+      if (state.session && state.session.idleTimeoutMinutes !== action.payload) {
+        state.session = { ...state.session, idleTimeoutMinutes: action.payload }
+      }
     },
   },
   extraReducers: (builder) => {
@@ -433,6 +465,7 @@ const authSlice = createSlice({
 export const {
   emailEditRequested,
   errorCleared,
+  idleTimeoutUpdated,
   rememberMeChanged,
   sessionCleared,
   sessionEnded,

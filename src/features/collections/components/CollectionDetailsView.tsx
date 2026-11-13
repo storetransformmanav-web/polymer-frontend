@@ -31,7 +31,10 @@ import type {
   CollectionRuleOptions,
   CollectionUpdateBody,
 } from '../../../lib/api/endpoints.ts'
+import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import { formatDateTimeAmPm } from '../../../lib/format.ts'
+import { safeUrl } from '../../../lib/safeUrl.ts'
+import { ProductLightbox, type LightboxSlide } from '../../products/index.ts'
 import {
   useCollectionDetails,
   useCollectionRuleOptions,
@@ -153,9 +156,7 @@ export function CollectionDetailsView({
           {collection.products_count === 1 ? 'product' : 'products'}
         </span>
       </HeaderChip>
-      <HeaderChip icon={GlobeIcon} label="Handle">
-        /{collection.handle}
-      </HeaderChip>
+      
       <HeaderChip icon={ArrowUpDownIcon} label="Product order">
         {sortOrderLabel(collection.sort_order)}
       </HeaderChip>
@@ -307,6 +308,40 @@ function Overview({
 }) {
   const conditions = collection.rule_set?.conditions ?? []
   const columns = ruleOptions?.columns ?? []
+  // The picture opens in the same viewer as a product's pictures; its alt text is changed there.
+  const [lightbox, setLightbox] = useState(false)
+  const [altSaving, setAltSaving] = useState(false)
+  const [altError, setAltError] = useState<string | null>(null)
+  const pictureSrc = safeUrl(collection.image_url)
+  const slides: LightboxSlide[] = pictureSrc
+    ? [
+        {
+          src: pictureSrc,
+          alt: collection.image_alt?.trim() || collection.title,
+          altText: collection.image_alt ?? '',
+          id: 'collection-image',
+        },
+      ]
+    : []
+  const altEditor = {
+    // Only the alt text is sent (`PUT /collections/{id}` `{ image_alt }`); the viewer asks first.
+    save: async (_imageId: string, alt: string) => {
+      setAltSaving(true)
+      setAltError(null)
+      try {
+        await onSave({ image_alt: alt })
+        return true
+      } catch (error) {
+        setAltError(toUserMessage(error))
+        return false
+      } finally {
+        setAltSaving(false)
+      }
+    },
+    isSaving: altSaving,
+    error: altError,
+    clearError: () => setAltError(null),
+  }
   const before = () => draftFromCollection(collection)
   const title = collection.title
   const textValue = (field: CollectionTextField, value: string, display?: ReactNode) => (
@@ -324,47 +359,72 @@ function Overview({
     <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
       <aside className="flex min-w-0 flex-col gap-4">
         <div className={`${DETAIL_CARD} overflow-hidden p-0`}>
-          <CollectionImage
-            src={collection.image_url}
-            size="xl"
-            alt={collection.image_alt ?? collection.title}
-          />
-        </div>
-        <EditableCard<CollectionDraft>
-          title="Image"
-          icon={ImageIcon}
-          canEdit={canManage}
-          collectionTitle={title}
-          onSave={onSave}
-          start={before}
-          build={(draft) => buildUpdateBody(before(), draft, columns)}
-          validate={(draft) =>
-            pick(validateCollectionDraft(draft, columns), (key) =>
-              IMAGE_FIELDS.includes(key),
-            )
-          }
-          view={
-            <dl className="m-0 flex flex-col gap-1">
-              <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
-                Alt text
-              </dt>
-              <dd className="m-0 text-[0.85rem] break-words">
-                {collection.image_alt?.trim() || (
-                  <span className="text-text-muted">—</span>
-                )}
-              </dd>
-            </dl>
-          }
-          editor={(draft, change, errors) => (
-            <ImageFields
-              draft={draft}
-              errors={errors}
-              onChange={(changes) => change({ ...draft, ...changes })}
-              idPrefix="collection-image"
-              canRemove={Boolean(collection.image_url)}
+          {pictureSrc ? (
+            <button
+              type="button"
+              onClick={() => setLightbox(true)}
+              aria-label={`View the image of ${collection.title}`}
+              title="Click to view the image"
+              className="block w-full cursor-zoom-in border-none bg-transparent p-0"
+            >
+              <CollectionImage
+                src={collection.image_url}
+                size="xl"
+                alt={collection.image_alt ?? collection.title}
+              />
+            </button>
+          ) : (
+            <CollectionImage
+              src={collection.image_url}
+              size="xl"
+              alt={collection.image_alt ?? collection.title}
             />
           )}
+        </div>
+        <ProductLightbox
+          slides={slides}
+          index={lightbox ? 0 : null}
+          onClose={() => setLightbox(false)}
+          altEditor={canManage ? altEditor : undefined}
         />
+        {/* A collection with a picture changes its alt text in the viewer; one without has this card to add one. */}
+        {!collection.image_url && (
+          <EditableCard<CollectionDraft>
+            title="Image"
+            icon={ImageIcon}
+            canEdit={canManage}
+            collectionTitle={title}
+            onSave={onSave}
+            start={before}
+            build={(draft) => buildUpdateBody(before(), draft, columns)}
+            validate={(draft) =>
+              pick(validateCollectionDraft(draft, columns), (key) =>
+                IMAGE_FIELDS.includes(key),
+              )
+            }
+            view={
+              <dl className="m-0 flex flex-col gap-1">
+                <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
+                  Alt text
+                </dt>
+                <dd className="m-0 text-[0.85rem] break-words">
+                  {collection.image_alt?.trim() || (
+                    <span className="text-text-muted">—</span>
+                  )}
+                </dd>
+              </dl>
+            }
+            editor={(draft, change, errors) => (
+              <ImageFields
+                draft={draft}
+                errors={errors}
+                onChange={(changes) => change({ ...draft, ...changes })}
+                idPrefix="collection-image"
+                canRemove={Boolean(collection.image_url)}
+              />
+            )}
+          />
+        )}
       </aside>
 
       <div className="flex min-w-0 flex-col gap-4">
