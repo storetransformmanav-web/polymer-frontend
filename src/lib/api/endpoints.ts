@@ -1059,6 +1059,51 @@ const customerAddressSchema = z.object({
   time_zone: z.string().nullish(),
 })
 
+/**
+ * `order_summary` of `GET /customers/{id}`: what the customer ordered. The `orders_in_shopify` count
+ * is every order the store has for them; the rest is worked out from the `orders_in_crm` orders
+ * that are synced here (`complete` says whether those are all of them). Amounts are decimal strings.
+ */
+const customerOrderSummarySchema = z.object({
+  orders_in_shopify: z.number().nullish(),
+  orders_in_crm: z.number().nullish(),
+  complete: z.boolean().nullish(),
+  completed: z.number().nullish(),
+  open: z.number().nullish(),
+  cancelled: z.number().nullish(),
+  fulfilled: z.number().nullish(),
+  unfulfilled: z.number().nullish(),
+  paid: z.number().nullish(),
+  payment_pending: z.number().nullish(),
+  refunded: z.number().nullish(),
+  items_ordered: z.number().nullish(),
+  total_value: z.string().nullish(),
+  total_refunded: z.string().nullish(),
+  outstanding: z.string().nullish(),
+  average_order_value: z.string().nullish(),
+  total_spent_shopify: z.string().nullish(),
+  currency: z.string().nullish(),
+  first_order_at: z.string().nullish(),
+  first_order_name: z.string().nullish(),
+  last_order_at: z.string().nullish(),
+  last_order_name: z.string().nullish(),
+})
+
+/** One of the latest orders in `orders` of `GET /customers/{id}` (the first ten). */
+const customerRecentOrderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  order_number: z.number().nullish(),
+  created_at: z.string().nullish(),
+  items_count: z.number().nullish(),
+  lines_count: z.number().nullish(),
+  financial_status: z.string().nullish(),
+  fulfillment_status: z.string().nullish(),
+  cancelled: z.boolean().nullish(),
+  total_price: z.string().nullish(),
+  currency: z.string().nullish(),
+})
+
 const customerDetailSchema = z.object({
   shop: shopRefSchema.nullish(),
   id: z.string(),
@@ -1102,6 +1147,10 @@ const customerDetailSchema = z.object({
   created_at: z.string().nullish(),
   updated_at: z.string().nullish(),
   addresses: z.array(customerAddressSchema).default([]),
+  /** What the customer ordered, and their latest orders (both may be missing on older answers). */
+  order_summary: customerOrderSummarySchema.nullish(),
+  orders: z.array(customerRecentOrderSchema).nullish(),
+  orders_has_more: z.boolean().nullish(),
   metafields: z
     .array(
       z.object({
@@ -1217,6 +1266,8 @@ export interface CustomerCreateResult {
 
 export type CustomerDetail = z.infer<typeof customerDetailSchema>
 export type CustomerAddress = z.infer<typeof customerAddressSchema>
+export type CustomerOrderSummary = z.infer<typeof customerOrderSummarySchema>
+export type CustomerRecentOrder = z.infer<typeof customerRecentOrderSchema>
 
 // --- Product details (GET /products/{ref}) --------------------------------
 // Optional-ish fields use `.nullish()` so one missing value in the backend's

@@ -40,6 +40,8 @@ interface OrderDetailsViewProps {
   /** The order's store key from the address, when it has one. */
   shop: string | null
   onBack: () => void
+  /** What the back button says; "Back to list" by default. */
+  backLabel?: string
 }
 
 /**
@@ -50,7 +52,12 @@ interface OrderDetailsViewProps {
  * **Timeline**. The header and summary draw straight from the list row while the full record
  * loads, so nothing waits on the network when you come from the list.
  */
-export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewProps) {
+export function OrderDetailsView({
+  reference,
+  shop,
+  onBack,
+  backLabel = 'Back to list',
+}: OrderDetailsViewProps) {
   const details = useOrderDetails(reference, shop)
   const { order, preview } = details
   const [tab, setTab] = useState<TabId>('details')
@@ -131,7 +138,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
             onClick={onBack}
             className="border-border bg-bg text-text-muted hover:text-text cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors"
           >
-            Back to list
+            {backLabel}
           </button>
         </div>
       </section>
@@ -213,6 +220,7 @@ export function OrderDetailsView({ reference, shop, onBack }: OrderDetailsViewPr
           )
         }
         onBack={onBack}
+        backLabel={backLabel}
       />
 
       {notice && (

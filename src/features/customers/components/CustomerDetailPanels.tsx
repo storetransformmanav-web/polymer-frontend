@@ -318,7 +318,7 @@ function AddressCard({ address }: { address: CustomerAddress }) {
 
 /**
  * Addresses on the Overview: only the default address. When the customer has more, a
- * "Show more addresses" button opens the Addresses tab, which lists all of them.
+ * "View more addresses" button opens the Addresses tab, which lists all of them.
  */
 function AddressesCard({
   customer,
@@ -344,7 +344,7 @@ function AddressesCard({
               onClick={onShowMore}
               className="border-border bg-bg text-accent hover:border-accent inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[0.82rem] font-semibold transition-colors"
             >
-              Show more addresses ({more})
+              View more addresses ({more})
               <ChevronRightIcon width={14} height={14} />
             </button>
           )}
@@ -378,8 +378,10 @@ interface OverviewProps {
   customer: CustomerDetail | null
   /** The matching list row, so the summary can draw before details arrive. */
   preview: CustomerListItem | null
-  /** "Show more addresses": opens the Addresses tab. */
+  /** "View more addresses": opens the Addresses tab. */
   onShowAddresses?: () => void
+  /** "View history": opens the Orders tab (the order history). */
+  onViewOrderHistory?: () => void
 }
 
 const MINI_LABEL = 'text-text-muted text-[0.68rem] font-bold tracking-wide uppercase'
@@ -392,10 +394,12 @@ export function CustomerOverviewPanel({
   customer,
   preview,
   onShowAddresses,
+  onViewOrderHistory,
 }: OverviewProps) {
   const source = customer ?? preview
   const orders = source?.orders_count ?? 0
   const lastOrder = source?.last_order_name
+  const summary = customer?.order_summary ?? null
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
@@ -417,7 +421,22 @@ export function CustomerOverviewPanel({
         </div>
       )}
 
-      <DetailSection title="Orders & Spend" icon={OrdersIcon}>
+      <DetailSection
+        title="Orders & Spend"
+        icon={OrdersIcon}
+        actions={
+          onViewOrderHistory && customer ? (
+            <button
+              type="button"
+              onClick={onViewOrderHistory}
+              className="border-border bg-bg text-accent hover:border-accent inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2.5 text-[0.75rem] font-semibold transition-colors"
+            >
+              View history
+              <ChevronRightIcon width={12} height={12} />
+            </button>
+          ) : undefined
+        }
+      >
         <div className="border-border bg-surface grid grid-cols-2 gap-x-4 gap-y-4 rounded-xl border p-4">
           <div>
             <p className={MINI_LABEL}>Orders</p>
@@ -450,8 +469,35 @@ export function CustomerOverviewPanel({
             </div>
           </div>
         </div>
-        {lastOrder && (
-          <p className="text-text-muted mt-3 text-[0.82rem]">Last order {lastOrder}</p>
+        {summary?.first_order_name || summary?.last_order_name ? (
+          <dl className="border-border m-0 mt-3 grid grid-cols-2 gap-x-4 rounded-xl border p-4">
+            <div>
+              <dt className={MINI_LABEL}>First order</dt>
+              <dd className="m-0 mt-1 text-[0.9rem] font-semibold">
+                {summary.first_order_name ?? '—'}
+              </dd>
+              {summary.first_order_at && (
+                <dd className="text-text-muted m-0 text-[0.78rem]">
+                  {formatDate(summary.first_order_at)}
+                </dd>
+              )}
+            </div>
+            <div className="text-right">
+              <dt className={MINI_LABEL}>Latest order</dt>
+              <dd className="m-0 mt-1 text-[0.9rem] font-semibold">
+                {summary.last_order_name ?? lastOrder ?? '—'}
+              </dd>
+              {summary.last_order_at && (
+                <dd className="text-text-muted m-0 text-[0.78rem]">
+                  {formatDate(summary.last_order_at)}
+                </dd>
+              )}
+            </div>
+          </dl>
+        ) : (
+          lastOrder && (
+            <p className="text-text-muted mt-3 text-[0.82rem]">Last order {lastOrder}</p>
+          )
         )}
       </DetailSection>
     </div>

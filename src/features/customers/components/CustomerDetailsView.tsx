@@ -13,6 +13,7 @@ import {
   MailIcon,
   TrashIcon,
   UsersIcon,
+  XIcon,
 } from '../../../components/ui/icons.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
 import { formatDate, initials } from '../../../lib/format.ts'
@@ -24,9 +25,10 @@ import {
   CustomerOverviewPanel,
 } from './CustomerDetailPanels.tsx'
 import { CustomerLockAccessPanel } from './CustomerLockAccessPanel.tsx'
+import { CustomerOrderHistory } from './CustomerOrderHistory.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
-type TabId = 'overview' | 'addresses' | 'marketing' | 'lock' | 'metafields'
+type TabId = 'overview' | 'orders' | 'addresses' | 'marketing' | 'lock' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -61,7 +63,8 @@ export function CustomerDetailsView({
   // Lock Access is for people who may view lock management (the backend still decides).
   const canSeeLocks = useAccess('access').canView
   const [selectedTab, setTab] = useState<TabId>('overview')
-  // The Addresses tab is opened by "Show more addresses" on the Overview (for this customer).
+  // The Addresses tab is opened by "View more addresses" on the Overview (for this customer) and
+  // can be closed with its ✕, which goes back to the Orders tab.
   const [addressesFor, setAddressesFor] = useState<string | null>(null)
   const addressesOpen = addressesFor === id
   const tab: TabId =
@@ -87,6 +90,11 @@ export function CustomerDetailsView({
           },
         ]
       : []),
+    {
+      id: 'orders',
+      label: 'Orders',
+      count: customer?.order_summary?.orders_in_shopify ?? customer?.orders_count,
+    },
     { id: 'marketing', label: 'Marketing & Tax' },
     ...(canSeeLocks ? [{ id: 'lock' as const, label: 'Lock Access' }] : []),
     ...(metafieldCount > 0
@@ -201,6 +209,60 @@ export function CustomerDetailsView({
       >
         {tabs.map((item) => {
           const selected = item.id === tab
+          const closable = item.id === 'addresses'
+          const label =
+            item.id === 'metafields' ? (
+              // The same small red note under the label as a product's Metafields tab.
+              <span className="flex flex-col items-start leading-tight">
+                {item.label}
+                <span className="text-danger text-[0.65rem] font-normal">
+                  Under Progress
+                </span>
+              </span>
+            ) : (
+              item.label
+            )
+          const count = item.count !== undefined && (
+            <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
+              {item.count}
+            </span>
+          )
+          const colour = selected
+            ? 'border-accent text-text'
+            : 'text-text-muted hover:text-text border-transparent'
+          if (closable) {
+            return (
+              <div
+                key={item.id}
+                className={`-mb-px flex shrink-0 items-center border-0 border-b-2 pr-2 transition-colors ${colour}`}
+              >
+                <button
+                  id={`customer-tab-${item.id}`}
+                  role="tab"
+                  type="button"
+                  aria-selected={selected}
+                  aria-controls="customer-tabpanel"
+                  onClick={() => setTab(item.id)}
+                  className="flex cursor-pointer items-center gap-2 border-0 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap text-current"
+                >
+                  {label}
+                  {count}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Close the Addresses tab"
+                  title="Close"
+                  onClick={() => {
+                    setAddressesFor(null)
+                    setTab('orders')
+                  }}
+                  className="text-text-muted hover:bg-surface hover:text-text flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 transition-colors"
+                >
+                  <XIcon width={12} height={12} />
+                </button>
+              </div>
+            )
+          }
           return (
             <button
               key={item.id}
@@ -210,28 +272,10 @@ export function CustomerDetailsView({
               aria-selected={selected}
               aria-controls="customer-tabpanel"
               onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
-                selected
-                  ? 'border-accent text-text'
-                  : 'text-text-muted hover:text-text border-transparent'
-              }`}
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${colour}`}
             >
-              {item.id === 'metafields' ? (
-                // The same small red note under the label as a product's Metafields tab.
-                <span className="flex flex-col items-start leading-tight">
-                  {item.label}
-                  <span className="text-danger text-[0.65rem] font-normal">
-                    Under Progress
-                  </span>
-                </span>
-              ) : (
-                item.label
-              )}
-              {item.count !== undefined && (
-                <span className="bg-surface text-text-muted border-border rounded-full border px-1.5 py-0.5 text-[0.68rem] font-bold">
-                  {item.count}
-                </span>
-              )}
+              {label}
+              {count}
             </button>
           )
         })}
@@ -251,11 +295,13 @@ export function CustomerDetailsView({
               setAddressesFor(id)
               setTab('addresses')
             }}
+            onViewOrderHistory={() => setTab('orders')}
           />
         )}
         {customer && tab === 'addresses' && (
           <CustomerAddressesPanel customer={customer} />
         )}
+        {customer && tab === 'orders' && <CustomerOrderHistory customer={customer} />}
         {tab !== 'overview' && !customer && <DetailSkeleton />}
         {customer && tab === 'marketing' && (
           <CustomerMarketingPanel customer={customer} />

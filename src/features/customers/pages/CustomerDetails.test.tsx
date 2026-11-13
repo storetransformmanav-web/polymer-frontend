@@ -263,7 +263,7 @@ describe('Customer details', () => {
     expect(screen.queryByText('Second Place')).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Addresses/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Show more addresses \(2\)/ }))
+    await user.click(screen.getByRole('button', { name: /View more addresses \(2\)/ }))
 
     expect(
       screen.getByRole('tab', { name: /Addresses/, selected: true }),
