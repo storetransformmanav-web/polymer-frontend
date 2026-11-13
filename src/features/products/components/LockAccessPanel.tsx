@@ -13,7 +13,6 @@ import {
   GlobeIcon,
   type IconProps,
   LockIcon,
-  PlusIcon,
   SearchIcon,
   SpinnerIcon,
   TagIcon,
@@ -187,7 +186,22 @@ export function LockAccessPanel({ product }: { product: ProductDetail }) {
   return <LockedProduct lock={found.lock} shop={shop} handle={handle} />
 }
 
-/** A product with no lock: say so plainly and lock it here, with optional keys. */
+/** The settings a new lock starts with: nothing hidden, no manual locking. */
+const NO_SETTINGS: Record<Exclude<LockSwitch, 'enabled'>, boolean> = {
+  hide_from_nav: false,
+  hide_from_lists: false,
+  hide_from_sitemap: false,
+  noindex: false,
+  manual_locking: false,
+}
+
+/**
+ * A product with no lock, set up on the spot: the same keys search, customer search and visibility
+ * switches as a locked product, working on a draft held on screen. Everything is optional. **Lock
+ * this product** asks once and then makes the lock in one call (`POST /access/locks`) with the keys
+ * and customers chosen and the settings switched on — so locking takes one page, not two steps.
+ * With no keys and no customers any customer who is signed in can open the product.
+ */
 function NotLocked({
   shop,
   handle,
@@ -199,96 +213,164 @@ function NotLocked({
 }) {
   const writes = useProductLockWrites(shop, handle, null)
   const [tags, setTags] = useState<string[]>([])
-  const [typed, setTyped] = useState('')
+  const [customers, setCustomers] = useState<ChosenCustomer[]>([])
+  const [pickerKey, setPickerKey] = useState(0)
+  const [options, setOptions] = useState(NO_SETTINGS)
   const [asking, setAsking] = useState(false)
 
-  function addTyped() {
-    const next = typed
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-    if (next.length === 0) return
-    const seen = lowerSet(tags)
-    setTags(
-      [...tags, ...next.filter((tag) => !seen.has(tag.toLowerCase()))].slice(0, MAX_KEYS),
-    )
-    setTyped('')
+  // The shared cards read an ordinary lock; this one only exists on screen until it is made.
+  const draft: AccessLock = {
+    product_id: handle,
+    shopify_id: null,
+    title,
+    handle,
+    status: null,
+    image_url: null,
+    product_tags: [],
+    enabled: true,
+    tags,
+    ...options,
+    message: null,
+    customers_with_access: customers.length,
+    sync_status: null,
+    sync_error: null,
+    last_pushed_at: null,
+    updated_at: null,
+    shop: null,
   }
+  const settingsOn = SETTINGS.filter((setting) => options[setting.name])
+  const summary =
+    tags.length === 0 && customers.length === 0
+      ? 'No keys or customers chosen: once locked, any customer who is signed in can open it.'
+      : [
+          tags.length > 0 &&
+            `${tags.length} ${tags.length === 1 ? 'key' : 'keys'} (${tags.join(', ')})`,
+          customers.length > 0 &&
+            `${customers.length} ${customers.length === 1 ? 'customer' : 'customers'}`,
+          settingsOn.length > 0 &&
+            `${settingsOn.length} visibility ${settingsOn.length === 1 ? 'setting' : 'settings'} on`,
+        ]
+          .filter(Boolean)
+          .join(' · ')
 
   return (
-    <section className={`${CARD} flex flex-col gap-5 p-5 sm:p-6`}>
-      <div className="flex items-start gap-4">
+    <div className="flex flex-col gap-3">
+      <section
+        className={`${CARD} from-accent-tint/60 to-bg flex items-center gap-3 bg-linear-to-r px-4 py-3`}
+      >
         <span aria-hidden="true" className={TILE}>
-          <LockIcon width={22} height={22} />
+          <LockIcon width={18} height={18} />
         </span>
-        <div>
-          <h2 className="m-0 text-[1.05rem] font-bold">This product is not locked</h2>
-          <p className="text-text-muted m-0 text-[0.85rem]">
-            Everyone can see and buy it in the store. Lock it to choose which customers
-            can open it.
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 text-[0.98rem] font-bold">This product is not locked</h2>
+          <p className="text-text-muted m-0 text-[0.8rem]">
+            Everyone can see and buy it. Choose who can open it below — everything is
+            optional — then press <strong>Lock this product</strong>.
           </p>
         </div>
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor="lock-new-keys" className="text-[0.85rem] font-semibold">
-          Keys (tags) — optional
-        </label>
-        <p className="text-text-muted m-0 text-[0.78rem]">
-          Customers with one of these tags can open the product. With none, any customer
-          who is signed in can.
-        </p>
-        <div className="flex gap-2">
-          <input
-            id="lock-new-keys"
-            type="text"
-            value={typed}
-            maxLength={255}
-            placeholder="e.g. wholesale — press Enter to add"
-            onChange={(event) => setTyped(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ',') {
-                event.preventDefault()
-                addTyped()
-              }
-            }}
-            className={INPUT}
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <LockKeysSearch
+            key={tags.join('|')}
+            lock={draft}
+            shop={shop}
+            busy={writes.isWriting}
+            onSave={({ add, remove }) =>
+              setTags((current) => {
+                const gone = lowerSet(remove)
+                const kept = current.filter((tag) => !gone.has(tag.toLowerCase()))
+                const have = lowerSet(kept)
+                return [
+                  ...kept,
+                  ...add.filter((tag) => !have.has(tag.toLowerCase())),
+                ].slice(0, MAX_KEYS)
+              })
+            }
           />
-          <button
-            type="button"
-            onClick={addTyped}
-            disabled={!typed.trim() || tags.length >= MAX_KEYS}
-            className={`${OUTLINE} h-10 px-3 text-[0.82rem]`}
+
+          <section
+            className={`${CARD} flex flex-col gap-3 p-3 sm:p-4`}
+            aria-label="Customers"
           >
-            <PlusIcon width={14} height={14} />
-            Add
-          </button>
+            <div className="flex items-center gap-3">
+              <span aria-hidden="true" className={TILE}>
+                <UsersIcon width={17} height={17} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="m-0 text-[0.92rem] font-bold">Customers</h2>
+                <p className="text-text-muted m-0 truncate text-[0.76rem]">
+                  Search and add the customers who can open this product.
+                </p>
+              </div>
+              <span className={COUNT_BADGE}>{customers.length}</span>
+            </div>
+            <LockCustomerSearch
+              key={pickerKey}
+              lock={draft}
+              shop={shop}
+              busy={writes.isWriting}
+              onAdd={(chosen) => {
+                setCustomers((current) => {
+                  const have = lowerSet(current.map((item) => item.ref))
+                  return [
+                    ...current,
+                    ...chosen.filter((item) => !have.has(item.ref.toLowerCase())),
+                  ].slice(0, 250)
+                })
+                // Empties the search box and its chosen customers.
+                setPickerKey((key) => key + 1)
+              }}
+            />
+            {customers.length > 0 && (
+              <ul
+                aria-label="Customers who will get access"
+                className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+              >
+                {customers.map((item) => (
+                  <li key={item.ref} className={CHIP} title={item.ref}>
+                    {item.label}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${item.label}`}
+                      onClick={() =>
+                        setCustomers(customers.filter((other) => other.ref !== item.ref))
+                      }
+                      className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current"
+                    >
+                      <XIcon width={10} height={10} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
-        {tags.length > 0 && (
-          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {tags.map((tag) => (
-              <li key={tag} className={CHIP}>
-                {tag}
-                <button
-                  type="button"
-                  aria-label={`Remove ${tag}`}
-                  onClick={() => setTags(tags.filter((item) => item !== tag))}
-                  className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current"
-                >
-                  <XIcon width={10} height={10} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+
+        <SettingsCard
+          lock={draft}
+          busy={writes.isWriting}
+          onToggle={(name, value) =>
+            setOptions((current) => ({ ...current, [name]: value }))
+          }
+        />
       </div>
 
-      <div>
-        <button type="button" className={PRIMARY} onClick={() => setAsking(true)}>
+      <section
+        className={`${CARD} flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:px-4`}
+      >
+        <p className="text-text-muted m-0 min-w-0 flex-1 text-[0.82rem]">{summary}</p>
+        <button
+          type="button"
+          className={PRIMARY}
+          disabled={writes.isWriting}
+          onClick={() => setAsking(true)}
+        >
           <LockIcon width={16} height={16} />
           Lock this product
         </button>
-      </div>
+      </section>
 
       {asking && (
         <AccessQuestion
@@ -296,19 +378,27 @@ function NotLocked({
           confirmLabel="Yes, lock it"
           onClose={() => setAsking(false)}
           onConfirm={async () => {
-            await writes.write({ kind: 'lock', tags })
+            await writes.write({
+              kind: 'lock',
+              tags,
+              customers: customers.map((item) => item.ref),
+              options,
+            })
             setAsking(false)
           }}
         >
           <p className="m-0 text-[0.85rem]">
-            {tags.length > 0
-              ? `Only customers with ${tags.map((tag) => `“${tag}”`).join(' or ')} will be able to open it.`
-              : 'Only customers who are signed in will be able to open it.'}{' '}
+            {tags.length > 0 || customers.length > 0
+              ? 'Only the customers you chose, and customers with one of the keys, will be able to open it.'
+              : 'Only customers who are signed in will be able to open it.'}
+          </p>
+          <p className="text-text-muted mt-2 mb-0 text-[0.8rem]">{summary}</p>
+          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
             These changes will also be updated in Shopify.
           </p>
         </AccessQuestion>
       )}
-    </section>
+    </div>
   )
 }
 

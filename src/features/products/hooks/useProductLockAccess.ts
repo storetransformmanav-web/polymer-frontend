@@ -1,3 +1,4 @@
+import { ownLockTag } from '../../../lib/lockOwnTag.ts'
 import {
   keepPreviousData,
   useMutation,
@@ -221,7 +222,14 @@ export type LockAccessChange =
   /** Take one key (tag) off the product (`PUT /access/tags` `tags_remove`). */
   | { kind: 'removeKey'; tag: string }
   /** Lock a product that is not locked yet (no tags = any signed-in customer). */
-  | { kind: 'lock'; tags: string[] }
+  | {
+      kind: 'lock'
+      tags: string[]
+      /** Customers (email, else id) who get access at once: they hold a tag made for this lock. */
+      customers?: string[]
+      /** Settings to switch on from the start (anything left out stays off). */
+      options?: Partial<Record<Exclude<LockSwitch, 'enabled'>, boolean>>
+    }
   /** Take the lock off: everyone can see the product again. */
   | { kind: 'unlock' }
 
@@ -400,10 +408,19 @@ export function useProductLockWrites(
           return result.message
         }
         case 'lock': {
+          const customers = change.customers ?? []
+          // Chosen customers hold a tag made for this lock alone, so only they get access by it.
+          const own = customers.length > 0 ? ownLockTag(handle) : null
+          const tags =
+            own && !change.tags.some((tag) => tag.toLowerCase() === own)
+              ? [...change.tags, own]
+              : change.tags
           const result = await api.access.lock({
             shop,
             products: [handle],
-            ...(change.tags.length > 0 ? { tags: change.tags } : {}),
+            ...(tags.length > 0 ? { tags } : {}),
+            ...(customers.length > 0 ? { customers } : {}),
+            ...change.options,
             enabled: true,
           })
           return result.message
