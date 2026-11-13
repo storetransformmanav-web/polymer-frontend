@@ -2662,7 +2662,15 @@ const lockCustomerSchema = z
     email: z.string().nullish(),
     phone: z.string().nullish(),
     company: z.string().nullish(),
-    tags: z.array(z.union([z.string(), z.object({ tag: z.string() })])).nullish(),
+    // The lock tags the customer holds. The answer sends them as `matched_tags`; other names are
+    // read too, as a list of words, of `{ tag }` objects or as one comma-separated text.
+    // `.optional()`: a field the answer leaves out must not fail the whole list.
+    tags: z.unknown().optional(),
+    matched_tags: z.unknown().optional(),
+    lock_tags: z.unknown().optional(),
+    matching_tags: z.unknown().optional(),
+    access_tags: z.unknown().optional(),
+    customer_tags: z.unknown().optional(),
     created_at: z.string().nullish(),
   })
   .transform((customer) => ({
@@ -2677,9 +2685,49 @@ const lockCustomerSchema = z
     email: customer.email ?? null,
     phone: customer.phone ?? null,
     company: customer.company ?? null,
-    tags: (customer.tags ?? []).map((tag) => (typeof tag === 'string' ? tag : tag.tag)),
+    tags: firstTagList(
+      customer.matched_tags,
+      customer.tags,
+      customer.lock_tags,
+      customer.matching_tags,
+      customer.access_tags,
+      customer.customer_tags,
+    ),
     created_at: customer.created_at ?? null,
   }))
+
+/** One tag list read leniently: words, `{ tag }` objects or one comma-separated text. */
+function readTagList(value: unknown): string[] {
+  const words = Array.isArray(value)
+    ? value.map((item) =>
+        typeof item === 'string'
+          ? item
+          : item && typeof item === 'object' && 'tag' in item
+            ? String((item as { tag: unknown }).tag ?? '')
+            : '',
+      )
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+  const seen = new Set<string>()
+  return words
+    .map((word) => word.trim())
+    .filter((word) => {
+      const key = word.toLowerCase()
+      if (!word || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+/** The first of these fields that carries any tag. */
+function firstTagList(...values: unknown[]): string[] {
+  for (const value of values) {
+    const tags = readTagList(value)
+    if (tags.length > 0) return tags
+  }
+  return []
+}
 
 const lockCustomersResponseSchema = z
   .object({

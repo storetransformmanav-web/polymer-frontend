@@ -47,8 +47,12 @@ export function toLockCustomerParams(
  * tab is open; every query is cached under `['lock-customers']` (a write there refreshes them),
  * and the previous rows stay on screen while a new page or filter loads.
  */
-export function useLockCustomers(shop: string, product: string) {
-  const [filters, setFilters] = useState(DEFAULT_LOCK_CUSTOMER_FILTERS)
+export function useLockCustomers(shop: string, product: string, initialTag = '') {
+  // A lock with its own tag starts on the customers chosen for it (the holders of that tag).
+  const [filters, setFilters] = useState(() => ({
+    ...DEFAULT_LOCK_CUSTOMER_FILTERS,
+    tag: initialTag,
+  }))
   const params = toLockCustomerParams(filters, shop)
 
   const query = useQuery({
@@ -69,7 +73,7 @@ export function useLockCustomers(shop: string, product: string) {
     isFetching: query.isFetching,
     isShowingPrevious: query.isPlaceholderData,
     error: query.isError && !query.data ? toUserMessage(query.error) : null,
-    hasFilters: filters.search.trim() !== '' || filters.tag !== '',
+    hasFilters: filters.search.trim() !== '' || filters.tag !== initialTag,
 
     /** Anything other than an explicit page change sends the user back to page 1. */
     setFilters: (changes: Partial<LockCustomerFilters>) =>
@@ -81,6 +85,7 @@ export function useLockCustomers(shop: string, product: string) {
     resetFilters: () =>
       setFilters((current) => ({
         ...DEFAULT_LOCK_CUSTOMER_FILTERS,
+        tag: initialTag,
         pageSize: current.pageSize,
       })),
     retry: () => void query.refetch(),

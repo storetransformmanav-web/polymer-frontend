@@ -204,7 +204,39 @@ export function validateLockDraft(draft: LockDraft): LockProblems {
   return problems
 }
 
-/** The one `POST /access/locks` call for a draft; every option is sent, so what you see is what is set. */
+/**
+ * A lock's **own tag**: `lock-<product handle>`. Tags are shared (a `b2b` key opens the product to
+ * everyone who has `b2b`), so a lock made with chosen customers also gets a tag only those
+ * customers hold — the lock's page lists the holders of this tag as "Selected customers".
+ */
+export const OWN_TAG_PREFIX = 'lock-'
+
+export function ownLockTag(handle: string): string {
+  const slug = handle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${OWN_TAG_PREFIX}${slug || 'products'}`.slice(0, MAX_TAG_LENGTH)
+}
+
+/** The lock's own tag among its keys (the one made with it), or null for a lock without one. */
+export function findOwnTag(
+  tags: readonly string[],
+  handle?: string | null,
+): string | null {
+  const own = handle ? ownLockTag(handle).toLowerCase() : null
+  return (
+    tags.find((tag) => tag.toLowerCase() === own) ??
+    tags.find((tag) => tag.toLowerCase().startsWith(OWN_TAG_PREFIX)) ??
+    null
+  )
+}
+
+/**
+ * The one `POST /access/locks` call for a draft; every option is sent, so what you see is what is
+ * set. With customers chosen, the lock's own tag (`lock-<first product's handle>`) goes with the
+ * chosen tags, so only those customers hold it and the lock's page can list exactly them.
+ */
 export function buildLockBody(draft: LockDraft, shop: string): AccessLockBody {
   const { options } = draft
   const body: AccessLockBody = {
@@ -216,9 +248,23 @@ export function buildLockBody(draft: LockDraft, shop: string): AccessLockBody {
     hide_from_sitemap: options.hideFromSitemap,
     manual_locking: options.manualLocking,
   }
-  if (draft.products.length > 0) body.products = draft.products.map((item) => item.id)
-  if (draft.customers.length > 0) body.customers = draft.customers.map((item) => item.id)
-  if (draft.tags.length > 0) body.tags = draft.tags
+  // As the API's example: products by handle, customers by email (the id when there is none).
+  if (draft.products.length > 0) {
+    body.products = draft.products.map((item) => item.sub?.trim() || item.id)
+  }
+  if (draft.customers.length > 0) {
+    body.customers = draft.customers.map((item) => item.sub?.trim() || item.id)
+  }
+  const firstProduct = draft.products[0]
+  const own =
+    draft.customers.length > 0 && firstProduct
+      ? ownLockTag(firstProduct.sub?.trim() || firstProduct.label)
+      : null
+  const tags =
+    own && !draft.tags.some((tag) => tag.toLowerCase() === own)
+      ? [...draft.tags, own]
+      : draft.tags
+  if (tags.length > 0) body.tags = tags
   const message = options.message.trim()
   if (message) body.message = message
   return body

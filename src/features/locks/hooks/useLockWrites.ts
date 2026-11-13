@@ -11,6 +11,7 @@ import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
   type AccessCheck,
+  type AccessCustomerTagsBody,
   type AccessLock,
   type AccessLockBody,
   type AccessTagsUpdateBody,
@@ -210,6 +211,25 @@ export function useSetLockCustomers() {
   })
   return {
     set: mutation.mutateAsync,
+    isSetting: mutation.isPending,
+    error: mutation.isError ? toUserMessage(mutation.error) : null,
+    clearError: mutation.reset,
+  }
+}
+
+/**
+ * `PUT /access/customers/tags`: adds and/or removes tags on customers (every other tag stays) —
+ * how a lock's own tag is given to a customer who already has access through a shared tag (the
+ * lock's customers call refuses those). Then every access read is refreshed. Never retried.
+ */
+export function useSetCustomerTags() {
+  const refresh = useRefreshAfterWrite()
+  const mutation = useMutation({
+    mutationFn: (body: AccessCustomerTagsBody) => api.access.customerTags(body),
+    onSuccess: () => refresh(),
+  })
+  return {
+    setTags: mutation.mutateAsync,
     isSetting: mutation.isPending,
     error: mutation.isError ? toUserMessage(mutation.error) : null,
     clearError: mutation.reset,

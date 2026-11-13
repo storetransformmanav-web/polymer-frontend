@@ -9,10 +9,10 @@ import type {
   LockCustomer,
 } from '../../../lib/api/endpoints.ts'
 import { useLockCustomers } from '../hooks/useLockCustomers.ts'
-import { useSetLockCustomers } from '../hooks/useLockWrites.ts'
+import { useSetCustomerTags, useSetLockCustomers } from '../hooks/useLockWrites.ts'
 import { usePickCustomers } from '../hooks/usePickers.ts'
-import { MAX_ITEMS, type PickedItem } from '../utils/lockDraft.ts'
-import { AddCustomersDialog, RemoveCustomerDialog } from './LockCustomerDialogs.tsx'
+import { findOwnTag, MAX_ITEMS, type PickedItem } from '../utils/lockDraft.ts'
+import { RemoveCustomerDialog } from './LockCustomerDialogs.tsx'
 import { LockCustomersList } from './LockCustomersList.tsx'
 import { PickList, type PickRow } from './PickList.tsx'
 import { PickedChips } from './PickedChips.tsx'
@@ -52,19 +52,23 @@ const refOf = (item: PickedItem) => item.sub?.trim() || item.id
  * the backend searches) with a checkbox each; several can be ticked, and they stay ticked through
  * searches as removable chips. A customer who already has the access is shown ticked and locked.
  * **Add New Customer** gives access to the ticked customers at once (no window). Under it, the
- * table of who can already open the product, with **Edit access** and **Remove access** on each
+ * table of who can already open the product, with **Remove access** on each
  * row. Every write is `PUT /access/locks/{product}/customers`; an error from the API — such as a
  * customer who already has the access — shows under the search.
  */
 export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }) {
   const product = lock.handle ?? lock.product_id
-  const customers = useLockCustomers(shop, product)
+  // The lock's own tag (made with it): its holders are the customers chosen for this lock.
+  const ownTag = findOwnTag(lock.tags, lock.handle)
+  const customers = useLockCustomers(shop, product, ownTag ?? '')
   const [search, setSearch] = useState('')
   // Asked for only once something is typed.
   const store = usePickCustomers(shop, search, search.trim() !== '')
   const [picked, setPicked] = useState<PickedItem[]>([])
-  const { set, isSetting, error: addError } = useSetLockCustomers()
-  const [editing, setEditing] = useState<LockCustomer | null>(null)
+  const { set, isSetting: isGiving, error: giveError } = useSetLockCustomers()
+  const { setTags, isSetting: isTagging, error: tagError } = useSetCustomerTags()
+  const isSetting = isGiving || isTagging
+  const addError = giveError ?? tagError
   const [removing, setRemoving] = useState<LockCustomer | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [limitHit, setLimitHit] = useState(false)
@@ -107,14 +111,18 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
     if (refs.length === 0 || isSetting) return
     setNotice(null)
     try {
-      const result = await set({
-        product,
-        body: {
-          shop,
-          add: refs,
-          ...(lock.tags.length > 1 ? { tag: lock.tags[0] } : {}),
-        },
-      })
+      // With an own tag, the customers are given that tag (they then show as "Selected
+      // customers"), even when a shared tag already lets them in.
+      const result = ownTag
+        ? await setTags({ shop, customers: refs, tags_add: [ownTag] })
+        : await set({
+            product,
+            body: {
+              shop,
+              add: refs,
+              ...(lock.tags.length > 1 ? { tag: lock.tags[0] } : {}),
+            },
+          })
       setNotice(result.message)
       choose([])
     } catch {
@@ -143,7 +151,9 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
           listHeight="max-h-44"
           label="Customers to add"
           noun="customer"
-          rows={store.items.map((customer) => customerRow(customer, lock.tags))}
+          rows={store.items.map((customer) =>
+            customerRow(customer, ownTag ? [ownTag] : lock.tags),
+          )}
           selectedIds={pickedIds}
           onToggle={toggle}
           onTogglePage={togglePage}
@@ -194,25 +204,12 @@ export function LockAccessTab({ lock, shop }: { lock: AccessLock; shop: string }
         lock={lock}
         customers={customers}
         notice={notice ? <FormMessage tone="success">{notice}</FormMessage> : null}
-        onEdit={(customer) => {
-          setNotice(null)
-          setEditing(customer)
-        }}
         onRemove={(customer) => {
           setNotice(null)
           setRemoving(customer)
         }}
       />
 
-      {editing &&
-        createPortal(
-          <AddCustomersDialog
-            {...dialogProps}
-            editing={editing}
-            onClose={() => setEditing(null)}
-          />,
-          document.body,
-        )}
       {removing &&
         createPortal(
           <RemoveCustomerDialog

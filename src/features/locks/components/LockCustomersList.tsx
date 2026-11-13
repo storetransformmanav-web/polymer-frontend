@@ -2,21 +2,21 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangleIcon,
-  PencilIcon,
-  SearchIcon,
   TrashIcon,
+  SearchIcon,
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
-import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import { findOwnTag } from '../utils/lockDraft.ts'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { initials } from '../../../lib/format.ts'
 import type { AccessLock, LockCustomer } from '../../../lib/api/endpoints.ts'
 import type { LockCustomersState } from '../hooks/useLockCustomers.ts'
-import { canEditCustomer, customerName, linkedCustomerPath } from '../utils/format.ts'
+import { customerName, linkedCustomerPath } from '../utils/format.ts'
 
 const TH =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3 py-2.5 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
@@ -57,7 +57,7 @@ function Avatar({ name }: { name: string }) {
  * Who can see the lock's product (`GET /access/locks/{product}/customers`), as a card under Check
  * access: Name, Email, Phone, Company, the lock tags each customer holds (hover: how many locked
  * products share the tag) and the row actions — Edit (a pencil, only when the lock has another key
- * to give) and Remove access (a bin). A search box, a Tag filter (the lock's own tags), a Sort by
+ * to give). A search box, a Tag filter (the lock's own tags), a Sort by
  * and the paging footer narrow it, all by the API. A login-only lock (no keys) lists every customer with an
  * account and has no row actions. The data and the writes are held by the parent.
  */
@@ -65,19 +65,18 @@ export function LockCustomersList({
   lock,
   customers,
   notice,
-  onEdit,
   onRemove,
 }: {
   lock: AccessLock
   customers: LockCustomersState
   /** The backend's message about the last change. */
   notice?: ReactNode
-  onEdit: (customer: LockCustomer) => void
   onRemove: (customer: LockCustomer) => void
 }) {
   const linkedState = useLinkedState()
   const { filters, data } = customers
   const loginOnly = lock.tags.length === 0
+  const ownTag = findOwnTag(lock.tags, lock.handle)
   // Typing is instant here and sent to the API once the person pauses; Check also sets this
   // search (to the customer's email), so the box follows it.
   const [search, setSearch] = useDebouncedField(filters.search, (value) =>
@@ -190,6 +189,10 @@ export function LockCustomersList({
                             </tr>
                           ))
                         : customers.customers.map((customer) => {
+                            // The tags chosen for the lock; its own `lock-…` tag is internal.
+                            const shownTags = customer.tags.filter(
+                              (tag) => tag.toLowerCase() !== ownTag?.toLowerCase(),
+                            )
                             return (
                               <tr
                                 key={customer.id}
@@ -222,11 +225,11 @@ export function LockCustomersList({
                                   <Cell text={customer.company} />
                                 </td>
                                 <td className={TD}>
-                                  {customer.tags.length === 0 ? (
+                                  {shownTags.length === 0 ? (
                                     <span className="text-text-muted">—</span>
                                   ) : (
                                     <span className="flex flex-wrap gap-1">
-                                      {customer.tags.map((tag) => {
+                                      {shownTags.map((tag) => {
                                         const shared = customers.tags.find(
                                           (item) =>
                                             item.tag.toLowerCase() === tag.toLowerCase(),
@@ -251,17 +254,6 @@ export function LockCustomersList({
                                 {!loginOnly && (
                                   <td className={`${TD} text-center whitespace-nowrap`}>
                                     <span className="inline-flex items-center gap-1">
-                                      {canEditCustomer(lock, customer) && (
-                                        <button
-                                          type="button"
-                                          aria-label={`Edit access of ${customerName(customer)}`}
-                                          title="Edit access"
-                                          onClick={() => onEdit(customer)}
-                                          className={ROW_ACTION}
-                                        >
-                                          <PencilIcon />
-                                        </button>
-                                      )}
                                       <button
                                         type="button"
                                         aria-label={`Remove access of ${customerName(customer)}`}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IconAction } from '../../../components/ui/IconAction.tsx'
 import { ArrowLeftIcon, CheckIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -7,20 +7,15 @@ import type {
   CustomerListItem,
   ProductListItem,
 } from '../../../lib/api/endpoints.ts'
-import { useHeldTags, usePickCustomers, usePickProducts } from '../hooks/usePickers.ts'
-import {
-  findLockOfProduct,
-  loadLockCustomers,
-  useLockedProducts,
-} from '../hooks/useLockedProducts.ts'
+import { usePickCustomers, usePickProducts } from '../hooks/usePickers.ts'
+import { useLockedProducts } from '../hooks/useLockedProducts.ts'
 import { useSaveLock } from '../hooks/useLockWrites.ts'
 import {
   MAX_ITEMS,
   blankLockDraft,
   buildLockBody,
   isLockDraftDirty,
-  mergeKeys,
-  mergePicked,
+  ownLockTag,
   validateLockDraft,
   type LockDraft,
   type PickedItem,
@@ -36,14 +31,6 @@ import { PickList, type PickRow } from './PickList.tsx'
 import { PickedChips } from './PickedChips.tsx'
 import { TagPicker } from './TagPicker.tsx'
 
-/** A product's handle or name as a tag: lower case, words joined by "-", at most 60 characters. */
-const slug = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'products'
-
 const productRow = (product: ProductListItem, lock?: AccessLock): PickRow => ({
   id: product.id,
   label: product.title,
@@ -51,10 +38,10 @@ const productRow = (product: ProductListItem, lock?: AccessLock): PickRow => ({
   image: product.image_url,
   withImage: true,
   chips: product.status ? [product.status.toLowerCase()] : [],
-  // A product that already has a lock says so: ticking it brings its keys and customers along.
+  // A product that already has a lock says so (ticking it adds this lock's tags and settings).
   trailing: lock ? (
     <span
-      title="This product is already locked: ticking it adds its keys and customers below."
+      title="This product is already locked: the tags and settings chosen here are added to it."
       className="bg-accent-tint text-accent border-accent/30 shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold"
     >
       Already locked
@@ -64,13 +51,6 @@ const productRow = (product: ProductListItem, lock?: AccessLock): PickRow => ({
     </span>
   ) : undefined,
 })
-
-/** What reading an already-locked product's keys and customers is doing, and what it found. */
-interface PrefillState {
-  busy: boolean
-  message: string | null
-  tone: 'info' | 'error'
-}
 
 const customerRow = (customer: CustomerListItem): PickRow => ({
   id: customer.id,
@@ -120,24 +100,6 @@ export function LockCreateView({
   const customers = usePickCustomers(shop, customerSearch)
   // The store's locks among the products shown: those products are marked "Already locked".
   const lockedProducts = useLockedProducts(shop, productSearch)
-  const [prefill, setPrefill] = useState<PrefillState>({
-    busy: false,
-    message: null,
-    tone: 'info',
-  })
-  // The draft as of now, for work that runs after an await; and which reading is the latest.
-  const draftRef = useRef(draft)
-  const prefillRun = useRef(0)
-  useEffect(() => {
-    draftRef.current = draft
-  })
-
-  // Chosen tags that customers already hold: every one of them will be able to open the products.
-  const heldTags = useHeldTags(shop, draft.tags)
-  const alreadyHolding = heldTags.reduce((sum, held) => sum + held.customers, 0)
-  // A tag only for this lock, so only the customers picked below get it.
-  const ownTag = `lock-${slug(draft.products[0]?.sub || draft.products[0]?.label || 'products')}`
-
   const problems = useMemo(() => validateLockDraft(draft), [draft])
   const shown = showErrors ? problems : {}
 
@@ -178,102 +140,6 @@ export function LockCreateView({
       }),
     [],
   )
-
-  /**
-   * Ticking a product that **already has a lock** brings its keys and the customers who can see it
-   * into the form, ticked, so the new lock starts from what it already has. Each product's lock is
-   * found among the ones already loaded (else looked up by its handle); a product with no lock
-   * just stays ticked. Keys and customers are added to what is already chosen (never replacing it,
-   * never repeated, within the form's limits) and can still be taken off with their ✕.
-   * `withCustomers` is off for "Select all shown", which would otherwise read the customers of up to
-   * a page of locks.
-   */
-  async function prefillFromLocks(
-    picked: { id: string; handle: string | null; title: string }[],
-    withCustomers: boolean,
-  ) {
-    if (picked.length === 0) return
-    const run = ++prefillRun.current
-    setPrefill({ busy: true, message: null, tone: 'info' })
-
-    let tagsNow = draftRef.current.tags
-    let customersNow = draftRef.current.customers
-    let found = 0
-    let keysAdded = 0
-    let customersAdded = 0
-    let customersLeftOut = 0
-    let firstTitle = ''
-
-    try {
-      for (const product of picked) {
-        const lock =
-          lockedProducts.get(product.id) ?? (await findLockOfProduct(shop, product))
-        if (!lock) continue
-        found += 1
-        firstTitle = firstTitle || product.title
-
-        const keys = mergeKeys(tagsNow, lock.tags)
-        keysAdded += keys.tags.length - tagsNow.length
-        tagsNow = keys.tags
-
-        let people: Awaited<ReturnType<typeof loadLockCustomers>> = {
-          items: [],
-          total: 0,
-        }
-        if (withCustomers) {
-          people = await loadLockCustomers(shop, lock, MAX_ITEMS - customersNow.length)
-          const merged = mergePicked(customersNow, people.items)
-          customersAdded += merged.items.length - customersNow.length
-          customersNow = merged.items
-          // Customers the lock has that did not fit (not read, or over the form's limit).
-          customersLeftOut +=
-            Math.max(people.total - people.items.length, 0) + merged.skipped
-        }
-
-        // Added to the form as each one is read, to whatever is chosen by then.
-        setDraft((current) => ({
-          ...current,
-          tags: mergeKeys(current.tags, lock.tags).tags,
-          customers: mergePicked(current.customers, people.items).items,
-        }))
-      }
-    } catch {
-      if (run === prefillRun.current) {
-        setPrefill({
-          busy: false,
-          tone: 'error',
-          message:
-            'Could not read the keys and customers of an already-locked product. The product is still ticked; add its keys and customers by hand if you need them.',
-        })
-      }
-      return
-    }
-
-    if (run !== prefillRun.current) return
-    if (found === 0) {
-      setPrefill({ busy: false, message: null, tone: 'info' })
-      return
-    }
-    const who =
-      found === 1 ? `“${firstTitle}” is already locked` : `${found} locked products`
-    const parts = [
-      `${keysAdded} ${keysAdded === 1 ? 'key' : 'keys'}`,
-      ...(withCustomers
-        ? [`${customersAdded} ${customersAdded === 1 ? 'customer' : 'customers'}`]
-        : []),
-    ]
-    const leftOut =
-      customersLeftOut > 0
-        ? ` Not every customer fits: a lock takes at most ${MAX_ITEMS} customers at a time (${customersLeftOut.toLocaleString('en-GB')} left out).`
-        : ''
-    setPrefill({
-      busy: false,
-      tone: 'info',
-      message: `${who}: its ${parts.join(' and ')} ${
-        found === 1 ? 'are' : 'were'
-      } added below. Take off any you do not want with its ✕.${leftOut}`,
-    })
-  }
 
   function submit() {
     setShowErrors(true)
@@ -357,35 +223,8 @@ export function LockCreateView({
                   productRow(product, lockedProducts.get(product.id)),
                 )}
                 selectedIds={productIds}
-                onToggle={(row) => {
-                  const wasTicked = productIds.has(row.id)
-                  toggle('products', row)
-                  // A product that already has a lock brings its keys and customers along.
-                  if (!wasTicked) {
-                    void prefillFromLocks(
-                      [{ id: row.id, handle: row.sub ?? null, title: row.label }],
-                      true,
-                    )
-                  }
-                }}
-                onTogglePage={(rows, select) => {
-                  togglePage('products', rows, select)
-                  if (select) {
-                    // Only the products already known to be locked, and their keys alone.
-                    void prefillFromLocks(
-                      rows
-                        .filter(
-                          (row) => !productIds.has(row.id) && lockedProducts.has(row.id),
-                        )
-                        .map((row) => ({
-                          id: row.id,
-                          handle: row.sub ?? null,
-                          title: row.label,
-                        })),
-                      false,
-                    )
-                  }
-                }}
+                onToggle={(row) => toggle('products', row)}
+                onTogglePage={(rows, select) => togglePage('products', rows, select)}
                 search={productSearch}
                 onSearch={setProductSearch}
                 searchPlaceholder="Search products by name, handle or tag…"
@@ -399,19 +238,9 @@ export function LockCreateView({
                 error={products.error}
                 onRetry={products.retry}
               />
-              {prefill.busy && (
-                <p role="status" className="text-text-muted text-[0.8rem]">
-                  Reading the keys and customers of the locked product…
-                </p>
-              )}
-              {!prefill.busy && prefill.message && (
-                <FormMessage tone={prefill.tone}>{prefill.message}</FormMessage>
-              )}
               <p className="text-text-muted text-[0.75rem]">
                 Up to {MAX_ITEMS} products at a time. Products already locked keep their
-                lock; the tags and settings you choose are added to them. Search for a
-                product marked “Already locked” and tick it: its keys and customers are
-                added below, ticked.
+                lock; the tags and settings you choose are added to them.
               </p>
             </div>
           </LockCard>
@@ -447,43 +276,8 @@ export function LockCreateView({
                   }))
                 }
               />
-              {heldTags.length > 0 && (
-                <div
-                  role="note"
-                  className="bg-warning-bg text-warning mt-3 flex flex-col gap-2 rounded-lg px-3 py-2.5 text-[0.8rem]"
-                >
-                  <p className="m-0">
-                    {heldTags
-                      .map(
-                        (held) =>
-                          `“${held.tag}” is already held by ${held.customers.toLocaleString('en-GB')} ${
-                            held.customers === 1 ? 'customer' : 'customers'
-                          }`,
-                      )
-                      .join('; ')}
-                    . A lock opens its products to <strong>everyone</strong> with one of
-                    its tags, so{' '}
-                    {alreadyHolding === 1
-                      ? 'that customer'
-                      : `all ${alreadyHolding.toLocaleString('en-GB')} of them`}{' '}
-                    will have access, not only the customers you pick below.
-                  </p>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDraft((current) => ({ ...current, tags: [ownTag] }))
-                      }
-                      className="border-warning text-warning hover:bg-warning/10 inline-flex h-8 cursor-pointer items-center rounded-lg border bg-transparent px-3 text-[0.78rem] font-semibold"
-                    >
-                      Use a new tag only for this lock (“{ownTag}”)
-                    </button>
-                  </div>
-                </div>
-              )}
               <p className="text-text-muted mt-3 text-[0.75rem]">
-                With no tag, the products are locked to signed-in customers only. To give
-                access only to the customers you pick, use a new tag that nobody has yet.
+                With no tag, the products are locked to signed-in customers only.
               </p>
             </LockCard>
 
@@ -591,13 +385,36 @@ export function LockCreateView({
               <li>{noProducts.toLocaleString('en-GB')} product(s) locked</li>
             )}
             {noCustomers > 0 && (
-              <li>{noCustomers.toLocaleString('en-GB')} customer(s) given the tags</li>
+              <li>
+                Only the {noCustomers.toLocaleString('en-GB')} selected customer
+                {noCustomers === 1 ? '' : 's'} given the tags:{' '}
+                <span className="text-text-muted break-words">
+                  {draft.customers
+                    .slice(0, 10)
+                    .map((item) => item.sub || item.label)
+                    .join(', ')}
+                  {noCustomers > 10
+                    ? ` and ${(noCustomers - 10).toLocaleString('en-GB')} more`
+                    : ''}
+                </span>
+              </li>
             )}
             <li>
               {draft.tags.length > 0
                 ? `Tags: ${draft.tags.join(', ')}`
                 : 'No tags: signed-in customers only'}
             </li>
+            {noCustomers > 0 && draft.products[0] && (
+              <li>
+                Their own tag for this lock:{' '}
+                <strong>
+                  {ownLockTag(draft.products[0].sub?.trim() || draft.products[0].label)}
+                </strong>{' '}
+                <span className="text-text-muted">
+                  (only these customers get it, so the lock’s page can list just them)
+                </span>
+              </li>
+            )}
             {!draft.options.enabled && <li>The lock is switched off</li>}
           </ul>
         </LockConfirmDialog>
