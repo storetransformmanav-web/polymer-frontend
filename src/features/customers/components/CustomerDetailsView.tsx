@@ -27,8 +27,10 @@ import {
 import { CustomerLockAccessPanel } from './CustomerLockAccessPanel.tsx'
 import { CustomerOrderHistory, type OpenOrderRequest } from './CustomerOrderHistory.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
+import { CustomerTimelinePanel } from './CustomerTimelinePanel.tsx'
 
-type TabId = 'overview' | 'orders' | 'addresses' | 'marketing' | 'lock' | 'metafields'
+type TabId =
+  'overview' | 'orders' | 'timeline' | 'addresses' | 'marketing' | 'lock' | 'metafields'
 
 interface CustomerDetailsViewProps {
   id: string
@@ -102,6 +104,7 @@ export function CustomerDetailsView({
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
       : []),
+    { id: 'timeline', label: 'Timeline' },
     ...(canSeeLocks ? [{ id: 'lock' as const, label: 'Lock Access' }] : []),
   ]
 
@@ -315,6 +318,9 @@ export function CustomerDetailsView({
         )}
         {customer && tab === 'addresses' && (
           <CustomerAddressesPanel customer={customer} />
+        )}
+        {customer && tab === 'timeline' && (
+          <CustomerTimelinePanel customer={customer} onOpenOrder={onOpenOrder} />
         )}
         {customer && tab === 'orders' && (
           <CustomerOrderHistory customer={customer} onOpenOrder={onOpenOrder} />
