@@ -4,11 +4,15 @@ import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
+  BulletListIcon,
   CheckCircleIcon,
   ChevronRightIcon,
   ClockIcon,
+  CodeIcon,
   EyeOffIcon,
+  GlobeIcon,
   type IconProps,
+  ListChecksIcon,
   LockIcon,
   PlusIcon,
   SearchIcon,
@@ -20,11 +24,9 @@ import {
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
-import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import type {
   AccessLock,
-  CustomerListItem,
   LockCustomer,
   LockCustomerTag,
   ProductDetail,
@@ -35,72 +37,97 @@ import {
   LOCK_ACCESS_PAGE_SIZE,
   type LockAccessChange,
   type LockSwitch,
-  usePickStoreCustomers,
   useProductLock,
   useProductLockCustomers,
   useProductLockWrites,
 } from '../hooks/useProductLockAccess.ts'
+import { LockCustomerSearch, type ChosenCustomer } from './LockCustomerSearch.tsx'
+import { LockKeysCard } from './LockKeysCard.tsx'
+import {
+  CARD,
+  CHECKBOX,
+  CHIP,
+  COUNT_BADGE,
+  DANGER_OUTLINE,
+  lowerSet,
+  MAX_KEYS,
+  OUTLINE,
+  PRIMARY,
+  STAT_TONES,
+  TILE,
+} from './lockAccessStyles.ts'
 
-const CARD = 'border-border bg-bg rounded-2xl border'
-const TILE =
-  'bg-accent-tint text-accent flex h-11 w-11 shrink-0 items-center justify-center rounded-xl'
-const PRIMARY =
-  'bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border-none px-4 text-[0.85rem] font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-50'
-const OUTLINE =
-  'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
-const DANGER_OUTLINE =
-  'border-danger text-danger hover:bg-danger-bg inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-transparent font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
-const CHIP =
-  'bg-accent-tint text-accent inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[0.75rem] font-semibold'
-const TH = 'px-4 py-3 text-left text-[0.7rem] font-bold tracking-wide uppercase'
-const TD = 'px-4 py-3 align-middle'
+const TH = 'px-3 py-2 text-left text-[0.68rem] font-bold tracking-wide uppercase'
+const TD = 'px-3 py-2 align-middle'
 const NOTE = 'bg-warning-bg text-warning mt-3 rounded-lg px-3 py-2 text-[0.82rem]'
 const INPUT =
-  'border-border bg-surface text-text focus:border-accent h-10 w-full rounded-lg border px-3 text-[0.85rem] outline-none'
-const CHECKBOX = 'accent-accent m-0 h-4 w-4 cursor-pointer'
+  'border-border bg-surface text-text focus:border-accent h-9 w-full rounded-lg border px-3 text-[0.83rem] outline-none'
 
-/** At most this many customers are given access in one go (the API's own limit). */
-const MAX_CUSTOMERS = 250
-/** At most this many keys (tags) on one lock (the API's own limit). */
-const MAX_KEYS = 20
+interface SettingDef {
+  name: Exclude<LockSwitch, 'enabled'>
+  label: string
+  hint: string
+  icon: ComponentType<IconProps>
+  /** An "expert" setting that changes how the lock works: shown in amber while on. */
+  caution?: boolean
+}
 
-/** The lock's settings, in plain words, as the switches of the Settings card. */
-const SETTINGS: { name: Exclude<LockSwitch, 'enabled'>; label: string; hint: string }[] =
-  [
-    {
-      name: 'hide_from_nav',
-      label: 'Hide from navigation menus',
-      hint: 'Customers without access don’t see it in the store’s menus.',
-    },
-    {
-      name: 'hide_from_lists',
-      label: 'Hide from lists',
-      hint: 'Left out of collections, search results and related products for them.',
-    },
-    {
-      name: 'hide_from_sitemap',
-      label: 'Hide from sitemaps',
-      hint: 'Left out of the sitemap search engines read.',
-    },
-    {
-      name: 'noindex',
-      label: 'Tell search engines not to index',
-      hint: 'The page asks Google and others not to show it in results.',
-    },
-    {
-      name: 'manual_locking',
-      label: 'Manual locking',
-      hint: 'The website shows it to everyone and leaves the lock to custom theme code. Keep off unless a theme developer asks.',
-    },
-  ]
+/** The lock's settings, in plain words, grouped as the Visibility settings card shows them. */
+const SETTING_GROUPS: { title: string; items: SettingDef[] }[] = [
+  {
+    title: 'Hide from customers without access',
+    items: [
+      {
+        name: 'hide_from_nav',
+        label: 'Hide from navigation menus',
+        hint: 'They don’t see it in the store’s menus.',
+        icon: BulletListIcon,
+      },
+      {
+        name: 'hide_from_lists',
+        label: 'Hide from lists',
+        hint: 'Left out of collections, search results and related products.',
+        icon: ListChecksIcon,
+      },
+    ],
+  },
+  {
+    title: 'Search engines',
+    items: [
+      {
+        name: 'hide_from_sitemap',
+        label: 'Hide from sitemaps',
+        hint: 'Left out of the sitemap search engines read.',
+        icon: GlobeIcon,
+      },
+      {
+        name: 'noindex',
+        label: 'Tell search engines not to index',
+        hint: 'The page asks Google and others not to show it in results.',
+        icon: SearchIcon,
+      },
+    ],
+  },
+  {
+    title: 'Advanced',
+    items: [
+      {
+        name: 'manual_locking',
+        label: 'Manual locking',
+        hint: 'The website shows it to everyone and leaves the lock to custom theme code. Keep off unless a theme developer asks.',
+        icon: CodeIcon,
+        caution: true,
+      },
+    ],
+  },
+]
+
+const SETTINGS: SettingDef[] = SETTING_GROUPS.flatMap((group) => group.items)
 
 const SETTING_LABELS: Record<LockSwitch, string> = {
   enabled: 'Lock',
   ...Object.fromEntries(SETTINGS.map((item) => [item.name, item.label])),
 } as Record<LockSwitch, string>
-
-const lowerSet = (tags: readonly string[]) =>
-  new Set(tags.map((tag) => tag.toLowerCase()))
 
 /** "Tags are shared: …" when a tag also opens other locked products (from the customers answer). */
 function sharedNote(shared: readonly LockCustomerTag[], tags: readonly string[]) {
@@ -112,20 +139,6 @@ function sharedNote(shared: readonly LockCustomerTag[], tags: readonly string[])
   return `Tags are shared: ${many
     .map((item) => `“${item.tag}” (${item.locked_products} locked products)`)
     .join(', ')}. The change applies to every product that uses them.`
-}
-
-/** Emails or ids typed into a box: split on commas, semicolons, spaces or new lines, no repeats. */
-function parseRefs(text: string): string[] {
-  const seen = new Set<string>()
-  const refs: string[] = []
-  for (const part of text.split(/[\s,;]+/)) {
-    const ref = part.trim()
-    if (ref && !seen.has(ref.toLowerCase())) {
-      seen.add(ref.toLowerCase())
-      refs.push(ref)
-    }
-  }
-  return refs
 }
 
 const customerLabel = (customer: LockCustomer) =>
@@ -307,7 +320,8 @@ type Asked =
   | { kind: 'untag'; customer: LockCustomer; tag: string }
   | { kind: 'remove'; customers: LockCustomer[] }
   | { kind: 'unlock' }
-  | { kind: 'addKey'; tag: string }
+  | { kind: 'addKeys'; tags: string[] }
+  | { kind: 'removeKey'; tag: string }
 
 function LockedProduct({
   lock,
@@ -322,11 +336,12 @@ function LockedProduct({
   const list = useProductLockCustomers(shop, product)
   const writes = useProductLockWrites(shop, handle, lock)
   const [notice, setNotice] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
+  // The customers picked in the search box, waiting for "Yes" (and the box is emptied after it).
+  const [giving, setGiving] = useState<ChosenCustomer[] | null>(null)
+  const [pickerKey, setPickerKey] = useState(0)
   const [taggingFor, setTaggingFor] = useState<LockCustomer | null>(null)
   const [asked, setAsked] = useState<Asked | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const [search, setSearch] = useDebouncedField(list.search, list.setSearch)
 
   const data = list.data
   const total = data?.total ?? lock.customers_with_access ?? 0
@@ -357,7 +372,7 @@ function LockedProduct({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <LockHeader
         lock={lock}
         busy={writes.isWriting}
@@ -366,20 +381,23 @@ function LockedProduct({
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat
+          tone="green"
           icon={UsersIcon}
           value={total.toLocaleString('en-GB')}
           label="Customers with access"
           hint={loginOnly ? 'Any signed-in customer' : 'Hold one of the product’s keys'}
         />
         <Stat
+          tone="blue"
           icon={TagIcon}
           value={lock.tags.length.toLocaleString('en-GB')}
           label={lock.tags.length === 1 ? 'Key (tag)' : 'Keys (tags)'}
           hint={lock.tags.length > 0 ? lock.tags.join(', ') : 'No keys: login only'}
         />
         <Stat
+          tone="violet"
           icon={SlidersIcon}
           value={tagsShown.toLocaleString('en-GB')}
           label="Tags assigned"
@@ -387,318 +405,320 @@ function LockedProduct({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <LockKeysCard
+            lock={lock}
+            shop={shop}
+            busy={writes.isWriting}
+            onAdd={(tags) => ask({ kind: 'addKeys', tags })}
+            onRemove={(tag) => ask({ kind: 'removeKey', tag })}
+          />
+
+          <section className={CARD} aria-label="Customer Access">
+            <div className="flex items-center gap-3 p-3 sm:p-4">
+              <span aria-hidden="true" className={TILE}>
+                <UsersIcon width={17} height={17} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="m-0 text-[0.92rem] font-bold">Customer Access</h2>
+                <p className="text-text-muted m-0 truncate text-[0.76rem]">
+                  {loginOnly
+                    ? 'This lock has no keys: every customer with an account can open the product.'
+                    : 'Customers who can open this product, and the tags that give them access.'}
+                </p>
+              </div>
+              <span className={COUNT_BADGE}>{total.toLocaleString('en-GB')}</span>
+            </div>
+
+            {!loginOnly && (
+              <div className="px-3 pb-3 sm:px-4">
+                <LockCustomerSearch
+                  key={pickerKey}
+                  lock={lock}
+                  shop={shop}
+                  busy={writes.isWriting}
+                  onAdd={(customers) => {
+                    setNotice(null)
+                    setGiving(customers)
+                  }}
+                />
+              </div>
+            )}
+
+            {picked.length > 0 && (
+              <div className="border-border bg-accent-tint/40 flex flex-wrap items-center gap-3 border-t px-4 py-2.5 text-[0.82rem] sm:px-5">
+                <span className="font-semibold">{picked.length} selected</span>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="text-text-muted hover:text-text cursor-pointer border-none bg-transparent p-0 font-semibold underline"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => ask({ kind: 'remove', customers: picked })}
+                  className={`${DANGER_OUTLINE} ml-auto h-8 px-3 text-[0.8rem]`}
+                >
+                  <TrashIcon width={14} height={14} />
+                  Remove access ({picked.length})
+                </button>
+              </div>
+            )}
+
+            <div className="relative overflow-x-auto">
+              <div
+                aria-hidden="true"
+                className={`bg-accent absolute inset-x-0 top-0 z-[1] h-0.5 transition-opacity ${
+                  list.isFetching && !list.isPending
+                    ? 'animate-pulse opacity-100'
+                    : 'opacity-0'
+                }`}
+              />
+              <table className="w-full min-w-[760px] border-collapse text-[0.82rem]">
+                <thead className="bg-table-head border-border-strong border-b">
+                  <tr>
+                    <th className={`${TH} w-10`}>
+                      {!loginOnly && (
+                        <input
+                          type="checkbox"
+                          aria-label="Select every customer on this page"
+                          checked={allPicked}
+                          disabled={list.customers.length === 0}
+                          onChange={() =>
+                            setSelected(
+                              allPicked
+                                ? new Set()
+                                : new Set(list.customers.map((customer) => customer.id)),
+                            )
+                          }
+                          className={CHECKBOX}
+                        />
+                      )}
+                    </th>
+                    <th className={TH} aria-sort={ariaSort(list.sort === 'name', 'asc')}>
+                      <SortButton
+                        label="Customer"
+                        active={list.sort === 'name'}
+                        order="asc"
+                        onClick={() => list.setSort('name')}
+                      />
+                    </th>
+                    <th className={TH} aria-sort={ariaSort(list.sort === 'email', 'asc')}>
+                      <SortButton
+                        label="Email"
+                        active={list.sort === 'email'}
+                        order="asc"
+                        onClick={() => list.setSort('email')}
+                      />
+                    </th>
+                    <th className={TH}>Assigned tags</th>
+                    <th className={`${TH} text-center`}>Tag count</th>
+                    <th className={`${TH} text-right`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.isPending ? (
+                    <StateRow>
+                      <SpinnerIcon width={18} height={18} className="animate-spin" />
+                      Loading customers…
+                    </StateRow>
+                  ) : list.error ? (
+                    <StateRow>
+                      <span className="text-danger">{list.error}</span>
+                      <button
+                        type="button"
+                        onClick={list.retry}
+                        className={`${OUTLINE} h-8 px-3 text-[0.8rem]`}
+                      >
+                        Try again
+                      </button>
+                    </StateRow>
+                  ) : list.customers.length === 0 ? (
+                    <StateRow>
+                      No customer has access yet. Search above to add some.
+                    </StateRow>
+                  ) : (
+                    list.customers.map((customer) => {
+                      const name = customer.name ?? customer.email ?? 'Unnamed customer'
+                      const isPicked = selected.has(customer.id)
+                      return (
+                        <tr
+                          key={customer.id}
+                          className={`border-border border-b last:border-b-0 ${
+                            isPicked ? 'bg-accent-tint/50' : 'hover:bg-accent-tint/30'
+                          }`}
+                        >
+                          <td className={TD}>
+                            {!loginOnly && (
+                              <input
+                                type="checkbox"
+                                aria-label={`Select ${name}`}
+                                checked={isPicked}
+                                onChange={() => toggleOne(customer.id)}
+                                className={CHECKBOX}
+                              />
+                            )}
+                          </td>
+                          <td className={TD}>
+                            <div className="flex items-center gap-3">
+                              <span
+                                aria-hidden="true"
+                                className="bg-accent-tint text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.72rem] font-bold"
+                              >
+                                {initials(name)}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate font-semibold">
+                                  {name}
+                                </span>
+                                {customer.company && (
+                                  <span className="text-text-muted block truncate text-[0.75rem]">
+                                    {customer.company}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td className={TD}>
+                            {customer.email ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="break-all">{customer.email}</span>
+                                <CopyButton
+                                  value={customer.email}
+                                  label={`Copy email of ${name}`}
+                                />
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+                          <td className={TD}>
+                            {customer.tags.length === 0 ? (
+                              <span className="text-text-muted">—</span>
+                            ) : (
+                              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                                {customer.tags.map((tag) => (
+                                  <li key={tag} className={CHIP}>
+                                    {tag}
+                                    {!loginOnly && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Remove tag ${tag} from ${name}`}
+                                        title="Remove this tag"
+                                        onClick={() =>
+                                          ask({ kind: 'untag', customer, tag })
+                                        }
+                                        className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+                                      >
+                                        <XIcon width={10} height={10} />
+                                      </button>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                          <td className={`${TD} text-center`}>
+                            <span className="bg-accent-tint text-accent inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[0.78rem] font-bold">
+                              {customer.tags.length}
+                            </span>
+                          </td>
+                          <td className={TD}>
+                            {!loginOnly && (
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={`${OUTLINE} h-8 px-2.5 text-[0.8rem]`}
+                                  onClick={() => {
+                                    setNotice(null)
+                                    setTaggingFor(customer)
+                                  }}
+                                >
+                                  <PlusIcon width={14} height={14} />
+                                  Add tag
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Remove access of ${name}`}
+                                  title="Remove access"
+                                  onClick={() =>
+                                    ask({ kind: 'remove', customers: [customer] })
+                                  }
+                                  className={`${DANGER_OUTLINE} h-8 w-8 p-0`}
+                                >
+                                  <TrashIcon width={15} height={15} />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {data && data.total > 0 && (
+              <Pager
+                page={data.page}
+                totalPages={data.total_pages}
+                total={data.total}
+                shown={list.customers.length}
+                onPage={(page) => {
+                  setSelected(new Set())
+                  list.setPage(page)
+                }}
+              />
+            )}
+          </section>
+        </div>
+
         <SettingsCard
           lock={lock}
           busy={writes.isWriting}
           onToggle={(name, value) => ask({ kind: 'switch', name, value })}
         />
-        <KeysCard
-          lock={lock}
-          busy={writes.isWriting}
-          onAdd={(tag) => ask({ kind: 'addKey', tag })}
-        />
       </div>
 
-      <section className={`${CARD} overflow-hidden`} aria-label="Customer Access">
-        <div className="flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:items-center">
-          <div className="min-w-0 flex-1">
-            <h2 className="m-0 text-[1.05rem] font-bold">
-              Customer Access{' '}
-              <span className="bg-accent-tint text-accent ml-1 rounded-full px-2 py-0.5 align-middle text-[0.75rem]">
-                {total.toLocaleString('en-GB')}
-              </span>
-            </h2>
-            <p className="text-text-muted m-0 text-[0.85rem]">
-              {loginOnly
-                ? 'This lock has no keys: every customer with an account can open the product.'
-                : 'Customers who can open this product, and the tags that give them access.'}
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="border-border bg-surface focus-within:border-accent flex h-10 items-center gap-2 rounded-lg border px-3 sm:w-72">
-              <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
-              <span className="sr-only">Search customers with access</span>
-              <input
-                type="search"
-                value={search}
-                maxLength={200}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name, email or company…"
-                className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
-              />
-            </label>
-            {!loginOnly && (
-              <button
-                type="button"
-                className={PRIMARY}
-                onClick={() => {
-                  setNotice(null)
-                  setAdding(true)
-                }}
-              >
-                <PlusIcon width={16} height={16} />
-                Add customers
-              </button>
-            )}
-          </div>
-        </div>
-
-        {picked.length > 0 && (
-          <div className="border-border bg-accent-tint/40 flex flex-wrap items-center gap-3 border-t px-4 py-2.5 text-[0.82rem] sm:px-5">
-            <span className="font-semibold">{picked.length} selected</span>
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              className="text-text-muted hover:text-text cursor-pointer border-none bg-transparent p-0 font-semibold underline"
-            >
-              Clear selection
-            </button>
-            <button
-              type="button"
-              onClick={() => ask({ kind: 'remove', customers: picked })}
-              className={`${DANGER_OUTLINE} ml-auto h-8 px-3 text-[0.8rem]`}
-            >
-              <TrashIcon width={14} height={14} />
-              Remove access ({picked.length})
-            </button>
-          </div>
-        )}
-
-        <div className="relative overflow-x-auto">
-          <div
-            aria-hidden="true"
-            className={`bg-accent absolute inset-x-0 top-0 z-[1] h-0.5 transition-opacity ${
-              list.isFetching && !list.isPending
-                ? 'animate-pulse opacity-100'
-                : 'opacity-0'
-            }`}
-          />
-          <table className="w-full min-w-[900px] border-collapse text-[0.85rem]">
-            <thead className="bg-table-head border-border-strong border-b">
-              <tr>
-                <th className={`${TH} w-10`}>
-                  {!loginOnly && (
-                    <input
-                      type="checkbox"
-                      aria-label="Select every customer on this page"
-                      checked={allPicked}
-                      disabled={list.customers.length === 0}
-                      onChange={() =>
-                        setSelected(
-                          allPicked
-                            ? new Set()
-                            : new Set(list.customers.map((customer) => customer.id)),
-                        )
-                      }
-                      className={CHECKBOX}
-                    />
-                  )}
-                </th>
-                <th className={TH} aria-sort={ariaSort(list.sort === 'name', 'asc')}>
-                  <SortButton
-                    label="Customer"
-                    active={list.sort === 'name'}
-                    order="asc"
-                    onClick={() => list.setSort('name')}
-                  />
-                </th>
-                <th className={TH} aria-sort={ariaSort(list.sort === 'email', 'asc')}>
-                  <SortButton
-                    label="Email"
-                    active={list.sort === 'email'}
-                    order="asc"
-                    onClick={() => list.setSort('email')}
-                  />
-                </th>
-                <th className={TH}>Assigned tags</th>
-                <th className={`${TH} text-center`}>Tag count</th>
-                <th className={`${TH} text-right`}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.isPending ? (
-                <StateRow>
-                  <SpinnerIcon width={18} height={18} className="animate-spin" />
-                  Loading customers…
-                </StateRow>
-              ) : list.error ? (
-                <StateRow>
-                  <span className="text-danger">{list.error}</span>
-                  <button
-                    type="button"
-                    onClick={list.retry}
-                    className={`${OUTLINE} h-8 px-3 text-[0.8rem]`}
-                  >
-                    Try again
-                  </button>
-                </StateRow>
-              ) : list.customers.length === 0 ? (
-                <StateRow>
-                  {list.search.trim()
-                    ? 'No customer with access matches your search.'
-                    : 'No customer has access yet. Add some with Add customers.'}
-                </StateRow>
-              ) : (
-                list.customers.map((customer) => {
-                  const name = customer.name ?? customer.email ?? 'Unnamed customer'
-                  const isPicked = selected.has(customer.id)
-                  return (
-                    <tr
-                      key={customer.id}
-                      className={`border-border border-b last:border-b-0 ${
-                        isPicked ? 'bg-accent-tint/50' : 'hover:bg-accent-tint/30'
-                      }`}
-                    >
-                      <td className={TD}>
-                        {!loginOnly && (
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${name}`}
-                            checked={isPicked}
-                            onChange={() => toggleOne(customer.id)}
-                            className={CHECKBOX}
-                          />
-                        )}
-                      </td>
-                      <td className={TD}>
-                        <div className="flex items-center gap-3">
-                          <span
-                            aria-hidden="true"
-                            className="bg-accent-tint text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-bold"
-                          >
-                            {initials(name)}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-semibold">{name}</span>
-                            {customer.company && (
-                              <span className="text-text-muted block truncate text-[0.75rem]">
-                                {customer.company}
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td className={TD}>
-                        {customer.email ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="break-all">{customer.email}</span>
-                            <CopyButton
-                              value={customer.email}
-                              label={`Copy email of ${name}`}
-                            />
-                          </span>
-                        ) : (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </td>
-                      <td className={TD}>
-                        {customer.tags.length === 0 ? (
-                          <span className="text-text-muted">—</span>
-                        ) : (
-                          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-                            {customer.tags.map((tag) => (
-                              <li key={tag} className={CHIP}>
-                                {tag}
-                                {!loginOnly && (
-                                  <button
-                                    type="button"
-                                    aria-label={`Remove tag ${tag} from ${name}`}
-                                    title="Remove this tag"
-                                    onClick={() => ask({ kind: 'untag', customer, tag })}
-                                    className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
-                                  >
-                                    <XIcon width={10} height={10} />
-                                  </button>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                      <td className={`${TD} text-center`}>
-                        <span className="bg-accent-tint text-accent inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[0.78rem] font-bold">
-                          {customer.tags.length}
-                        </span>
-                      </td>
-                      <td className={TD}>
-                        {!loginOnly && (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              className={`${OUTLINE} h-8 px-2.5 text-[0.8rem]`}
-                              onClick={() => {
-                                setNotice(null)
-                                setTaggingFor(customer)
-                              }}
-                            >
-                              <PlusIcon width={14} height={14} />
-                              Add tag
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Remove access of ${name}`}
-                              title="Remove access"
-                              onClick={() =>
-                                ask({ kind: 'remove', customers: [customer] })
-                              }
-                              className={`${DANGER_OUTLINE} h-8 w-8 p-0`}
-                            >
-                              <TrashIcon width={15} height={15} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {data && data.total > 0 && (
-          <Pager
-            page={data.page}
-            totalPages={data.total_pages}
-            total={data.total}
-            shown={list.customers.length}
-            onPage={(page) => {
-              setSelected(new Set())
-              list.setPage(page)
-            }}
-          />
-        )}
-      </section>
-
       <section
-        className={`${CARD} border-danger/40 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5`}
+        className={`${CARD} border-danger/40 bg-danger-bg/40 flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:px-4`}
       >
+        <span
+          aria-hidden="true"
+          className="bg-danger-bg text-danger border-danger/20 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border sm:flex"
+        >
+          <TrashIcon width={17} height={17} />
+        </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-danger m-0 text-[0.95rem] font-bold">Remove the lock</h2>
-          <p className="text-text-muted m-0 text-[0.82rem]">
+          <h2 className="text-danger m-0 text-[0.88rem] font-bold">Remove the lock</h2>
+          <p className="text-text-muted m-0 text-[0.76rem]">
             The product becomes visible to everyone again. Customers keep their tags.
           </p>
         </div>
         <button
           type="button"
           onClick={() => ask({ kind: 'unlock' })}
-          className={`${DANGER_OUTLINE} h-10 px-4 text-[0.85rem]`}
+          className={`${DANGER_OUTLINE} bg-bg h-9 px-3.5 text-[0.82rem]`}
         >
           <TrashIcon width={15} height={15} />
           Remove lock
         </button>
       </section>
 
-      {adding && (
-        <AddCustomersDialog
+      {giving && (
+        <GiveAccessDialog
           lock={lock}
-          shop={shop}
+          customers={giving}
           sharedTags={list.tags}
-          onClose={() => setAdding(false)}
-          onConfirm={async (refs, tag) => {
-            await run({ kind: 'give', refs, tag })
-            setAdding(false)
+          onClose={() => setGiving(null)}
+          onConfirm={async (tag) => {
+            await run({ kind: 'give', refs: giving.map((item) => item.ref), tag })
+            setGiving(null)
+            // Empties the search box and its chosen customers.
+            setPickerKey((key) => key + 1)
           }}
         />
       )}
@@ -829,20 +849,47 @@ function AskedQuestion({
         </AccessQuestion>
       )
     }
-    case 'addKey':
+    case 'addKeys': {
+      const quoted = asked.tags.map((tag) => `“${tag}”`).join(', ')
       return (
         <AccessQuestion
-          title={`Add the key “${asked.tag}”?`}
-          confirmLabel="Add key"
+          title={
+            asked.tags.length === 1
+              ? `Add the key ${quoted}?`
+              : `Add ${asked.tags.length} keys?`
+          }
+          confirmLabel={asked.tags.length === 1 ? 'Add key' : 'Add keys'}
           onClose={onClose}
           onConfirm={onConfirm}
         >
           <p className="m-0 text-[0.85rem]">
-            Customers with the tag “{asked.tag}” will be able to open “{lock.title}”.{' '}
-            {footer}
+            Customers with {asked.tags.length === 1 ? 'the tag' : 'one of the tags'}{' '}
+            {quoted} will be able to open “{lock.title}”. {footer}
           </p>
+          <SharedNote note={sharedNote(sharedTags, asked.tags)} />
         </AccessQuestion>
       )
+    }
+    case 'removeKey': {
+      const last = lock.tags.length <= 1
+      return (
+        <AccessQuestion
+          title={`Remove the key “${asked.tag}”?`}
+          confirmLabel="Remove key"
+          danger
+          onClose={onClose}
+          onConfirm={onConfirm}
+        >
+          <p className="m-0 text-[0.85rem]">
+            {last
+              ? 'It is the only key of this product, so it becomes login-only: any customer who is signed in will be able to open it.'
+              : 'Customers who only have this tag will no longer be able to open the product.'}{' '}
+            {footer}
+          </p>
+          <SharedNote note={sharedNote(sharedTags, [asked.tag])} />
+        </AccessQuestion>
+      )
+    }
     case 'unlock':
       return (
         <AccessQuestion
@@ -886,29 +933,29 @@ function LockHeader({
         : 'Sending to Shopify…'
   return (
     <section
-      className={`${CARD} flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5`}
+      className={`${CARD} from-accent-tint to-bg flex items-center gap-3 bg-linear-to-r p-3 sm:px-4`}
     >
-      <span aria-hidden="true" className={TILE}>
-        <LockIcon width={22} height={22} />
+      <span aria-hidden="true" className={`${TILE} h-11 w-11`}>
+        <LockIcon width={20} height={20} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="m-0 text-[1.05rem] font-bold">Lock Access</h2>
+          <h2 className="m-0 text-[1rem] font-bold">Lock Access</h2>
           <span
             title={lock.sync_error ?? undefined}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-[0.75rem] font-semibold ${tone}`}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${tone}`}
           >
             {state === 'synced' ? (
-              <CheckCircleIcon width={14} height={14} />
+              <CheckCircleIcon width={12} height={12} />
             ) : state === 'error' ? (
-              <AlertTriangleIcon width={14} height={14} />
+              <AlertTriangleIcon width={12} height={12} />
             ) : (
-              <ClockIcon width={14} height={14} />
+              <ClockIcon width={12} height={12} />
             )}
             {label}
           </span>
         </div>
-        <p className="text-text-muted m-0 text-[0.85rem]">
+        <p className="text-text-muted m-0 text-[0.76rem]">
           {lock.enabled
             ? 'The lock is on: only customers with access can open this product.'
             : 'The lock is off: everyone can see this product.'}
@@ -926,7 +973,7 @@ function LockHeader({
   )
 }
 
-/** The lock's other settings as switches, each in plain words. */
+/** The lock's other settings as switches, grouped by what they do, each in plain words. */
 function SettingsCard({
   lock,
   busy,
@@ -936,114 +983,83 @@ function SettingsCard({
   busy: boolean
   onToggle: (name: Exclude<LockSwitch, 'enabled'>, value: boolean) => void
 }) {
+  const on = SETTINGS.filter((setting) => lock[setting.name]).length
   return (
-    <section className={`${CARD} p-4 sm:p-5`} aria-label="Lock settings">
-      <h2 className="m-0 flex items-center gap-2 text-[0.95rem] font-bold">
-        <EyeOffIcon width={17} height={17} className="text-accent" />
-        Visibility settings
-      </h2>
-      <p className="text-text-muted mt-0.5 mb-2 text-[0.8rem]">
-        How the product shows to customers without access.
-      </p>
-      <ul className="m-0 list-none p-0">
-        {SETTINGS.map((setting) => (
-          <li
-            key={setting.name}
-            className="border-border flex items-center gap-3 border-t py-2.5 first:border-t-0"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="m-0 text-[0.85rem] font-semibold">{setting.label}</p>
-              <p className="text-text-muted m-0 text-[0.75rem]">{setting.hint}</p>
-            </div>
-            <ToggleSwitch
-              label={setting.label}
-              checked={lock[setting.name]}
-              disabled={busy}
-              onChange={(value) => onToggle(setting.name, value)}
-            />
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-/** The product's keys (tags), and a box to add one. */
-function KeysCard({
-  lock,
-  busy,
-  onAdd,
-}: {
-  lock: AccessLock
-  busy: boolean
-  onAdd: (tag: string) => void
-}) {
-  const [typed, setTyped] = useState('')
-  const clean = typed.trim()
-  const exists = lowerSet(lock.tags).has(clean.toLowerCase())
-  const full = lock.tags.length >= MAX_KEYS
-
-  function submit() {
-    if (!clean || exists || full) return
-    onAdd(clean)
-    setTyped('')
-  }
-
-  return (
-    <section className={`${CARD} flex flex-col p-4 sm:p-5`} aria-label="Keys">
-      <h2 className="m-0 flex items-center gap-2 text-[0.95rem] font-bold">
-        <TagIcon width={17} height={17} className="text-accent" />
-        Keys (tags)
-      </h2>
-      <p className="text-text-muted mt-0.5 mb-3 text-[0.8rem]">
-        A customer with any of these tags can open the product.
-      </p>
-      {lock.tags.length === 0 ? (
-        <p className="text-text-muted m-0 text-[0.85rem]">
-          No keys: any customer who is signed in can open it.
-        </p>
-      ) : (
-        <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-          {lock.tags.map((tag) => (
-            <li key={tag} className={`${CHIP} pr-2.5`}>
-              {tag}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-auto flex gap-2 pt-4">
-        <label className="sr-only" htmlFor="lock-add-key">
-          New key
-        </label>
-        <input
-          id="lock-add-key"
-          type="text"
-          value={typed}
-          maxLength={255}
-          disabled={busy || full}
-          placeholder={full ? `At most ${MAX_KEYS} keys` : 'New key, e.g. wholesale'}
-          onChange={(event) => setTyped(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              submit()
-            }
-          }}
-          className={INPUT}
-        />
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || !clean || exists || full}
-          className={`${OUTLINE} h-10 px-3 text-[0.82rem]`}
+    <section
+      className={`${CARD} flex flex-col gap-3 p-3 sm:p-4`}
+      aria-label="Lock settings"
+    >
+      <div className="flex items-center gap-3">
+        <span aria-hidden="true" className={TILE}>
+          <EyeOffIcon width={17} height={17} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 text-[0.92rem] font-bold">Visibility settings</h2>
+          <p className="text-text-muted m-0 truncate text-[0.76rem]">
+            How the product shows to customers who don’t have access.
+          </p>
+        </div>
+        <span
+          className={COUNT_BADGE}
+          title={`${on} of ${SETTINGS.length} settings are on`}
         >
-          <PlusIcon width={14} height={14} />
-          Add key
-        </button>
+          {on} of {SETTINGS.length} on
+        </span>
       </div>
-      {exists && (
-        <p className="text-text-muted mt-1.5 mb-0 text-[0.75rem]">
-          The product already has this key.
+
+      {SETTING_GROUPS.map((group) => (
+        <fieldset key={group.title} className="m-0 flex flex-col gap-1.5 border-none p-0">
+          <legend className="text-accent mb-1 p-0 text-[0.66rem] font-bold tracking-wider uppercase">
+            {group.title}
+          </legend>
+          {group.items.map((setting) => {
+            const checked = lock[setting.name]
+            const Icon = setting.icon
+            const warn = setting.caution === true && checked
+            return (
+              <div
+                key={setting.name}
+                className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors ${
+                  warn
+                    ? 'border-warning/50 bg-warning-bg'
+                    : checked
+                      ? 'border-accent/40 bg-accent-tint/40'
+                      : 'border-border bg-bg hover:bg-accent-tint/20'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center ${
+                    warn ? 'text-warning' : checked ? 'text-accent' : 'text-text-muted'
+                  }`}
+                >
+                  <Icon width={18} height={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 text-[0.82rem] leading-snug font-semibold">
+                    {setting.label}
+                  </p>
+                  <p className="text-text-muted m-0 text-[0.72rem] leading-snug">
+                    {setting.hint}
+                  </p>
+                </div>
+                <ToggleSwitch
+                  label={setting.label}
+                  checked={checked}
+                  disabled={busy}
+                  onChange={(value) => onToggle(setting.name, value)}
+                />
+              </div>
+            )
+          })}
+        </fieldset>
+      ))}
+
+      {lock.manual_locking && (
+        <p role="note" className={`${NOTE} mt-0 flex items-start gap-2 text-[0.78rem]`}>
+          <AlertTriangleIcon width={14} height={14} className="mt-0.5 shrink-0" />
+          Manual locking is on, so the website shows this product to everyone. Switch it
+          off to enforce the lock.
         </p>
       )}
     </section>
@@ -1099,22 +1115,30 @@ function Stat({
   value,
   label,
   hint,
+  tone,
 }: {
   icon: ComponentType<IconProps>
   value: string
   label: string
   hint?: string
+  tone: keyof typeof STAT_TONES
 }) {
+  const colours = STAT_TONES[tone]
   return (
-    <div className={`${CARD} flex items-center gap-4 p-4 sm:p-5`}>
-      <span aria-hidden="true" className={TILE}>
-        <Icon width={22} height={22} />
+    <div
+      className={`${CARD} flex items-center gap-3 bg-linear-to-br p-3 ${colours.card}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${colours.tile}`}
+      >
+        <Icon width={20} height={20} />
       </span>
       <div className="min-w-0">
-        <p className="m-0 text-[1.5rem] leading-tight font-bold">{value}</p>
-        <p className="m-0 text-[0.85rem] font-semibold">{label}</p>
+        <p className="m-0 text-[1.35rem] leading-tight font-bold">{value}</p>
+        <p className="m-0 text-[0.82rem] leading-snug font-semibold">{label}</p>
         {hint && (
-          <p className="text-text-muted m-0 truncate text-[0.75rem]" title={hint}>
+          <p className="text-text-muted m-0 truncate text-[0.72rem]" title={hint}>
             {hint}
           </p>
         )}
@@ -1438,207 +1462,54 @@ function AddTagDialog({
   )
 }
 
-/** A store customer in the search: does one of their tags already open the product? */
-function holdsKey(customer: CustomerListItem, keys: Set<string>) {
-  return (customer.tags ?? []).some((tag) => keys.has(String(tag).trim().toLowerCase()))
-}
-
 /**
- * Add customers: search the store's customers and tick them (they stay ticked through searches),
- * or paste emails; then choose the tag they get. A customer who already holds a key is shown as
- * "Has access" and can't be ticked.
+ * "Give access": the question after Add customer. It names the customers picked in the search box;
+ * when the product has several keys it asks which tag they get (or a new one, which also becomes a
+ * key of the product), and with one key it just says which one. Nothing is sent before the button.
  */
-function AddCustomersDialog({
+function GiveAccessDialog({
   lock,
-  shop,
+  customers,
   sharedTags,
   onClose,
   onConfirm,
 }: {
   lock: AccessLock
-  shop: string
+  customers: ChosenCustomer[]
   sharedTags: readonly LockCustomerTag[]
   onClose: () => void
-  onConfirm: (refs: string[], tag: string) => Promise<void>
+  onConfirm: (tag: string) => Promise<void>
 }) {
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const store = usePickStoreCustomers(shop, search, page)
-  const [chosen, setChosen] = useState<{ ref: string; label: string }[]>([])
-  const [pasted, setPasted] = useState('')
   const [tag, setTag] = useState(lock.tags[0] ?? '')
-  const keys = lowerSet(lock.tags)
-  const chosenRefs = lowerSet(chosen.map((item) => item.ref))
-  const refs = [
-    ...chosen.map((item) => item.ref),
-    ...parseRefs(pasted).filter((ref) => !chosenRefs.has(ref.toLowerCase())),
-  ]
-  const tooMany = refs.length > MAX_CUSTOMERS
-  const clean = tag.trim()
-
-  function toggle(customer: CustomerListItem) {
-    const ref = customer.email ?? customer.id
-    setChosen(
-      chosenRefs.has(ref.toLowerCase())
-        ? chosen.filter((item) => item.ref.toLowerCase() !== ref.toLowerCase())
-        : [...chosen, { ref, label: customer.full_name?.trim() || ref }],
-    )
-  }
-
+  const several = lock.tags.length > 1
+  const clean = (several ? tag : (lock.tags[0] ?? tag)).trim()
+  const many = customers.length > 1
   return (
     <AccessQuestion
-      title={`Add customers to “${lock.title}”`}
-      confirmLabel={refs.length > 0 ? `Give access (${refs.length})` : 'Give access'}
-      disabled={refs.length === 0 || tooMany || !clean}
-      wide
+      title={many ? `Give access to ${customers.length} customers?` : 'Give access?'}
+      confirmLabel={many ? `Give access (${customers.length})` : 'Give access'}
+      disabled={!clean}
       onClose={onClose}
-      onConfirm={() => onConfirm(refs, clean)}
+      onConfirm={() => onConfirm(clean)}
     >
-      <label className="border-border bg-surface focus-within:border-accent flex h-10 items-center gap-2 rounded-lg border px-3">
-        <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
-        <span className="sr-only">Search the store’s customers</span>
-        <input
-          type="search"
-          value={search}
-          maxLength={200}
-          autoFocus
-          onChange={(event) => {
-            setSearch(event.target.value)
-            setPage(1)
-          }}
-          placeholder="Search the store’s customers by name, email or company…"
-          className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none"
-        />
-        {store.isFetching && (
-          <SpinnerIcon width={14} height={14} className="text-text-muted animate-spin" />
-        )}
-      </label>
-
-      {search.trim() && (
-        <div className="border-border mt-2 max-h-60 overflow-y-auto rounded-lg border">
-          {store.error ? (
-            <p className="text-danger m-0 px-3 py-3 text-[0.82rem]">{store.error}</p>
-          ) : store.items.length === 0 ? (
-            <p className="text-text-muted m-0 px-3 py-3 text-[0.82rem]">
-              {store.isFetching ? 'Searching…' : 'No customer matches.'}
-            </p>
-          ) : (
-            <ul className="m-0 list-none p-0">
-              {store.items.map((customer) => {
-                const ref = customer.email ?? customer.id
-                const has = keys.size > 0 && holdsKey(customer, keys)
-                const on = chosenRefs.has(ref.toLowerCase())
-                const name =
-                  customer.full_name?.trim() || customer.email || 'Unnamed customer'
-                return (
-                  <li
-                    key={customer.id}
-                    className="border-border border-b last:border-b-0"
-                  >
-                    <label
-                      className={`flex items-center gap-3 px-3 py-2 ${
-                        has ? 'opacity-60' : 'hover:bg-accent-tint/40 cursor-pointer'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on || has}
-                        disabled={has}
-                        onChange={() => toggle(customer)}
-                        className={CHECKBOX}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[0.85rem] font-semibold">
-                          {name}
-                        </span>
-                        {customer.email && (
-                          <span className="text-text-muted block truncate text-[0.75rem]">
-                            {customer.email}
-                          </span>
-                        )}
-                      </span>
-                      {has && (
-                        <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[0.7rem] font-semibold">
-                          Has access
-                        </span>
-                      )}
-                    </label>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {store.totalPages > 1 && (
-            <div className="border-border flex items-center justify-between border-t px-3 py-2 text-[0.78rem]">
-              <span className="text-text-muted">
-                {store.total.toLocaleString('en-GB')} found
-              </span>
-              <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className={`${OUTLINE} h-7 px-2 text-[0.75rem]`}
-                >
-                  Previous
-                </button>
-                <span>
-                  {page} / {store.totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= store.totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className={`${OUTLINE} h-7 px-2 text-[0.75rem]`}
-                >
-                  Next
-                </button>
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {chosen.length > 0 && (
-        <ul className="m-0 mt-3 flex list-none flex-wrap gap-1.5 p-0" aria-label="Chosen">
-          {chosen.map((item) => (
-            <li key={item.ref} className={CHIP} title={item.ref}>
-              {item.label}
-              <button
-                type="button"
-                aria-label={`Remove ${item.label}`}
-                onClick={() =>
-                  setChosen(chosen.filter((other) => other.ref !== item.ref))
-                }
-                className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current"
-              >
-                <XIcon width={10} height={10} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <details className="mt-3">
-        <summary className="text-accent cursor-pointer text-[0.82rem] font-semibold">
-          Or paste emails
-        </summary>
-        <textarea
-          rows={3}
-          value={pasted}
-          aria-label="Emails or customer ids"
-          onChange={(event) => setPasted(event.target.value)}
-          placeholder="john.doe@example.com, sarah@example.com"
-          className="border-border bg-surface text-text focus:border-accent mt-2 w-full resize-y rounded-lg border px-3 py-2 text-[0.85rem] outline-none"
-        />
-      </details>
-
-      {tooMany && (
-        <p className="text-danger mt-2 mb-0 text-[0.8rem]">
-          Up to {MAX_CUSTOMERS} customers can be added at a time.
+      <ul
+        aria-label="Customers getting access"
+        className="m-0 flex max-h-32 list-none flex-wrap gap-1.5 overflow-auto p-0"
+      >
+        {customers.map((item) => (
+          <li key={item.ref} className={CHIP} title={item.ref}>
+            {item.label}
+          </li>
+        ))}
+      </ul>
+      {several ? (
+        <TagChoice keys={lock.tags} value={tag} onChange={setTag} />
+      ) : (
+        <p className="mt-3 mb-0 text-[0.85rem]">
+          They will get the key <strong>“{lock.tags[0]}”</strong> and be able to open “
+          {lock.title}”.
         </p>
       )}
-      <TagChoice keys={lock.tags} value={tag} onChange={setTag} />
       <SharedNote note={sharedNote(sharedTags, clean ? [clean] : [])} />
       <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
         These changes will also be updated in Shopify.

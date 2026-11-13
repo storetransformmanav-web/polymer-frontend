@@ -122,7 +122,7 @@ export function useProductLockCustomers(shop: string, product: string) {
 }
 
 /**
- * The store's customers for the "Add customers" window (`GET /customers?role=all&search=&shop=`),
+ * The store's customers suggested while searching to add one (`GET /customers?role=all&search=&shop=`),
  * asked only once something is typed. Under `['lock-picker']`, so an access change re-reads it.
  */
 export function usePickStoreCustomers(shop: string, search: string, page: number) {
@@ -144,9 +144,51 @@ export function usePickStoreCustomers(shop: string, search: string, page: number
   return {
     items: text ? (query.data?.items ?? []) : [],
     total: text ? (query.data?.total ?? 0) : 0,
-    totalPages: query.data?.total_pages ?? 1,
+    totalPages: Math.max(1, query.data?.total_pages ?? 1),
+    isPending: text !== '' && query.isPending,
     isFetching: query.isFetching,
-    error: query.isError ? toUserMessage(query.error) : null,
+    error: query.isError && !query.data ? toUserMessage(query.error) : null,
+    retry: () => void query.refetch(),
+  }
+}
+
+/** How many store tags the Keys dropdown lists at a time. */
+export const PICK_TAGS_PAGE_SIZE = 12
+
+/**
+ * The tags to choose a key from (`GET /access/tags`): every tag the store's products and customers
+ * carry, lock tags first, each with its product and customer counts. With nothing typed it is the
+ * plain list; typing narrows it (a contains-match done by the backend). Asked for only while the
+ * dropdown is open (`enabled`). Under `['access-tags']`, so any lock or tag change re-reads it.
+ */
+export function usePickStoreTags(
+  shop: string,
+  search: string,
+  page: number,
+  enabled = true,
+) {
+  const text = search.trim()
+  const query = useQuery({
+    queryKey: ['access-tags', 'product-keys', shop, text, page],
+    queryFn: () =>
+      api.access.tags({
+        shop,
+        ...(text ? { search: text } : {}),
+        page,
+        page_size: PICK_TAGS_PAGE_SIZE,
+      }),
+    enabled: enabled && shop !== '',
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  })
+  return {
+    items: query.data?.tags ?? [],
+    total: query.data?.total ?? 0,
+    totalPages: Math.max(1, query.data?.total_pages ?? 1),
+    isPending: query.isPending && enabled,
+    isFetching: query.isFetching,
+    error: query.isError && !query.data ? toUserMessage(query.error) : null,
+    retry: () => void query.refetch(),
   }
 }
 
@@ -159,8 +201,10 @@ export type LockAccessChange =
   | { kind: 'remove'; refs: string[] }
   /** Switch one of the lock's settings on or off. */
   | { kind: 'switch'; name: LockSwitch; value: boolean }
-  /** Add a key (tag) to the product: customers with it can then open it. */
-  | { kind: 'addKey'; tag: string }
+  /** Add keys (tags) to the product: customers with one of them can then open it. */
+  | { kind: 'addKeys'; tags: string[] }
+  /** Take one key (tag) off the product (`PUT /access/tags` `tags_remove`). */
+  | { kind: 'removeKey'; tag: string }
   /** Lock a product that is not locked yet (no tags = any signed-in customer). */
   | { kind: 'lock'; tags: string[] }
   /** Take the lock off: everyone can see the product again. */
@@ -243,11 +287,27 @@ export function useProductLockWrites(
           })
           return result.message
         }
-        case 'addKey': {
+        case 'addKeys': {
+          const added = [
+            ...new Map(
+              change.tags
+                .map((tag) => tag.trim())
+                .filter((tag) => tag && !isKey(tag))
+                .map((tag) => [tag.toLowerCase(), tag] as const),
+            ).values(),
+          ]
           const result = await api.access.lock({
             shop,
             products: [product],
-            tags: [...keys, change.tag.trim()],
+            tags: [...keys, ...added],
+          })
+          return result.message
+        }
+        case 'removeKey': {
+          const result = await api.access.updateTags({
+            shop,
+            products: [product],
+            tags_remove: [change.tag],
           })
           return result.message
         }

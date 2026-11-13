@@ -7,7 +7,7 @@ import type {
   CustomerListItem,
   ProductListItem,
 } from '../../../lib/api/endpoints.ts'
-import { usePickCustomers, usePickProducts } from '../hooks/usePickers.ts'
+import { useHeldTags, usePickCustomers, usePickProducts } from '../hooks/usePickers.ts'
 import {
   findLockOfProduct,
   loadLockCustomers,
@@ -35,6 +35,14 @@ import {
 import { PickList, type PickRow } from './PickList.tsx'
 import { PickedChips } from './PickedChips.tsx'
 import { TagPicker } from './TagPicker.tsx'
+
+/** A product's handle or name as a tag: lower case, words joined by "-", at most 60 characters. */
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'products'
 
 const productRow = (product: ProductListItem, lock?: AccessLock): PickRow => ({
   id: product.id,
@@ -123,6 +131,12 @@ export function LockCreateView({
   useEffect(() => {
     draftRef.current = draft
   })
+
+  // Chosen tags that customers already hold: every one of them will be able to open the products.
+  const heldTags = useHeldTags(shop, draft.tags)
+  const alreadyHolding = heldTags.reduce((sum, held) => sum + held.customers, 0)
+  // A tag only for this lock, so only the customers picked below get it.
+  const ownTag = `lock-${slug(draft.products[0]?.sub || draft.products[0]?.label || 'products')}`
 
   const problems = useMemo(() => validateLockDraft(draft), [draft])
   const shown = showErrors ? problems : {}
@@ -433,8 +447,43 @@ export function LockCreateView({
                   }))
                 }
               />
+              {heldTags.length > 0 && (
+                <div
+                  role="note"
+                  className="bg-warning-bg text-warning mt-3 flex flex-col gap-2 rounded-lg px-3 py-2.5 text-[0.8rem]"
+                >
+                  <p className="m-0">
+                    {heldTags
+                      .map(
+                        (held) =>
+                          `“${held.tag}” is already held by ${held.customers.toLocaleString('en-GB')} ${
+                            held.customers === 1 ? 'customer' : 'customers'
+                          }`,
+                      )
+                      .join('; ')}
+                    . A lock opens its products to <strong>everyone</strong> with one of
+                    its tags, so{' '}
+                    {alreadyHolding === 1
+                      ? 'that customer'
+                      : `all ${alreadyHolding.toLocaleString('en-GB')} of them`}{' '}
+                    will have access, not only the customers you pick below.
+                  </p>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((current) => ({ ...current, tags: [ownTag] }))
+                      }
+                      className="border-warning text-warning hover:bg-warning/10 inline-flex h-8 cursor-pointer items-center rounded-lg border bg-transparent px-3 text-[0.78rem] font-semibold"
+                    >
+                      Use a new tag only for this lock (“{ownTag}”)
+                    </button>
+                  </div>
+                </div>
+              )}
               <p className="text-text-muted mt-3 text-[0.75rem]">
-                With no tag, the products are locked to signed-in customers only.
+                With no tag, the products are locked to signed-in customers only. To give
+                access only to the customers you pick, use a new tag that nobody has yet.
               </p>
             </LockCard>
 

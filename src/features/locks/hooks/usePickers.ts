@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQueries,
+  useQuery,
+  type UseQueryResult,
+} from '@tanstack/react-query'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
@@ -137,4 +142,36 @@ export function useAccessTags(
     staleTime: STALE_MS,
   })
   return pagedState(query, page, setPage, TAG_PAGE_SIZE)
+}
+
+/** A chosen tag that customers already hold, and how many of them. */
+export interface HeldTag {
+  tag: string
+  customers: number
+}
+
+/**
+ * How many customers already hold each of these tags (`GET /access/tags?search=<tag>`, the row
+ * whose name is exactly the tag). A lock opens its products to **everyone** who holds one of its
+ * tags, so a tag that is already in use gives access to all of those customers too — not only the
+ * ones picked in the form. Only the tags held by at least one customer are returned.
+ */
+export function useHeldTags(shop: string, tags: readonly string[]): HeldTag[] {
+  const results = useQueries({
+    queries: tags.map((tag) => ({
+      queryKey: ['access-tags', 'holders', shop, tag.toLowerCase()],
+      queryFn: async (): Promise<HeldTag> => {
+        const answer = await api.access.tags({ shop, search: tag, page_size: 50 })
+        const row = answer.tags.find(
+          (item) => item.tag.toLowerCase() === tag.toLowerCase(),
+        )
+        return { tag, customers: row?.customers ?? 0 }
+      },
+      enabled: shop !== '' && tag.trim() !== '',
+      staleTime: STALE_MS,
+    })),
+  })
+  return results
+    .map((result) => result.data)
+    .filter((held): held is HeldTag => Boolean(held && held.customers > 0))
 }

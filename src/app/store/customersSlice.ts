@@ -62,7 +62,8 @@ export const DEFAULT_CUSTOMER_FILTERS: CustomerFilters = {
   country: '',
   minSpent: '',
   maxSpent: '',
-  sort: 'created_at',
+  // Customers who have placed orders first (most orders at the top) by default.
+  sort: 'orders_count',
   order: 'desc',
   page: 1,
   pageSize: 25,
