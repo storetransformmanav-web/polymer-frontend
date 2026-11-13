@@ -10,7 +10,9 @@ import {
   type CustomerToDelete,
 } from '../components/CustomerDeleteDialog.tsx'
 import { CustomerCreateView } from '../components/CustomerCreateView.tsx'
-import { CustomerTabsBar } from '../components/CustomerTabsBar.tsx'
+import { CustomerTabsBar, type CustomerOrderTab } from '../components/CustomerTabsBar.tsx'
+import type { OpenOrderRequest } from '../components/CustomerOrderHistory.tsx'
+import { OrderDetailsView } from '../../orders/index.ts'
 import { CustomerDetailsView } from '../components/CustomerDetailsView.tsx'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { CustomersExport } from '../components/CustomersExport.tsx'
@@ -74,6 +76,13 @@ export function CustomersPage() {
 
   // The customer a trash button asked to delete (the dialog confirms), and what to say after.
   const [deleting, setDeleting] = useState<CustomerToDelete | null>(null)
+  // Orders opened from a customer's Orders tab: each is a tab beside its customer's, and the one
+  // being looked at (if it belongs to the customer on screen) replaces that customer's details.
+  const [orderTabs, setOrderTabs] = useState<CustomerOrderTab[]>([])
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null)
+  const activeOrder =
+    orderTabs.find((tab) => tab.id === activeOrderId && tab.customerId === activeId) ??
+    null
   const [notice, setNotice] = useState<string | null>(null)
   const closeDelete = useCallback(() => setDeleting(null), [])
 
@@ -88,6 +97,7 @@ export function CustomersPage() {
     setNotice(
       `Deleted “${customer.name}”. ${message || 'It is also deleted in Shopify.'}`,
     )
+    setOrderTabs((current) => current.filter((tab) => tab.customerId !== customer.id))
     // Deleted from its own page: there is nothing left to show, so go back to the list.
     if (activeId === customer.id) navigate(LIST_PATH)
   }
@@ -142,10 +152,56 @@ export function CustomersPage() {
     const index = tabs.tabs.findIndex((tab) => tab.id === id)
     const neighbour = tabs.tabs[index + 1] ?? tabs.tabs[index - 1]
     tabs.closeTab(id)
-    if (id === activeId) navigate(neighbour ? detailsPath(neighbour.id) : LIST_PATH)
+    setOrderTabs((current) => current.filter((tab) => tab.customerId !== id))
+    if (id === activeId) {
+      setActiveOrderId(null)
+      navigate(neighbour ? detailsPath(neighbour.id) : LIST_PATH)
+    }
+  }
+
+  /** An order from the Orders tab: a tab beside its customer's, shown at once. */
+  function openOrder(order: OpenOrderRequest) {
+    if (!activeId) return
+    const id = `order:${activeId}:${order.shop ?? ''}:${order.ref}`
+    const owner = tabs.tabs.find((tab) => tab.id === activeId)
+    setOrderTabs((current) =>
+      current.some((tab) => tab.id === id)
+        ? current
+        : [
+            ...current,
+            {
+              id,
+              customerId: activeId,
+              customerName: owner?.name ?? 'this customer',
+              ref: order.ref,
+              label: order.label,
+              shop: order.shop,
+            },
+          ],
+    )
+    setActiveOrderId(id)
+  }
+
+  function closeOrderTab(id: string) {
+    setOrderTabs((current) => current.filter((tab) => tab.id !== id))
+    // Closing the order on screen goes back to its customer (the Orders tab as it was left).
+    if (id === activeOrderId) setActiveOrderId(null)
+  }
+
+  function selectTab(id: string) {
+    const order = orderTabs.find((tab) => tab.id === id)
+    if (order) {
+      setActiveOrderId(order.id)
+      navigate(detailsPath(order.customerId))
+      return
+    }
+    setActiveOrderId(null)
+    navigate(id === DRAFT_TAB ? NEW_PATH : detailsPath(id))
   }
 
   function clearTabs() {
+    setOrderTabs([])
+    setActiveOrderId(null)
     tabs.clearTabs()
     if (activeId) navigate(LIST_PATH)
     if (formOpen) requestClose()
@@ -170,24 +226,54 @@ export function CustomersPage() {
 
       <CustomerTabsBar
         tabs={tabs.tabs}
-        activeId={creatingRoute ? DRAFT_TAB : activeId}
+        orderTabs={orderTabs}
+        activeId={creatingRoute ? DRAFT_TAB : (activeOrder?.id ?? activeId)}
         draft={formOpen}
-        onShowList={() => navigate(LIST_PATH)}
-        onSelect={(id) => navigate(id === DRAFT_TAB ? NEW_PATH : detailsPath(id))}
-        onClose={(id) => (id === DRAFT_TAB ? requestClose() : closeTab(id))}
+        onShowList={() => {
+          setActiveOrderId(null)
+          navigate(LIST_PATH)
+        }}
+        onSelect={selectTab}
+        onClose={(id) => {
+          if (id === DRAFT_TAB) requestClose()
+          else if (orderTabs.some((tab) => tab.id === id)) closeOrderTab(id)
+          else closeTab(id)
+        }}
         onClear={clearTabs}
       />
 
+      {/* The customer stays mounted (hidden) while one of their orders is open, so coming back
+          keeps the tab and the page of the order history it was left on. From `lg` the customer
+          fills the window and does not scroll as a whole: its tab's content scrolls inside it. */}
       {activeId && (
-        <div className="relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div
+          className={
+            activeOrder
+              ? 'hidden'
+              : 'relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden'
+          }
+        >
           <CustomerDetailsView
             key={activeId}
             id={activeId}
             onBack={() => navigate(LIST_PATH)}
+            onOpenOrder={openOrder}
             onDelete={(customer) => {
               setNotice(null)
               setDeleting({ id: activeId, ...customer })
             }}
+          />
+        </div>
+      )}
+
+      {activeOrder && (
+        <div className="relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+          <OrderDetailsView
+            key={activeOrder.id}
+            reference={activeOrder.ref}
+            shop={activeOrder.shop}
+            backLabel="Back to customer"
+            onBack={() => setActiveOrderId(null)}
           />
         </div>
       )}

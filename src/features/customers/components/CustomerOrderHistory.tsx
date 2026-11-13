@@ -26,6 +26,14 @@ const COLUMNS = 6
 /** The width of the Actions column, as in the Orders list (just the eye). */
 const ACTIONS_COLUMN_REM = 5
 
+/** What the history hands to the page when an order is opened (the page makes it a tab). */
+export interface OpenOrderRequest {
+  /** The order number, which opens it. */
+  ref: string
+  label: string
+  shop: string | null
+}
+
 /** The order number as the Orders list writes it: 17516, not "#17516". */
 const orderNumber = (order: OrderListItem) => String(order.order_number ?? order.name)
 
@@ -37,13 +45,29 @@ const orderNumber = (order: OrderListItem) => String(order.order_number ?? order
  * returns to the history (on the page it was left on). The table scrolls in its own box with a
  * sticky header; the page controls are the list's footer.
  */
-export function CustomerOrderHistory({ customer }: { customer: CustomerDetail }) {
+export function CustomerOrderHistory({
+  customer,
+  onOpenOrder,
+}: {
+  customer: CustomerDetail
+  /**
+   * Opens an order as a tab beside the customer's (the Customers page). Without it (the customer
+   * is being looked at from an order) the order opens in place of this table instead.
+   */
+  onOpenOrder?: (order: OpenOrderRequest) => void
+}) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
   const [viewing, setViewing] = useState<OrderListItem | null>(null)
   const history = useCustomerOrderHistory(customer, page, pageSize, viewing === null)
   const shop = customer.shop?.key ?? null
   const data = history.data
+
+  function open(order: OrderListItem) {
+    if (onOpenOrder)
+      onOpenOrder({ ref: orderNumber(order), label: orderNumber(order), shop })
+    else setViewing(order)
+  }
 
   if (viewing) {
     return (
@@ -74,11 +98,11 @@ export function CustomerOrderHistory({ customer }: { customer: CustomerDetail })
   return (
     <section
       aria-label="Order history"
-      className="border-border bg-bg flex min-w-0 flex-col overflow-hidden rounded-xl border"
+      className="border-border bg-bg flex min-w-0 flex-col overflow-hidden rounded-xl border lg:min-h-0 lg:flex-1"
     >
       <div
         aria-busy={history.isPending || history.isFetching}
-        className="max-h-[min(68svh,760px)] min-h-40 overflow-auto"
+        className="max-h-[min(68svh,760px)] min-h-40 overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
       >
         <table className="w-full min-w-[640px] border-collapse text-[0.85rem]">
           <thead>
@@ -123,7 +147,7 @@ export function CustomerOrderHistory({ customer }: { customer: CustomerDetail })
                     <button
                       type="button"
                       title={`Open order ${orderNumber(order)}`}
-                      onClick={() => setViewing(order)}
+                      onClick={() => open(order)}
                       className="text-text hover:text-accent cursor-pointer border-none bg-transparent p-0 text-left font-semibold hover:underline"
                     >
                       {orderNumber(order)}
@@ -164,7 +188,7 @@ export function CustomerOrderHistory({ customer }: { customer: CustomerDetail })
                       type="button"
                       aria-label={`View order ${orderNumber(order)}`}
                       title="View"
-                      onClick={() => setViewing(order)}
+                      onClick={() => open(order)}
                       className={ROW_ACTION}
                     >
                       <EyeIcon />

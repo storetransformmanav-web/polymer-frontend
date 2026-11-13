@@ -25,7 +25,7 @@ import {
   CustomerOverviewPanel,
 } from './CustomerDetailPanels.tsx'
 import { CustomerLockAccessPanel } from './CustomerLockAccessPanel.tsx'
-import { CustomerOrderHistory } from './CustomerOrderHistory.tsx'
+import { CustomerOrderHistory, type OpenOrderRequest } from './CustomerOrderHistory.tsx'
 import { CustomerMetafieldsPanel } from './CustomerMetafieldsPanel.tsx'
 
 type TabId = 'overview' | 'orders' | 'addresses' | 'marketing' | 'lock' | 'metafields'
@@ -44,6 +44,8 @@ interface CustomerDetailsViewProps {
   }) => void
   /** What the back button says; "Back to list" by default. */
   backLabel?: string
+  /** Opens an order from the Orders tab as a tab of its own (see the Customers page). */
+  onOpenOrder?: (order: OpenOrderRequest) => void
 }
 
 /**
@@ -57,6 +59,7 @@ export function CustomerDetailsView({
   onBack,
   onDelete,
   backLabel = 'Back to list',
+  onOpenOrder,
 }: CustomerDetailsViewProps) {
   const details = useCustomerDetails(id)
   const { customer, preview } = details
@@ -131,7 +134,7 @@ export function CustomerDetailsView({
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
+    <article className="border-border bg-bg flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1">
       <DetailsHeader
         visual={<HeaderTile>{initials(name) || '?'}</HeaderTile>}
         title={name}
@@ -285,7 +288,13 @@ export function CustomerDetailsView({
         id="customer-tabpanel"
         role="tabpanel"
         aria-labelledby={`customer-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        // From `lg` the page does not scroll as a whole: the header and tabs stay put and the tab's
+        // content scrolls in this box (the Orders table scrolls in its own box instead).
+        className={`bg-surface p-3 sm:p-5 lg:min-h-0 lg:flex-1 ${
+          tab === 'orders'
+            ? 'lg:flex lg:flex-col lg:overflow-hidden'
+            : 'lg:overflow-y-auto'
+        }`}
       >
         {tab === 'overview' && (
           <CustomerOverviewPanel
@@ -301,7 +310,9 @@ export function CustomerDetailsView({
         {customer && tab === 'addresses' && (
           <CustomerAddressesPanel customer={customer} />
         )}
-        {customer && tab === 'orders' && <CustomerOrderHistory customer={customer} />}
+        {customer && tab === 'orders' && (
+          <CustomerOrderHistory customer={customer} onOpenOrder={onOpenOrder} />
+        )}
         {tab !== 'overview' && !customer && <DetailSkeleton />}
         {customer && tab === 'marketing' && (
           <CustomerMarketingPanel customer={customer} />
