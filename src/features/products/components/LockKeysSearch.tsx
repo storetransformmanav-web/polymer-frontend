@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   CheckIcon,
+  PlusIcon,
   SearchIcon,
   SpinnerIcon,
   TagIcon,
@@ -13,6 +14,10 @@ import { usePickStoreTags } from '../hooks/useProductLockAccess.ts'
 
 const BUTTON =
   'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+const CHIP =
+  'inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[0.75rem] font-semibold'
+const CHIP_X =
+  'hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current disabled:pointer-events-none disabled:opacity-50'
 
 const lower = (value: string) => value.trim().toLowerCase()
 
@@ -20,11 +25,12 @@ const lower = (value: string) => value.trim().toLowerCase()
 const MAX_KEYS = 20
 
 /**
- * The product's tags (the lock's keys), changed from one search bar at the top of the Lock Access
- * tab: clicking it opens every tag of the store (`GET /access/tags`, narrowed by typing) with a
- * tick box — the product's tags start ticked. Tick to add, untick to take off (a typed tag the
- * store lacks can be ticked as a new one), then **Save tags** hands over what changed (the page
- * asks first). The lock's own `lock-…` tag is never listed.
+ * The product's tags (the lock's keys), kept simple: one search bar and an **Add tag** button.
+ * Clicking the bar (or typing in it) drops down every tag of the store (`GET /access/tags`,
+ * narrowed by what is typed); click a tag to pick it — it appears as a chip below — and press
+ * **Add tag** to add the picked ones (the page asks first). A typed tag the store lacks can be
+ * picked as a new one. The product's own tags are the solid chips under the bar; their ✕ takes one
+ * off (also asked first). The lock's own `lock-…` tag is never listed.
  */
 export function LockKeysSearch({
   lock,
@@ -40,7 +46,7 @@ export function LockKeysSearch({
   const ownTag = findOwnTag(lock.tags, lock.handle)
   const current = withoutOwnTag(lock.tags, ownTag)
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<string[]>(current)
+  const [picked, setPicked] = useState<string[]>([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [text, setText] = useDebouncedField(query, (value) => {
@@ -52,19 +58,18 @@ export function LockKeysSearch({
   const root = useRef<HTMLDivElement>(null)
 
   const currentSet = new Set(current.map(lower))
-  const draftSet = new Set(draft.map(lower))
-  const add = draft.filter((tag) => !currentSet.has(lower(tag)))
-  const remove = current.filter((tag) => !draftSet.has(lower(tag)))
-  const changed = add.length + remove.length > 0
+  const pickedSet = new Set(picked.map(lower))
   const rows = store.items.filter((item) => !ownTag || lower(item.tag) !== lower(ownTag))
   const typed = text.trim()
   const typedIsNew =
     typed !== '' &&
     !rows.some((item) => lower(item.tag) === lower(typed)) &&
-    !draftSet.has(lower(typed)) &&
+    !currentSet.has(lower(typed)) &&
+    !pickedSet.has(lower(typed)) &&
     (!ownTag || lower(typed) !== lower(ownTag))
+  const room = Math.max(0, MAX_KEYS - current.length)
 
-  // A click outside closes the list (what was ticked stays until Save or Cancel).
+  // A click outside closes the list (what was picked stays until Add tag).
   useEffect(() => {
     if (!open) return undefined
     function onPointerDown(event: PointerEvent) {
@@ -74,24 +79,21 @@ export function LockKeysSearch({
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
 
-  function toggle(tag: string) {
-    setDraft((list) =>
-      list.some((item) => lower(item) === lower(tag))
-        ? list.filter((item) => lower(item) !== lower(tag))
-        : [...list, tag].slice(0, MAX_KEYS),
-    )
+  function pick(tag: string) {
+    const key = lower(tag)
+    if (currentSet.has(key) || pickedSet.has(key)) return
+    setPicked((list) => [...list, tag].slice(0, room))
+    setText('')
   }
 
-  function reset() {
-    setDraft(current)
-    setText('')
-    setOpen(false)
+  function unpick(tag: string) {
+    setPicked((list) => list.filter((item) => lower(item) !== lower(tag)))
   }
 
   return (
     <div
       ref={root}
-      className="border-border bg-bg relative rounded-xl border p-3 sm:px-4"
+      className="border-border bg-bg rounded-xl border p-3 sm:px-4"
       onKeyDown={(event) => {
         if (event.key === 'Escape' && open) {
           event.stopPropagation()
@@ -107,224 +109,212 @@ export function LockKeysSearch({
         </span>
       </div>
 
-      <label className="border-border bg-surface focus-within:border-accent mt-2 flex h-10 items-center gap-2 rounded-lg border px-3">
-        <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
-        <span className="sr-only">Search tags</span>
-        <input
-          type="search"
-          value={text}
-          maxLength={255}
-          onFocus={() => setOpen(true)}
-          onClick={() => setOpen(true)}
-          onChange={(event) => {
-            setText(event.target.value)
-            setOpen(true)
+      <div className="relative mt-2 flex gap-2">
+        <label className="border-border bg-surface focus-within:border-accent flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3">
+          <SearchIcon width={16} height={16} className="text-text-muted shrink-0" />
+          <span className="sr-only">Search tags</span>
+          <input
+            type="search"
+            value={text}
+            maxLength={255}
+            onFocus={() => setOpen(true)}
+            onClick={() => setOpen(true)}
+            onChange={(event) => {
+              setText(event.target.value)
+              setOpen(true)
+            }}
+            onKeyDown={(event) => {
+              // Enter picks a typed tag the store does not have yet.
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                if (typedIsNew) pick(typed)
+              }
+            }}
+            placeholder="Search tags, or type a new one…"
+            className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+          {open && store.isFetching && (
+            <SpinnerIcon
+              width={14}
+              height={14}
+              className="text-text-muted animate-spin"
+            />
+          )}
+        </label>
+        <button
+          type="button"
+          disabled={busy || picked.length === 0}
+          onClick={() => {
+            setOpen(false)
+            onSave({ add: picked, remove: [] })
           }}
-          placeholder="Click to see every tag, or type to search…"
-          className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.85rem] outline-none [&::-webkit-search-cancel-button]:hidden"
-        />
-        {open && store.isFetching && (
-          <SpinnerIcon width={14} height={14} className="text-text-muted animate-spin" />
-        )}
-      </label>
+          className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
+        >
+          <PlusIcon width={14} height={14} />
+          {picked.length > 1 ? `Add ${picked.length} tags` : 'Add tag'}
+        </button>
 
-      {/* The tags as they will be after Save: ticked ones as chips (✕ unticks). */}
-      {draft.length > 0 && (
+        {open && (
+          <div className="border-border bg-bg absolute top-full right-0 left-0 z-30 mt-1 flex flex-col overflow-hidden rounded-xl border shadow-lg">
+            <div className="max-h-64 overflow-y-auto">
+              {store.error ? (
+                <div className="text-danger flex items-center justify-center gap-2 px-3 py-4 text-[0.82rem]">
+                  {store.error}
+                  <button
+                    type="button"
+                    onClick={store.retry}
+                    className={`${BUTTON} border-border bg-bg text-text h-7 px-2.5`}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <ul aria-label="Tags in the store" className="m-0 list-none p-0">
+                  {typedIsNew && (
+                    <li className="border-border border-b">
+                      <button
+                        type="button"
+                        onClick={() => pick(typed)}
+                        className="hover:bg-accent-tint/50 flex w-full cursor-pointer items-center gap-3 border-none bg-transparent px-3 py-2 text-left"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[0.85rem] font-semibold">
+                          {typed}
+                        </span>
+                        <span className="bg-warning-bg text-warning rounded-full px-2 py-0.5 text-[0.68rem] font-semibold">
+                          New tag
+                        </span>
+                      </button>
+                    </li>
+                  )}
+                  {store.isPending ? (
+                    <li className="text-text-muted flex items-center justify-center gap-2 px-3 py-4 text-[0.82rem]">
+                      <SpinnerIcon width={14} height={14} className="animate-spin" />
+                      Loading tags…
+                    </li>
+                  ) : rows.length === 0 && !typedIsNew ? (
+                    <li className="text-text-muted px-3 py-4 text-center text-[0.82rem]">
+                      {typed ? 'No tag matches.' : 'This store has no tags yet.'}
+                    </li>
+                  ) : (
+                    rows.map((item) => {
+                      const onProduct = currentSet.has(lower(item.tag))
+                      const isPicked = pickedSet.has(lower(item.tag))
+                      return (
+                        <li
+                          key={item.tag}
+                          className="border-border border-b last:border-b-0"
+                        >
+                          <button
+                            type="button"
+                            disabled={onProduct || (!isPicked && picked.length >= room)}
+                            onClick={() => (isPicked ? unpick(item.tag) : pick(item.tag))}
+                            className="hover:bg-accent-tint/50 flex w-full cursor-pointer items-center gap-3 border-none bg-transparent px-3 py-2 text-left disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[0.85rem] font-semibold">
+                                {item.label || item.tag}
+                              </span>
+                              <span className="text-text-muted block truncate text-[0.72rem]">
+                                {item.label && item.label !== item.tag
+                                  ? `${item.tag} · `
+                                  : ''}
+                                {item.products.toLocaleString('en-GB')} products ·{' '}
+                                {item.customers.toLocaleString('en-GB')} customers
+                              </span>
+                            </span>
+                            {onProduct ? (
+                              <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[0.68rem] font-semibold">
+                                On this product
+                              </span>
+                            ) : isPicked ? (
+                              <span className="text-accent inline-flex items-center gap-1 text-[0.72rem] font-semibold">
+                                <CheckIcon width={14} height={14} />
+                                Picked
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      )
+                    })
+                  )}
+                </ul>
+              )}
+            </div>
+            {store.totalPages > 1 && (
+              <div className="border-border flex items-center justify-between border-t px-3 py-2 text-[0.75rem]">
+                <span className="text-text-muted">
+                  {store.total.toLocaleString('en-GB')} tags
+                </span>
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                    className={`${BUTTON} border-border bg-bg text-text h-7 px-2`}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    {page} / {store.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= store.totalPages}
+                    onClick={() => setPage(page + 1)}
+                    className={`${BUTTON} border-border bg-bg text-text h-7 px-2`}
+                  >
+                    Next
+                  </button>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Picked to add (dashed), then the product's own tags (✕ takes one off, asked first). */}
+      {(picked.length > 0 || current.length > 0) && (
         <ul
           className="m-0 mt-2 flex list-none flex-wrap gap-1.5 p-0"
-          aria-label="Ticked tags"
+          aria-label="Tags of this product"
         >
-          {draft.map((tag) => (
+          {picked.map((tag) => (
             <li
-              key={tag}
-              className={`inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[0.75rem] font-semibold ${
-                currentSet.has(lower(tag))
-                  ? 'bg-accent-tint text-accent'
-                  : 'bg-warning-bg text-warning'
-              }`}
-              title={
-                currentSet.has(lower(tag))
-                  ? 'A tag of this product'
-                  : 'Added when you save'
-              }
+              key={`picked-${tag}`}
+              className={`${CHIP} bg-accent-tint text-accent border-accent/40 border border-dashed`}
+              title="Added when you press Add tag"
             >
               {tag}
               <button
                 type="button"
-                aria-label={`Untick ${tag}`}
-                onClick={() => toggle(tag)}
-                className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current"
+                aria-label={`Don’t add ${tag}`}
+                onClick={() => unpick(tag)}
+                className={CHIP_X}
+              >
+                <XIcon width={10} height={10} />
+              </button>
+            </li>
+          ))}
+          {current.map((tag) => (
+            <li
+              key={tag}
+              className={`${CHIP} bg-accent-tint text-accent`}
+              title="A tag of this product"
+            >
+              {tag}
+              <button
+                type="button"
+                aria-label={`Remove the tag ${tag}`}
+                title="Remove this tag"
+                disabled={busy}
+                onClick={() => onSave({ add: [], remove: [tag] })}
+                className={CHIP_X}
               >
                 <XIcon width={10} height={10} />
               </button>
             </li>
           ))}
         </ul>
-      )}
-
-      {/* Unsaved ticks stay after the list closes: save or drop them here too. */}
-      {changed && !open && (
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-          <span className="text-text-muted mr-auto text-[0.75rem]">
-            Not saved: {add.length} to add · {remove.length} to take off
-          </span>
-          <button
-            type="button"
-            onClick={reset}
-            className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onSave({ add, remove })}
-            className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
-          >
-            <CheckIcon width={14} height={14} />
-            Save tags
-          </button>
-        </div>
-      )}
-
-      {open && (
-        <div className="border-border bg-bg absolute inset-x-3 top-full z-30 -mt-1 flex flex-col rounded-xl border shadow-lg sm:inset-x-4">
-          <div className="max-h-64 overflow-y-auto">
-            {store.error ? (
-              <div className="text-danger flex items-center justify-center gap-2 px-3 py-4 text-[0.82rem]">
-                {store.error}
-                <button
-                  type="button"
-                  onClick={store.retry}
-                  className={`${BUTTON} border-border bg-bg text-text h-7 px-2.5`}
-                >
-                  Try again
-                </button>
-              </div>
-            ) : (
-              <ul className="m-0 list-none p-0">
-                {typedIsNew && (
-                  <li className="border-border border-b">
-                    <label className="hover:bg-accent-tint/40 flex cursor-pointer items-center gap-3 px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        onChange={() => toggle(typed)}
-                        className="accent-accent h-4 w-4"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-[0.85rem] font-semibold">
-                        {typed}
-                      </span>
-                      <span className="bg-warning-bg text-warning rounded-full px-2 py-0.5 text-[0.68rem] font-semibold">
-                        New tag
-                      </span>
-                    </label>
-                  </li>
-                )}
-                {store.isPending ? (
-                  <li className="text-text-muted flex items-center justify-center gap-2 px-3 py-4 text-[0.82rem]">
-                    <SpinnerIcon width={14} height={14} className="animate-spin" />
-                    Loading tags…
-                  </li>
-                ) : rows.length === 0 && !typedIsNew ? (
-                  <li className="text-text-muted px-3 py-4 text-center text-[0.82rem]">
-                    {typed ? 'No tag matches.' : 'This store has no tags yet.'}
-                  </li>
-                ) : (
-                  rows.map((item) => {
-                    const on = draftSet.has(lower(item.tag))
-                    return (
-                      <li
-                        key={item.tag}
-                        className="border-border border-b last:border-b-0"
-                      >
-                        <label className="hover:bg-accent-tint/40 flex cursor-pointer items-center gap-3 px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            onChange={() => toggle(item.tag)}
-                            className="accent-accent h-4 w-4"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[0.85rem] font-semibold">
-                              {item.label || item.tag}
-                            </span>
-                            <span className="text-text-muted block truncate text-[0.72rem]">
-                              {item.label && item.label !== item.tag
-                                ? `${item.tag} · `
-                                : ''}
-                              {item.products.toLocaleString('en-GB')} products ·{' '}
-                              {item.customers.toLocaleString('en-GB')} customers
-                            </span>
-                          </span>
-                          {currentSet.has(lower(item.tag)) && (
-                            <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[0.68rem] font-semibold">
-                              On this product
-                            </span>
-                          )}
-                        </label>
-                      </li>
-                    )
-                  })
-                )}
-              </ul>
-            )}
-          </div>
-          {store.totalPages > 1 && (
-            <div className="border-border flex items-center justify-between border-t px-3 py-2 text-[0.75rem]">
-              <span className="text-text-muted">
-                {store.total.toLocaleString('en-GB')} tags
-              </span>
-              <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className={`${BUTTON} border-border bg-bg text-text h-7 px-2`}
-                >
-                  Previous
-                </button>
-                <span>
-                  {page} / {store.totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= store.totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className={`${BUTTON} border-border bg-bg text-text h-7 px-2`}
-                >
-                  Next
-                </button>
-              </span>
-            </div>
-          )}
-          <div className="border-border flex flex-wrap items-center justify-end gap-2 border-t p-2">
-            <span className="text-text-muted mr-auto text-[0.75rem]">
-              {changed
-                ? `${add.length} to add · ${remove.length} to take off`
-                : 'Tick to add a tag, untick to take it off.'}
-            </span>
-            <button
-              type="button"
-              onClick={reset}
-              className={`${BUTTON} border-border bg-bg text-text hover:border-accent`}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={busy || !changed}
-              onClick={() => {
-                setOpen(false)
-                onSave({ add, remove })
-              }}
-              className={`${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`}
-            >
-              <CheckIcon width={14} height={14} />
-              Save tags
-            </button>
-          </div>
-        </div>
       )}
     </div>
   )

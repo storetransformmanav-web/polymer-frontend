@@ -89,7 +89,7 @@ export function LockAddTagsSection({
   }
 
   return (
-    <div className="flex w-[26rem] max-w-[85vw] flex-col gap-3 p-2">
+    <div className="border-accent/40 bg-accent-tint/20 flex flex-col gap-3 border-l-4 p-3 sm:p-4">
       <div className="flex items-center gap-2">
         <TagIcon width={16} height={16} className="text-accent shrink-0" />
         <h3 className="m-0 text-[0.88rem] font-bold">

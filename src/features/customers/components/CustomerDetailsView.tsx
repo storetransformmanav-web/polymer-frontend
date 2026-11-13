@@ -16,7 +16,7 @@ import {
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
-import { formatDate, initials } from '../../../lib/format.ts'
+import { formatDateTimeAmPm, initials } from '../../../lib/format.ts'
 import { useCustomerDetails } from '../hooks/useCustomerDetails.ts'
 import { capitalize, customerName, customerSource, stateTone } from '../utils/format.ts'
 import {
@@ -99,10 +99,10 @@ export function CustomerDetailsView({
       count: customer?.order_summary?.orders_in_shopify ?? customer?.orders_count,
     },
     { id: 'marketing', label: 'Marketing & Tax' },
-    ...(canSeeLocks ? [{ id: 'lock' as const, label: 'Lock Access' }] : []),
     ...(metafieldCount > 0
       ? [{ id: 'metafields' as const, label: 'Metafields', count: metafieldCount }]
       : []),
+    ...(canSeeLocks ? [{ id: 'lock' as const, label: 'Lock Access' }] : []),
   ]
 
   if (details.error) {
@@ -169,12 +169,18 @@ export function CustomerDetailsView({
               )}
               {created && (
                 <HeaderChip icon={CalendarIcon} label="Created">
-                  {formatDate(created)}
+                  <span aria-hidden="true" className="text-text-muted">
+                    Created{' '}
+                  </span>
+                  {formatDateTimeAmPm(created)}
                 </HeaderChip>
               )}
               {customer?.updated_at && (
                 <HeaderChip icon={CalendarIcon} label="Updated">
-                  {formatDate(customer.updated_at)}
+                  <span aria-hidden="true" className="text-text-muted">
+                    Updated{' '}
+                  </span>
+                  {formatDateTimeAmPm(customer.updated_at)}
                 </HeaderChip>
               )}
             </>
@@ -289,9 +295,9 @@ export function CustomerDetailsView({
         role="tabpanel"
         aria-labelledby={`customer-tab-${tab}`}
         // From `lg` the page does not scroll as a whole: the header and tabs stay put and the tab's
-        // content scrolls in this box (the Orders table scrolls in its own box instead).
+        // content scrolls in this box (the Orders table and the Lock Access lists scroll in their own boxes instead).
         className={`bg-surface p-3 sm:p-5 lg:min-h-0 lg:flex-1 ${
-          tab === 'orders'
+          tab === 'orders' || tab === 'lock'
             ? 'lg:flex lg:flex-col lg:overflow-hidden'
             : 'lg:overflow-y-auto'
         }`}

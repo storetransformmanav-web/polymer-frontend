@@ -21,7 +21,6 @@ import {
   UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
-import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
@@ -41,9 +40,7 @@ import {
   useProductLockCustomers,
   useProductLockWrites,
 } from '../hooks/useProductLockAccess.ts'
-import { LockAddTagsSection } from './LockAddTagsSection.tsx'
 import { LockKeysSearch } from './LockKeysSearch.tsx'
-import { LockRemoveTagsSection } from './LockRemoveTagsSection.tsx'
 import { LockCustomerSearch, type ChosenCustomer } from './LockCustomerSearch.tsx'
 import {
   CARD,
@@ -366,19 +363,6 @@ function LockedProduct({
   const [giving, setGiving] = useState<ChosenCustomer[] | null>(null)
   const [pickerKey, setPickerKey] = useState(0)
   const [asked, setAsked] = useState<Asked | null>(null)
-  // The customer whose "Add tag" window is open.
-  // The tags ticked in that section, waiting for "Yes".
-  // Bumped after tags are added: the Add tags card starts empty again.
-  const [tagsKey, setTagsKey] = useState(0)
-  // The tags ticked in the Remove tags dropdown, waiting for "Yes".
-  const [removingTags, setRemovingTags] = useState<{
-    customers: LockCustomer[]
-    tags: string[]
-  } | null>(null)
-  const [addingTags, setAddingTags] = useState<{
-    customers: LockCustomer[]
-    tags: string[]
-  } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
 
   const data = list.data
@@ -433,67 +417,6 @@ function LockedProduct({
             busy={writes.isWriting}
             onSave={(change) => ask({ kind: 'setKeys', ...change })}
           />
-
-          {!loginOnly && (
-            // Add / Remove tags for the customers ticked in the table below: each button opens a
-            // dropdown where several tags are ticked; Add / Remove closes it and asks first.
-            <div
-              role="group"
-              aria-label="Tags of the ticked customers"
-              className={`${CARD} flex flex-wrap items-center gap-2 p-3 sm:px-4`}
-            >
-              <TagIcon width={16} height={16} className="text-accent shrink-0" />
-              <span className="text-text-muted min-w-0 flex-1 text-[0.8rem]">
-                {picked.length > 0
-                  ? `${picked.length} ${picked.length === 1 ? 'customer' : 'customers'} ticked`
-                  : 'Tick customers in the table below to add or remove their tags.'}
-              </span>
-              <PopoverButton
-                key={`add-${tagsKey}`}
-                label="Add tags"
-                icon={PlusIcon}
-                tone="primary"
-                align="right"
-                disabled={picked.length === 0 || writes.isWriting}
-              >
-                {(close) => (
-                  <LockAddTagsSection
-                    lock={lock}
-                    shop={shop}
-                    customers={picked}
-                    busy={writes.isWriting}
-                    onCancel={close}
-                    onAdd={(tags) => {
-                      close()
-                      setNotice(null)
-                      setAddingTags({ customers: picked, tags })
-                    }}
-                  />
-                )}
-              </PopoverButton>
-              <PopoverButton
-                key={`remove-${tagsKey}`}
-                label="Remove tags"
-                icon={TrashIcon}
-                align="right"
-                disabled={picked.length === 0 || writes.isWriting}
-              >
-                {(close) => (
-                  <LockRemoveTagsSection
-                    lock={lock}
-                    customers={picked}
-                    busy={writes.isWriting}
-                    onCancel={close}
-                    onRemove={(tags) => {
-                      close()
-                      setNotice(null)
-                      setRemovingTags({ customers: picked, tags })
-                    }}
-                  />
-                )}
-              </PopoverButton>
-            </div>
-          )}
 
           <section className={CARD} aria-label="Customer Access">
             <div className="flex items-center gap-3 p-3 sm:p-4">
@@ -799,90 +722,6 @@ function LockedProduct({
             setPickerKey((key) => key + 1)
           }}
         />
-      )}
-      {removingTags && (
-        <AccessQuestion
-          title={`Remove ${removingTags.tags.length} ${
-            removingTags.tags.length === 1 ? 'tag' : 'tags'
-          } from ${
-            removingTags.customers.length === 1
-              ? customerLabel(removingTags.customers[0])
-              : `${removingTags.customers.length} customers`
-          }?`}
-          confirmLabel={removingTags.tags.length === 1 ? 'Remove tag' : 'Remove tags'}
-          danger
-          onClose={() => setRemovingTags(null)}
-          onConfirm={async () => {
-            await run({
-              kind: 'takeTags',
-              refs: removingTags.customers.map(customerRefOf),
-              tags: removingTags.tags,
-            })
-            setRemovingTags(null)
-            setTagsKey((key) => key + 1)
-          }}
-        >
-          <ul
-            className="m-0 flex list-none flex-wrap gap-1.5 p-0"
-            aria-label="Tags to remove"
-          >
-            {removingTags.tags.map((tag) => (
-              <li key={tag} className={`${CHIP} pr-2.5`}>
-                {tag}
-              </li>
-            ))}
-          </ul>
-          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
-            Their other tags stay, and they stay customers of this lock. These changes
-            will also be updated in Shopify.
-          </p>
-          <SharedNote note={sharedNote(list.tags, removingTags.tags)} />
-        </AccessQuestion>
-      )}
-      {addingTags && (
-        <AccessQuestion
-          title={`Add ${addingTags.tags.length} ${
-            addingTags.tags.length === 1 ? 'tag' : 'tags'
-          } to ${
-            addingTags.customers.length === 1
-              ? customerLabel(addingTags.customers[0])
-              : `${addingTags.customers.length} customers`
-          }?`}
-          confirmLabel={addingTags.tags.length === 1 ? 'Add tag' : 'Add tags'}
-          onClose={() => setAddingTags(null)}
-          onConfirm={async () => {
-            await run({
-              kind: 'giveTags',
-              refs: addingTags.customers.map(customerRefOf),
-              tags: addingTags.tags,
-            })
-            setAddingTags(null)
-            setTagsKey((key) => key + 1)
-          }}
-        >
-          <ul
-            className="m-0 flex list-none flex-wrap gap-1.5 p-0"
-            aria-label="Tags to add"
-          >
-            {addingTags.tags.map((tag) => (
-              <li key={tag} className={`${CHIP} pr-2.5`}>
-                {tag}
-              </li>
-            ))}
-          </ul>
-          {addingTags.tags.some(
-            (tag) => !lock.tags.some((key) => key.toLowerCase() === tag.toLowerCase()),
-          ) && (
-            <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
-              Tags the product doesn’t have yet are added to it as keys too, so they give
-              access.
-            </p>
-          )}
-          <SharedNote note={sharedNote(list.tags, addingTags.tags)} />
-          <p className="text-text-muted mt-3 mb-0 text-[0.8rem]">
-            These changes will also be updated in Shopify.
-          </p>
-        </AccessQuestion>
       )}
       {asked && (
         <AskedQuestion

@@ -142,9 +142,6 @@ export function CollectionsList({
                     <span className="truncate text-[0.88rem] font-semibold">
                       <Highlight text={collection.title} />
                     </span>
-                    <span className="text-text-muted truncate text-[0.75rem]">
-                      /{collection.handle}
-                    </span>
                     <span className="mt-1 flex flex-wrap items-center gap-2 text-[0.78rem]">
                       <TypeBadge type={collection.collection_type} />
                       <span className="text-text-muted">
@@ -211,12 +208,6 @@ export function CollectionsList({
                         >
                           <Highlight text={collection.title} />
                         </button>
-                        <span
-                          className="text-text-muted truncate text-[0.75rem]"
-                          title={collection.handle}
-                        >
-                          /<Highlight text={collection.handle} />
-                        </span>
                       </span>
                     </span>
                   </td>

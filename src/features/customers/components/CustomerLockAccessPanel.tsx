@@ -19,6 +19,7 @@ import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
 import { toUserMessage } from '../../../lib/api/ApiError.ts'
 import type { AccessLock, CustomerDetail } from '../../../lib/api/endpoints.ts'
+import { formatDateTimeAmPm } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { useStoreTags } from '../../products/index.ts'
 import { useCustomerLockWrites, useStoreLocks } from '../hooks/useCustomerLockAccess.ts'
@@ -155,39 +156,41 @@ function LoadedLockAccess({
   )
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1">
       <section
-        className={`${CARD} from-accent-tint/70 to-bg flex flex-wrap items-center gap-x-4 gap-y-3 bg-linear-to-r px-5 py-4`}
+        className={`${CARD} from-accent-tint/60 to-bg flex flex-wrap items-center gap-x-3 gap-y-2 bg-linear-to-r px-3 py-2`}
       >
-        <LockIcon width={30} height={30} className="text-accent shrink-0" />
-        <div className="min-w-0 flex-1 basis-56">
-          <h2 className="m-0 text-[1.15rem] leading-tight font-bold">Lock Access</h2>
-          <p className="text-text-muted m-0 text-[0.85rem]">
-            Manage product access for this customer using tags.
+        <LockIcon width={20} height={20} className="text-accent shrink-0" />
+        <h2 className="m-0 text-[0.98rem] font-bold">Lock Access</h2>
+        {customer.shop?.name && (
+          <span
+            title="The store these locks belong to"
+            className="border-accent/30 bg-accent-tint text-accent inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[0.72rem] font-bold tracking-wide uppercase"
+          >
+            <StoreIcon width={13} height={13} />
+            {customer.shop.name}
+          </span>
+        )}
+        <span aria-hidden="true" className="bg-border hidden h-6 w-px sm:block" />
+        <Count
+          icon={<ProductsIcon width={16} height={16} className="text-text-muted" />}
+          value={withAccess.length}
+          one="Product"
+          many="Products"
+          title="Locked products this customer can open"
+        />
+        <Count
+          icon={<TagIcon width={16} height={16} className="text-text-muted" />}
+          value={keys.length}
+          one="Key"
+          many="Keys"
+          title="Tags this customer holds that open locked products"
+        />
+        {customer.updated_at && (
+          <p className="text-text-muted m-0 ml-auto text-[0.78rem]">
+            Updated {formatDateTimeAmPm(customer.updated_at)}.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {customer.shop?.name && (
-            <span className="border-border bg-bg text-text-muted inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[0.85rem] shadow-sm">
-              <StoreIcon width={15} height={15} />
-              {customer.shop.name}
-            </span>
-          )}
-          <Count
-            icon={<ProductsIcon width={16} height={16} className="text-accent" />}
-            value={withAccess.length}
-            one="Product"
-            many="Products"
-            title="Locked products this customer can open"
-          />
-          <Count
-            icon={<TagIcon width={16} height={16} className="text-accent" />}
-            value={keys.length}
-            one="Key"
-            many="Keys"
-            title="Tags this customer holds that open locked products"
-          />
-        </div>
+        )}
       </section>
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
@@ -197,7 +200,7 @@ function LoadedLockAccess({
         </FormMessage>
       )}
 
-      <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+      <div className="grid items-stretch gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
         <TagsCard
           customer={customer}
           keys={keys}
@@ -243,7 +246,7 @@ function Count({
   return (
     <span
       title={title}
-      className="border-border bg-bg inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-[0.88rem] shadow-sm"
+      className="border-border bg-bg inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[0.8rem]"
     >
       {icon}
       <strong>{value.toLocaleString('en-GB')}</strong>
@@ -347,7 +350,7 @@ function TagsCard({
 
   return (
     <section
-      className={`${CARD} flex min-w-0 flex-col gap-3 p-3 sm:p-4`}
+      className={`${CARD} flex min-w-0 flex-col gap-3 p-3 sm:p-4 lg:min-h-0`}
       aria-label="Tags"
     >
       <div className="flex items-center gap-3">
@@ -528,7 +531,7 @@ function TagsCard({
       ) : (
         <ul
           aria-label="Tags of this customer"
-          className="m-0 flex max-h-[26rem] min-h-24 flex-1 list-none flex-wrap content-start gap-2.5 overflow-auto p-0"
+          className="m-0 flex max-h-[26rem] min-h-24 flex-1 list-none flex-wrap content-start gap-2.5 overflow-auto p-0 lg:max-h-none lg:min-h-0"
         >
           {shown.map((tag) => {
             const isKey = use.has(tag.toLowerCase())
@@ -643,7 +646,7 @@ function ProductsCard({
 
   return (
     <section
-      className={`${CARD} flex min-w-0 flex-col gap-3 p-3 sm:p-4`}
+      className={`${CARD} flex min-w-0 flex-col gap-3 p-3 sm:p-4 lg:min-h-0`}
       aria-label="Locked products"
     >
       <div className="flex flex-wrap items-center gap-3">
@@ -715,7 +718,7 @@ function ProductsCard({
         </p>
       ) : (
         <div className="border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-          <div className="max-h-[min(60svh,30rem)] min-h-40 flex-1 overflow-auto">
+          <div className="max-h-[min(60svh,30rem)] min-h-40 flex-1 overflow-auto lg:max-h-none lg:min-h-0">
             <table
               aria-label={showAll ? 'All locked products' : 'Products with access'}
               className="w-full min-w-[640px] border-collapse text-[0.85rem]"
@@ -743,6 +746,7 @@ function ProductsCard({
             </table>
           </div>
           <PaginationFooter
+            compact
             page={page}
             pageSize={pageSize}
             total={rows.length}
