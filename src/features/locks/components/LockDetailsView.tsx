@@ -294,7 +294,10 @@ export function LockDetailsView({
                 {lock.tags.length === 1 ? 'key' : 'keys'}
               </span>
             </HeaderChip>
-            <HeaderChip icon={ClockIcon} label="Last updated">
+            <HeaderChip icon={ClockIcon} label="Updated date">
+              <span aria-hidden="true" className="text-text-muted">
+                Updated Date:
+              </span>{' '}
               {lock.updated_at ? formatDateTimeAmPm(lock.updated_at) : '—'}
             </HeaderChip>
           </>

@@ -478,7 +478,10 @@ function LockedProduct({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    // On Lock Management's page (`accessOnly`, from `lg`) the card fills the height left under the
+    // lock's tabs: the page does not scroll, the customers table scrolls in its own box and the
+    // pagination stays under it. The product page's tab is unchanged.
+    <div className={`flex flex-col gap-3 ${accessOnly ? 'lg:min-h-0 lg:flex-1' : ''}`}>
       {!accessOnly && (
         <LockHeader
           lock={lock}
@@ -494,11 +497,13 @@ function LockedProduct({
       <div
         className={
           accessOnly
-            ? 'grid items-start gap-3'
+            ? 'flex flex-col gap-3 lg:min-h-0 lg:flex-1'
             : 'grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]'
         }
       >
-        <div className="flex min-w-0 flex-col gap-3">
+        <div
+          className={`flex min-w-0 flex-col gap-3 ${accessOnly ? 'lg:min-h-0 lg:flex-1' : ''}`}
+        >
           {/* The product's tags: one search bar, every tag with a tick box (ticked = on the product). */}
           <LockKeysSearch
             key={lock.tags.join('|')}
@@ -508,7 +513,10 @@ function LockedProduct({
             onSave={(change) => ask({ kind: 'setKeys', ...change })}
           />
 
-          <section className={CARD} aria-label="Customer Access">
+          <section
+            className={`${CARD} ${accessOnly ? 'flex flex-col lg:min-h-0 lg:flex-1' : ''}`}
+            aria-label="Customer Access"
+          >
             <div className="flex items-center gap-3 p-3 sm:p-4">
               <span aria-hidden="true" className={TILE}>
                 <UsersIcon width={17} height={17} />
@@ -560,7 +568,11 @@ function LockedProduct({
               </div>
             )}
 
-            <div className="relative max-h-[22rem] overflow-auto">
+            <div
+              className={`relative max-h-[22rem] overflow-auto ${
+                accessOnly ? 'lg:max-h-none lg:min-h-[12rem] lg:flex-1' : ''
+              }`}
+            >
               <div
                 aria-hidden="true"
                 className={`bg-accent absolute inset-x-0 top-0 z-[1] h-0.5 transition-opacity ${
