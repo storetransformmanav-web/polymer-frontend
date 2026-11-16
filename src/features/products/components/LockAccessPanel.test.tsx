@@ -245,23 +245,39 @@ describe('the Keys (tags) card', () => {
   })
 })
 
-describe('the Visibility settings card', () => {
-  it('shows every setting, grouped, with its state', async () => {
+describe('the lock settings cards', () => {
+  it('shows every setting in the same two cards as Lock Management, with its state', async () => {
     renderWithProviders(<LockAccessPanel product={PRODUCT} />)
     const card = await screen.findByRole('region', { name: 'Lock settings' })
-    expect(within(card).getByText('Visibility Settings')).toBeInTheDocument()
-    // Only "Hide from lists" is on in the fixture.
-    expect(within(card).getByRole('switch', { name: 'Hide from lists' })).toBeChecked()
     expect(
-      within(card).getByRole('switch', { name: 'Hide from navigation menus' }),
+      within(card).getByRole('region', { name: 'Access & Visibility' }),
+    ).toBeInTheDocument()
+    expect(
+      within(card).getByRole('region', { name: 'Advanced Settings' }),
+    ).toBeInTheDocument()
+    // Only "Hidden from lists" is on in the fixture.
+    expect(within(card).getByRole('switch', { name: 'Hidden from lists' })).toBeChecked()
+    expect(
+      within(card).getByRole('switch', { name: 'Hidden from navigation menus' }),
     ).not.toBeChecked()
+    for (const name of [
+      'Manual locking',
+      'Hidden from sitemaps',
+      'Search engines told not to index',
+    ]) {
+      expect(within(card).getByRole('switch', { name })).not.toBeChecked()
+    }
+    // Each setting says Yes or No beside its switch, as on the lock page.
+    expect(within(card).getByText('Hidden from lists').closest('div')).toHaveTextContent(
+      'Yes',
+    )
   })
 
   it('asks before switching one, then sends only that setting', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LockAccessPanel product={PRODUCT} />)
     const card = await screen.findByRole('region', { name: 'Lock settings' })
-    await user.click(within(card).getByRole('switch', { name: 'Hide from sitemaps' }))
+    await user.click(within(card).getByRole('switch', { name: 'Hidden from sitemaps' }))
     const dialog = await screen.findByRole('alertdialog')
     expect(lockWrite).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole('button', { name: 'Yes, turn on' }))

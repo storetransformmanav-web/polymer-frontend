@@ -8,18 +8,20 @@ import { findOwnTag, withoutOwnTag } from '../../../lib/lockOwnTag.ts'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
+import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
-  BulletListIcon,
   CheckCircleIcon,
   ClockIcon,
-  CodeIcon,
   EyeIcon,
-  GlobeIcon,
+  InfoIcon,
   type IconProps,
+  LayersIcon,
+  ListChecksIcon,
   LockIcon,
   SearchIcon,
+  SlidersIcon,
   SpinnerIcon,
   TagIcon,
   TrashIcon,
@@ -71,55 +73,61 @@ interface SettingDef {
   label: string
   hint: string
   icon: ComponentType<IconProps>
-  /** An "expert" setting that changes how the lock works: shown in amber while on. */
-  caution?: boolean
 }
 
-/** The lock's settings, in plain words, grouped as the Visibility settings card shows them. */
-const SETTING_GROUPS: { title: string; items: SettingDef[] }[] = [
+interface SettingGroup {
+  title: string
+  description: string
+  icon: ComponentType<IconProps>
+  items: SettingDef[]
+}
+
+/**
+ * The lock's settings in the two cards Lock Management's lock page shows — **Access & Visibility**
+ * and **Advanced Settings** — with the same words, hints and icons.
+ */
+const SETTING_GROUPS: SettingGroup[] = [
   {
-    title: 'Hide from customers without access',
+    title: 'Access & Visibility',
+    description: 'Who can access the product and where it is visible.',
+    icon: EyeIcon,
     items: [
       {
         name: 'hide_from_nav',
-        label: 'Hide from navigation menus',
-        hint: 'They don’t see it in the store’s menus.',
-        icon: EyeIcon,
+        label: 'Hidden from navigation menus',
+        hint: 'Leaves the product out of the store’s navigation menus.',
+        icon: ListChecksIcon,
       },
       {
         name: 'hide_from_lists',
-        label: 'Hide from lists',
-        hint: 'Left out of collections, search results and related products.',
-        icon: BulletListIcon,
+        label: 'Hidden from lists',
+        hint: 'Leaves the product out of collection and search lists.',
+        icon: ListChecksIcon,
       },
     ],
   },
   {
-    title: 'Search engines',
-    items: [
-      {
-        name: 'hide_from_sitemap',
-        label: 'Hide from sitemaps',
-        hint: 'Left out of the sitemap search engines read.',
-        icon: GlobeIcon,
-      },
-      {
-        name: 'noindex',
-        label: 'Tell search engines not to index',
-        hint: 'The page asks Google and others not to show it in results.',
-        icon: SearchIcon,
-      },
-    ],
-  },
-  {
-    title: 'Advanced',
+    title: 'Advanced Settings',
+    description: 'Extra lock options and indexing behavior.',
+    icon: SlidersIcon,
     items: [
       {
         name: 'manual_locking',
         label: 'Manual locking',
-        hint: 'The website shows it to everyone and leaves the lock to custom theme code. Keep off unless a theme developer asks.',
-        icon: CodeIcon,
-        caution: true,
+        hint: 'The website shows the product to everyone and leaves the lock to custom theme code.',
+        icon: LockIcon,
+      },
+      {
+        name: 'hide_from_sitemap',
+        label: 'Hidden from sitemaps',
+        hint: 'Leaves the product out of the store’s sitemap.',
+        icon: LayersIcon,
+      },
+      {
+        name: 'noindex',
+        label: 'Search engines told not to index',
+        hint: 'Asks search engines not to list the product page.',
+        icon: SearchIcon,
       },
     ],
   },
@@ -1112,7 +1120,11 @@ function LockHeader({
   )
 }
 
-/** The lock's other settings as switches, grouped by what they do. */
+/**
+ * The lock's other settings as switches, in the same two cards as Lock Management's lock page —
+ * a tinted header with an icon, a title and a line about it, then a row per setting (icon, name,
+ * an ⓘ with what it does, Yes / No and the switch). A switch asks first and saves at once.
+ */
 function SettingsCard({
   lock,
   busy,
@@ -1123,64 +1135,53 @@ function SettingsCard({
   onToggle: (name: Exclude<LockSwitch, 'enabled'>, value: boolean) => void
 }) {
   return (
-    <section
-      className={`${CARD} flex flex-col gap-3 p-3 sm:p-4`}
-      aria-label="Lock settings"
-    >
-      <h2 className="m-0 flex items-center gap-2.5 text-[0.95rem] font-bold">
-        <EyeIcon width={19} height={19} className="text-accent" />
-        Visibility Settings
-      </h2>
-
-      {SETTING_GROUPS.map((group) => (
-        <div
-          key={group.title}
-          role="group"
-          aria-label={group.title}
-          className="flex flex-col gap-2"
-        >
-          <p className="text-accent m-0 flex items-center gap-3 text-[0.7rem] font-bold tracking-wide uppercase">
-            {group.title}
-            <span aria-hidden="true" className="bg-accent/25 h-px flex-1" />
-          </p>
-          {group.items.map((setting) => {
-            const checked = lock[setting.name]
-            const Icon = setting.icon
-            const warn = setting.caution === true && checked
-            return (
-              <div
-                key={setting.name}
-                title={setting.hint}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition-colors ${
-                  warn
-                    ? 'border-warning/50 bg-warning-bg'
-                    : checked
-                      ? 'border-accent/50 bg-accent-tint/50'
-                      : 'border-border bg-surface'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                    warn ? 'bg-warning-bg text-warning' : 'bg-accent-tint text-accent'
-                  }`}
-                >
-                  <Icon width={18} height={18} />
-                </span>
-                <p className="m-0 min-w-0 flex-1 text-[0.88rem] leading-snug font-semibold">
-                  {setting.label}
-                </p>
-                <ToggleSwitch
-                  label={setting.label}
-                  checked={checked}
-                  disabled={busy}
-                  onChange={(value) => onToggle(setting.name, value)}
-                />
+    <section className="flex min-w-0 flex-col gap-3" aria-label="Lock settings">
+      {SETTING_GROUPS.map((group) => {
+        const GroupIcon = group.icon
+        return (
+          <section
+            key={group.title}
+            aria-label={group.title}
+            className={`${DETAIL_CARD} min-w-0 overflow-hidden`}
+          >
+            <div className="bg-accent-tint/60 border-border-strong flex items-center gap-3 border-b px-4 py-3">
+              <GroupIcon width={22} height={22} className="text-accent shrink-0" />
+              <div className="min-w-0">
+                <h2 className="m-0 text-[1rem] font-semibold">{group.title}</h2>
+                <p className="text-text-muted m-0 text-[0.78rem]">{group.description}</p>
               </div>
-            )
-          })}
-        </div>
-      ))}
+            </div>
+            <div className="px-4 py-1">
+              {group.items.map((setting) => {
+                const Icon = setting.icon
+                return (
+                  <div
+                    key={setting.name}
+                    className="border-border flex items-center gap-3 border-b py-2.5 last:border-b-0"
+                  >
+                    <Icon width={18} height={18} className="text-text-muted shrink-0" />
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-[0.88rem] font-medium">
+                      <span className="truncate">{setting.label}</span>
+                      <span
+                        title={setting.hint}
+                        className="text-text-muted inline-flex shrink-0"
+                      >
+                        <InfoIcon width={14} height={14} />
+                      </span>
+                    </span>
+                    <ToggleSwitch
+                      label={setting.label}
+                      checked={lock[setting.name]}
+                      disabled={busy}
+                      onChange={(value) => onToggle(setting.name, value)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
 
       {lock.manual_locking && (
         <p role="note" className={`${NOTE} mt-0 flex items-start gap-2 text-[0.78rem]`}>
@@ -1211,9 +1212,9 @@ function ToggleSwitch({
     <span className="inline-flex shrink-0 items-center gap-2">
       <span
         aria-hidden="true"
-        className={`text-[0.78rem] font-semibold ${checked ? 'text-accent' : 'text-text-muted'}`}
+        className="text-text-muted w-7 text-right text-[0.78rem] font-semibold"
       >
-        {checked ? 'On' : 'Off'}
+        {checked ? 'Yes' : 'No'}
       </span>
       <button
         type="button"
