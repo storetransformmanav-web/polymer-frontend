@@ -13,6 +13,7 @@ export const PRODUCT_COLUMN_IDS = [
   'status',
   'inventory',
   'price',
+  'sku',
   'category',
   'product_type',
   'vendor',
@@ -52,6 +53,8 @@ export const PRODUCT_COLUMNS: Record<ProductColumnId, ProductColumnDef> =
     column('status', 'Status', 8, 'center'),
     column('inventory', 'Inventory', 9, 'right', 'inventory'),
     column('price', 'Price', 10, 'right', 'price'),
+    // Hidden to begin with (not in the defaults below); not sortable, the API has no SKU sort.
+    column('sku', 'SKU', 11),
     column('category', 'Category', 12),
     column('product_type', 'Product type', 11),
     column('vendor', 'Vendor', 11),

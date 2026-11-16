@@ -84,6 +84,24 @@ export function svgImageWarning(address: string): string | null {
 const STOREFRONT_ORIGIN = 'https://polymeruk.com'
 
 /**
+ * The SKUs a list row carries, as one text ("SKU-1, SKU-2"), or '' when it carries none. A SKU is a
+ * variant's, so the row may hold one (`sku`) or several (`skus`); a value of another kind is
+ * ignored, so an unexpected answer can never fail the list.
+ */
+export function productSkus(product: Pick<ProductListItem, 'sku' | 'skus'>): string {
+  const found: string[] = []
+  const add = (value: unknown) => {
+    if (typeof value !== 'string') return
+    const text = value.trim()
+    if (text && !found.includes(text)) found.push(text)
+  }
+  add(product.sku)
+  if (Array.isArray(product.skus)) product.skus.forEach(add)
+  else add(product.skus)
+  return found.join(', ')
+}
+
+/**
  * The product's page on the public store — `https://polymeruk.com/products/<handle>` — or null
  * when it has no handle. The handle (the product's URL name) is the only part taken from the data.
  */

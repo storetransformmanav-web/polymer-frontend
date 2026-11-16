@@ -511,6 +511,11 @@ const productListItemSchema = z.object({
   currency: z.string().nullable(),
   variants_count: z.number(),
   total_inventory: z.number().nullable(),
+  // A SKU belongs to a variant. The list's documentation names no SKU field, so the SKU column
+  // reads `sku` (text) or `skus` (a list of text) leniently and shows a dash until the backend
+  // sends one of them (see `productSkus`).
+  sku: z.unknown().optional(),
+  skus: z.unknown().optional(),
   shopify_created_at: z.string().nullable(),
   shopify_updated_at: z.string().nullable(),
   synced_at: z.string(),

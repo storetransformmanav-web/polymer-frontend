@@ -268,6 +268,15 @@ function NotLocked({
             optional — then press <strong>Lock this product</strong>.
           </p>
         </div>
+        <button
+          type="button"
+          className={`${PRIMARY} shrink-0`}
+          disabled={writes.isWriting}
+          onClick={() => setAsking(true)}
+        >
+          <LockIcon width={16} height={16} />
+          Lock this product
+        </button>
       </section>
 
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -357,19 +366,8 @@ function NotLocked({
         />
       </div>
 
-      <section
-        className={`${CARD} flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:px-4`}
-      >
+      <section className={`${CARD} flex items-center gap-3 px-4 py-3`}>
         <p className="text-text-muted m-0 min-w-0 flex-1 text-[0.82rem]">{summary}</p>
-        <button
-          type="button"
-          className={PRIMARY}
-          disabled={writes.isWriting}
-          onClick={() => setAsking(true)}
-        >
-          <LockIcon width={16} height={16} />
-          Lock this product
-        </button>
       </section>
 
       {asking && (

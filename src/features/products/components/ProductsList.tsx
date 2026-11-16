@@ -21,6 +21,7 @@ import {
 } from '../utils/columns.ts'
 import {
   formatPriceRange,
+  productSkus,
   storefrontProductUrl,
   statusLabel,
   statusTone,
@@ -134,6 +135,8 @@ function ColumnCell({
       return <Stock value={product.total_inventory} />
     case 'price':
       return <span className="font-semibold">{formatPriceRange(product)}</span>
+    case 'sku':
+      return <TextCell value={productSkus(product)} />
     case 'category':
       return <TextCell value={product.category_name?.trim() ?? ''} />
     case 'product_type':
