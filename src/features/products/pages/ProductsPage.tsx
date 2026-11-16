@@ -19,7 +19,7 @@ import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChun
 import { ProductCreateView } from '../components/ProductCreateView.tsx'
 import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
-import { LockQuickView } from '../components/LockQuickView.tsx'
+import { ProductLockView } from '../components/ProductLockView.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -78,6 +78,9 @@ function collectionNote(outcome: NewCollectionsOutcome | undefined): string {
 const LIST_PATH = '/products'
 // An open product / the bulk editor / the create form scroll inside the page (from `lg` up the
 // page itself does not scroll — see `fillHeight` in navigation.ts).
+/** The most lock tabs kept open beside the products' (the oldest is dropped). */
+const MAX_LOCK_TABS = 10
+
 const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
 // The "Add product" form is a tab of its own, at /products/new (no product has that id).
@@ -106,10 +109,25 @@ export function ProductsPage() {
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
-  // The lock whose details panel is open (opened from the lock icon beside a product's name).
-  // It sits over whatever the page is showing, so the list or the open product stays as it is.
-  const [lockView, setLockView] = useState<AccessLock | null>(null)
-  const closeLockView = useCallback(() => setLockView(null), [])
+  // The locks opened from the lock icon beside a product's name: a tab each in the strip above
+  // (next to the products'), and the one being looked at takes the list's place inside this page,
+  // as a product's details do.
+  const [lockTabs, setLockTabs] = useState<AccessLock[]>([])
+  const [activeLockId, setActiveLockId] = useState<string | null>(null)
+  const lockView = lockTabs.find((lock) => lock.product_id === activeLockId) ?? null
+  const closeLockView = useCallback(() => setActiveLockId(null), [])
+  const openLock = useCallback((lock: AccessLock) => {
+    setLockTabs((current) =>
+      current.some((tab) => tab.product_id === lock.product_id)
+        ? current.map((tab) => (tab.product_id === lock.product_id ? lock : tab))
+        : [...current, lock].slice(-MAX_LOCK_TABS),
+    )
+    setActiveLockId(lock.product_id)
+  }, [])
+  function closeLockTab(id: string) {
+    setLockTabs((current) => current.filter((tab) => tab.product_id !== id))
+    setActiveLockId((current) => (current === id ? null : current))
+  }
   // Products edited this session → the push status their save reported (so the
   // details header can track whether the edit reached the store).
   const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
@@ -389,6 +407,8 @@ export function ProductsPage() {
   function clearTabs() {
     const clear = () => {
       tabs.clearTabs()
+      setLockTabs([])
+      setActiveLockId(null)
       if (activeId) navigate(LIST_PATH)
     }
     if (creating) discardCreate(clear)
@@ -399,7 +419,9 @@ export function ProductsPage() {
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {/* The stock figures sit above the product tabs; they belong to the list, so a product,
           the bulk editor and the create form take their place (kept mounted, only hidden). */}
-      <div className={activeId || bulkItems || showCreate ? 'hidden' : undefined}>
+      <div
+        className={activeId || bulkItems || showCreate || lockView ? 'hidden' : undefined}
+      >
         <ProductsKpis
           summary={stockFigures.summary}
           total={stockFigures.total}
@@ -412,9 +434,30 @@ export function ProductsPage() {
         tabs={tabs.tabs}
         activeId={activeId}
         draft={creating ? { active: creatingRoute } : null}
-        onShowList={() => navigate(LIST_PATH)}
-        onSelect={(id) => navigate(detailsPath(id))}
-        onSelectDraft={() => navigate(CREATE_PATH)}
+        locks={lockTabs.map((lock) => ({
+          id: lock.product_id,
+          label: lock.title,
+          title: lock.handle ?? undefined,
+        }))}
+        // A product's page wins while one is open; otherwise the lock being looked at.
+        activeLockId={activeId ? null : activeLockId}
+        onSelectLock={(id) => {
+          setActiveLockId(id)
+          navigate(LIST_PATH)
+        }}
+        onCloseLock={closeLockTab}
+        onShowList={() => {
+          setActiveLockId(null)
+          navigate(LIST_PATH)
+        }}
+        onSelect={(id) => {
+          setActiveLockId(null)
+          navigate(detailsPath(id))
+        }}
+        onSelectDraft={() => {
+          setActiveLockId(null)
+          navigate(CREATE_PATH)
+        }}
         onCloseDraft={() => discardCreate()}
         onClose={closeTab}
         onClear={clearTabs}
@@ -476,11 +519,33 @@ export function ProductsPage() {
         </div>
       )}
 
+      {/* A product's lock, from the lock icon in the list: in place of the list, laid out like a
+          product's page (the list stays mounted, hidden, so Back lands on it as it was). */}
+      {lockView && !activeId && (
+        <div className={SCROLL_VIEW}>
+          <ProductLockView
+            key={`lock-view-${lockView.product_id}`}
+            lock={lockView}
+            onBack={closeLockView}
+            onViewProduct={() => {
+              const id = lockView.product_id
+              setActiveLockId(null)
+              navigate(detailsPath(id))
+            }}
+            onOpenInLocks={() => {
+              const to = lockPagePath(lockView.handle ?? lockView.product_id)
+              setActiveLockId(null)
+              if (to) navigate(to)
+            }}
+          />
+        </div>
+      )}
+
       {/* Kept mounted but hidden while a product is open (display: none also
           removes it from tab order and screen readers). */}
       <div
         className={
-          activeId || bulkItems || showCreate
+          activeId || bulkItems || showCreate || lockView
             ? 'hidden'
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
@@ -491,7 +556,8 @@ export function ProductsPage() {
             !products.error &&
             !activeId &&
             !bulkItems &&
-            !showCreate
+            !showCreate &&
+            !lockView
           }
         />
 
@@ -505,7 +571,8 @@ export function ProductsPage() {
             !products.error &&
             !activeId &&
             !bulkItems &&
-            !showCreate
+            !showCreate &&
+            !lockView
           }
         />
 
@@ -579,7 +646,7 @@ export function ProductsPage() {
               isStale={products.isShowingPrevious}
               onOpen={openProduct}
               onQuickView={setQuickView}
-              onViewLock={setLockView}
+              onViewLock={openLock}
               onStatusChange={askStatusChange}
               statusPending={status.pending}
               statusErrors={status.errors}
@@ -633,19 +700,6 @@ export function ProductsPage() {
           title={`Change “${statusChange.product.title}” to ${statusLabel(statusChange.next)}?`}
           onConfirm={() => void changeStatus(statusChange.product, statusChange.next)}
           onCancel={() => setStatusChange(null)}
-        />
-      )}
-
-      {lockView && (
-        <LockQuickView
-          key={`lock-view-${lockView.product_id}`}
-          lock={lockView}
-          onClose={closeLockView}
-          onOpenInLocks={() => {
-            const to = lockPagePath(lockView.handle ?? lockView.product_id)
-            setLockView(null)
-            if (to) navigate(to)
-          }}
         />
       )}
 

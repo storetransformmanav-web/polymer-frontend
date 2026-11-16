@@ -137,52 +137,90 @@ describe('the lock icon in the products list', () => {
     )
   })
 
-  it('opens the lock’s details in a side panel and stays on the products page', async () => {
+  it('opens the lock’s details page inside the products page, with no window', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(
       await screen.findByRole('button', { name: 'View the lock of Product 2' }),
     )
 
-    const panel = await screen.findByRole('dialog', { name: 'Product 2 lock details' })
-    // Nothing was navigated to, and the list is still behind the panel.
+    // A page laid out like a product's: the shared header, the tab strip and the cards.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Product 2' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('tab', { name: 'Customer Access' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back to list' })).toBeInTheDocument()
+    // Nothing was navigated to, and the lock has a tab of its own beside the products'.
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/products$/)
     expect(screen.queryByText('Lock Management page')).not.toBeInTheDocument()
-    expect(screen.getByText('Product 1')).toBeInTheDocument()
-
-    expect(within(panel).getByText('Enabled')).toBeInTheDocument()
-    expect(within(panel).getByText('Synced with Shopify')).toBeInTheDocument()
-    expect(within(panel).getByText('b2b')).toBeInTheDocument()
-    expect(within(panel).getByText('vip')).toBeInTheDocument()
-    expect(within(panel).getByText('1,234')).toBeInTheDocument()
-    expect(within(panel).getByText('Polymer UK')).toBeInTheDocument()
+    const strip = screen.getByRole('navigation', { name: 'Open products' })
     expect(
-      within(panel).getByText('Please sign in to see this product.'),
+      within(strip).getByRole('button', { name: /^Lock\s*Product 2$/ }),
+    ).toHaveAttribute('aria-current', 'page')
+
+    expect(screen.getByText('Enabled')).toBeInTheDocument()
+    expect(screen.getByText('Synced with Shopify')).toBeInTheDocument()
+    const overview = screen.getByRole('tabpanel')
+    expect(within(overview).getByText('b2b')).toBeInTheDocument()
+    expect(within(overview).getByText('vip')).toBeInTheDocument()
+    expect(screen.getByText('1,234')).toBeInTheDocument()
+    expect(within(overview).getByText('Polymer UK')).toBeInTheDocument()
+    expect(
+      within(overview).getByText('Please sign in to see this product.'),
     ).toBeInTheDocument()
-    // The visibility settings, as Yes / No.
-    const lists = within(panel).getByText('Hidden from lists').closest('div')
-    expect(lists).toHaveTextContent('Yes')
-    const menus = within(panel).getByText('Hidden from navigation menus').closest('div')
-    expect(menus).toHaveTextContent('No')
+    // The settings, as Yes / No.
+    expect(
+      within(overview).getByText('Hidden from lists').closest('div'),
+    ).toHaveTextContent('Yes')
+    expect(
+      within(overview).getByText('Hidden from navigation menus').closest('div'),
+    ).toHaveTextContent('No')
     // It was drawn from the locks already read: no other request.
     expect(api.access.locks).toHaveBeenCalledTimes(1)
   })
 
-  it('closes with Escape or the close button, back on the same page', async () => {
+  it('goes back to the list with "Back to list", still on the same page', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(
       await screen.findByRole('button', { name: 'View the lock of Product 2' }),
     )
-    await screen.findByRole('dialog', { name: 'Product 2 lock details' })
+    await screen.findByRole('heading', { level: 1, name: 'Product 2' })
 
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-
-    await user.click(screen.getByRole('button', { name: 'View the lock of Product 2' }))
-    await user.click(await screen.findByRole('button', { name: 'Close' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Back to list' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('tablist', { name: 'Lock sections' })).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'View the lock of Product 2' }),
+    ).toBeVisible()
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/products$/)
+    // The tab stays open, and a click on it brings the lock back.
+    const strip = screen.getByRole('navigation', { name: 'Open products' })
+    await user.click(within(strip).getByRole('button', { name: /^Lock\s*Product 2$/ }))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Product 2' }),
+    ).toBeInTheDocument()
+  })
+
+  it('closes the lock’s tab with its ✕, back on the list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'View the lock of Product 2' }),
+    )
+    await screen.findByRole('heading', { level: 1, name: 'Product 2' })
+
+    await user.click(screen.getByRole('button', { name: 'Close Product 2' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('tablist', { name: 'Lock sections' })).toBeNull(),
+    )
+    expect(screen.queryByRole('navigation', { name: 'Open products' })).toBeNull()
   })
 
   it('goes to Lock Management only when "Open in Lock Management" is pressed', async () => {
