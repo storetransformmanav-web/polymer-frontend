@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { XIcon } from './icons.tsx'
 
 interface ExpandableChipsProps {
   values: string[]
@@ -11,10 +12,32 @@ interface ExpandableChipsProps {
   centered?: boolean
   /** What the values are, for the dropdown's heading and name ("Keys", "Hidden from"…). */
   label?: string
+  /**
+   * Gives every chip (and every row of the dropdown) a small ✕ that calls this with the value —
+   * for a list the person can take words off. Without it the chips are plain text.
+   */
+  onRemove?: (value: string) => void
+  /** The ✕ button's accessible name for a value (default "Remove <value>"). */
+  removeLabel?: (value: string) => string
 }
 
-const CHIP =
-  'bg-surface border-border truncate rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold'
+const CHIP_BOX =
+  'bg-surface border-border rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold'
+const CHIP = `${CHIP_BOX} truncate`
+
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title="Remove"
+      onClick={onClick}
+      className="text-text-muted hover:bg-accent hover:text-accent-contrast flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
+    >
+      <XIcon width={10} height={10} />
+    </button>
+  )
+}
 
 const TOGGLE =
   'text-text-muted hover:text-accent hover:bg-accent-tint focus-visible:outline-accent cursor-pointer rounded-full px-1.5 py-0.5 text-[0.7rem] font-semibold transition-colors focus-visible:outline-2 aria-expanded:bg-accent-tint aria-expanded:text-accent'
@@ -34,6 +57,8 @@ export function ExpandableChips({
   chipWidth = 'max-w-32',
   centered = false,
   label = 'All values',
+  onRemove,
+  removeLabel = (value) => `Remove ${value}`,
 }: ExpandableChipsProps) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -84,11 +109,22 @@ export function ExpandableChips({
     <span
       className={`inline-flex items-center gap-1 ${centered ? 'justify-center' : ''}`}
     >
-      {(hidden > 0 ? values.slice(0, limit) : values).map((value) => (
-        <span key={value} className={`${CHIP} ${chipWidth}`} title={value}>
-          {value}
-        </span>
-      ))}
+      {(hidden > 0 ? values.slice(0, limit) : values).map((value) =>
+        onRemove ? (
+          <span
+            key={value}
+            className={`${CHIP_BOX} inline-flex items-center gap-1 ${chipWidth}`}
+            title={value}
+          >
+            <span className="min-w-0 truncate">{value}</span>
+            <RemoveButton label={removeLabel(value)} onClick={() => onRemove(value)} />
+          </span>
+        ) : (
+          <span key={value} className={`${CHIP} ${chipWidth}`} title={value}>
+            {value}
+          </span>
+        ),
+      )}
       {hidden > 0 && (
         <button
           ref={button}
@@ -120,9 +156,20 @@ export function ExpandableChips({
               {values.map((value) => (
                 <li
                   key={value}
-                  className="bg-surface border-border rounded-full border px-2.5 py-0.5 text-[0.75rem] font-semibold break-all"
+                  className={`bg-surface border-border rounded-full border px-2.5 py-0.5 text-[0.75rem] font-semibold break-all ${
+                    onRemove ? 'inline-flex items-center gap-1' : ''
+                  }`}
                 >
                   {value}
+                  {onRemove && (
+                    <RemoveButton
+                      label={removeLabel(value)}
+                      onClick={() => {
+                        setPosition(null)
+                        onRemove(value)
+                      }}
+                    />
+                  )}
                 </li>
               ))}
             </ul>

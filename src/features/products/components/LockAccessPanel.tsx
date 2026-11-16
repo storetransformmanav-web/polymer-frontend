@@ -1,3 +1,4 @@
+import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
 import { findOwnTag, withoutOwnTag } from '../../../lib/lockOwnTag.ts'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
@@ -617,7 +618,6 @@ function LockedProduct({
                       />
                     </th>
                     <th className={TH}>Assigned tags</th>
-                    <th className={`${TH} text-center`}>Tag count</th>
                     <th className={`${TH} text-right`}>Actions</th>
                   </tr>
                 </thead>
@@ -699,35 +699,22 @@ function LockedProduct({
                             )}
                           </td>
                           <td className={TD}>
+                            {/* The tag names, as the Key column of the locks list shows them: up to two,
+                                then a "+N" that opens every one. A tag can still be taken off. */}
                             {shownTags.length === 0 ? (
                               <span className="text-text-muted">—</span>
                             ) : (
-                              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-                                {shownTags.map((tag) => (
-                                  <li key={tag} className={CHIP}>
-                                    {tag}
-                                    {!loginOnly && (
-                                      <button
-                                        type="button"
-                                        aria-label={`Remove tag ${tag} from ${name}`}
-                                        title="Remove this tag"
-                                        onClick={() =>
-                                          ask({ kind: 'untag', customer, tag })
-                                        }
-                                        className="hover:bg-accent hover:text-accent-contrast flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-current transition-colors"
-                                      >
-                                        <XIcon width={10} height={10} />
-                                      </button>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
+                              <ExpandableChips
+                                values={shownTags}
+                                label="Assigned tags"
+                                onRemove={
+                                  loginOnly
+                                    ? undefined
+                                    : (tag) => ask({ kind: 'untag', customer, tag })
+                                }
+                                removeLabel={(tag) => `Remove tag ${tag} from ${name}`}
+                              />
                             )}
-                          </td>
-                          <td className={`${TD} text-center`}>
-                            <span className="bg-accent-tint text-accent inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[0.78rem] font-bold">
-                              {shownTags.length}
-                            </span>
                           </td>
                           <td className={TD}>
                             {!loginOnly && (
@@ -1245,7 +1232,7 @@ function ToggleSwitch({
 function StateRow({ children }: { children: ReactNode }) {
   return (
     <tr>
-      <td colSpan={6} className="text-text-muted px-4 py-10 text-center">
+      <td colSpan={5} className="text-text-muted px-4 py-10 text-center">
         <span className="inline-flex flex-wrap items-center justify-center gap-2">
           {children}
         </span>

@@ -299,6 +299,54 @@ describe('Customer Access', () => {
     expect(screen.queryByRole('list', { name: 'Customers in the store' })).toBeNull()
   })
 
+  it('shows each customer’s tag names in Assigned tags, with no Tag count column', async () => {
+    renderWithProviders(<LockAccessPanel product={PRODUCT} />)
+    const section = await screen.findByRole('region', { name: 'Customer Access' })
+    await within(section).findByText('Ada Buyer')
+
+    expect(
+      within(section).getByRole('columnheader', { name: 'Assigned tags' }),
+    ).toBeInTheDocument()
+    expect(within(section).queryByRole('columnheader', { name: 'Tag count' })).toBeNull()
+    const row = within(section).getByRole('row', { name: /Ada Buyer/ })
+    expect(within(row).getByText('vans')).toBeInTheDocument()
+    // No "+N" button while there are two tags or fewer.
+    expect(within(row).queryByRole('button', { name: /^\+\d/ })).toBeNull()
+  })
+
+  it('shows two tags and a "+N" that opens every tag when a customer has more than two', async () => {
+    lockCustomers.mockResolvedValue({
+      ...WITH_ACCESS,
+      customers: [
+        { ...WITH_ACCESS.customers[0], tags: ['vans', 'b2b', 'retail', 'wholesale'] },
+      ],
+    })
+    const user = userEvent.setup()
+    renderWithProviders(<LockAccessPanel product={PRODUCT} />)
+    const row = await screen.findByRole('row', { name: /Ada Buyer/ })
+
+    expect(within(row).getByText('vans')).toBeInTheDocument()
+    expect(within(row).getByText('b2b')).toBeInTheDocument()
+    expect(within(row).queryByText('retail')).toBeNull()
+    await user.click(within(row).getByRole('button', { name: '+2' }))
+
+    const all = await screen.findByRole('group', { name: 'Assigned tags' })
+    for (const tag of ['vans', 'b2b', 'retail', 'wholesale']) {
+      expect(within(all).getByText(tag)).toBeInTheDocument()
+    }
+  })
+
+  it('still asks before taking one tag off a customer, from its ✕', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<LockAccessPanel product={PRODUCT} />)
+    await user.click(
+      await screen.findByRole('button', { name: 'Remove tag vans from Ada Buyer' }),
+    )
+    // A question first; nothing is sent until it is answered.
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument()
+    expect(api.access.customerTags).not.toHaveBeenCalled()
+  })
+
   it('suggests the store’s customers when something is typed, and marks who already has access', async () => {
     const user = userEvent.setup()
     renderWithProviders(<LockAccessPanel product={PRODUCT} />)
