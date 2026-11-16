@@ -84,6 +84,16 @@ export function svgImageWarning(address: string): string | null {
 const STOREFRONT_ORIGIN = 'https://polymeruk.com'
 
 /**
+ * A product's lock page in Lock Management (`/locks/<handle>`), or null when it has no handle. The
+ * address is written here, not imported, because Lock Management already opens product pages and
+ * the two features must not depend on each other.
+ */
+export function lockPagePath(handle: string | null | undefined): string | null {
+  const name = (handle ?? '').trim()
+  return name ? `/locks/${encodeURIComponent(name)}` : null
+}
+
+/**
  * The SKUs a list row carries, as one text ("SKU-1, SKU-2"), or '' when it carries none. A SKU is a
  * variant's, so the row may hold one (`sku`) or several (`skus`); a value of another kind is
  * ignored, so an unexpected answer can never fail the list.

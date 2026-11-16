@@ -1,11 +1,13 @@
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { useEffect, useRef, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   AlertTriangleIcon,
   ExternalLinkIcon,
   EyeIcon,
+  LockIcon,
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
@@ -21,12 +23,14 @@ import {
 } from '../utils/columns.ts'
 import {
   formatPriceRange,
+  lockPagePath,
   productSkus,
   storefrontProductUrl,
   statusLabel,
   statusTone,
 } from '../utils/format.ts'
 import type { ProductEditStatus } from '../../../lib/api/endpoints.ts'
+import { useLockedProducts } from '../hooks/useLockedProducts.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { ProductStatusSelect } from './ProductStatusSelect.tsx'
 
@@ -196,6 +200,26 @@ function ShopifyLink({ product }: { product: ProductListItem }) {
   )
 }
 
+/**
+ * A small lock beside the name of a product that is locked: it opens that product's lock page in
+ * Lock Management (`/locks/<handle>`). Same 20px box and 15px icon as the copy and store icons, so
+ * the three line up. Only drawn for a locked product (and one with a handle).
+ */
+function LockLink({ product }: { product: ProductListItem }) {
+  const to = lockPagePath(product.handle)
+  if (!to) return null
+  return (
+    <Link
+      to={to}
+      aria-label={`Open the lock of ${product.title}`}
+      title="Locked — open its lock"
+      className="text-accent hover:text-accent-hover focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 items-center justify-center leading-none transition-colors focus-visible:outline-2"
+    >
+      <LockIcon width={15} height={15} />
+    </Link>
+  )
+}
+
 const NONE_HIGHLIGHTED: ReadonlySet<string> = new Set()
 
 export function ProductsList({
@@ -223,6 +247,9 @@ export function ProductsList({
   columns,
 }: ProductsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  // Which rows are locked (the locks of the stores on screen, read once and cached). Only the
+  // table shows it; the phone cards are one big button, so they have no room for a link.
+  const isLocked = useLockedProducts(items, isDesktop && !isPending)
   const selectedOnPage = items.filter((product) => selected.has(product.id)).length
   const allSelected = items.length > 0 && selectedOnPage === items.length
   // "Some but not all": a checkbox can only show this through its DOM property.
@@ -468,6 +495,7 @@ export function ProductsList({
                           label={`Copy name of ${product.title}`}
                         />
                         <ShopifyLink product={product} />
+                        {isLocked(product) && <LockLink product={product} />}
                       </span>
                     </div>
                   </td>
@@ -492,7 +520,7 @@ export function ProductsList({
                     </td>
                   ))}
                   <td className={`${TD} text-center`}>
-                    <span className="inline-flex items-center justify-center gap-0.5">
+                    <span className="inline-flex items-center gap-1">
                       <button
                         type="button"
                         aria-label={`View ${product.title}`}
@@ -502,7 +530,7 @@ export function ProductsList({
                         onFocus={() => onPrefetch(product.id)}
                         className={ROW_ACTION}
                       >
-                        <EyeIcon />
+                        <EyeIcon width={15} height={15} />
                       </button>
                       <button
                         type="button"
@@ -511,7 +539,7 @@ export function ProductsList({
                         onClick={() => onDelete(product)}
                         className={ROW_ACTION_DANGER}
                       >
-                        <TrashIcon />
+                        <TrashIcon width={15} height={15} />
                       </button>
                     </span>
                   </td>
