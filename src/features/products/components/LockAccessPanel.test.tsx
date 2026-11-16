@@ -260,13 +260,11 @@ describe('the lock settings cards', () => {
     expect(
       within(card).getByRole('switch', { name: 'Hidden from navigation menus' }),
     ).not.toBeChecked()
-    for (const name of [
-      'Manual locking',
-      'Hidden from sitemaps',
-      'Search engines told not to index',
-    ]) {
+    for (const name of ['Hidden from sitemaps', 'Search engines told not to index']) {
       expect(within(card).getByRole('switch', { name })).not.toBeChecked()
     }
+    // Manual locking is not offered here while it is off.
+    expect(within(card).queryByRole('switch', { name: 'Manual locking' })).toBeNull()
     // Each setting says Yes or No beside its switch, as on the lock page.
     expect(within(card).getByText('Hidden from lists').closest('div')).toHaveTextContent(
       'Yes',
@@ -291,12 +289,38 @@ describe('the lock settings cards', () => {
     )
   })
 
+  it('explains a setting in a tooltip on its ⓘ, in the words of the Add lock form', async () => {
+    renderWithProviders(<LockAccessPanel product={PRODUCT} />)
+    const card = await screen.findByRole('region', { name: 'Lock settings' })
+
+    const tip = (name: string) =>
+      document.getElementById(
+        within(card).getByRole('button', { name }).getAttribute('aria-describedby') ?? '',
+      )
+    expect(tip('About Hidden from navigation menus')).toHaveTextContent(
+      'Applies when links to this product appear in navigation menus.',
+    )
+    const lists = tip('About Hidden from lists')
+    expect(lists).toHaveTextContent('Applies when this product appears in:')
+    for (const area of ['Search results', 'Collection pages', 'And other areas...']) {
+      expect(within(lists as HTMLElement).getByText(area)).toBeInTheDocument()
+    }
+    expect(tip('About Hidden from sitemaps')).toHaveTextContent(
+      'Adds the SEO:Hidden metafield to this product',
+    )
+    expect(tip('About Search engines told not to index')).toHaveTextContent(
+      'adds the “noindex” meta tag whenever this lock denies access to the visitor.',
+    )
+  })
+
   it('warns while manual locking is on', async () => {
     locks.mockResolvedValue(lockList(makeLock({ manual_locking: true })))
     renderWithProviders(<LockAccessPanel product={PRODUCT} />)
     expect(
       await screen.findByText(/shows this product to everyone\. Switch it off/),
     ).toBeInTheDocument()
+    // While it is on its switch is there, so it can be turned off.
+    expect(screen.getByRole('switch', { name: 'Manual locking' })).toBeChecked()
   })
 })
 

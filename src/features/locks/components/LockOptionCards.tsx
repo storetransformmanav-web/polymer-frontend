@@ -66,7 +66,24 @@ export function SettingsFields({ options, onChange, disabled }: OptionCardProps)
         />
         <Check
           label="Hide from lists"
-          hint="Applies when the product appears in search results, collection pages and other lists."
+          hint={
+            <>
+              Applies when this product appears in:
+              <span role="list" className="mt-1 flex flex-col gap-0.5">
+                {['Search results', 'Collection pages', 'And other areas...'].map(
+                  (area) => (
+                    <span
+                      key={area}
+                      role="listitem"
+                      className="flex gap-2 before:content-['•']"
+                    >
+                      {area}
+                    </span>
+                  ),
+                )}
+              </span>
+            </>
+          }
           checked={options.hideFromLists}
           disabled={disabled}
           onChange={(hideFromLists) => onChange({ hideFromLists })}
@@ -80,23 +97,23 @@ export function SettingsFields({ options, onChange, disabled }: OptionCardProps)
 export function AdvancedFields({ options, onChange, disabled }: OptionCardProps) {
   return (
     <div className="flex flex-col gap-3">
-      <Check
+      {/* <Check
         label="Enable manual locking"
-        hint="Manual locking: the website shows the product to everyone and leaves the lock to custom theme code. Keep this off unless a theme developer asks for it."
+        hint="Disables Lock management's protection for this lock, allowing you to enforce the lock yourself using custom Liquid code."
         checked={options.manualLocking}
         disabled={disabled}
         onChange={(manualLocking) => onChange({ manualLocking })}
-      />
+      /> */}
       <Check
         label="Hide product from sitemaps"
-        hint="Keeps the product out of the sitemap, so search engines do not list it."
+        hint="Adds the SEO:Hidden metafield to this product, which results in hiding it from sitemaps, preventing Shopify from sending it to search engines, and removing it from storefront search results."
         checked={options.hideFromSitemap}
         disabled={disabled}
         onChange={(hideFromSitemap) => onChange({ hideFromSitemap })}
       />
       <Check
-        label="Ask search engines not to index it"
-        hint="Adds a noindex tag to the product page."
+        label="Add the “noindex” meta tag to any pages protected by this lock"
+        hint="When enabled, adds the “noindex” meta tag whenever this lock denies access to the visitor."
         checked={options.noindex}
         disabled={disabled}
         onChange={(noindex) => onChange({ noindex })}

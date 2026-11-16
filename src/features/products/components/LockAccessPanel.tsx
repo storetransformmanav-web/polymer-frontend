@@ -5,7 +5,7 @@ import {
   ROW_ACTION_ICON,
 } from '../../../components/ui/rowActions.ts'
 import { findOwnTag, withoutOwnTag } from '../../../lib/lockOwnTag.ts'
-import { useState, type ComponentType, type ReactNode } from 'react'
+import { useId, useState, type ComponentType, type ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
@@ -71,9 +71,26 @@ const INPUT =
 interface SettingDef {
   name: Exclude<LockSwitch, 'enabled'>
   label: string
-  hint: string
+  /** What it does — shown when the ⓘ is hovered (the same words as the Add lock form's). */
+  hint: ReactNode
   icon: ComponentType<IconProps>
+  /** Left out of the card unless it is on (so a lock that has it can still be switched off). */
+  hiddenUnlessOn?: boolean
 }
+
+/** "Applies when this product appears in:" and the places, as the Add lock form words it. */
+const HIDE_FROM_LISTS_HINT = (
+  <>
+    Applies when this product appears in:
+    <span role="list" className="mt-1 flex flex-col gap-0.5">
+      {['Search results', 'Collection pages', 'And other areas...'].map((area) => (
+        <span key={area} role="listitem" className="flex gap-2 before:content-['•']">
+          {area}
+        </span>
+      ))}
+    </span>
+  </>
+)
 
 interface SettingGroup {
   title: string
@@ -95,13 +112,13 @@ const SETTING_GROUPS: SettingGroup[] = [
       {
         name: 'hide_from_nav',
         label: 'Hidden from navigation menus',
-        hint: 'Leaves the product out of the store’s navigation menus.',
+        hint: 'Applies when links to this product appear in navigation menus.',
         icon: ListChecksIcon,
       },
       {
         name: 'hide_from_lists',
         label: 'Hidden from lists',
-        hint: 'Leaves the product out of collection and search lists.',
+        hint: HIDE_FROM_LISTS_HINT,
         icon: ListChecksIcon,
       },
     ],
@@ -114,19 +131,20 @@ const SETTING_GROUPS: SettingGroup[] = [
       {
         name: 'manual_locking',
         label: 'Manual locking',
-        hint: 'The website shows the product to everyone and leaves the lock to custom theme code.',
+        hint: 'Disables Lock management’s protection for this lock, allowing you to enforce the lock yourself using custom Liquid code.',
         icon: LockIcon,
+        hiddenUnlessOn: true,
       },
       {
         name: 'hide_from_sitemap',
         label: 'Hidden from sitemaps',
-        hint: 'Leaves the product out of the store’s sitemap.',
+        hint: 'Adds the SEO:Hidden metafield to this product, which results in hiding it from sitemaps, preventing Shopify from sending it to search engines, and removing it from storefront search results.',
         icon: LayersIcon,
       },
       {
         name: 'noindex',
         label: 'Search engines told not to index',
-        hint: 'Asks search engines not to list the product page.',
+        hint: 'When enabled, adds the “noindex” meta tag whenever this lock denies access to the visitor.',
         icon: SearchIcon,
       },
     ],
@@ -1142,9 +1160,9 @@ function SettingsCard({
           <section
             key={group.title}
             aria-label={group.title}
-            className={`${DETAIL_CARD} min-w-0 overflow-hidden`}
+            className={`${DETAIL_CARD} min-w-0`}
           >
-            <div className="bg-accent-tint/60 border-border-strong flex items-center gap-3 border-b px-4 py-3">
+            <div className="bg-accent-tint/60 border-border-strong flex items-center gap-3 rounded-t-[0.7rem] border-b px-4 py-3">
               <GroupIcon width={22} height={22} className="text-accent shrink-0" />
               <div className="min-w-0">
                 <h2 className="m-0 text-[1rem] font-semibold">{group.title}</h2>
@@ -1152,32 +1170,29 @@ function SettingsCard({
               </div>
             </div>
             <div className="px-4 py-1">
-              {group.items.map((setting) => {
-                const Icon = setting.icon
-                return (
-                  <div
-                    key={setting.name}
-                    className="border-border flex items-center gap-3 border-b py-2.5 last:border-b-0"
-                  >
-                    <Icon width={18} height={18} className="text-text-muted shrink-0" />
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-[0.88rem] font-medium">
-                      <span className="truncate">{setting.label}</span>
-                      <span
-                        title={setting.hint}
-                        className="text-text-muted inline-flex shrink-0"
-                      >
-                        <InfoIcon width={14} height={14} />
+              {group.items
+                .filter((setting) => !setting.hiddenUnlessOn || lock[setting.name])
+                .map((setting) => {
+                  const Icon = setting.icon
+                  return (
+                    <div
+                      key={setting.name}
+                      className="border-border flex items-center gap-3 border-b py-2.5 last:border-b-0"
+                    >
+                      <Icon width={18} height={18} className="text-text-muted shrink-0" />
+                      <span className="flex min-w-0 flex-1 items-center gap-2 text-[0.88rem] font-medium">
+                        <span className="truncate">{setting.label}</span>
+                        <InfoTip label={setting.label}>{setting.hint}</InfoTip>
                       </span>
-                    </span>
-                    <ToggleSwitch
-                      label={setting.label}
-                      checked={lock[setting.name]}
-                      disabled={busy}
-                      onChange={(value) => onToggle(setting.name, value)}
-                    />
-                  </div>
-                )
-              })}
+                      <ToggleSwitch
+                        label={setting.label}
+                        checked={lock[setting.name]}
+                        disabled={busy}
+                        onChange={(value) => onToggle(setting.name, value)}
+                      />
+                    </div>
+                  )
+                })}
             </div>
           </section>
         )
@@ -1191,6 +1206,33 @@ function SettingsCard({
         </p>
       )}
     </section>
+  )
+}
+
+/**
+ * The ⓘ beside a setting: hover or focus it and a small card explains the setting. It opens
+ * towards the left from the icon, so it stays inside the card even at the right-hand edge.
+ */
+function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <button
+        type="button"
+        aria-label={`About ${label}`}
+        aria-describedby={id}
+        className="text-text-muted hover:text-accent focus-visible:outline-accent inline-flex cursor-help border-none bg-transparent p-0 focus-visible:outline-2"
+      >
+        <InfoIcon width={14} height={14} />
+      </button>
+      <span
+        role="tooltip"
+        id={id}
+        className="bg-bg text-text border-border pointer-events-none absolute top-full right-0 z-20 mt-2 hidden w-72 max-w-[75vw] rounded-lg border px-3 py-2 text-[0.78rem] leading-snug font-normal shadow-lg group-focus-within:block group-hover:block"
+      >
+        {children}
+      </span>
+    </span>
   )
 }
 
