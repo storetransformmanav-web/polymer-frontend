@@ -236,6 +236,51 @@ export function useSetCustomerTags() {
   }
 }
 
+/**
+ * `DELETE /access/locks/{product}?shop=`: takes the lock off one product — it is public again; the
+ * product's tags and the customers' tags stay. The product is the lock's handle, else its id. When
+ * the backend confirms, the lock leaves every cached page of the list at once (the total is
+ * corrected) and its own query is emptied, then the locks and tag counts are read again quietly.
+ * A refusal keeps everything as it was and is shown by the caller. Never retried.
+ */
+export function useRemoveLock() {
+  const queryClient = useQueryClient()
+  const refresh = useRefreshAfterWrite()
+  const mutation = useMutation({
+    mutationFn: (input: { lock: AccessLock; shop: string }) =>
+      api.access.removeLock(input.lock.handle ?? input.lock.product_id, input.shop),
+    onSuccess: (_result, { lock, shop }) => {
+      const handle = (lock.handle ?? lock.product_id).toLowerCase()
+      const isThis = (row: AccessLock) =>
+        row.handle?.toLowerCase() === handle || row.product_id.toLowerCase() === handle
+      const filters = {
+        predicate: (query: { queryKey: QueryKey }) => isLockQueryOf(shop, query.queryKey),
+      }
+      queryClient.setQueriesData<unknown>(filters, (data: unknown) => {
+        if (!data || typeof data !== 'object') return data
+        if ('locks' in data && Array.isArray((data as { locks: unknown }).locks)) {
+          const list = data as { locks: AccessLock[]; total?: number }
+          const kept = list.locks.filter((row) => !isThis(row))
+          const removed = list.locks.length - kept.length
+          return {
+            ...list,
+            locks: kept,
+            ...(typeof list.total === 'number'
+              ? { total: Math.max(0, list.total - removed) }
+              : {}),
+          }
+        }
+        return 'tags' in data && isThis(data as AccessLock) ? null : data
+      })
+      return refresh()
+    },
+  })
+  return {
+    remove: mutation.mutateAsync,
+    isRemoving: mutation.isPending,
+  }
+}
+
 /** `POST /access/setup`: once per store, creates the definition and pushes pending locks. */
 export function useSetupStore() {
   const refresh = useRefreshAfterWrite()

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -19,7 +20,7 @@ import { useLockColumns } from '../hooks/useLockColumns.ts'
 import { useLockShop } from '../hooks/useLockShop.ts'
 import { useLockDetails, useLocks } from '../hooks/useLocks.ts'
 import { lockMemory, useLockTabs } from '../hooks/useLockTabs.ts'
-import { useSetupStore } from '../hooks/useLockWrites.ts'
+import { useRemoveLock, useSetupStore } from '../hooks/useLockWrites.ts'
 import { LOCK_COLUMNS } from '../utils/columns.ts'
 import { lockPath } from '../utils/format.ts'
 
@@ -59,6 +60,9 @@ export function LocksPage() {
   // Which columns the table shows (the Columns menu), remembered on this browser.
   const columnChoice = useLockColumns()
   const { setup, clearError: clearSetupError } = useSetupStore()
+  const { remove: removeLock } = useRemoveLock()
+  // The lock the person asked to delete from the list (nothing is sent until they confirm).
+  const [deleting, setDeleting] = useState<AccessLock | null>(null)
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const location = useLocation()
@@ -401,6 +405,10 @@ export function LocksPage() {
               setNotice(null)
               navigate(lockPath(lock.handle ?? lock.product_id))
             }}
+            onDelete={(lock) => {
+              setNotice(null)
+              setDeleting(lock)
+            }}
             onRetry={locks.retry}
             onClearFilters={locks.resetFilters}
             emptyAction={addButton}
@@ -419,6 +427,29 @@ export function LocksPage() {
           />
         )}
       </section>
+
+      {deleting && (
+        <LockConfirmDialog
+          title={`Delete the lock on “${deleting.title}”?`}
+          confirmLabel="Yes, delete"
+          danger
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            const handle = deleting.handle ?? deleting.product_id
+            const result = await removeLock({ lock: deleting, shop })
+            setDeleting(null)
+            // Its tab (if it was opened) goes with it.
+            lockTabs.closeTab(handle)
+            setNotice(result.message || 'The lock was deleted.')
+          }}
+        >
+          <p>
+            Are you sure you want to delete this lock? The product becomes public again
+            and the lock is also removed in Shopify. The product&apos;s tags and the
+            customers&apos; tags stay.
+          </p>
+        </LockConfirmDialog>
+      )}
 
       {settingUp && (
         <LockConfirmDialog

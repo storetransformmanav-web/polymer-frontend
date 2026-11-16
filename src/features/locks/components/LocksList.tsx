@@ -8,8 +8,9 @@ import {
   ExternalLinkIcon,
   EyeIcon,
   LockIcon,
+  TrashIcon,
 } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
@@ -66,6 +67,8 @@ interface LocksListProps {
   /** Rows belong to the previous query while the new one loads. */
   isStale: boolean
   onOpen: (lock: AccessLock) => void
+  /** Asks to take the lock off the product (the page confirms before anything is sent). */
+  onDelete: (lock: AccessLock) => void
   onRetry: () => void
   onClearFilters: () => void
   /** The empty list's own call to action (Add lock). */
@@ -164,6 +167,26 @@ function ViewButton({
   )
 }
 
+function DeleteButton({
+  lock,
+  onDelete,
+}: {
+  lock: AccessLock
+  onDelete: (lock: AccessLock) => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Delete lock on ${lock.title}`}
+      title="Delete lock"
+      onClick={() => onDelete(lock)}
+      className={ROW_ACTION_DANGER}
+    >
+      <TrashIcon width={15} height={15} />
+    </button>
+  )
+}
+
 const count = (value: number | null | undefined) =>
   value == null ? '—' : value.toLocaleString('en-GB')
 
@@ -247,6 +270,7 @@ export function LocksList({
   hasFilters,
   isStale,
   onOpen,
+  onDelete,
   onRetry,
   onClearFilters,
   emptyAction,
@@ -421,7 +445,10 @@ export function LocksList({
                     </td>
                   ))}
                   <td className={TD_CENTER}>
-                    <ViewButton lock={lock} onOpen={onOpen} />
+                    <span className="inline-flex items-center gap-1">
+                      <ViewButton lock={lock} onOpen={onOpen} />
+                      <DeleteButton lock={lock} onDelete={onDelete} />
+                    </span>
                   </td>
                 </tr>
               ))}
