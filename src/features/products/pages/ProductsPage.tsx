@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import type {
+  AccessLock,
   ProductCreateResult,
   ProductDetail,
   ProductEditStatus,
@@ -18,6 +19,7 @@ import { preloadRichTextEditor } from '../../../components/ui/richTextEditorChun
 import { ProductCreateView } from '../components/ProductCreateView.tsx'
 import { ProductDeleteDialog } from '../components/ProductDeleteDialog.tsx'
 import { ProductDetailsView } from '../components/ProductDetailsView.tsx'
+import { LockQuickView } from '../components/LockQuickView.tsx'
 import { ProductQuickView } from '../components/ProductQuickView.tsx'
 import { ProductTabsBar } from '../components/ProductTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -38,7 +40,7 @@ import { useProductStatusChange } from '../hooks/useProductStatusChange.ts'
 import { useProductTabs } from '../hooks/useProductTabs.ts'
 import { useRefreshProductList } from '../hooks/useRefreshProductList.ts'
 import { PRODUCT_COLUMNS } from '../utils/columns.ts'
-import { statusLabel } from '../utils/format.ts'
+import { lockPagePath, statusLabel } from '../utils/format.ts'
 import { useProducts } from '../hooks/useProducts.ts'
 import { useStockSummary } from '../hooks/useStockSummary.ts'
 
@@ -104,6 +106,10 @@ export function ProductsPage() {
   // The product whose quick-view side panel is open (opened from a row's image).
   const [quickView, setQuickView] = useState<ProductListItem | null>(null)
   const closeQuickView = useCallback(() => setQuickView(null), [])
+  // The lock whose details panel is open (opened from the lock icon beside a product's name).
+  // It sits over whatever the page is showing, so the list or the open product stays as it is.
+  const [lockView, setLockView] = useState<AccessLock | null>(null)
+  const closeLockView = useCallback(() => setLockView(null), [])
   // Products edited this session → the push status their save reported (so the
   // details header can track whether the edit reached the store).
   const [savedStatus, setSavedStatus] = useState<Record<string, string>>({})
@@ -573,6 +579,7 @@ export function ProductsPage() {
               isStale={products.isShowingPrevious}
               onOpen={openProduct}
               onQuickView={setQuickView}
+              onViewLock={setLockView}
               onStatusChange={askStatusChange}
               statusPending={status.pending}
               statusErrors={status.errors}
@@ -626,6 +633,19 @@ export function ProductsPage() {
           title={`Change “${statusChange.product.title}” to ${statusLabel(statusChange.next)}?`}
           onConfirm={() => void changeStatus(statusChange.product, statusChange.next)}
           onCancel={() => setStatusChange(null)}
+        />
+      )}
+
+      {lockView && (
+        <LockQuickView
+          key={`lock-view-${lockView.product_id}`}
+          lock={lockView}
+          onClose={closeLockView}
+          onOpenInLocks={() => {
+            const to = lockPagePath(lockView.handle ?? lockView.product_id)
+            setLockView(null)
+            if (to) navigate(to)
+          }}
         />
       )}
 

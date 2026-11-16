@@ -64,8 +64,11 @@ describe('Orders, Products and Customers lists look alike', () => {
       expect(code, name).not.toMatch(
         /inline-flex h-8 w-8 items-center justify-center rounded-lg transition/,
       )
-      // Icons keep the default 20px: no one-off size on the row actions.
-      expect(code, name).not.toMatch(/<(Eye|Trash)Icon [^>]*(width|height)/)
+      // One icon size for every row action (`ROW_ACTION_ICON`, 15px): no one-off number on them,
+      // and none left at the old default.
+      expect(code, name).toContain('ROW_ACTION_ICON')
+      expect(code, name).not.toMatch(/<(Eye|Trash)Icon [^>]*(width|height)=\{\d/)
+      expect(code, name).not.toMatch(/<(Eye|Trash)Icon \/>/)
     }
   })
 

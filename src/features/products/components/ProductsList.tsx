@@ -1,6 +1,5 @@
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { useEffect, useRef, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
@@ -19,7 +18,11 @@ import {
 } from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
-import type { ProductListItem, ProductSort } from '../../../lib/api/endpoints.ts'
+import type {
+  AccessLock,
+  ProductListItem,
+  ProductSort,
+} from '../../../lib/api/endpoints.ts'
 import { formatDate } from '../../../lib/format.ts'
 import {
   PRODUCT_ACTIONS_COLUMN_REM,
@@ -28,7 +31,6 @@ import {
 } from '../utils/columns.ts'
 import {
   formatPriceRange,
-  lockPagePath,
   productSkus,
   storefrontProductUrl,
   statusLabel,
@@ -60,6 +62,8 @@ interface ProductsListProps {
   onOpen: (product: ProductListItem) => void
   /** Clicking a row's image opens the quick-view side panel. */
   onQuickView: (product: ProductListItem) => void
+  /** Opens a locked product's lock in the side panel (without it no lock icon is drawn). */
+  onViewLock?: (lock: AccessLock) => void
   /** Changes a product's status from its row's dropdown (saved at once). */
   onStatusChange: (product: ProductListItem, status: ProductEditStatus) => void
   /** The status being saved for a product, by id — shown in its dropdown meanwhile. */
@@ -206,22 +210,27 @@ function ShopifyLink({ product }: { product: ProductListItem }) {
 }
 
 /**
- * A small lock beside the name of a product that is locked: it opens that product's lock page in
- * Lock Management (`/locks/<handle>`). Same 20px box and 15px icon as the copy and store icons, so
- * the three line up. Only drawn for a locked product (and one with a handle).
+ * A small lock beside the name of a product that is locked: it opens that lock's details in a
+ * right-hand panel on this same page (nothing is navigated to). Same 20px box and 15px icon as
+ * the copy and store icons, so the three line up. Only drawn for a locked product.
  */
-function LockLink({ product }: { product: ProductListItem }) {
-  const to = lockPagePath(product.handle)
-  if (!to) return null
+function LockButton({
+  product,
+  onClick,
+}: {
+  product: ProductListItem
+  onClick: () => void
+}) {
   return (
-    <Link
-      to={to}
-      aria-label={`Open the lock of ${product.title}`}
-      title="Locked — open its lock"
-      className="text-accent hover:text-accent-hover focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 items-center justify-center leading-none transition-colors focus-visible:outline-2"
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`View the lock of ${product.title}`}
+      title="Locked — view lock details"
+      className="text-accent hover:text-accent-hover focus-visible:outline-accent inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center border-none bg-transparent p-0 leading-none transition-colors focus-visible:outline-2"
     >
       <LockIcon width={15} height={15} />
-    </Link>
+    </button>
   )
 }
 
@@ -235,6 +244,7 @@ export function ProductsList({
   isStale,
   onOpen,
   onQuickView,
+  onViewLock,
   onStatusChange,
   statusPending,
   statusErrors,
@@ -254,7 +264,7 @@ export function ProductsList({
   const isDesktop = useMediaQuery('(min-width: 768px)')
   // Which rows are locked (the locks of the stores on screen, read once and cached). Only the
   // table shows it; the phone cards are one big button, so they have no room for a link.
-  const isLocked = useLockedProducts(items, isDesktop && !isPending)
+  const lockOf = useLockedProducts(items, isDesktop && !isPending && !!onViewLock)
   const selectedOnPage = items.filter((product) => selected.has(product.id)).length
   const allSelected = items.length > 0 && selectedOnPage === items.length
   // "Some but not all": a checkbox can only show this through its DOM property.
@@ -500,7 +510,12 @@ export function ProductsList({
                           label={`Copy name of ${product.title}`}
                         />
                         <ShopifyLink product={product} />
-                        {isLocked(product) && <LockLink product={product} />}
+                        {onViewLock && lockOf(product) && (
+                          <LockButton
+                            product={product}
+                            onClick={() => onViewLock(lockOf(product) as AccessLock)}
+                          />
+                        )}
                       </span>
                     </div>
                   </td>
