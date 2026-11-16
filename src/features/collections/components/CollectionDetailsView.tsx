@@ -156,7 +156,7 @@ export function CollectionDetailsView({
           {collection.products_count === 1 ? 'product' : 'products'}
         </span>
       </HeaderChip>
-      
+
       <HeaderChip icon={ArrowUpDownIcon} label="Product order">
         {sortOrderLabel(collection.sort_order)}
       </HeaderChip>

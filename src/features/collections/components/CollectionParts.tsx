@@ -42,7 +42,7 @@ export function CollectionImage({
   )
 }
 
-/** Manual (picked by hand) or Automated (filled by its conditions). */
+/** The collection's type exactly as the API sends it (`smart` → Smart, `custom` → Custom). */
 export function TypeBadge({
   type,
   className = '',

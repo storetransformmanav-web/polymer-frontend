@@ -4,8 +4,8 @@ import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/i
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CollectionListItem } from '../../../lib/api/endpoints.ts'
-import { formatDate, formatDateTime } from '../../../lib/format.ts'
-import { sortOrderLabel } from '../utils/collectionDraft.ts'
+import { formatDateTime } from '../../../lib/format.ts'
+import { formatUpdatedAt } from '../../../lib/storeTime.ts'
 import { CollectionImage, Message, TypeBadge } from './CollectionParts.tsx'
 import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
 
@@ -34,8 +34,10 @@ interface CollectionsListProps {
   emptyAction?: ReactNode
 }
 
+// "16 minutes ago", "Yesterday, 4:30 PM", "Monday, 4:30 PM" or "October 10, 2026" — worked out from
+// the current time on every render; the full date and time is the hover text.
 const updated = (value: string | null | undefined) =>
-  value ? <span title={formatDateTime(value)}>{formatDate(value)}</span> : '—'
+  value ? <span title={formatDateTime(value)}>{formatUpdatedAt(value) || '—'}</span> : '—'
 
 function ViewButton({
   collection,
@@ -59,7 +61,7 @@ function ViewButton({
 
 /**
  * The collections: a sticky-header table from `md` up (picture, title and handle, type, products,
- * product order, store, last updated, View), stacked cards below it. It draws the loading, error
+ * store, last updated, View), stacked cards below it. It draws the loading, error
  * and empty states itself.
  */
 export function CollectionsList({
@@ -169,9 +171,8 @@ export function CollectionsList({
             <th className={TH_LEFT}>Collection</th>
             <th className={`${TH_CENTER} w-32`}>Type</th>
             <th className={`${TH_CENTER} w-28`}>Products</th>
-            <th className={`${TH_CENTER} w-40`}>Product order</th>
             {showStore && <th className={`${TH_CENTER} w-44`}>Store</th>}
-            <th className={`${TH_CENTER} w-32`}>Updated</th>
+            <th className={`${TH_CENTER} w-48`}>Updated</th>
             <th className={`${TH_CENTER} w-24`}>Actions</th>
           </tr>
         </thead>
@@ -184,7 +185,7 @@ export function CollectionsList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: showStore ? 7 : 6 }, (_, cell) => (
+                  {Array.from({ length: showStore ? 6 : 5 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -219,9 +220,6 @@ export function CollectionsList({
                   </td>
                   <td className={`${TD_CENTER} font-semibold`}>
                     {count(collection.products_count)}
-                  </td>
-                  <td className={`${TD_CENTER} text-text-muted overflow-hidden`}>
-                    {sortOrderLabel(collection.sort_order)}
                   </td>
                   {showStore && (
                     <td className={`${TD_CENTER} overflow-hidden`}>

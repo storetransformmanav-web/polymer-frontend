@@ -14,14 +14,21 @@ export const SEO_DESCRIPTION_MAX = 320
 export const MAX_CONDITIONS = 60
 export const MAX_PRODUCTS = 250
 
-/** "custom" → Manual, "smart" → Automated. */
+/** The two types the API takes when a collection is made or filtered: "custom" and "smart". */
 export type CollectionKind = 'custom' | 'smart'
 
 export const isSmart = (type: string | null | undefined) =>
   (type ?? '').toLowerCase() === 'smart'
 
-export const typeLabel = (type: string | null | undefined) =>
-  isSmart(type) ? 'Automated' : 'Manual'
+/**
+ * The type as the API names it, written for people — nothing is mapped by hand, so whatever the
+ * backend sends is what shows: `smart` → "Smart", `custom` → "Custom", `some_new_type` →
+ * "Some new type". An empty or missing type shows a dash.
+ */
+export function typeLabel(type: string | null | undefined): string {
+  const words = (type ?? '').replace(/[_-]+/g, ' ').trim().toLowerCase()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : '—'
+}
 
 /** The words for Shopify's product orders (the API sends the codes). */
 const SORT_ORDER_LABELS: Record<string, string> = {

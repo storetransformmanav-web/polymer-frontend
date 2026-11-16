@@ -10,11 +10,13 @@ import {
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import type { CollectionFilters } from '../hooks/useCollections.ts'
+import { typeLabel } from '../utils/collectionDraft.ts'
 
 const TYPE_OPTIONS: SelectOption[] = [
   { value: '', label: 'All collections' },
-  { value: 'custom', label: 'Manual' },
-  { value: 'smart', label: 'Automated' },
+  // The values are the API's own type names; the words are made from them (see `typeLabel`).
+  { value: 'custom', label: typeLabel('custom') },
+  { value: 'smart', label: typeLabel('smart') },
 ]
 
 const SORT_OPTIONS: SelectOption[] = [

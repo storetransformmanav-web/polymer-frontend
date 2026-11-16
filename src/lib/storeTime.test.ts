@@ -4,6 +4,7 @@ import {
   DEFAULT_TIME_ZONE,
   formatRelativeDateTime,
   formatStoreDate,
+  formatUpdatedAt,
   getStoreTimeZone,
   setStoreTimeZone,
   storeTimeToIso,
@@ -66,6 +67,74 @@ describe('store time zone', () => {
     }).format(new Date())
     const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     expect(ymd).toBe(text)
+  })
+})
+
+describe('when something was last updated', () => {
+  // A Wednesday, 12:00 in London (winter, so London is UTC).
+  const now = new Date('2026-11-11T12:00:00Z')
+
+  it('today: how long ago, from the current time', () => {
+    expect(formatUpdatedAt('2026-11-11T11:44:00Z', now)).toBe('16 minutes ago')
+    expect(formatUpdatedAt('2026-11-11T11:59:00Z', now)).toBe('1 minute ago')
+    expect(formatUpdatedAt('2026-11-11T11:59:30Z', now)).toBe('30 seconds ago')
+    expect(formatUpdatedAt('2026-11-11T09:00:00Z', now)).toBe('3 hours ago')
+  })
+
+  it('never says a time in the future (a clock a little ahead reads as just now)', () => {
+    expect(formatUpdatedAt('2026-11-11T12:00:20Z', now)).toBe('now')
+  })
+
+  it('yesterday: the word Yesterday and the time, 12-hour with AM / PM', () => {
+    expect(formatUpdatedAt('2026-11-10T16:30:00Z', now)).toBe('Yesterday, 4:30 PM')
+    expect(formatUpdatedAt('2026-11-10T00:05:00Z', now)).toBe('Yesterday, 12:05 AM')
+  })
+
+  it('the days before that, within a week: the weekday and the time', () => {
+    expect(formatUpdatedAt('2026-11-09T16:30:00Z', now)).toBe('Monday, 4:30 PM')
+    expect(formatUpdatedAt('2026-11-05T09:40:00Z', now)).toBe('Thursday, 9:40 AM')
+  })
+
+  it('a week or more ago: the date in full', () => {
+    expect(formatUpdatedAt('2026-11-04T10:38:00Z', now)).toBe('November 4, 2026')
+    expect(formatUpdatedAt('2026-10-10T10:00:00Z', now)).toBe('October 10, 2026')
+    expect(formatUpdatedAt('2025-03-02T10:00:00Z', now)).toBe('March 2, 2025')
+  })
+
+  it('moves on with the clock: the same moment reads differently as time passes', () => {
+    const moment = '2026-11-11T11:44:00Z'
+    expect(formatUpdatedAt(moment, new Date('2026-11-11T12:00:00Z'))).toBe(
+      '16 minutes ago',
+    )
+    expect(formatUpdatedAt(moment, new Date('2026-11-12T12:00:00Z'))).toBe(
+      'Yesterday, 11:44 AM',
+    )
+    expect(formatUpdatedAt(moment, new Date('2026-11-14T12:00:00Z'))).toBe(
+      'Wednesday, 11:44 AM',
+    )
+    expect(formatUpdatedAt(moment, new Date('2026-11-30T12:00:00Z'))).toBe(
+      'November 11, 2026',
+    )
+  })
+
+  it('counts the store’s calendar days, not 24-hour spans', () => {
+    // 23:30 on the 10th is yesterday once it is just after midnight on the 11th.
+    expect(
+      formatUpdatedAt('2026-11-10T23:30:00Z', new Date('2026-11-11T00:10:00Z')),
+    ).toBe('Yesterday, 11:30 PM')
+  })
+
+  it('shows the store’s clock, whatever the computer’s zone is (British summer time)', () => {
+    // 15:30 UTC is 16:30 in London in July.
+    expect(
+      formatUpdatedAt('2026-07-09T15:30:00Z', new Date('2026-07-10T09:00:00Z')),
+    ).toBe('Yesterday, 4:30 PM')
+  })
+
+  it('gives nothing for an empty or unreadable value', () => {
+    expect(formatUpdatedAt(null, now)).toBe('')
+    expect(formatUpdatedAt('', now)).toBe('')
+    expect(formatUpdatedAt('not a date', now)).toBe('')
   })
 })
 

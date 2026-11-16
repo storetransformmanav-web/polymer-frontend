@@ -168,6 +168,78 @@ export function formatRelativeDateTime(
   return `${day} at ${time}`
 }
 
+/** "4:30 PM" — the time of day on the store's clock, 12-hour, upper-case AM / PM. */
+function clockTimeUpper(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\s/g, ' ')
+}
+
+/** "16 minutes ago" — how long ago, in seconds, minutes or hours (never in the future). */
+function timeAgo(elapsedMs: number): string {
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+  const seconds = Math.max(0, Math.floor(elapsedMs / 1000))
+  if (seconds < 60) return formatter.format(-seconds, 'second')
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return formatter.format(-minutes, 'minute')
+  return formatter.format(-Math.floor(minutes / 60), 'hour')
+}
+
+/**
+ * When something was last updated, the way a list shows it. Everything is worked out from `now` and
+ * the store's calendar days (not 24-hour spans), and every word comes from `Intl`, so nothing is
+ * written by hand:
+ *  - **today** → how long ago: "16 minutes ago", "3 hours ago";
+ *  - **yesterday** → "Yesterday, 4:30 PM";
+ *  - **the days before that, within the last 7** → the weekday and time: "Monday, 4:30 PM";
+ *  - **older** → the date: "October 10, 2026".
+ * `now` is only for tests.
+ */
+export function formatUpdatedAt(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const then = partsInZone(date.getTime(), timeZone)
+  const today = partsInZone(now.getTime(), timeZone)
+  const dayNumber = (p: { year: number; month: number; day: number }) =>
+    Date.UTC(p.year, p.month - 1, p.day) / 86_400_000
+  const daysAgo = dayNumber(today) - dayNumber(then)
+
+  if (daysAgo <= 0) return timeAgo(now.getTime() - date.getTime())
+
+  const time = clockTimeUpper(date, timeZone)
+  if (daysAgo === 1) {
+    const yesterday = new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
+      -1,
+      'day',
+    )
+    return `${yesterday.charAt(0).toUpperCase()}${yesterday.slice(1)}, ${time}`
+  }
+  if (daysAgo < 7) {
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'long',
+    }).format(date)
+    return `${weekday}, ${time}`
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
 /** "2026-11-05" — the store's calendar day an instant falls on (to group events by day). */
 export function storeDateKey(
   iso: string | null | undefined,

@@ -10,6 +10,7 @@ import {
   blankCondition,
   buildCreateBody,
   isDraftDirty,
+  typeLabel,
   validateCollectionDraft,
   type CollectionDraft,
   type DraftErrors,
@@ -148,12 +149,10 @@ export function CollectionCreateView({
                 [
                   {
                     kind: 'custom',
-                    label: 'Manual',
                     text: 'Add products to this collection one by one.',
                   },
                   {
                     kind: 'smart',
-                    label: 'Automated',
                     text: 'Products that match the conditions are added on their own.',
                   },
                 ] as const
@@ -175,7 +174,7 @@ export function CollectionCreateView({
                   />
                   <span>
                     <span className="block text-[0.88rem] font-semibold">
-                      {item.label}
+                      {typeLabel(item.kind)}
                     </span>
                     <span className="text-text-muted block text-[0.78rem]">
                       {item.text}
@@ -284,7 +283,7 @@ export function CollectionCreateView({
           }}
         >
           <p className="m-0">
-            A {draft.kind === 'smart' ? 'automated' : 'manual'} collection
+            A {typeLabel(draft.kind).toLowerCase()} collection
             {draft.kind === 'custom' && draft.products.length > 0
               ? ` with ${draft.products.length} ${draft.products.length === 1 ? 'product' : 'products'}`
               : ''}

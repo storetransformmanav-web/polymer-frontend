@@ -33,7 +33,7 @@ import type {
   CollectionProductsState,
   useCollectionDetails,
 } from '../hooks/useCollections.ts'
-import { isSmart } from '../utils/collectionDraft.ts'
+import { isSmart, typeLabel } from '../utils/collectionDraft.ts'
 import { CollectionConfirm } from './CollectionConfirm.tsx'
 import { ProductPicker, type PickedProduct } from './CollectionFormParts.tsx'
 import { CollectionImage, Message } from './CollectionParts.tsx'
@@ -193,8 +193,9 @@ export function CollectionProducts({
 
       {!manual && (
         <p className="text-text-muted border-border m-0 border-t px-4 py-2.5 text-[0.8rem] sm:px-5">
-          This collection is automated: its products come from its conditions. Change the
-          conditions on the Overview tab, or use Refresh after Shopify has matched them.
+          This is a {typeLabel(collection.collection_type).toLowerCase()} collection: its
+          products come from its conditions. Change the conditions on the Overview tab, or
+          use Refresh after Shopify has matched them.
         </p>
       )}
 
