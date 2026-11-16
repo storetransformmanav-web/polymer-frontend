@@ -2,6 +2,7 @@ import { Highlight } from '../../../components/ui/Highlight.tsx'
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ActivityItem } from '../../../lib/api/endpoints.ts'
 import { formatTimestamp, initials } from '../../../lib/format.ts'
@@ -278,10 +279,11 @@ export function ActivityList({
                       <button
                         type="button"
                         aria-label={`View activity ${item.id}`}
+                        title="View"
                         onClick={() => onOpen(item)}
-                        className="text-text-muted hover:text-accent inline-flex cursor-pointer items-center justify-center border-none bg-none p-1 transition-colors"
+                        className={ROW_ACTION}
                       >
-                        <EyeIcon />
+                        <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                       </button>
                     </td>
                   </tr>

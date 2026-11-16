@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { OrderListItem } from '../../../lib/api/endpoints.ts'
 import { formatDateTime, formatPrice } from '../../../lib/format.ts'
@@ -432,7 +432,7 @@ export function OrdersList({
                       onFocus={() => onPrefetch(order)}
                       className={ROW_ACTION}
                     >
-                      <EyeIcon />
+                      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                     </button>
                   </td>
                 </tr>

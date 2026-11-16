@@ -11,7 +11,12 @@ import {
   SearchIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import {
+  ROW_ACTION,
+  ROW_ACTION_DANGER,
+  ROW_ACTIONS,
+  ROW_ACTION_ICON,
+} from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ProductListItem, ProductSort } from '../../../lib/api/endpoints.ts'
@@ -520,7 +525,7 @@ export function ProductsList({
                     </td>
                   ))}
                   <td className={`${TD} text-center`}>
-                    <span className="inline-flex items-center gap-1">
+                    <span className={ROW_ACTIONS}>
                       <button
                         type="button"
                         aria-label={`View ${product.title}`}
@@ -530,7 +535,7 @@ export function ProductsList({
                         onFocus={() => onPrefetch(product.id)}
                         className={ROW_ACTION}
                       >
-                        <EyeIcon width={15} height={15} />
+                        <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                       </button>
                       <button
                         type="button"
@@ -539,7 +544,7 @@ export function ProductsList({
                         onClick={() => onDelete(product)}
                         className={ROW_ACTION_DANGER}
                       >
-                        <TrashIcon width={15} height={15} />
+                        <TrashIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                       </button>
                     </span>
                   </td>

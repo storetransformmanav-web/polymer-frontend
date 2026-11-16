@@ -9,7 +9,11 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
-import { ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import {
+  ROW_ACTION_DANGER,
+  ROW_ACTIONS,
+  ROW_ACTION_ICON,
+} from '../../../components/ui/rowActions.ts'
 import { findOwnTag } from '../utils/lockDraft.ts'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
@@ -326,7 +330,7 @@ export function LockCustomersList({
                                 </td>
                                 {!loginOnly && (
                                   <td className={`${TD} text-center whitespace-nowrap`}>
-                                    <span className="inline-flex items-center gap-1">
+                                    <span className={ROW_ACTIONS}>
                                       <button
                                         type="button"
                                         aria-label={`Remove access of ${customerName(customer)}`}
@@ -334,7 +338,10 @@ export function LockCustomersList({
                                         onClick={() => onRemove(customer)}
                                         className={ROW_ACTION_DANGER}
                                       >
-                                        <TrashIcon />
+                                        <TrashIcon
+                                          width={ROW_ACTION_ICON}
+                                          height={ROW_ACTION_ICON}
+                                        />
                                       </button>
                                     </span>
                                   </td>

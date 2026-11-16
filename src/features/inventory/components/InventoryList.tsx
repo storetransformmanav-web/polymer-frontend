@@ -9,7 +9,11 @@ import {
   PencilIcon,
   SearchIcon,
 } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import {
+  ROW_ACTION,
+  ROW_ACTIONS,
+  ROW_ACTION_ICON,
+} from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { InventoryItem, InventorySort } from '../../../lib/api/endpoints.ts'
@@ -368,7 +372,7 @@ export function InventoryList({
                         </td>
                       )}
                       <td className={`${TD} text-center`}>
-                        <span className="inline-flex items-center justify-center gap-0.5">
+                        <span className={ROW_ACTIONS}>
                           <button
                             type="button"
                             aria-label={`View ${item.title}${name ? ` ${name}` : ''}`}
@@ -378,7 +382,7 @@ export function InventoryList({
                             onFocus={() => onPrefetch(item.variant_id)}
                             className={ROW_ACTION}
                           >
-                            <EyeIcon />
+                            <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                           </button>
                           {editable && (
                             <button
@@ -393,7 +397,10 @@ export function InventoryList({
                               }
                               className={ROW_ACTION}
                             >
-                              <PencilIcon />
+                              <PencilIcon
+                                width={ROW_ACTION_ICON}
+                                height={ROW_ACTION_ICON}
+                              />
                             </button>
                           )}
                         </span>

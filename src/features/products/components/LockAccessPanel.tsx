@@ -1,4 +1,9 @@
 import { ExpandableChips } from '../../../components/ui/ExpandableChips.tsx'
+import {
+  ROW_ACTION_DANGER,
+  ROW_ACTIONS,
+  ROW_ACTION_ICON,
+} from '../../../components/ui/rowActions.ts'
 import { findOwnTag, withoutOwnTag } from '../../../lib/lockOwnTag.ts'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
@@ -718,7 +723,7 @@ function LockedProduct({
                           </td>
                           <td className={TD}>
                             {!loginOnly && (
-                              <div className="flex items-center justify-end gap-2">
+                              <div className={ROW_ACTIONS}>
                                 <button
                                   type="button"
                                   aria-label={`Remove access of ${name}`}
@@ -726,9 +731,12 @@ function LockedProduct({
                                   onClick={() =>
                                     ask({ kind: 'remove', customers: [customer] })
                                   }
-                                  className={`${DANGER_OUTLINE} h-8 w-8 p-0`}
+                                  className={ROW_ACTION_DANGER}
                                 >
-                                  <TrashIcon width={15} height={15} />
+                                  <TrashIcon
+                                    width={ROW_ACTION_ICON}
+                                    height={ROW_ACTION_ICON}
+                                  />
                                 </button>
                               </div>
                             )}

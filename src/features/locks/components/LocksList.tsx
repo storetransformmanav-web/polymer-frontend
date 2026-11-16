@@ -10,7 +10,12 @@ import {
   LockIcon,
   TrashIcon,
 } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION, ROW_ACTION_DANGER } from '../../../components/ui/rowActions.ts'
+import {
+  ROW_ACTION,
+  ROW_ACTION_DANGER,
+  ROW_ACTIONS,
+  ROW_ACTION_ICON,
+} from '../../../components/ui/rowActions.ts'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AccessLock } from '../../../lib/api/endpoints.ts'
@@ -162,7 +167,7 @@ function ViewButton({
       onClick={() => onOpen(lock)}
       className={ROW_ACTION}
     >
-      <EyeIcon width={15} height={15} />
+      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
     </button>
   )
 }
@@ -182,7 +187,7 @@ function DeleteButton({
       onClick={() => onDelete(lock)}
       className={ROW_ACTION_DANGER}
     >
-      <TrashIcon width={15} height={15} />
+      <TrashIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
     </button>
   )
 }
@@ -445,7 +450,7 @@ export function LocksList({
                     </td>
                   ))}
                   <td className={TD_CENTER}>
-                    <span className="inline-flex items-center gap-1">
+                    <span className={ROW_ACTIONS}>
                       <ViewButton lock={lock} onOpen={onOpen} />
                       <DeleteButton lock={lock} onDelete={onDelete} />
                     </span>

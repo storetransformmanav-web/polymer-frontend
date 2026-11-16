@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SpinnerIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
-import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { formatDateTimeAmPm, formatPrice } from '../../../lib/format.ts'
 import type { CustomerDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
 import { OrderDetailsView } from '../../orders/index.ts'
@@ -191,7 +191,7 @@ export function CustomerOrderHistory({
                       onClick={() => open(order)}
                       className={ROW_ACTION}
                     >
-                      <EyeIcon />
+                      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                     </button>
                   </td>
                 </tr>

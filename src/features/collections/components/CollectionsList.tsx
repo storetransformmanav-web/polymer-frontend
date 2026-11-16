@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION } from '../../../components/ui/rowActions.ts'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CollectionListItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime } from '../../../lib/format.ts'
@@ -52,7 +52,7 @@ function ViewButton({
       onClick={() => onOpen(collection)}
       className={ROW_ACTION}
     >
-      <EyeIcon width={15} height={15} />
+      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
     </button>
   )
 }
