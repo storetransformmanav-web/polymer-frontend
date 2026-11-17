@@ -1,10 +1,13 @@
 import { Pagination } from './Pagination.tsx'
 import { SelectField } from './SelectField.tsx'
 
-const PAGE_SIZES = [10, 25, 50, 100].map((size) => ({
-  value: String(size),
-  label: String(size),
-}))
+const SIZES = [10, 25, 50, 100]
+
+/** The usual choices, plus the size in use when a page starts on another (20 on a collection's products). */
+const pageSizeOptions = (current: number) =>
+  (SIZES.includes(current) ? SIZES : [...SIZES, current].sort((a, b) => a - b)).map(
+    (size) => ({ value: String(size), label: String(size) }),
+  )
 
 interface PaginationFooterProps {
   page: number
@@ -49,7 +52,7 @@ export function PaginationFooter({
             id="page-size"
             label="Entries per page"
             value={String(pageSize)}
-            options={PAGE_SIZES}
+            options={pageSizeOptions(pageSize)}
             onChange={(value) => onPageSizeChange(Number(value))}
             hideLabel
             compact={compact}
