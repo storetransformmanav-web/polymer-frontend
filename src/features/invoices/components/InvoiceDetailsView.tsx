@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import {
   HeaderChip,
@@ -24,9 +23,11 @@ import {
   CreditCardIcon,
   FileTextIcon,
   GridIcon,
-  ImageIcon,
+  LayersIcon,
+  MapPinIcon,
   PoundIcon,
   ProductsIcon,
+  TruckIcon,
   UsersIcon,
 } from '../../../components/ui/icons.tsx'
 import type {
@@ -36,16 +37,15 @@ import type {
 } from '../../../lib/api/invoiceDetail.ts'
 import { fieldLabel } from '../../../lib/api/invoiceDetail.ts'
 import type { Invoice } from '../../../lib/api/invoices.ts'
-import { safeUrl } from '../../../lib/safeUrl.ts'
 import { useInvoiceDetail } from '../hooks/useInvoiceDetail.ts'
 import {
   dateOrTime,
+  dateTimeAmPm,
   kindLabel,
   looseValue,
   money,
   paymentLabel,
   paymentTone,
-  percent,
   quantity,
 } from '../utils/format.ts'
 import { customerPath } from '../utils/paths.ts'
@@ -65,7 +65,7 @@ interface InvoiceDetailsViewProps {
 
 const SMALL_TEXT = 'text-[0.82rem]'
 
-/** A label and a value on one line, the value on the right (the summary-style cards). */
+/** A label and a value on one line, the value on the right (the amount summary). */
 function Row({
   label,
   children,
@@ -95,25 +95,7 @@ const copyable = (value: string, label: string) =>
     </span>
   ) : null
 
-/** Yes / No as a badge; nothing when the API did not say. */
-function FlagBadge({
-  value,
-  yes,
-  no,
-  yesTone = 'warning',
-  noTone = 'success',
-}: {
-  value: boolean | null
-  yes: string
-  no: string
-  yesTone?: 'warning' | 'danger' | 'success' | 'neutral'
-  noTone?: 'warning' | 'danger' | 'success' | 'neutral'
-}) {
-  if (value === null) return null
-  return <Badge tone={value ? yesTone : noTone}>{value ? yes : no}</Badge>
-}
-
-/** An address: the API's formatted lines first, then every field it sent. */
+/** An address as the API formats it, one line each; its plain fields only when there are no lines. */
 function AddressBlock({
   address,
   emptyText,
@@ -121,59 +103,41 @@ function AddressBlock({
   address: InvoiceAddress | null
   emptyText: string
 }) {
-  if (!address) return <p className="text-text-muted m-0 text-[0.85rem]">{emptyText}</p>
+  if (!address || (address.lines.length === 0 && address.fields.length === 0)) {
+    return <p className="text-text-muted m-0 text-[0.85rem]">{emptyText}</p>
+  }
+  if (address.lines.length > 0) {
+    // The name on its own line, then the rest of the address on one line:
+    //   BLUE NILE BAKERY LIMITED
+    //   268 HARROW ROAD, LONDON, W2 5ES
+    const [name, ...rest] = address.lines
+    const street = rest.join(', ')
+    return (
+      <address className="m-0 text-[0.92rem] leading-relaxed font-semibold not-italic">
+        <span className="block break-words">{name}</span>
+        {street && <span className="block break-words">{street}</span>}
+      </address>
+    )
+  }
   return (
-    <div className="flex flex-col gap-3">
-      {address.lines.length > 0 && (
-        <address className="m-0 text-[0.88rem] leading-relaxed font-medium not-italic">
-          {address.lines.map((line, index) => (
-            <span key={`${line}-${index}`} className="block break-words">
-              {line}
-            </span>
-          ))}
-        </address>
-      )}
-      {address.fields.length > 0 && (
-        <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-2.5 min-[420px]:grid-cols-2">
-          {address.fields.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
-                {label}
-              </dt>
-              <dd className="m-0 text-[0.85rem] font-medium break-words">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </div>
-  )
-}
-
-/** A line's picture from the API's `image_url`, or a quiet tile when it has none. */
-function LineThumb({ url, alt }: { url: string | null; alt: string }) {
-  const src = safeUrl(url)
-  return (
-    <span className="border-border bg-surface text-text-muted inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border">
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <ImageIcon width={16} height={16} />
-      )}
-    </span>
+    <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-2.5 min-[420px]:grid-cols-2">
+      {address.fields.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
+            {label}
+          </dt>
+          <dd className="m-0 text-[0.85rem] font-medium break-words">{value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
 const NUMBER_TD = `${DETAIL_TD} text-right tabular-nums`
 const NUMBER_TH = `${DETAIL_TH} text-right`
 
-/** The invoice lines, in a table that scrolls sideways when the window is narrower than it. */
-function LinesTable({
+/** The invoice's products, in a table that scrolls sideways when the window is narrower than it. */
+function ItemsTable({
   lines,
   currency,
 }: {
@@ -181,108 +145,75 @@ function LinesTable({
   currency: string | null
 }) {
   if (lines.length === 0) {
-    return <DetailEmpty icon={ProductsIcon}>This invoice has no lines.</DetailEmpty>
+    return <DetailEmpty icon={ProductsIcon}>This invoice has no items.</DetailEmpty>
   }
   return (
     <div className={`${DETAIL_CARD} overflow-hidden`}>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1500px] border-collapse">
+        <table className="w-full min-w-[820px] table-fixed border-collapse">
           <thead>
             <tr>
-              <th className={`${DETAIL_TH} w-12 text-center`}>Pos</th>
-              <th className={`${DETAIL_TH} w-14`}>Image</th>
-              <th className={`${DETAIL_TH} w-28`}>Stock code</th>
-              <th className={`${DETAIL_TH} min-w-64`}>Product name / description</th>
-              <th className={`${DETAIL_TH} w-40`}>Extra text</th>
-              <th className={`${DETAIL_TH} w-24`}>Unit of sale</th>
-              <th className={`${NUMBER_TH} w-20`}>Qty</th>
-              <th className={`${NUMBER_TH} w-24`}>Unit price</th>
-              <th className={`${NUMBER_TH} w-20`}>Discount rate</th>
-              <th className={`${NUMBER_TH} w-24`}>Discount amount</th>
-              <th className={`${NUMBER_TH} w-24`}>Net</th>
-              <th className={`${DETAIL_TH} w-20 text-center`}>Tax code</th>
-              <th className={`${NUMBER_TH} w-20`}>Tax rate</th>
-              <th className={`${NUMBER_TH} w-24`}>Tax</th>
-              <th className={`${NUMBER_TH} w-24`}>Gross</th>
-              <th className={`${DETAIL_TH} w-24`}>Nominal code</th>
-              <th className={`${DETAIL_TH} w-28`}>Delivery date</th>
+              <th className={`${DETAIL_TH} w-20 text-center`}>Position</th>
+              <th className={`${DETAIL_TH} w-32`}>Stock code</th>
+              <th className={DETAIL_TH}>Product title</th>
+              <th className={`${DETAIL_TH} w-28`}>Unit of sale</th>
+              <th className={`${NUMBER_TH} w-24`}>Quantity</th>
+              <th className={`${NUMBER_TH} w-28`}>Unit price</th>
+              <th className={`${NUMBER_TH} w-28`}>Net</th>
+              <th className={`${NUMBER_TH} w-28`}>Gross</th>
             </tr>
           </thead>
           <tbody>
-            {lines.map((line, index) => (
-              <tr
-                key={`${line.position}-${index}`}
-                className="border-border even:bg-surface/60 border-b align-top last:border-b-0"
-              >
-                <td className={`${DETAIL_TD} text-text-muted text-center`}>
-                  {line.position}
-                </td>
-                {line.isTextLine ? (
-                  <td
-                    colSpan={16}
-                    className={`${DETAIL_TD} text-text-muted !whitespace-normal italic`}
-                  >
-                    {[line.description, line.extraText].filter(Boolean).join(' — ') ||
-                      '—'}
+            {lines.map((line, index) => {
+              const title = line.crmProduct?.title || line.description
+              return (
+                <tr
+                  key={`${line.position}-${index}`}
+                  className="border-border even:bg-surface/60 border-b align-top last:border-b-0"
+                >
+                  <td className={`${DETAIL_TD} text-text-muted text-center`}>
+                    {line.position || '—'}
                   </td>
-                ) : (
-                  <>
-                    <td className={DETAIL_TD}>
-                      <LineThumb
-                        url={line.imageUrl}
-                        alt={line.crmProduct?.title || line.description || line.stockCode}
-                      />
+                  {line.isTextLine ? (
+                    <td
+                      colSpan={7}
+                      className={`${DETAIL_TD} text-text-muted !whitespace-normal italic`}
+                    >
+                      {[line.description, line.extraText].filter(Boolean).join(' — ') ||
+                        '—'}
                     </td>
-                    <td className={`${DETAIL_TD} font-medium`}>
-                      {line.stockCode || '—'}
-                    </td>
-                    <td className={`${DETAIL_TD} !whitespace-normal`}>
-                      <span className="block font-medium break-words">
-                        {line.description || line.crmProduct?.title || '—'}
-                      </span>
-                      {line.crmProduct && (
-                        <span className="text-text-muted block text-[0.75rem]">
-                          CRM product:{' '}
-                          {line.crmProduct.id ? (
-                            <Link
-                              to={`/products/${encodeURIComponent(line.crmProduct.id)}`}
-                              className="text-accent no-underline hover:underline"
-                            >
-                              {line.crmProduct.title || line.crmProduct.handle || 'Open'}
-                            </Link>
-                          ) : (
-                            line.crmProduct.title || line.crmProduct.handle
-                          )}
-                          {line.crmProduct.status &&
-                            ` · ${line.crmProduct.status.toLowerCase()}`}
-                        </span>
-                      )}
-                    </td>
-                    <td className={`${DETAIL_TD} break-words !whitespace-normal`}>
-                      {line.extraText || '—'}
-                    </td>
-                    <td className={DETAIL_TD}>{line.unitOfSale || '—'}</td>
-                    <td className={NUMBER_TD}>{quantity(line.quantity)}</td>
-                    <td className={NUMBER_TD}>{money(line.unitPrice, currency)}</td>
-                    <td className={NUMBER_TD}>
-                      {line.discountRate ? percent(line.discountRate) : '—'}
-                    </td>
-                    <td className={NUMBER_TD}>
-                      {line.discountAmount ? money(line.discountAmount, currency) : '—'}
-                    </td>
-                    <td className={NUMBER_TD}>{money(line.net, currency)}</td>
-                    <td className={`${DETAIL_TD} text-center`}>{line.taxCode || '—'}</td>
-                    <td className={NUMBER_TD}>{percent(line.taxRate)}</td>
-                    <td className={NUMBER_TD}>{money(line.tax, currency)}</td>
-                    <td className={`${NUMBER_TD} font-semibold`}>
-                      {money(line.gross, currency)}
-                    </td>
-                    <td className={DETAIL_TD}>{line.nominalCode || '—'}</td>
-                    <td className={DETAIL_TD}>{dateOrTime(line.deliveryDate)}</td>
-                  </>
-                )}
-              </tr>
-            ))}
+                  ) : (
+                    <>
+                      <td
+                        className={`${DETAIL_TD} truncate font-medium`}
+                        title={line.stockCode}
+                      >
+                        {line.stockCode || '—'}
+                      </td>
+                      <td className={`${DETAIL_TD} !whitespace-normal`}>
+                        {line.crmProduct?.id ? (
+                          <Link
+                            to={`/products/${encodeURIComponent(line.crmProduct.id)}`}
+                            className="text-text hover:text-accent font-medium break-words no-underline hover:underline"
+                          >
+                            {title || '—'}
+                          </Link>
+                        ) : (
+                          <span className="font-medium break-words">{title || '—'}</span>
+                        )}
+                      </td>
+                      <td className={DETAIL_TD}>{line.unitOfSale || '—'}</td>
+                      <td className={NUMBER_TD}>{quantity(line.quantity)}</td>
+                      <td className={NUMBER_TD}>{money(line.unitPrice, currency)}</td>
+                      <td className={NUMBER_TD}>{money(line.net, currency)}</td>
+                      <td className={`${NUMBER_TD} font-semibold`}>
+                        {money(line.gross, currency)}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -344,18 +275,17 @@ function PaymentsTable({
 
 /**
  * One invoice's page, in place of the list and laid out like a product's: the shared header (a tile,
- * the invoice number, its payment status, the dates and the customer as chips, **Back to list**), a
- * tab strip and clearly labelled cards. The invoice is **asked for by its number when the page opens**
- * (`GET /api/sage/invoices/{invoice_number}`) and the answer is the source of truth; while it loads
- * the header draws from the list row. Tabs: **Overview** (invoice overview, customer, invoice and
- * delivery addresses, the amount summary, the VAT analysis and the payment information), **Line
- * items**, **Payments** (the allocations) and **Additional information** (notes, courier,
- * consignment, settlement terms, the sales order, and any other field the API sent). Empty values show
- * a dash, never a broken layout.
+ * the invoice number, its payment status as a badge, the amount paid, the dates and the customer as
+ * chips, **Back to list**), a tab strip and clearly labelled cards. The invoice is **asked for by its
+ * number when the page opens** (`GET /api/sage/invoices/{invoice_number}`) and the answer is the
+ * source of truth; while it loads the header draws from the list row. Tabs: **Overview** (invoice
+ * overview, customer information, the addresses and the VAT analysis), **Items** (the products and,
+ * under them, the amount summary), **Payments** (the allocations) and **Additional information**
+ * (notes, courier, consignment, settlement terms, the sales order, and any other field the API
+ * sent). Each fact is shown once; empty values show a dash, never a broken layout.
  */
 export function InvoiceDetailsView({
   reference,
-  kind,
   preview,
   onBack,
   onLoaded,
@@ -372,13 +302,9 @@ export function InvoiceDetailsView({
 
   // The answer when it is there, else the list row.
   const currency = detail?.currency ?? preview?.currency ?? null
-  const kindText =
-    detail?.kindLabel ||
-    (detail?.kind || preview?.kind || kind
-      ? kindLabel(detail?.kind || preview?.kind || kind || '')
-      : 'Invoice')
   const shownNumber = detail?.number || preview?.number || reference
   const paymentStatus = detail?.payment.status || preview?.paymentStatus || ''
+  const paid = detail?.payment.paid ?? preview?.paid ?? null
   const accountRef = detail?.customer.accountRef || preview?.accountRef || ''
   const customerName = detail?.customer.name || preview?.customerName || accountRef
   const dueDate = detail?.payment.dueDate ?? preview?.dueDate ?? null
@@ -391,20 +317,13 @@ export function InvoiceDetailsView({
         <FileTextIcon width={26} height={26} />
       </HeaderTile>
     ),
-    title: `${kindText} ${shownNumber}`,
-    titleHint: shownNumber,
+    title: `Invoice ${shownNumber}`,
     status: (
       <>
         {paymentStatus && (
           <StatusPill
             label={paymentLabel(paymentStatus)}
             tone={paymentTone(paymentStatus)}
-          />
-        )}
-        {detail?.posted !== null && detail?.posted !== undefined && (
-          <StatusPill
-            label={detail.posted ? 'Posted' : 'Not Posted'}
-            tone={detail.posted ? 'success' : 'neutral'}
           />
         )}
         {state.isRefreshing && (
@@ -416,6 +335,14 @@ export function InvoiceDetailsView({
     ),
     chips: (
       <>
+        {paid !== null && (
+          <HeaderChip icon={PoundIcon} label="Paid">
+            <span aria-hidden="true" className="text-text-muted">
+              Paid:
+            </span>{' '}
+            <span className="font-semibold">{money(paid, currency)}</span>
+          </HeaderChip>
+        )}
         <HeaderChip icon={CalendarIcon} label="Invoice date">
           <span aria-hidden="true" className="text-text-muted">
             Invoice date:
@@ -441,14 +368,6 @@ export function InvoiceDetailsView({
             ) : (
               customerName
             )}
-          </HeaderChip>
-        )}
-        {currency && (
-          <HeaderChip icon={PoundIcon} label="Currency">
-            <span aria-hidden="true" className="text-text-muted">
-              Currency:
-            </span>{' '}
-            {currency}
           </HeaderChip>
         )}
       </>
@@ -503,12 +422,7 @@ export function InvoiceDetailsView({
       {...header}
       tabs={[
         { id: 'overview', label: 'Overview', icon: GridIcon },
-        {
-          id: 'lines',
-          label: 'Line items',
-          icon: ProductsIcon,
-          count: detail.lines.length,
-        },
+        { id: 'items', label: 'Items', icon: ProductsIcon, count: detail.lines.length },
         {
           id: 'payments',
           label: 'Payments',
@@ -520,8 +434,8 @@ export function InvoiceDetailsView({
       tab={tab}
       onTab={setTab}
     >
-      {tab === 'overview' && <Overview detail={detail} currency={currency} />}
-      {tab === 'lines' && <LinesTable lines={detail.lines} currency={currency} />}
+      {tab === 'overview' && <Overview detail={detail} />}
+      {tab === 'items' && <Items detail={detail} currency={currency} />}
       {tab === 'payments' && (
         <PaymentsTable payments={detail.payments} currency={currency} />
       )}
@@ -530,137 +444,150 @@ export function InvoiceDetailsView({
   )
 }
 
-function Overview({
-  detail,
-  currency,
-}: {
-  detail: InvoiceDetail
-  currency: string | null
-}) {
-  const c = detail.customer
-  const s = detail.summary
-  const p = detail.payment
+/** A column of the overview strip: a thin divider on its left from `lg`, except the first. */
+const STRIP_CELL =
+  'min-w-0 lg:border-l lg:border-border lg:pl-6 lg:first:border-l-0 lg:first:pl-0'
+
+/** A label and a bold amount on one line (the VAT card). */
+function VatRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:items-start">
-      <div className="flex min-w-0 flex-col gap-4">
-        <DetailSection title="Invoice overview" icon={FileTextIcon}>
-          <FieldGrid>
+    <div className="border-border flex items-baseline justify-between gap-4 border-b py-3 last:border-b-0">
+      <dt className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
+        {label}
+      </dt>
+      <dd className="m-0 text-[0.92rem] font-bold tabular-nums">{children}</dd>
+    </div>
+  )
+}
+
+function Overview({ detail }: { detail: InvoiceDetail }) {
+  const c = detail.customer
+  const currency = detail.currency
+  const vatNet = detail.vat.reduce((sum, row) => sum + (row.net ?? 0), 0)
+  const vatTax = detail.vat.reduce((sum, row) => sum + (row.tax ?? 0), 0)
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <DetailSection title="Invoice Overview" icon={FileTextIcon}>
+        <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={STRIP_CELL}>
             <Field label="Invoice number">
               {copyable(detail.number, 'Copy invoice number')}
             </Field>
+          </div>
+          <div className={STRIP_CELL}>
             <Field label="Invoice type">
               {detail.kindLabel || (detail.kind ? kindLabel(detail.kind) : '')}
             </Field>
-            <Field label="Invoice date">
-              {detail.date ? dateOrTime(detail.date) : ''}
-            </Field>
-            <Field label="Created at">
-              {detail.createdAt ? dateOrTime(detail.createdAt) : ''}
-            </Field>
+          </div>
+          <div className={STRIP_CELL}>
             <Field label="Currency">{detail.currency}</Field>
-            <Field label="Status">
-              {detail.posted !== null ? (
-                <FlagBadge
-                  value={detail.posted}
-                  yes="Posted"
-                  no="Not Posted"
-                  yesTone="success"
-                  noTone="neutral"
-                />
-              ) : (
-                detail.postedText
-              )}
+          </div>
+          <div className={STRIP_CELL}>
+            <Field label="Created at">
+              {detail.createdAt ? dateTimeAmPm(detail.createdAt) : ''}
             </Field>
-            <Field label="Printed status">{detail.printed}</Field>
-            <Field label="Customer order number">
-              {copyable(detail.customerOrderNumber, 'Copy customer order number')}
-            </Field>
-            <Field label="Taken by">{detail.takenBy}</Field>
-            <Field label="From sales order">{detail.fromSalesOrder}</Field>
-            <Field label="Quote status">{detail.quoteStatus}</Field>
-            <Field label="Quote expiry date">
-              {detail.quoteExpiry ? dateOrTime(detail.quoteExpiry) : ''}
-            </Field>
-          </FieldGrid>
+          </div>
+        </dl>
+      </DetailSection>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <DetailSection title="Customer Information" icon={UsersIcon}>
+          <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-5">
+              <Field label="Account reference">
+                {copyable(c.accountRef, 'Copy account reference')}
+              </Field>
+              <Field label="Contact name">{c.contactName}</Field>
+              <Field label="Telephone">{c.telephone}</Field>
+              <Field label="Account balance">
+                {c.balance === null ? '' : money(c.balance, currency)}
+              </Field>
+            </div>
+            <div className="border-border flex min-w-0 flex-col gap-5 md:border-l md:pl-6">
+              <Field label="Customer name">
+                {c.accountRef && c.name ? (
+                  <Link
+                    to={customerPath(c.accountRef)}
+                    state={{ linkedName: c.name }}
+                    className="text-text hover:text-accent font-semibold no-underline hover:underline"
+                  >
+                    {c.name}
+                  </Link>
+                ) : (
+                  c.name
+                )}
+              </Field>
+              <Field label="Email">
+                {c.email ? (
+                  <a
+                    href={`mailto:${c.email}`}
+                    className="text-text hover:text-accent break-all no-underline hover:underline"
+                  >
+                    {c.email}
+                  </a>
+                ) : null}
+              </Field>
+              <Field label="Credit limit">
+                {c.creditLimit === null ? '' : money(c.creditLimit, currency)}
+              </Field>
+              <Field label="CRM customer ID">
+                {copyable(c.crmCustomerId, 'Copy CRM customer ID')}
+              </Field>
+            </div>
+          </dl>
         </DetailSection>
 
-        <DetailSection title="Customer information" icon={UsersIcon}>
-          <FieldGrid>
-            <Field label="Customer name">
-              {c.accountRef && c.name ? (
-                <Link
-                  to={customerPath(c.accountRef)}
-                  state={{ linkedName: c.name }}
-                  className="text-text hover:text-accent font-semibold no-underline hover:underline"
-                >
-                  {c.name}
-                </Link>
-              ) : (
-                c.name
-              )}
-            </Field>
-            <Field label="Account reference">
-              {copyable(c.accountRef, 'Copy account reference')}
-            </Field>
-            <Field label="Contact name">{c.contactName}</Field>
-            <Field label="Telephone">{c.telephone}</Field>
-            <Field label="Secondary telephone">{c.telephone2}</Field>
-            <Field label="Email">
-              {c.email ? (
-                <a
-                  href={`mailto:${c.email}`}
-                  className="text-accent break-all no-underline hover:underline"
-                >
-                  {c.email}
-                </a>
-              ) : null}
-            </Field>
-            <Field label="VAT registration number">{c.vatNumber}</Field>
-            <Field label="Country code">{c.countryCode}</Field>
-            <Field label="Credit limit">
-              {c.creditLimit === null ? '' : money(c.creditLimit, currency)}
-            </Field>
-            <Field label="Account balance">
-              {c.balance === null ? '' : money(c.balance, currency)}
-            </Field>
-            <Field label="On hold">
-              <FlagBadge
-                value={c.onHold}
-                yes="On hold"
-                no="Not on hold"
-                yesTone="danger"
-              />
-            </Field>
-            <Field label="Payment due days">{c.paymentDueDays}</Field>
-            <Field label="CRM customer ID">
-              {copyable(c.crmCustomerId, 'Copy CRM customer ID')}
-            </Field>
-          </FieldGrid>
+        <DetailSection title="VAT Analysis" icon={LayersIcon}>
+          {detail.vat.length === 0 ? (
+            <p className="text-text-muted m-0 text-[0.85rem]">No VAT analysis.</p>
+          ) : (
+            <dl className="m-0">
+              {/* Several rates: each one's own net and tax first, then the totals. */}
+              {detail.vat.length > 1 &&
+                detail.vat.map((row, index) => (
+                  <VatRow
+                    key={`${row.rate}-${index}`}
+                    label={`${row.rate || 'Rate'} · net / tax`}
+                  >
+                    {money(row.net, currency)} / {money(row.tax, currency)}
+                  </VatRow>
+                ))}
+              <VatRow label="Net amount">{money(vatNet, currency)}</VatRow>
+              <VatRow label="Tax amount">{money(vatTax, currency)}</VatRow>
+              <VatRow label="Gross amount">{money(vatNet + vatTax, currency)}</VatRow>
+            </dl>
+          )}
         </DetailSection>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <DetailSection title="Invoice address" icon={UsersIcon}>
-            <AddressBlock
-              address={detail.invoiceAddress}
-              emptyText="No invoice address."
-            />
-          </DetailSection>
-          <DetailSection title="Delivery address" icon={UsersIcon}>
-            <AddressBlock
-              address={detail.deliveryAddress}
-              emptyText="No delivery address."
-            />
-          </DetailSection>
-        </div>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <DetailSection title="Invoice Address" icon={MapPinIcon}>
+          <AddressBlock address={detail.invoiceAddress} emptyText="No invoice address." />
+        </DetailSection>
+        <DetailSection title="Delivery Address" icon={TruckIcon}>
+          <AddressBlock
+            address={detail.deliveryAddress}
+            emptyText="No delivery address."
+          />
+        </DetailSection>
+      </div>
+    </div>
+  )
+}
+
+/** The products, and under them the amount summary from the answer's `amounts`. */
+function Items({ detail, currency }: { detail: InvoiceDetail; currency: string | null }) {
+  const s = detail.summary
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <ItemsTable lines={detail.lines} currency={currency} />
+
+      <div className="w-full lg:ml-auto lg:max-w-md">
         <DetailSection title="Amount summary" icon={PoundIcon}>
           <dl className="m-0">
             <Row label="Items net">{money(s.itemsNet, currency)}</Row>
             <Row label="Items tax">{money(s.itemsTax, currency)}</Row>
-            <Row label="Discount net">{money(s.discountNet, currency)}</Row>
-            <Row label="Discount description">{s.discountDescription || '—'}</Row>
+            <Row label="Discount">{money(s.discountNet, currency)}</Row>
             <Row label="Carriage net">{money(s.carriageNet, currency)}</Row>
             <Row label="Carriage tax">{money(s.carriageTax, currency)}</Row>
             <Row label="Carriage gross">{money(s.carriageGross, currency)}</Row>
@@ -674,65 +601,6 @@ function Overview({
               {money(s.totalGross, currency)}
             </Row>
             <Row label="Amount prepaid">{money(s.prepaid, currency)}</Row>
-          </dl>
-        </DetailSection>
-
-        <DetailSection title="VAT analysis" icon={PoundIcon}>
-          {detail.vat.length === 0 ? (
-            <p className="text-text-muted m-0 text-[0.85rem]">No VAT analysis.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className={DETAIL_TH}>VAT rate</th>
-                    <th className={NUMBER_TH}>Net amount</th>
-                    <th className={NUMBER_TH}>Tax amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.vat.map((row, index) => (
-                    <tr
-                      key={`${row.rate}-${index}`}
-                      className="border-border border-b last:border-b-0"
-                    >
-                      <td className={`${DETAIL_TD} font-medium`}>{row.rate || '—'}</td>
-                      <td className={NUMBER_TD}>{money(row.net, currency)}</td>
-                      <td className={NUMBER_TD}>{money(row.tax, currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </DetailSection>
-
-        <DetailSection title="Payment information" icon={CreditCardIcon}>
-          <dl className="m-0">
-            <Row label="Payment status">
-              {p.status ? (
-                <Badge tone={paymentTone(p.status)}>{paymentLabel(p.status)}</Badge>
-              ) : (
-                '—'
-              )}
-            </Row>
-            <Row label="Paid amount">{money(p.paid, currency)}</Row>
-            <Row label="Outstanding amount">{money(p.outstanding, currency)}</Row>
-            <Row label="Due date">{p.dueDate ? dateOrTime(p.dueDate) : '—'}</Row>
-            <Row label="Overdue status">
-              {p.overdue === null ? (
-                '—'
-              ) : (
-                <FlagBadge
-                  value={p.overdue}
-                  yes="Overdue"
-                  no="Not overdue"
-                  yesTone="danger"
-                />
-              )}
-            </Row>
-            <Row label="Days overdue">{quantity(p.daysOverdue)}</Row>
-            <Row label="Ledger transaction">{p.ledgerTransaction || '—'}</Row>
           </dl>
         </DetailSection>
       </div>

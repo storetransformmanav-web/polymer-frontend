@@ -1,5 +1,10 @@
 import type { BadgeTone } from '../../../components/ui/Badge.tsx'
-import { formatDate, formatDateTime, formatPrice } from '../../../lib/format.ts'
+import {
+  formatDate,
+  formatDateTime,
+  formatDateTimeAmPm,
+  formatPrice,
+} from '../../../lib/format.ts'
 import type { InvoiceKind, InvoiceKindCount } from '../../../lib/api/invoices.ts'
 
 /** "credit_note" → "Credit note": a word the API sends, written for people. */
@@ -118,4 +123,11 @@ export function looseValue(key: string, value: unknown, currency: string | null)
   if (Array.isArray(value))
     return value.map((item) => looseValue(key, item, currency)).join(', ')
   return JSON.stringify(value)
+}
+
+/** A timestamp with its time, 12-hour with AM / PM ("11 Nov 2026, 06:20 AM"); a bare date stays a date. */
+export function dateTimeAmPm(value: string | null | undefined): string {
+  if (!value) return '—'
+  if (Number.isNaN(Date.parse(value))) return value
+  return /[T ]\d{2}:\d{2}/.test(value) ? formatDateTimeAmPm(value) : formatDate(value)
 }

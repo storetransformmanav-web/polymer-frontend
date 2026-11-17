@@ -266,26 +266,24 @@ describe('a customer and an invoice open as pages of their own', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => expect(getDetail).toHaveBeenCalledWith('SI-2'))
 
-    const overview = (await screen.findByText('Invoice overview')).closest('section')
+    const overview = (await screen.findByText('Invoice Overview')).closest('section')
     expect(overview).toHaveTextContent('PO-SI-2')
-    expect(screen.getByText('Customer information').closest('section')).toHaveTextContent(
+    expect(screen.getByText('Customer Information').closest('section')).toHaveTextContent(
       'buyer@example.com',
     )
-    expect(screen.getByText('Invoice address').closest('section')).toHaveTextContent(
+    expect(screen.getByText('Invoice Address').closest('section')).toHaveTextContent(
       '1 High St',
     )
-    expect(screen.getByText('Delivery address').closest('section')).toHaveTextContent(
+    expect(screen.getByText('Delivery Address').closest('section')).toHaveTextContent(
       'No delivery address.',
     )
-    expect(screen.getByText('Amount summary').closest('section')).toHaveTextContent(
-      '£30.00',
-    )
-    expect(screen.getByText('VAT analysis').closest('section')).toHaveTextContent(
+    expect(screen.getByText('VAT Analysis').closest('section')).toHaveTextContent(
       '£25.00',
     )
-    expect(screen.getByText('Payment information').closest('section')).toHaveTextContent(
-      'Part Paid',
-    )
+    // The payment status is a badge in the header, and Overview has no payment or amount cards.
+    expect(screen.getByText('Part Paid')).toBeInTheDocument()
+    expect(screen.queryByText('Payment information')).not.toBeInTheDocument()
+    expect(screen.queryByText('Amount summary')).not.toBeInTheDocument()
     expect(
       within(screen.getByRole('navigation', { name: 'Open invoices' })).getByRole(
         'button',
@@ -306,17 +304,20 @@ describe('a customer and an invoice open as pages of their own', () => {
     expect(screen.getByTestId('path')).toHaveTextContent(
       '/sage/invoices/SI-1?kind=invoice',
     )
-    expect(await screen.findByText('Invoice overview')).toBeInTheDocument()
+    expect(await screen.findByText('Invoice Overview')).toBeInTheDocument()
     expect(getDetail).toHaveBeenCalledWith('SI-1')
   })
 
   it('lists the lines, the payments and the extra information on their own tabs', async () => {
     const user = userEvent.setup()
     renderPage('/sage/invoices/SI-1?kind=invoice')
-    await screen.findByText('Invoice overview')
+    await screen.findByText('Invoice Overview')
 
-    await user.click(screen.getByRole('tab', { name: /^Line items/ }))
+    await user.click(screen.getByRole('tab', { name: /^Items/ }))
     expect(screen.getByText('BAG-1')).toBeInTheDocument()
+    expect(screen.getByText('Amount summary').closest('section')).toHaveTextContent(
+      '£30.00',
+    )
     expect(screen.getByText('Paper bag')).toBeInTheDocument()
     // A line with no stock code is a text line, shown as plain text.
     expect(screen.getByText('Free text note')).toBeInTheDocument()
@@ -340,7 +341,7 @@ describe('a customer and an invoice open as pages of their own', () => {
       await screen.findByText('Couldn’t load this invoice', {}, { timeout: 4000 }),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('Invoice overview')).toBeInTheDocument()
+    expect(await screen.findByText('Invoice Overview')).toBeInTheDocument()
   })
 
   it('says so when an address names an invoice that does not exist', async () => {
