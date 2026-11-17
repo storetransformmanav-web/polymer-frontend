@@ -1,11 +1,6 @@
 import { useState } from 'react'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
-import {
-  PlusIcon,
-  SpinnerIcon,
-  TruckIcon,
-  UsersIcon,
-} from '../../../../components/ui/icons.tsx'
+import { PlusIcon, SpinnerIcon, XIcon } from '../../../../components/ui/icons.tsx'
 import { SuggestInput } from '../../../../components/ui/SuggestInput.tsx'
 import { countryOptions } from '../../../../lib/countries.ts'
 import type { CustomerListItem } from '../../../../lib/api/endpoints.ts'
@@ -19,20 +14,25 @@ import {
 import {
   Field,
   FIELD_INPUT,
-  FIELD_LABEL,
   FIELD_TEXTAREA,
+  FormSection,
   MoneyInput,
-  OrderSection,
   SECONDARY_BUTTON,
   SearchDropdown,
   TEXT_BUTTON,
   TextInput,
 } from './formParts.tsx'
 
-interface CardProps {
+interface SectionProps {
   draft: OrderDraft
   errors: OrderErrors
   update: (patch: Partial<OrderDraft>) => void
+}
+
+/** The customer chosen from the store's list; the form shows it as "Linked to …". */
+export interface LinkedCustomer {
+  name: string
+  email: string
 }
 
 /** Offered in the shipping method box (any other can be typed). */
@@ -52,27 +52,34 @@ const customerName = (customer: CustomerListItem) =>
   'Customer'
 
 /**
- * "Customer": find one of the store's customers (nothing is asked until something is typed), or
- * **Add Customer** to type a new buyer. The store finds the customer by email, or makes one.
- * Optional — but a customer needs an email, so a problem in the details always shows them.
+ * "CUSTOMER" and "NOTES" of the first step. **Existing customer** searches the store's customers
+ * (nothing is asked until something is typed); choosing one fills the boxes below and shows
+ * "Linked to …" with **Unlink** (keeps what was filled in). **Add Customer** empties the boxes for
+ * a new buyer — the store links an email that matches a customer it already has. Optional, but a
+ * customer needs an email.
  */
-export function OrderCustomerCard({ draft, errors, update }: CardProps) {
+export function OrderCustomerSection({
+  draft,
+  errors,
+  update,
+  linked,
+  onLink,
+}: SectionProps & {
+  linked: LinkedCustomer | null
+  onLink: (customer: LinkedCustomer | null) => void
+}) {
   const [text, setText] = useState('')
-  const [adding, setAdding] = useState(false)
   const found = usePickCustomers(draft.shop, text)
   const customers = found.data?.items ?? []
   const customer = draft.customer
   const set = (patch: Partial<OrderDraft['customer']>) =>
     update({ customer: { ...customer, ...patch } })
-
-  const hasProblem = [FIELD.email, FIELD.phone, FIELD.firstName, FIELD.lastName].some(
-    (field) => errors[field],
-  )
-  const formOpen = adding || hasProblem
-  const name = [customer.firstName, customer.lastName]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(' ')
+  const anyCustomer = Object.values(customer).some((value) => value.trim())
+  // The link ends when the email is changed to another one.
+  const active =
+    linked && linked.email.trim().toLowerCase() === customer.email.trim().toLowerCase()
+      ? linked
+      : null
 
   function choose(picked: CustomerListItem) {
     update({
@@ -83,178 +90,197 @@ export function OrderCustomerCard({ draft, errors, update }: CardProps) {
         phone: picked.phone ?? '',
       },
     })
+    onLink({ name: customerName(picked), email: picked.email ?? '' })
     setText('')
-    setAdding(false)
   }
 
-  function toggleForm() {
-    if (formOpen) {
-      setAdding(false)
-      return
-    }
-    // A chosen customer gives way to the new buyer being typed.
-    if (customer.email.trim()) update({ customer: BLANK_CUSTOMER })
-    setAdding(true)
+  function addNew() {
+    update({ customer: BLANK_CUSTOMER })
+    onLink(null)
+    setText('')
+    window.setTimeout(() => document.getElementById(FIELD.email)?.focus(), 0)
   }
 
   return (
-    <OrderSection
-      icon={UsersIcon}
-      title="Customer"
-      subtitle="Select or add a customer"
-      action={
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <SearchDropdown
-            id="order-customer-search"
-            label="Find a customer"
-            value={text}
-            placeholder="Search customer by name or email…"
-            onChange={setText}
-          >
-            {found.isFetching && customers.length === 0 && (
-              <p className="text-text-muted flex items-center gap-2 px-3 py-3 text-[0.8rem]">
-                <SpinnerIcon width={14} height={14} className="animate-spin" />
-                Searching customers…
-              </p>
+    <>
+      <FormSection title="Customer">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-text text-[0.82rem] font-semibold">
+            Existing customer
+          </span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            {active ? (
+              <div
+                className={`${FIELD_INPUT} flex items-center justify-between gap-2 sm:flex-1`}
+              >
+                <span className="truncate">{active.name}</span>
+                <button
+                  type="button"
+                  aria-label="Clear customer"
+                  onClick={addNew}
+                  className="text-text-muted hover:text-text inline-flex cursor-pointer border-none bg-transparent p-0.5"
+                >
+                  <XIcon width={16} height={16} />
+                </button>
+              </div>
+            ) : (
+              <SearchDropdown
+                id="order-customer-search"
+                label="Find a customer"
+                value={text}
+                placeholder="Select customer — search by name or email"
+                onChange={setText}
+              >
+                {found.isFetching && customers.length === 0 && (
+                  <p className="text-text-muted flex items-center gap-2 px-3 py-3 text-[0.8rem]">
+                    <SpinnerIcon width={14} height={14} className="animate-spin" />
+                    Searching customers…
+                  </p>
+                )}
+                {found.isError && (
+                  <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
+                    Could not search the customers. Use Add Customer to type their
+                    details.
+                  </p>
+                )}
+                {found.data && customers.length === 0 && !found.isFetching && (
+                  <p className="text-text-muted px-3 py-3 text-[0.8rem]">
+                    No customer matches “{text.trim()}”. Use Add Customer — the store will
+                    add them.
+                  </p>
+                )}
+                {customers.length > 0 && (
+                  <ul aria-label="Customers found" className="m-0 list-none p-0">
+                    {customers.map((candidate) => (
+                      <li
+                        key={candidate.id}
+                        className="border-border border-t first:border-t-0"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => choose(candidate)}
+                          className="hover:bg-accent-tint/60 flex w-full cursor-pointer flex-col items-start border-none bg-transparent px-3 py-2 text-left transition-colors"
+                        >
+                          <span className="text-[0.85rem] font-semibold">
+                            {customerName(candidate)}
+                          </span>
+                          <span className="text-text-muted text-[0.76rem]">
+                            {[candidate.email, candidate.phone]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SearchDropdown>
             )}
-            {found.isError && (
-              <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
-                Could not search the customers. Use Add Customer to type their details.
-              </p>
-            )}
-            {found.data && customers.length === 0 && !found.isFetching && (
-              <p className="text-text-muted px-3 py-3 text-[0.8rem]">
-                No customer matches “{text.trim()}”. Use Add Customer — the store will add
-                them.
-              </p>
-            )}
-            {customers.length > 0 && (
-              <ul aria-label="Customers found" className="m-0 list-none p-0">
-                {customers.map((candidate) => (
-                  <li
-                    key={candidate.id}
-                    className="border-border border-t first:border-t-0"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => choose(candidate)}
-                      className="hover:bg-accent-tint/60 flex w-full cursor-pointer flex-col items-start border-none bg-transparent px-3 py-2 text-left transition-colors"
-                    >
-                      <span className="text-[0.85rem] font-semibold">
-                        {customerName(candidate)}
-                      </span>
-                      <span className="text-text-muted text-[0.76rem]">
-                        {[candidate.email, candidate.phone].filter(Boolean).join(' · ')}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SearchDropdown>
-          <button
-            type="button"
-            aria-expanded={formOpen}
-            onClick={toggleForm}
-            className={SECONDARY_BUTTON}
-          >
-            <PlusIcon width={16} height={16} />
-            Add Customer
-          </button>
-        </div>
-      }
-    >
-      {!formOpen && customer.email.trim() && (
-        <div className="border-border bg-surface/40 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
-          <div className="flex min-w-0 flex-col text-[0.85rem]">
-            {name && <span className="font-semibold">{name}</span>}
-            <span className="text-text-muted break-all">{customer.email}</span>
-            {customer.phone.trim() && (
-              <span className="text-text-muted">{customer.phone}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={() => setAdding(true)} className={TEXT_BUTTON}>
-              Edit details
-            </button>
-            <button
-              type="button"
-              onClick={() => update({ customer: BLANK_CUSTOMER })}
-              className={TEXT_BUTTON}
-            >
-              Remove
+            <button type="button" onClick={addNew} className={SECONDARY_BUTTON}>
+              <PlusIcon width={16} height={16} />
+              Add Customer
             </button>
           </div>
+          {active ? (
+            <div className="border-border-strong bg-accent-tint/50 flex items-center justify-between gap-3 rounded-lg border px-3 py-1.5 text-[0.82rem]">
+              <span>
+                Linked to <strong>{active.name}</strong>
+              </span>
+              <button type="button" onClick={() => onLink(null)} className={TEXT_BUTTON}>
+                Unlink
+              </button>
+            </div>
+          ) : (
+            <p className="text-text-muted m-0 text-[0.76rem]">
+              Or enter a new customer below. An email that matches an existing customer is
+              linked to them. Leave everything empty for an order with no customer.
+            </p>
+          )}
         </div>
-      )}
 
-      {formOpen && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-2">
           <Field
-            id={FIELD.firstName}
-            label="First name"
-            error={errors[FIELD.firstName]}
-            optional
+            id={FIELD.email}
+            label="Email"
+            error={errors[FIELD.email]}
+            required={anyCustomer}
           >
-            <TextInput
-              id={FIELD.firstName}
-              value={customer.firstName}
-              error={errors[FIELD.firstName]}
-              onChange={(firstName) => set({ firstName })}
-            />
-          </Field>
-          <Field
-            id={FIELD.lastName}
-            label="Last name"
-            error={errors[FIELD.lastName]}
-            optional
-          >
-            <TextInput
-              id={FIELD.lastName}
-              value={customer.lastName}
-              error={errors[FIELD.lastName]}
-              onChange={(lastName) => set({ lastName })}
-            />
-          </Field>
-          <Field id={FIELD.email} label="Email" error={errors[FIELD.email]}>
             <TextInput
               id={FIELD.email}
               type="email"
               inputMode="email"
               value={customer.email}
               error={errors[FIELD.email]}
-              placeholder="buyer@example.com"
+              placeholder="e.g. buyer@company.com"
               onChange={(email) => set({ email })}
             />
           </Field>
-          <Field id={FIELD.phone} label="Phone" error={errors[FIELD.phone]} optional>
+          <Field id={FIELD.phone} label="Phone" error={errors[FIELD.phone]}>
             <TextInput
               id={FIELD.phone}
               type="tel"
               inputMode="tel"
               value={customer.phone}
               error={errors[FIELD.phone]}
-              placeholder="+447700900123"
+              placeholder="e.g. +447700900123"
               onChange={(phone) => set({ phone })}
             />
           </Field>
+          <Field id={FIELD.firstName} label="First Name" error={errors[FIELD.firstName]}>
+            <TextInput
+              id={FIELD.firstName}
+              value={customer.firstName}
+              error={errors[FIELD.firstName]}
+              placeholder="e.g. John"
+              onChange={(firstName) => set({ firstName })}
+            />
+          </Field>
+          <Field id={FIELD.lastName} label="Last Name" error={errors[FIELD.lastName]}>
+            <TextInput
+              id={FIELD.lastName}
+              value={customer.lastName}
+              error={errors[FIELD.lastName]}
+              placeholder="e.g. Smith"
+              onChange={(lastName) => set({ lastName })}
+            />
+          </Field>
         </div>
-      )}
-    </OrderSection>
+      </FormSection>
+
+      <FormSection title="Notes">
+        <label htmlFor={FIELD.note} className="sr-only">
+          Notes
+        </label>
+        <textarea
+          id={FIELD.note}
+          value={draft.note}
+          placeholder="Internal notes for this order"
+          maxLength={ORDER_LIMITS.note}
+          aria-invalid={errors[FIELD.note] ? true : undefined}
+          onChange={(event) => update({ note: event.target.value })}
+          className={FIELD_TEXTAREA}
+        />
+        {errors[FIELD.note] && (
+          <p role="alert" className="text-danger text-[0.78rem]">
+            {errors[FIELD.note]}
+          </p>
+        )}
+      </FormSection>
+    </>
   )
 }
 
 /**
- * "Shipping & Delivery": the shipping line's method and cost (leave both empty for none), the
- * delivery address (optional; once anything is typed, the street, the town and the country are
- * needed) and the order's note.
+ * The second step: the delivery address (optional; once anything is typed the street, the town
+ * and the country are needed) and the delivery itself — its method and cost (leave both empty
+ * for none).
  */
-export function OrderShippingCard({
+export function OrderAddressSection({
   draft,
   errors,
   update,
   symbol,
-}: CardProps & { symbol: string }) {
+}: SectionProps & { symbol: string }) {
   const address = draft.address
   const set = (patch: Partial<OrderDraft['address']>) =>
     update({ address: { ...address, ...patch } })
@@ -264,52 +290,10 @@ export function OrderShippingCard({
   )
 
   return (
-    <OrderSection
-      icon={TruckIcon}
-      title="Shipping & Delivery"
-      subtitle="Add shipping and delivery details"
-    >
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
-        <Field
-          id={FIELD.shippingTitle}
-          label="Shipping method"
-          error={errors[FIELD.shippingTitle]}
-          hint="Leave empty when the order is not delivered."
-          optional
-        >
-          <SuggestInput
-            id={FIELD.shippingTitle}
-            value={draft.shippingTitle}
-            suggestions={SHIPPING_METHODS}
-            placeholder="Standard Shipping"
-            maxLength={ORDER_LIMITS.title}
-            invalid={Boolean(errors[FIELD.shippingTitle])}
-            onChange={(shippingTitle) => update({ shippingTitle })}
-            className={FIELD_INPUT}
-          />
-        </Field>
-        <Field
-          id={FIELD.shippingPrice}
-          label="Shipping cost"
-          error={errors[FIELD.shippingPrice]}
-          optional
-        >
-          <MoneyInput
-            id={FIELD.shippingPrice}
-            value={draft.shippingPrice}
-            symbol={symbol}
-            error={errors[FIELD.shippingPrice]}
-            onChange={(shippingPrice) => update({ shippingPrice })}
-          />
-        </Field>
-      </div>
-
-      <div className="border-border flex flex-col gap-4 border-t pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-[0.9rem] font-semibold">
-            Delivery address{' '}
-            <span className="text-text-muted text-[0.82rem] font-normal">(optional)</span>
-          </h4>
+    <>
+      <FormSection
+        title="Shipping address"
+        aside={
           <button
             type="button"
             disabled={!canCopy}
@@ -324,24 +308,31 @@ export function OrderShippingCard({
           >
             Use the customer’s name and phone
           </button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id={FIELD.addressFirstName} label="First name" optional>
+        }
+      >
+        <p className="text-text-muted -mt-1 mb-0 text-[0.76rem]">
+          Optional. Leave it empty when the order is not delivered; once anything is
+          typed, the address, city and country are needed.
+        </p>
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          <Field id={FIELD.addressFirstName} label="First name">
             <TextInput
               id={FIELD.addressFirstName}
               value={address.firstName}
+              placeholder="e.g. John"
               onChange={(firstName) => set({ firstName })}
             />
           </Field>
-          <Field id={FIELD.addressLastName} label="Last name" optional>
+          <Field id={FIELD.addressLastName} label="Last name">
             <TextInput
               id={FIELD.addressLastName}
               value={address.lastName}
+              placeholder="e.g. Smith"
               onChange={(lastName) => set({ lastName })}
             />
           </Field>
-          <div className="sm:col-span-2">
-            <Field id={FIELD.company} label="Company" optional>
+          <div className="md:col-span-2">
+            <Field id={FIELD.company} label="Company">
               <TextInput
                 id={FIELD.company}
                 value={address.company}
@@ -350,27 +341,23 @@ export function OrderShippingCard({
               />
             </Field>
           </div>
-          <div className="sm:col-span-2">
-            <Field id={FIELD.address1} label="Address" error={errors[FIELD.address1]}>
+          <div className="md:col-span-2">
+            <Field
+              id={FIELD.address1}
+              label="Address"
+              error={errors[FIELD.address1]}
+              required
+            >
               <TextInput
                 id={FIELD.address1}
                 value={address.address1}
                 error={errors[FIELD.address1]}
-                placeholder="1 High Street"
+                placeholder="e.g. 1 High Street"
                 onChange={(address1) => set({ address1 })}
               />
             </Field>
           </div>
-          <div className="sm:col-span-2">
-            <Field id={FIELD.address2} label="Apartment, suite, etc." optional>
-              <TextInput
-                id={FIELD.address2}
-                value={address.address2}
-                onChange={(address2) => set({ address2 })}
-              />
-            </Field>
-          </div>
-          <Field id={FIELD.city} label="City" error={errors[FIELD.city]}>
+          <Field id={FIELD.city} label="City" error={errors[FIELD.city]} required>
             <TextInput
               id={FIELD.city}
               value={address.city}
@@ -378,7 +365,7 @@ export function OrderShippingCard({
               onChange={(city) => set({ city })}
             />
           </Field>
-          <Field id={FIELD.zip} label="Postcode" optional>
+          <Field id={FIELD.zip} label="Postcode">
             <TextInput
               id={FIELD.zip}
               value={address.zip}
@@ -403,12 +390,7 @@ export function OrderShippingCard({
               </p>
             )}
           </div>
-          <Field
-            id={FIELD.addressPhone}
-            label="Phone"
-            error={errors[FIELD.addressPhone]}
-            optional
-          >
+          <Field id={FIELD.addressPhone} label="Phone" error={errors[FIELD.addressPhone]}>
             <TextInput
               id={FIELD.addressPhone}
               type="tel"
@@ -419,27 +401,42 @@ export function OrderShippingCard({
             />
           </Field>
         </div>
-      </div>
+      </FormSection>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={FIELD.note} className={FIELD_LABEL}>
-          Notes <span className="text-text-muted font-normal">(optional)</span>
-        </label>
-        <textarea
-          id={FIELD.note}
-          value={draft.note}
-          placeholder="Add any special instructions…"
-          maxLength={ORDER_LIMITS.note}
-          aria-invalid={errors[FIELD.note] ? true : undefined}
-          onChange={(event) => update({ note: event.target.value })}
-          className={FIELD_TEXTAREA}
-        />
-        {errors[FIELD.note] && (
-          <p role="alert" className="text-danger text-[0.78rem]">
-            {errors[FIELD.note]}
-          </p>
-        )}
-      </div>
-    </OrderSection>
+      <FormSection title="Delivery">
+        <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_14rem]">
+          <Field
+            id={FIELD.shippingTitle}
+            label="Shipping method"
+            error={errors[FIELD.shippingTitle]}
+            hint="Leave empty when the order is not delivered."
+          >
+            <SuggestInput
+              id={FIELD.shippingTitle}
+              value={draft.shippingTitle}
+              suggestions={SHIPPING_METHODS}
+              placeholder="e.g. Standard Shipping"
+              maxLength={ORDER_LIMITS.title}
+              invalid={Boolean(errors[FIELD.shippingTitle])}
+              onChange={(shippingTitle) => update({ shippingTitle })}
+              className={FIELD_INPUT}
+            />
+          </Field>
+          <Field
+            id={FIELD.shippingPrice}
+            label="Shipping cost"
+            error={errors[FIELD.shippingPrice]}
+          >
+            <MoneyInput
+              id={FIELD.shippingPrice}
+              value={draft.shippingPrice}
+              symbol={symbol}
+              error={errors[FIELD.shippingPrice]}
+              onChange={(shippingPrice) => update({ shippingPrice })}
+            />
+          </Field>
+        </div>
+      </FormSection>
+    </>
   )
 }

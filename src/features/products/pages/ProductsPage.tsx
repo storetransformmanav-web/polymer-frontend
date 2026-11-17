@@ -562,6 +562,8 @@ export function ProductsPage() {
         />
 
         <ProductsExport
+          onRefresh={products.retry}
+          refreshing={products.isFetching}
           items={products.items}
           selected={selectedItems}
           filters={filters}

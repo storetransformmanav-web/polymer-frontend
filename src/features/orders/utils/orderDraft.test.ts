@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  blankCustomLine,
   blankOrderDraft,
   buildOrderBody,
   FIELD,
@@ -8,22 +7,24 @@ import {
   orderTotals,
   splitChips,
   validateOrderDraft,
+  withoutOne,
   withVariant,
   type OrderDraft,
 } from './orderDraft.ts'
 
 const VARIANT_ID = '2503d64d-42b7-4261-afe4-14ef76bfea13'
 
+const VARIANT = {
+  variantId: VARIANT_ID,
+  productTitle: 'Pizza Box',
+  variantTitle: '12 inch',
+  sku: 'PB12',
+  price: '10.00',
+  imageUrl: null,
+}
+
 /** The documented example request, typed into the form. */
 function exampleDraft(): OrderDraft {
-  const custom = {
-    ...blankCustomLine(),
-    title: 'Custom printing',
-    price: '25.00',
-    quantity: '1',
-    taxable: true,
-    requiresShipping: false,
-  }
   let lines = withVariant([], {
     variantId: VARIANT_ID,
     productTitle: 'Pizza Box',
@@ -54,13 +55,12 @@ function exampleDraft(): OrderDraft {
       lastName: 'Taylor',
       company: 'Taylor Foods Ltd',
       address1: '1 High Street',
-      address2: '',
       city: 'London',
       zip: 'NW10 7RX',
       countryCode: 'GB',
       phone: '+447700900123',
     },
-    lines: [...lines, custom],
+    lines,
     discountCodes: ['WELCOME10'],
     shippingTitle: 'Next day delivery',
     shippingPrice: '6.95',
@@ -93,16 +93,7 @@ describe('buildOrderBody', () => {
         country_code: 'GB',
         phone: '+447700900123',
       },
-      line_items: [
-        { variant_id: VARIANT_ID, quantity: 2 },
-        {
-          title: 'Custom printing',
-          price: '25.00',
-          quantity: 1,
-          taxable: true,
-          requires_shipping: false,
-        },
-      ],
+      line_items: [{ variant_id: VARIANT_ID, quantity: 2 }],
       discount_codes: ['WELCOME10'],
       shipping: { title: 'Next day delivery', price: '6.95' },
       note: 'Phone order',
@@ -115,30 +106,29 @@ describe('buildOrderBody', () => {
     const draft: OrderDraft = {
       ...blankOrderDraft(),
       shop: 'polymer-uk',
-      lines: [{ ...blankCustomLine(), title: 'Setup fee', price: '7', quantity: '3' }],
+      lines: withVariant([], VARIANT),
     }
     expect(buildOrderBody(draft)).toEqual({
       shop: 'polymer-uk',
-      line_items: [
-        {
-          title: 'Setup fee',
-          price: '7.00',
-          quantity: 3,
-          taxable: true,
-          requires_shipping: false,
-        },
-      ],
+      line_items: [{ variant_id: VARIANT_ID, quantity: 1 }],
       payment: { status: 'pending' },
     })
   })
 
-  it('gives a delivery with no price a price of 0.00, and sends the second address line when typed', () => {
+  it('sends a line as its variant id and quantity only: no title, price or flags', () => {
+    const body = buildOrderBody(exampleDraft())
+    for (const item of body.line_items) {
+      expect(Object.keys(item).sort()).toEqual(['quantity', 'variant_id'])
+    }
+  })
+
+  it('gives a delivery with no price a price of 0.00', () => {
     const draft = exampleDraft()
     draft.shippingPrice = ''
-    draft.address.address2 = 'Unit 4'
-    const body = buildOrderBody(draft)
-    expect(body.shipping).toEqual({ title: 'Next day delivery', price: '0.00' })
-    expect(body.shipping_address?.address2).toBe('Unit 4')
+    expect(buildOrderBody(draft).shipping).toEqual({
+      title: 'Next day delivery',
+      price: '0.00',
+    })
   })
 })
 
@@ -146,22 +136,25 @@ describe('validateOrderDraft', () => {
   it('needs a store and at least one line', () => {
     const errors = validateOrderDraft(blankOrderDraft())
     expect(errors[FIELD.shop]).toBeTruthy()
-    expect(errors[FIELD.lines]).toBe('Add at least one product or custom item.')
+    expect(errors[FIELD.lines]).toBe('Add at least one product.')
   })
 
-  it('checks each line: a whole quantity of 1 or more, and a named, priced custom item', () => {
-    const custom = { ...blankCustomLine(), quantity: '0' }
-    const draft = { ...blankOrderDraft(), shop: 's', lines: [custom] }
-    const errors = validateOrderDraft(draft)
-    expect(errors[FIELD.lineQuantity(custom.key)]).toBe('A whole number, 1 or more.')
-    expect(errors[FIELD.lineTitle(custom.key)]).toBe('Name the item.')
-    expect(errors[FIELD.linePrice(custom.key)]).toBe('A price such as 25.00.')
-
-    const ok = { ...custom, quantity: '2', title: 'Fee', price: '4.5' }
-    expect(validateOrderDraft({ ...draft, lines: [ok] })).toEqual({})
+  it('checks each line: a whole quantity of 1 or more', () => {
+    const [line] = withVariant([], VARIANT)
+    const draft = {
+      ...blankOrderDraft(),
+      shop: 's',
+      lines: [{ ...line, quantity: '0' }],
+    }
+    expect(validateOrderDraft(draft)[FIELD.lineQuantity(line.key)]).toBe(
+      'A whole number, 1 or more.',
+    )
+    expect(validateOrderDraft({ ...draft, lines: [{ ...line, quantity: '2' }] })).toEqual(
+      {},
+    )
     expect(
-      validateOrderDraft({ ...draft, lines: [{ ...ok, quantity: '1.5' }] })[
-        FIELD.lineQuantity(ok.key)
+      validateOrderDraft({ ...draft, lines: [{ ...line, quantity: '1.5' }] })[
+        FIELD.lineQuantity(line.key)
       ],
     ).toBeTruthy()
   })
@@ -203,21 +196,29 @@ describe('validateOrderDraft', () => {
 describe('the lines and totals', () => {
   it('adds one more of a variant that is already a line', () => {
     const draft = exampleDraft()
-    expect(draft.lines).toHaveLength(2)
+    expect(draft.lines).toHaveLength(1)
     expect(draft.lines[0].quantity).toBe('2')
   })
 
   it('adds up the lines and the delivery, and says when a line has no price', () => {
     expect(orderTotals(exampleDraft())).toEqual({
-      items: 3,
-      subtotal: 45,
+      items: 2,
+      subtotal: 20,
       shipping: 6.95,
-      total: 51.95,
+      total: 26.95,
       complete: true,
     })
     const draft = exampleDraft()
-    draft.lines = [...draft.lines, blankCustomLine()]
+    draft.lines = draft.lines.map((line) => ({ ...line, quantity: '' }))
     expect(orderTotals(draft).complete).toBe(false)
+  })
+
+  it('takes one off a line, and the line goes at 1', () => {
+    const twice = exampleDraft().lines
+    const once = withoutOne(twice, VARIANT_ID)
+    expect(once[0].quantity).toBe('1')
+    expect(withoutOne(once, VARIANT_ID)).toEqual([])
+    expect(withoutOne(twice, 'another-variant')).toEqual(twice)
   })
 
   it('counts anything typed as unsaved work, but not the store alone', () => {

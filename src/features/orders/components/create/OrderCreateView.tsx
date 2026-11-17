@@ -4,12 +4,14 @@ import { ConfirmCancelDialog } from '../../../../components/ui/ConfirmCancelDial
 import { Dialog } from '../../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../../components/ui/FormMessage.tsx'
 import {
-  EyeIcon,
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  ChevronRightIcon,
   InfoIcon,
-  ShoppingCartIcon,
   SpinnerIcon,
 } from '../../../../components/ui/icons.tsx'
-import { SelectField, type SelectOption } from '../../../../components/ui/SelectField.tsx'
+import { type SelectOption } from '../../../../components/ui/SelectField.tsx'
 import { useShops } from '../../../../hooks/useShops.ts'
 import { currencySymbol, formatPrice } from '../../../../lib/format.ts'
 import type { OrderCreateResult } from '../../../../lib/api/endpoints.ts'
@@ -17,20 +19,39 @@ import { useCreateOrder } from '../../hooks/useCreateOrder.ts'
 import {
   blankOrderDraft,
   buildOrderBody,
-  FIELD,
+  firstStepWithProblem,
   isOrderDirty,
+  ORDER_STEPS,
+  problemList,
   orderTotals,
+  PAYMENT_LABELS,
+  stepOfField,
+  stepProblems,
   validateOrderDraft,
+  withCustomerNameOnAddress,
   type DraftLine,
   type OrderDraft,
+  type OrderStepId,
 } from '../../utils/orderDraft.ts'
-import { IconTile, SECONDARY_BUTTON } from './formParts.tsx'
-import { OrderCustomerCard, OrderShippingCard } from './OrderCustomerCards.tsx'
+import {
+  OrderAddressSection,
+  OrderCustomerSection,
+  type LinkedCustomer,
+} from './OrderCustomerCards.tsx'
+import { OrderDetailsSection } from './OrderDetailsSection.tsx'
 import { OrderLinesCard } from './OrderLinesCard.tsx'
-import { OrderPaymentCard, OrderSummaryCard } from './OrderSummaryCards.tsx'
+import { OrderReviewStep } from './OrderReviewStep.tsx'
+import { OrderStepper } from './OrderStepper.tsx'
+import { OrderSummaryCard } from './OrderSummaryCard.tsx'
 
 const BUTTON =
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-5 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+const NAV_PRIMARY = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`
+const NAV_SECONDARY = `${BUTTON} border-border bg-bg text-text hover:border-accent`
+const BACK_TO_LIST =
+  'bg-text text-bg inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border-none px-3.5 text-[0.8rem] font-semibold transition-opacity hover:opacity-85 disabled:pointer-events-none disabled:opacity-50'
+
+const LAST_STEP = ORDER_STEPS.length - 1
 
 interface OrderCreateViewProps {
   onBack: () => void
@@ -41,12 +62,21 @@ interface OrderCreateViewProps {
 }
 
 /**
- * "Add order": one page in place of the list. Sections in a wide column — Customer, Add Products,
- * Shipping & Delivery, Payment & Details — with the Order Summary beside them, in view while the
- * form scrolls; the store is chosen in the page's heading. Nothing is sent until **Create order**, which
- * checks every field first (going to the first problem), then asks — the order is also made in
- * Shopify — and only "Yes, create" sends one `POST /orders`. A refusal keeps everything typed
- * and shows the backend's message.
+ * "Create Order" as a four-step wizard in place of the list, in one card: a header (the title and
+ * **Back to list**), the stepper, the step's form in a box that scrolls on its own, and a foot
+ * with **Cancel** / **Back** and **Next**.
+ *
+ * 1. **Order & Customer** — ORDER (store, payment status and method, discount codes, tags),
+ *    CUSTOMER (an existing one from the store, or a new buyer's details) and NOTES.
+ * 2. **Addresses** — the delivery address and the delivery's method and cost.
+ * 3. **Items** — store products and custom items.
+ * 4. **Review & Create** — everything that will be sent, with Edit buttons back to each step.
+ *
+ * **Next** checks only the step you are on and stops at its first problem; the stepper takes you
+ * back to a step you reached. Nothing is sent until **Create order** on the last step, which
+ * checks every field (going to the first step with a problem), then asks — the order is also
+ * made in Shopify — and only "Yes, create" sends one `POST /orders`. A refusal keeps everything
+ * typed and shows the backend's message.
  */
 export function OrderCreateView({
   onBack,
@@ -56,9 +86,13 @@ export function OrderCreateView({
   const { shops, selected } = useShops()
   const { create, isCreating, error, clearError } = useCreateOrder()
   const [draft, setDraft] = useState<OrderDraft>(blankOrderDraft)
-  const [showErrors, setShowErrors] = useState(false)
+  const [linked, setLinked] = useState<LinkedCustomer | null>(null)
+  const [step, setStep] = useState(0)
+  const [furthest, setFurthest] = useState(0)
+  // The steps whose problems are shown (a step is touched when Next is pressed on it).
+  const [touched, setTouched] = useState<ReadonlySet<OrderStepId>>(new Set())
   const [confirming, setConfirming] = useState(false)
-  // Counts the Create presses a problem stopped, so the page goes to the first problem each time.
+  // Counts the presses a problem stopped, so the page goes to the first problem each time.
   const [stopped, setStopped] = useState(0)
 
   const usable = useMemo(() => {
@@ -73,19 +107,32 @@ export function OrderCreateView({
   const shop = draft.shop || defaultShop
   const effective: OrderDraft = useMemo(() => ({ ...draft, shop }), [draft, shop])
   const problems = useMemo(() => validateOrderDraft(effective), [effective])
-  const errors = showErrors ? problems : {}
+  const errors = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(problems).filter(([field]) => touched.has(stepOfField(field))),
+      ),
+    [problems, touched],
+  )
+  const problemSteps = useMemo(
+    () => new Set(Object.keys(errors).map(stepOfField)),
+    [errors],
+  )
   const store = shops.find((candidate) => shopValue(candidate) === shop)
+  const storeName = store ? shopLabel(store) : shop
   const currency = store?.currency ?? null
   const symbol = currencySymbol(currency)
+  const stepId = ORDER_STEPS[step].id
+  const stepProblemList = problemList(effective, stepProblems(errors, stepId))
 
   function update(patch: Partial<OrderDraft>) {
     clearError()
-    // A different store has other products: the lines picked from the old one go.
+    // A different store has other products (and variants): the lines picked from the old one go.
     if (patch.shop !== undefined && patch.shop !== shop) {
       setDraft((current) => ({
         ...current,
         ...patch,
-        lines: current.lines.filter((line) => line.kind === 'custom'),
+        lines: [],
       }))
       return
     }
@@ -108,15 +155,33 @@ export function OrderCreateView({
     else onBack()
   }
 
-  /** From the summary: the customer goes, and the search is ready for another. */
-  function changeCustomer() {
-    update({ customer: blankOrderDraft().customer })
-    document.getElementById('order-customer-search')?.focus()
+  function goTo(index: number) {
+    // The Addresses step opens with the customer's name as the delivery name (when it has none).
+    if (ORDER_STEPS[index].id === 'addresses') setDraft(withCustomerNameOnAddress)
+    setStep(index)
+    setFurthest((current) => Math.max(current, index))
   }
 
+  /** Next: only this step's fields are checked; a problem keeps the person here. */
+  function next() {
+    setTouched((current) => new Set(current).add(stepId))
+    if (Object.keys(stepProblems(problems, stepId)).length > 0) {
+      setStopped((count) => count + 1)
+      return
+    }
+    goTo(step + 1)
+  }
+
+  function editStep(target: OrderStepId) {
+    setStep(ORDER_STEPS.findIndex((candidate) => candidate.id === target))
+  }
+
+  /** Create order (last step): every step is checked; a problem takes you to its step. */
   function submit() {
-    setShowErrors(true)
-    if (Object.keys(problems).length > 0) {
+    setTouched(new Set(ORDER_STEPS.map((candidate) => candidate.id)))
+    const first = firstStepWithProblem(problems)
+    if (first) {
+      editStep(first)
       setStopped((count) => count + 1)
       return
     }
@@ -133,98 +198,193 @@ export function OrderCreateView({
     }
   }
 
-  // On a long page the first problem can be out of sight: go to it.
+  // On a long step the first problem can be out of sight: go to it.
   const sectionRef = useRef<HTMLElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const messageRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (stopped === 0) return
-    const field = sectionRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+    const field = bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
     if (field) field.focus()
     else if (typeof messageRef.current?.scrollIntoView === 'function') {
       messageRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
     }
   }, [stopped])
 
+  // A new step starts at the top (not on the first render).
+  const arrived = useRef(false)
+  useEffect(() => {
+    if (!arrived.current) {
+      arrived.current = true
+      return
+    }
+    if (typeof bodyRef.current?.scrollTo === 'function')
+      bodyRef.current.scrollTo({ top: 0 })
+    if (typeof sectionRef.current?.scrollIntoView === 'function') {
+      sectionRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+  }, [step])
+
   const totals = orderTotals(effective)
+  const isReview = stepId === 'review'
   return (
     <section
       ref={sectionRef}
-      aria-label="Add order"
+      aria-label="Create order"
       aria-busy={isCreating}
-      // `relative` keeps the visually hidden labels (sr-only) inside this box.
-      className="relative flex w-full flex-col gap-5 lg:min-h-full"
+      // `relative` keeps the visually hidden labels (sr-only) inside this card.
+      className="border-border bg-bg relative flex w-full flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1"
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <IconTile icon={ShoppingCartIcon} large />
-        <div className="flex min-w-0 flex-col">
-          <h2 className="text-[1.5rem] leading-tight font-bold">Add order</h2>
-          <p className="text-text-muted m-0 text-[0.85rem]">
-            Create a new order with products and shipping details
-          </p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-end gap-3">
-          <div className="flex w-56 max-w-full flex-col gap-1">
-            <SelectField
-              compact
-              id={FIELD.shop}
-              label="Store"
-              value={effective.shop}
-              options={shopOptions}
-              onChange={(next) => update({ shop: next })}
-            />
-            {errors[FIELD.shop] && (
-              <p role="alert" className="text-danger text-[0.76rem]">
-                {errors[FIELD.shop]}
-              </p>
+      <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-6">
+        <h2 className="text-[1.05rem] font-bold">Create Order</h2>
+        <button
+          type="button"
+          onClick={back}
+          disabled={isCreating}
+          className={BACK_TO_LIST}
+        >
+          <ArrowLeftIcon width={14} height={14} />
+          Back to list
+        </button>
+      </div>
+
+      <OrderStepper
+        current={step}
+        furthest={furthest}
+        problemSteps={problemSteps}
+        onGo={goTo}
+      />
+
+      <div
+        ref={bodyRef}
+        className={`px-4 py-5 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${
+          isReview
+            ? 'flex flex-col gap-7'
+            : 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]'
+        }`}
+      >
+        <div className="flex min-w-0 flex-col gap-7">
+          <div ref={messageRef} className="flex flex-col gap-2 empty:hidden">
+            {stepProblemList.length > 0 && (
+              <div
+                role="alert"
+                className="bg-danger-bg text-danger flex items-start gap-2 rounded-lg px-3 py-2.5 text-[0.85rem] leading-snug"
+              >
+                <AlertTriangleIcon width={16} height={16} className="mt-px shrink-0" />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className="m-0 font-semibold">
+                    {stepProblemList.length === 1
+                      ? 'Please fix this field to continue:'
+                      : `Please fix these ${stepProblemList.length} fields to continue:`}
+                  </p>
+                  <ul className="m-0 flex list-disc flex-col gap-0.5 pl-5">
+                    {stepProblemList.map((problem) => (
+                      <li key={problem.field}>
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById(problem.field)?.focus()}
+                          className="cursor-pointer border-none bg-transparent p-0 text-left font-semibold underline underline-offset-2"
+                        >
+                          {problem.label}
+                        </button>
+                        {' — '}
+                        {problem.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             )}
+            {error && !confirming && <FormMessage tone="error">{error}</FormMessage>}
           </div>
+
+          {stepId === 'order' && (
+            <>
+              <OrderDetailsSection
+                draft={effective}
+                errors={errors}
+                update={update}
+                storeOptions={shopOptions}
+              />
+              <OrderCustomerSection
+                draft={effective}
+                errors={errors}
+                update={update}
+                linked={linked}
+                onLink={setLinked}
+              />
+            </>
+          )}
+          {stepId === 'addresses' && (
+            <OrderAddressSection
+              draft={effective}
+              errors={errors}
+              update={update}
+              symbol={symbol}
+            />
+          )}
+          {stepId === 'items' && (
+            <OrderLinesCard
+              lines={effective.lines}
+              shop={shop}
+              currency={currency}
+              errors={errors}
+              onChange={updateLines}
+            />
+          )}
+          {isReview && (
+            <OrderReviewStep
+              draft={effective}
+              storeName={storeName}
+              currency={currency}
+              onEdit={editStep}
+            />
+          )}
+        </div>
+        {!isReview && <OrderSummaryCard draft={effective} currency={currency} />}
+      </div>
+
+      <div className="border-border flex items-center justify-between gap-3 border-t px-4 py-3.5 sm:px-6">
+        {step === 0 ? (
           <button
             type="button"
             onClick={back}
             disabled={isCreating}
-            className={SECONDARY_BUTTON}
+            className={NAV_SECONDARY}
           >
-            <EyeIcon width={16} height={16} />
-            View Orders
+            Cancel
           </button>
-        </div>
-      </div>
-
-      <div ref={messageRef} className="flex flex-col gap-2 empty:hidden">
-        {showErrors && Object.keys(problems).length > 0 && (
-          <FormMessage tone="error">
-            Fix the highlighted fields to create the order.
-          </FormMessage>
+        ) : (
+          <button
+            type="button"
+            onClick={() => goTo(step - 1)}
+            disabled={isCreating}
+            className={NAV_SECONDARY}
+          >
+            <ArrowLeftIcon width={16} height={16} />
+            Back
+          </button>
         )}
-      </div>
-
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <OrderCustomerCard draft={effective} errors={errors} update={update} />
-          <OrderLinesCard
-            lines={effective.lines}
-            shop={shop}
-            currency={currency}
-            symbol={symbol}
-            errors={errors}
-            onChange={updateLines}
-          />
-          <OrderShippingCard
-            draft={effective}
-            errors={errors}
-            update={update}
-            symbol={symbol}
-          />
-          <OrderPaymentCard draft={effective} errors={errors} update={update} />
-        </div>
-
-        <OrderSummaryCard
-          draft={effective}
-          currency={currency}
-          isCreating={isCreating}
-          onChangeCustomer={changeCustomer}
-          onCreate={submit}
-        />
+        {step === LAST_STEP ? (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={isCreating}
+            className={NAV_PRIMARY}
+          >
+            {isCreating ? (
+              <SpinnerIcon width={16} height={16} className="animate-spin" />
+            ) : (
+              <CheckCircleIcon width={16} height={16} />
+            )}
+            {isCreating ? 'Creating…' : 'Create order'}
+          </button>
+        ) : (
+          <button type="button" onClick={next} className={NAV_PRIMARY}>
+            Next
+            <ChevronRightIcon width={16} height={16} />
+          </button>
+        )}
       </div>
 
       {confirming && (
@@ -266,7 +426,7 @@ export function OrderCreateView({
             <p className="text-text-muted m-0">It will also be created in Shopify.</p>
             <dl className="border-border bg-surface/40 m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border p-3 text-[0.82rem]">
               <dt className="text-text-muted">Store</dt>
-              <dd className="m-0">{store ? shopLabel(store) : shop}</dd>
+              <dd className="m-0">{storeName}</dd>
               <dt className="text-text-muted">Items</dt>
               <dd className="m-0">
                 {totals.items} ({effective.lines.length}{' '}
@@ -280,7 +440,7 @@ export function OrderCreateView({
               )}
               <dt className="text-text-muted">Payment</dt>
               <dd className="m-0">
-                {effective.paymentStatus === 'paid' ? 'Paid' : 'Payment pending'}
+                {PAYMENT_LABELS[effective.paymentStatus]}
                 {effective.paymentMethod.trim()
                   ? ` · ${effective.paymentMethod.trim()}`
                   : ''}

@@ -55,8 +55,10 @@ const ORDER_OPTIONS: SelectOption[] = [
 ]
 const PAYMENT_OPTIONS: SelectOption[] = [
   { value: '', label: 'All Payments' },
-  // No plain "Refunded" choice (removed by choice): "Partially refunded" stays.
-  ...ORDER_FINANCIAL_STATUSES.filter((value) => value !== 'REFUNDED').map((value) => ({
+  // No "Refunded" or "Voided" choice (removed by choice); "Partially refunded" stays.
+  ...ORDER_FINANCIAL_STATUSES.filter(
+    (value) => value !== 'REFUNDED' && value !== 'VOIDED',
+  ).map((value) => ({
     value,
     label: humanize(value),
   })),

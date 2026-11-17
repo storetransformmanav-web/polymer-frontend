@@ -3,7 +3,6 @@ import {
   ChevronDownIcon,
   MinusIcon,
   PlusIcon,
-  ProductsIcon,
   SpinnerIcon,
   TrashIcon,
 } from '../../../../components/ui/icons.tsx'
@@ -15,37 +14,106 @@ import {
   usePickVariants,
 } from '../../hooks/useOrderPickers.ts'
 import {
-  blankCustomLine,
   FIELD,
   orderSubtotal,
+  withoutOne,
   withVariant,
-  type CustomLine,
   type DraftLine,
   type OrderErrors,
 } from '../../utils/orderDraft.ts'
 import {
-  CheckField,
   FIELD_INPUT,
+  FormSection,
   ICON_BUTTON,
-  MoneyInput,
-  OrderSection,
-  PRIMARY_BUTTON,
   SearchDropdown,
   Thumb,
 } from './formParts.tsx'
 
 const TH = 'text-text px-3 py-2.5 text-[0.76rem] font-semibold whitespace-nowrap'
-const TD = 'border-border border-t px-3 py-3 align-top text-[0.85rem]'
+const TD = 'border-border border-t px-3 py-3 align-middle text-[0.85rem]'
 const STEP =
   'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-colors disabled:pointer-events-none disabled:opacity-40'
 
-/** One product found by the search: opening it lists its variants, each with Add. */
+type Change = (current: DraftLine[]) => DraftLine[]
+
+/** The quantity of a variant already on the order, or 0. */
+const quantityOf = (lines: DraftLine[] | undefined, variantId: string) => {
+  const line = lines?.find((candidate) => candidate.variantId === variantId)
+  const quantity = line ? Number.parseInt(line.quantity, 10) : 0
+  return Number.isFinite(quantity) ? quantity : 0
+}
+
+/**
+ * A variant's **Add** button; once it is on the order the button gives way to `[−] 1 [+]` —
+ * one more, one fewer, and at 1 the − takes it off the order.
+ */
+function AddOrCounter({
+  name,
+  quantity,
+  onChange,
+  variantId,
+  add,
+}: {
+  name: string
+  quantity: number
+  onChange: (change: Change) => void
+  variantId: string
+  add: () => void
+}) {
+  if (quantity <= 0) {
+    return (
+      <button
+        type="button"
+        aria-label={`Add ${name}`}
+        onClick={add}
+        className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-lg border-none px-2.5 text-[0.78rem] font-semibold transition-colors"
+      >
+        <PlusIcon width={14} height={14} />
+        Add
+      </button>
+    )
+  }
+  return (
+    <div
+      role="group"
+      aria-label={`Quantity of ${name}`}
+      className="flex items-center gap-1.5"
+    >
+      <button
+        type="button"
+        aria-label={quantity === 1 ? `Remove ${name}` : `One fewer of ${name}`}
+        onClick={() => onChange((lines) => withoutOne(lines, variantId))}
+        className={STEP}
+      >
+        <MinusIcon width={14} height={14} />
+      </button>
+      <span
+        aria-live="polite"
+        className="w-7 text-center text-[0.85rem] font-semibold tabular-nums"
+      >
+        {quantity}
+      </span>
+      <button
+        type="button"
+        aria-label={`One more of ${name}`}
+        onClick={add}
+        className={STEP}
+      >
+        <PlusIcon width={14} height={14} />
+      </button>
+    </div>
+  )
+}
+
+/** One product found by the search: opening it lists its variants, each with Add / a counter. */
 function ProductResult({
   product,
+  lines,
   onAdd,
 }: {
   product: ProductListItem
-  onAdd: (lines: (current: DraftLine[]) => DraftLine[]) => void
+  lines?: DraftLine[]
+  onAdd: (lines: Change) => void
 }) {
   const [open, setOpen] = useState(false)
   const details = usePickVariants(open ? product.id : null)
@@ -118,6 +186,7 @@ function ProductResult({
             {variants.map((variant) => {
               const name =
                 variant.title && variant.title !== 'Default Title' ? variant.title : ''
+              const label = `${product.title}${name ? ` – ${name}` : ''}`
               return (
                 <li
                   key={variant.id}
@@ -139,12 +208,14 @@ function ProductResult({
                   <span className="shrink-0 tabular-nums">
                     {formatPrice(variant.price, variant.currency ?? product.currency)}
                   </span>
-                  <button
-                    type="button"
-                    aria-label={`Add ${product.title}${name ? ` – ${name}` : ''}`}
-                    onClick={() =>
-                      onAdd((lines) =>
-                        withVariant(lines, {
+                  <AddOrCounter
+                    name={label}
+                    quantity={quantityOf(lines, variant.id)}
+                    variantId={variant.id}
+                    onChange={onAdd}
+                    add={() =>
+                      onAdd((current) =>
+                        withVariant(current, {
                           variantId: variant.id,
                           productTitle: product.title,
                           variantTitle: name,
@@ -154,11 +225,7 @@ function ProductResult({
                         }),
                       )
                     }
-                    className="bg-accent text-accent-contrast hover:bg-accent-hover inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-lg border-none px-2.5 text-[0.78rem] font-semibold transition-colors"
-                  >
-                    <PlusIcon width={14} height={14} />
-                    Add
-                  </button>
+                  />
                 </li>
               )
             })}
@@ -169,19 +236,21 @@ function ProductResult({
   )
 }
 
-/** A line's quantity: − and + beside a box that can also be typed in. */
+/** A line's quantity: − and + beside a box that can also be typed in; − at 1 removes the line. */
 function QuantityStepper({
   id,
   name,
   value,
   error,
   onChange,
+  onRemove,
 }: {
   id: string
   name: string
   value: string
   error?: string
   onChange: (value: string) => void
+  onRemove: () => void
 }) {
   const current = Number.parseInt(value, 10)
   const known = Number.isFinite(current)
@@ -190,9 +259,10 @@ function QuantityStepper({
       <div className="flex items-center justify-center gap-1.5">
         <button
           type="button"
-          aria-label={`One fewer of ${name}`}
-          disabled={known && current <= 1}
-          onClick={() => onChange(String(known ? current - 1 : 1))}
+          aria-label={known && current <= 1 ? `Remove ${name}` : `One fewer of ${name}`}
+          onClick={() =>
+            known && current <= 1 ? onRemove() : onChange(String(known ? current - 1 : 1))
+          }
           className={STEP}
         >
           <MinusIcon width={14} height={14} />
@@ -230,19 +300,22 @@ function QuantityStepper({
 
 /**
  * A search over the store's products (nothing is asked until something is typed) whose matches
- * drop down under the box; opening one lists its variants, each with **Add**.
+ * drop down under the box; opening one lists its variants. With `lines`, a variant already on the
+ * order shows its quantity counter in place of **Add**.
  */
 export function ProductSearch({
   id,
   shop,
   noMatchHint,
   onAdd,
+  lines,
 }: {
   id: string
   shop: string
   /** Said after "No product matches …". */
   noMatchHint: string
-  onAdd: (update: (current: DraftLine[]) => DraftLine[]) => void
+  onAdd: (update: Change) => void
+  lines?: DraftLine[]
 }) {
   const [text, setText] = useState('')
   const found = usePickProducts(shop, text)
@@ -276,7 +349,12 @@ export function ProductSearch({
       {products.length > 0 && (
         <ul aria-label="Products found" className="m-0 list-none p-0">
           {products.map((product) => (
-            <ProductResult key={product.id} product={product} onAdd={onAdd} />
+            <ProductResult
+              key={product.id}
+              product={product}
+              lines={lines}
+              onAdd={onAdd}
+            />
           ))}
         </ul>
       )}
@@ -291,56 +369,37 @@ export function ProductSearch({
 }
 
 /**
- * "Add Products": a search over the store's products (nothing is asked until something is typed)
- * whose matches drop down under the box; opening one lists its variants, and **Add** puts a
- * variant on the order (again: one more of it). **Add custom item** adds a line that is not a
- * product of the store, with its own name, price and flags. The lines are a table: product,
- * quantity, unit price, total and a bin, with the subtotal under it.
+ * "Items": only the store's own products can be ordered. A search lists matching products with
+ * their picture, title and price; opening one lists its variants, each with **Add**, which becomes
+ * a `[−] n [+]` counter (the same variant is never a second line). The chosen items are a table:
+ * product, quantity, unit price, total and a bin, with the subtotal under it. Each line is sent as
+ * its variant's id and quantity — the store prices it.
  */
 export function OrderLinesCard({
   lines,
   shop,
   currency,
-  symbol,
   errors,
   onChange,
 }: {
   lines: DraftLine[]
   shop: string
   currency: string | null
-  symbol: string
   errors: OrderErrors
-  onChange: (update: (current: DraftLine[]) => DraftLine[]) => void
+  onChange: (update: Change) => void
 }) {
-  const setLine = (key: string, patch: Partial<CustomLine> | { quantity: string }) =>
-    onChange((current) =>
-      current.map((line) =>
-        line.key === key ? ({ ...line, ...patch } as DraftLine) : line,
-      ),
-    )
+  const remove = (key: string) =>
+    onChange((current) => current.filter((candidate) => candidate.key !== key))
 
   return (
-    <OrderSection
-      icon={ProductsIcon}
-      title="Add Products"
-      subtitle="Search and add products to this order"
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <ProductSearch
-          id="order-product-search"
-          shop={shop}
-          noMatchHint="Add it as a custom item instead."
-          onAdd={onChange}
-        />
-        <button
-          type="button"
-          onClick={() => onChange((current) => [...current, blankCustomLine()])}
-          className={PRIMARY_BUTTON}
-        >
-          <PlusIcon width={16} height={16} />
-          Add custom item
-        </button>
-      </div>
+    <FormSection title="Items">
+      <ProductSearch
+        id="order-product-search"
+        shop={shop}
+        noMatchHint="Only products of the store can be added."
+        onAdd={onChange}
+        lines={lines}
+      />
 
       {lines.length === 0 ? (
         <p
@@ -353,22 +412,21 @@ export function OrderLinesCard({
               : 'border-border text-text-muted'
           }`}
         >
-          {errors[FIELD.lines] ??
-            'No items yet. Search for a product above, or add a custom item.'}
+          {errors[FIELD.lines] ?? 'No items yet. Search for a product above and add it.'}
         </p>
       ) : (
         <>
           <div className="border-border overflow-x-auto rounded-lg border">
             <table
               aria-label="Order items"
-              className="w-full min-w-[660px] border-collapse"
+              className="w-full min-w-[620px] border-collapse"
             >
               <thead className="bg-table-head">
                 <tr>
                   <th className={`${TH} text-left`}>Product</th>
                   <th className={`${TH} w-44 text-center`}>Quantity</th>
-                  <th className={`${TH} w-32 text-right`}>Unit Price</th>
-                  <th className={`${TH} w-24 text-right`}>Total</th>
+                  <th className={`${TH} w-28 text-right`}>Unit Price</th>
+                  <th className={`${TH} w-28 text-right`}>Total</th>
                   <th className={`${TH} w-16 text-center`}>Action</th>
                 </tr>
               </thead>
@@ -379,100 +437,43 @@ export function OrderLinesCard({
                     Number.isFinite(quantity) && line.price.trim()
                       ? Number.parseFloat(line.price) * quantity
                       : null
-                  const name =
-                    line.kind === 'variant'
-                      ? line.productTitle
-                      : line.title.trim() || 'Custom item'
-                  const titleId = FIELD.lineTitle(line.key)
-                  const priceId = FIELD.linePrice(line.key)
                   return (
                     <tr key={line.key}>
                       <td className={TD}>
-                        {line.kind === 'variant' ? (
-                          <div className="flex items-center gap-3">
-                            <Thumb url={line.imageUrl} alt="" />
-                            <div className="flex min-w-0 flex-col">
-                              <span className="truncate font-semibold">{name}</span>
-                              <span className="text-text-muted text-[0.76rem]">
-                                {[line.variantTitle, line.sku ? `SKU: ${line.sku}` : '']
-                                  .filter(Boolean)
-                                  .join(' · ') || 'Product of the store'}
-                              </span>
-                            </div>
+                        <div className="flex items-center gap-3">
+                          <Thumb url={line.imageUrl} alt="" />
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate font-semibold">
+                              {line.productTitle}
+                            </span>
+                            <span className="text-text-muted text-[0.76rem]">
+                              {[line.variantTitle, line.sku ? `SKU: ${line.sku}` : '']
+                                .filter(Boolean)
+                                .join(' · ') || 'Default variant'}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="flex min-w-0 flex-col gap-2">
-                            <label htmlFor={titleId} className="sr-only">
-                              Item name
-                            </label>
-                            <input
-                              id={titleId}
-                              autoComplete="off"
-                              value={line.title}
-                              placeholder="Custom item, e.g. Custom printing"
-                              aria-invalid={errors[titleId] ? true : undefined}
-                              onChange={(event) =>
-                                setLine(line.key, { title: event.target.value })
-                              }
-                              className={FIELD_INPUT}
-                            />
-                            {errors[titleId] && (
-                              <span role="alert" className="text-danger text-[0.74rem]">
-                                {errors[titleId]}
-                              </span>
-                            )}
-                            <div className="flex flex-wrap gap-x-5 gap-y-2">
-                              <CheckField
-                                id={`order-line-${line.key}-taxable`}
-                                label="Charge tax"
-                                checked={line.taxable}
-                                onChange={(taxable) => setLine(line.key, { taxable })}
-                              />
-                              <CheckField
-                                id={`order-line-${line.key}-shipping`}
-                                label="Needs shipping"
-                                checked={line.requiresShipping}
-                                onChange={(requiresShipping) =>
-                                  setLine(line.key, { requiresShipping })
-                                }
-                              />
-                            </div>
-                          </div>
-                        )}
+                        </div>
                       </td>
                       <td className={TD}>
                         <QuantityStepper
                           id={FIELD.lineQuantity(line.key)}
-                          name={name}
+                          name={line.productTitle}
                           value={line.quantity}
                           error={errors[FIELD.lineQuantity(line.key)]}
-                          onChange={(value) => setLine(line.key, { quantity: value })}
+                          onChange={(value) =>
+                            onChange((current) =>
+                              current.map((candidate) =>
+                                candidate.key === line.key
+                                  ? { ...candidate, quantity: value }
+                                  : candidate,
+                              ),
+                            )
+                          }
+                          onRemove={() => remove(line.key)}
                         />
                       </td>
                       <td className={`${TD} text-right tabular-nums`}>
-                        {line.kind === 'variant' ? (
-                          formatPrice(line.price, currency)
-                        ) : (
-                          <div className="flex flex-col gap-1 text-left">
-                            <MoneyInput
-                              id={priceId}
-                              label="Price"
-                              value={line.price}
-                              symbol={symbol}
-                              error={errors[priceId]}
-                              onChange={(price) => setLine(line.key, { price })}
-                            />
-                            {errors[priceId] && (
-                              <span
-                                id={`${priceId}-error`}
-                                role="alert"
-                                className="text-danger text-[0.74rem]"
-                              >
-                                {errors[priceId]}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        {formatPrice(line.price, currency)}
                       </td>
                       <td className={`${TD} text-right font-semibold tabular-nums`}>
                         {lineTotal === null ? '—' : formatPrice(lineTotal, currency)}
@@ -480,12 +481,8 @@ export function OrderLinesCard({
                       <td className={`${TD} text-center`}>
                         <button
                           type="button"
-                          aria-label={`Remove ${name}`}
-                          onClick={() =>
-                            onChange((current) =>
-                              current.filter((candidate) => candidate.key !== line.key),
-                            )
-                          }
+                          aria-label={`Delete ${line.productTitle}`}
+                          onClick={() => remove(line.key)}
                           className={ICON_BUTTON}
                         >
                           <TrashIcon width={16} height={16} />
@@ -505,6 +502,6 @@ export function OrderLinesCard({
           </p>
         </>
       )}
-    </OrderSection>
+    </FormSection>
   )
 }

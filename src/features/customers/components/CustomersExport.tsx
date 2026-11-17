@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import type { CustomerFilters } from '../../../app/store/customersSlice.ts'
 import { InAppBar } from '../../../components/ui/AppBarSlot.tsx'
-import { ExportButton, ExportStatus } from '../../../components/ui/ExportControls.tsx'
+import {
+  ExportButton,
+  ExportStatus,
+  RefreshButton,
+} from '../../../components/ui/ExportControls.tsx'
 import { useCsvExport } from '../../../hooks/useCsvExport.ts'
 import { api, type CustomerListItem } from '../../../lib/api/endpoints.ts'
 import { customerExportFilename } from '../utils/exportRequest.ts'
@@ -16,6 +20,12 @@ interface CustomersExportProps {
   total: number
   /** Show the button (the list is on screen); the progress and the dialog stay either way. */
   visible?: boolean
+  /** Asks the API for the list again (the Refresh button, just before Export). */
+  onRefresh?: () => void
+  /** The list is being read right now. */
+  refreshing?: boolean
+  /** Show Refresh; it follows `visible` unless the page says otherwise. */
+  refreshVisible?: boolean
 }
 
 /**
@@ -29,6 +39,9 @@ export function CustomersExport({
   filters,
   total,
   visible = true,
+  onRefresh,
+  refreshing = false,
+  refreshVisible,
 }: CustomersExportProps) {
   const { state, start, cancel, dismiss } = useCsvExport()
   const [open, setOpen] = useState(false)
@@ -40,6 +53,9 @@ export function CustomersExport({
         <div className="max-w-[16rem] min-w-0">
           <ExportStatus state={state} onCancel={cancel} onDismiss={dismiss} />
         </div>
+        {(refreshVisible ?? visible) && onRefresh && (
+          <RefreshButton refreshing={refreshing} onClick={onRefresh} />
+        )}
         {visible && (
           <ExportButton
             disabled={running || (items.length === 0 && total === 0)}

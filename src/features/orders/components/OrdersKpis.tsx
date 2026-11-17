@@ -9,12 +9,13 @@ interface OrdersKpisProps {
 }
 
 /**
- * The five cards above the list — Total Orders, Total Revenue, Net Revenue, Paid Orders and Pending
- * Orders — from `GET /orders/summary` for the list's own filters. Each is a filter button like the
- * Products page's stock cards: it sets the list's payment / cancelled filter (and the Filters grid
- * follows), and pressing the selected one again shows every matching order. **Total Orders** is the
- * selected card while neither filter is on, so the page opens on it without narrowing anything.
- * The (i) beside each arrow shows the API's own `info` text.
+ * The eight cards above the list — Total Orders, Total Revenue, Average Order Value, Net Revenue,
+ * Paid, Pending, Authorized and Refunded Orders — from `GET /orders/summary` for the list's own
+ * filters. Total Orders and the four payment-status cards are filter buttons like the Products
+ * page's stock cards: each sets the list's payment filter (and the Filters grid follows), and
+ * pressing the selected one again shows every matching order. **Total Orders** is the selected card
+ * while no payment filter is on, so the page opens on it without narrowing anything. The money
+ * cards (revenue, average) are display-only. The (i) beside each title shows the API's own `info`.
  */
 export function OrdersKpis({ filters, onChange }: OrdersKpisProps) {
   const { summary } = useOrderSummary(filters)

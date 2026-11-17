@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -52,6 +53,7 @@ const NOTICE_MS = 10_000
  */
 export function OrdersPage() {
   const orders = useOrders()
+  const queryClient = useQueryClient()
   const tabs = useOrderTabs()
   const navigate = useNavigate()
   const location = useLocation()
@@ -208,7 +210,9 @@ export function OrdersPage() {
       {creating && (
         <div
           className={
-            showCreate ? 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto' : 'hidden'
+            showCreate
+              ? 'relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden'
+              : 'hidden'
           }
         >
           <OrderCreateView
@@ -321,6 +325,12 @@ export function OrdersPage() {
           filters={filters}
           total={data?.total ?? 0}
           visible={!activeRef && !creatingRoute && !linked}
+          // Refresh asks for the list again (and the cards' figures that go with it) — no reload.
+          onRefresh={() => {
+            orders.retry()
+            void queryClient.invalidateQueries({ queryKey: ['order-summary'] })
+          }}
+          refreshing={orders.isFetching}
         />
 
         <section

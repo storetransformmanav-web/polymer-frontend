@@ -1,10 +1,5 @@
-import { useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react'
-import {
-  ImageIcon,
-  SearchIcon,
-  XIcon,
-  type IconProps,
-} from '../../../../components/ui/icons.tsx'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
+import { ImageIcon, SearchIcon, XIcon } from '../../../../components/ui/icons.tsx'
 import { safeUrl } from '../../../../lib/safeUrl.ts'
 import { splitChips } from '../../utils/orderDraft.ts'
 
@@ -28,52 +23,27 @@ export const QUANTITY_STEP =
 export const CHIP =
   'border-border-strong bg-accent-tint/50 text-text inline-flex max-w-full items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 text-[0.8rem] font-medium'
 
-/** A section's icon, in a tinted tile. */
-export function IconTile({
-  icon: Icon,
-  large = false,
-}: {
-  icon: ComponentType<IconProps>
-  large?: boolean
-}) {
-  const size = large ? 26 : 20
-  return (
-    <span
-      className={`bg-accent-tint text-accent border-border-strong flex shrink-0 items-center justify-center rounded-lg border ${large ? 'h-14 w-14' : 'h-11 w-11'}`}
-    >
-      <Icon width={size} height={size} />
-    </span>
-  )
-}
-
 /**
- * A section of the form: its icon, title and one-line description, then what it holds. `action`
- * sits beside the title, taking the rest of the row (Customer's search box).
+ * A section of a step: a small uppercase label (ORDER, CUSTOMER, NOTES …) over what it holds.
+ * `aside` sits at the right end of the label's row (a small action such as "Use the
+ * customer's name").
  */
-export function OrderSection({
-  icon,
+export function FormSection({
   title,
-  subtitle,
-  action,
+  aside,
   children,
 }: {
-  icon: ComponentType<IconProps>
   title: string
-  subtitle: string
-  action?: ReactNode
+  aside?: ReactNode
   children?: ReactNode
 }) {
   return (
-    <section aria-label={title} className={`${CARD} flex flex-col gap-4 p-4 sm:p-5`}>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <div className="flex items-center gap-3">
-          <IconTile icon={icon} />
-          <div className="flex flex-col">
-            <h3 className="text-[1rem] font-semibold">{title}</h3>
-            <p className="text-text-muted m-0 text-[0.8rem]">{subtitle}</p>
-          </div>
-        </div>
-        {action && <div className="min-w-0 flex-1 basis-80">{action}</div>}
+    <section aria-label={title} className="flex flex-col gap-3">
+      <div className="flex min-h-5 items-center justify-between gap-3">
+        <h3 className="text-text-muted text-[0.74rem] font-bold tracking-wider uppercase">
+          {title}
+        </h3>
+        {aside}
       </div>
       {children}
     </section>
@@ -185,6 +155,7 @@ export function Field({
   error,
   hint,
   optional = false,
+  required = false,
   children,
 }: {
   id: string
@@ -192,12 +163,20 @@ export function Field({
   error?: string
   hint?: string
   optional?: boolean
+  /** A red * after the label. */
+  required?: boolean
   children: ReactNode
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className={FIELD_LABEL}>
         {label}
+        {required && (
+          <span aria-hidden="true" className="text-danger">
+            {' '}
+            *
+          </span>
+        )}
         {optional && <span className="text-text-muted font-normal"> (optional)</span>}
       </label>
       {children}

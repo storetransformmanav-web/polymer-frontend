@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
@@ -7,7 +8,8 @@ import type { CollectionListItem } from '../../../lib/api/endpoints.ts'
 import { formatDateTime } from '../../../lib/format.ts'
 import { formatUpdatedAt } from '../../../lib/storeTime.ts'
 import { CollectionImage, Message, TypeBadge } from './CollectionParts.tsx'
-import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
+import { CONDITIONS_SHOWN, conditionTexts } from '../utils/conditions.ts'
+import { count, MESSAGE_BUTTON, SECONDARY_BUTTON } from '../utils/ui.ts'
 
 // No alignment in the base classes: each column sets its own, header and cells alike.
 const TH_BASE =
@@ -21,19 +23,21 @@ const SKELETON_ROWS = 8
 // Every column gets a share of the table's width (it is fixed-layout), so the gaps between them
 // stay even at any window width instead of the Collection column taking all the spare room.
 const COLUMN_WIDTHS = {
-  collection: 38,
-  type: 15,
-  products: 12,
+  collection: 27,
+  type: 11,
+  condition: 25,
+  products: 9,
   store: 0,
-  updated: 22,
-  actions: 13,
+  updated: 17,
+  actions: 11,
 }
 const COLUMN_WIDTHS_WITH_STORE = {
-  collection: 30,
-  type: 13,
-  products: 10,
-  store: 17,
-  updated: 20,
+  collection: 23,
+  type: 10,
+  condition: 21,
+  products: 8,
+  store: 13,
+  updated: 15,
   actions: 10,
 }
 
@@ -57,6 +61,97 @@ interface CollectionsListProps {
 // the current time on every render; the full date and time is the hover text.
 const updated = (value: string | null | undefined) =>
   value ? <span title={formatDateTime(value)}>{formatUpdatedAt(value) || '—'}</span> : '—'
+
+/**
+ * A collection's first two conditions, one under the other (the backend's own wording, cut with "…"
+ * when long; the full text is the hover text), then "+ More Conditions" when it has more. A collection
+ * with none shows a dash.
+ */
+function ConditionCell({
+  collection,
+  onMore,
+}: {
+  collection: CollectionListItem
+  onMore: (collection: CollectionListItem) => void
+}) {
+  const conditions = conditionTexts(collection)
+  if (conditions.length === 0) return <span className="text-text-muted">—</span>
+  const more = conditions.length - CONDITIONS_SHOWN
+  return (
+    <span className="flex min-w-0 flex-col items-start gap-1">
+      {conditions.slice(0, CONDITIONS_SHOWN).map((condition, index) => (
+        <span
+          key={`${condition}-${index}`}
+          title={condition}
+          className="border-border bg-surface text-text block max-w-full truncate rounded-md border px-2 py-0.5 text-[0.76rem] font-medium"
+        >
+          {condition}
+        </span>
+      ))}
+      {more > 0 && (
+        <button
+          type="button"
+          aria-label={`Show ${more} more ${more === 1 ? 'condition' : 'conditions'} of ${collection.title}`}
+          onClick={() => onMore(collection)}
+          className="text-accent cursor-pointer border-none bg-transparent p-0 text-[0.76rem] font-semibold hover:underline"
+        >
+          + More Conditions
+        </button>
+      )}
+    </span>
+  )
+}
+
+/** Every condition after the first two, in a white dialog, one per row. */
+function MoreConditionsDialog({
+  collection,
+  onClose,
+}: {
+  collection: CollectionListItem
+  onClose: () => void
+}) {
+  const rest = conditionTexts(collection).slice(CONDITIONS_SHOWN)
+  return (
+    <Dialog
+      title={`More conditions of ${collection.title}`}
+      role="dialog"
+      wide
+      banded
+      heading="More conditions"
+      subtitle={`${collection.title} · ${rest.length} more ${rest.length === 1 ? 'condition' : 'conditions'}`}
+      icon={
+        <span className="bg-accent-tint text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+          <LayersIcon width={18} height={18} />
+        </span>
+      }
+      onClose={onClose}
+      footer={
+        <button
+          type="button"
+          data-autofocus
+          className={SECONDARY_BUTTON}
+          onClick={onClose}
+        >
+          Close
+        </button>
+      }
+    >
+      <ol className="m-0 flex max-h-[55svh] list-none flex-col gap-2 overflow-y-auto p-0">
+        {rest.map((condition, index) => (
+          <li
+            key={`${condition}-${index}`}
+            className="border-border bg-bg text-text flex items-start gap-3 rounded-lg border px-3 py-2.5 text-[0.85rem] font-medium"
+          >
+            <span className="bg-accent-tint text-accent flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1 text-[0.7rem] font-bold">
+              {CONDITIONS_SHOWN + index + 1}
+            </span>
+            <span className="min-w-0 break-words">{condition}</span>
+          </li>
+        ))}
+      </ol>
+    </Dialog>
+  )
+}
 
 function ViewButton({
   collection,
@@ -96,6 +191,8 @@ export function CollectionsList({
   emptyAction,
 }: CollectionsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  // The collection whose remaining conditions are open in the dialog.
+  const [moreFor, setMoreFor] = useState<CollectionListItem | null>(null)
   const width = showStore ? COLUMN_WIDTHS_WITH_STORE : COLUMN_WIDTHS
 
   if (error) {
@@ -179,100 +276,113 @@ export function CollectionsList({
   }
 
   return (
-    <div
-      aria-busy={isPending || isStale}
-      className="relative max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
-    >
-      <table
-        className={`w-full min-w-[900px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+    <>
+      <div
+        aria-busy={isPending || isStale}
+        className="relative max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
       >
-        <thead>
-          <tr>
-            <th className={TH_LEFT} style={{ width: `${width.collection}%` }}>
-              Collection
-            </th>
-            <th className={TH_CENTER} style={{ width: `${width.type}%` }}>
-              Type
-            </th>
-            <th className={TH_CENTER} style={{ width: `${width.products}%` }}>
-              Products
-            </th>
-            {showStore && (
-              <th className={TH_CENTER} style={{ width: `${width.store}%` }}>
-                Store
+        <table
+          className={`w-full min-w-[1100px] table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        >
+          <thead>
+            <tr>
+              <th className={TH_LEFT} style={{ width: `${width.collection}%` }}>
+                Collection
               </th>
-            )}
-            <th className={TH_CENTER} style={{ width: `${width.updated}%` }}>
-              Updated
-            </th>
-            <th className={TH_CENTER} style={{ width: `${width.actions}%` }}>
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {isPending && (
-            <tr className="sr-only">
-              <td role="status">Loading collections…</td>
+              <th className={TH_CENTER} style={{ width: `${width.type}%` }}>
+                Type
+              </th>
+              <th className={TH_LEFT} style={{ width: `${width.condition}%` }}>
+                Condition
+              </th>
+              <th className={TH_CENTER} style={{ width: `${width.products}%` }}>
+                Products
+              </th>
+              {showStore && (
+                <th className={TH_CENTER} style={{ width: `${width.store}%` }}>
+                  Store
+                </th>
+              )}
+              <th className={TH_CENTER} style={{ width: `${width.updated}%` }}>
+                Updated
+              </th>
+              <th className={TH_CENTER} style={{ width: `${width.actions}%` }}>
+                Actions
+              </th>
             </tr>
-          )}
-          {isPending
-            ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
-                <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: showStore ? 6 : 5 }, (_, cell) => (
-                    <td key={cell} className={TD}>
-                      <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
+          </thead>
+          <tbody>
+            {isPending && (
+              <tr className="sr-only">
+                <td role="status">Loading collections…</td>
+              </tr>
+            )}
+            {isPending
+              ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
+                  <tr key={row} aria-hidden="true" className="border-border border-b">
+                    {Array.from({ length: showStore ? 7 : 6 }, (_, cell) => (
+                      <td key={cell} className={TD}>
+                        <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : items.map((collection) => (
+                  <tr
+                    key={collection.id}
+                    className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
+                  >
+                    <td className={`${TD} text-left`}>
+                      <span className="flex items-center gap-3">
+                        <CollectionImage src={collection.image_url} />
+                        <span className="flex min-w-0 flex-col">
+                          <button
+                            type="button"
+                            onClick={() => onOpen(collection)}
+                            className="text-text hover:text-accent cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold transition-colors"
+                            title={collection.title}
+                          >
+                            <Highlight text={collection.title} />
+                          </button>
+                        </span>
+                      </span>
                     </td>
-                  ))}
-                </tr>
-              ))
-            : items.map((collection) => (
-                <tr
-                  key={collection.id}
-                  className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
-                >
-                  <td className={`${TD} text-left`}>
-                    <span className="flex items-center gap-3">
-                      <CollectionImage src={collection.image_url} />
-                      <span className="flex min-w-0 flex-col">
-                        <button
-                          type="button"
-                          onClick={() => onOpen(collection)}
-                          className="text-text hover:text-accent cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold transition-colors"
-                          title={collection.title}
+                    <td className={TD_CENTER}>
+                      <TypeBadge
+                        type={collection.collection_type}
+                        className="w-24 justify-center"
+                      />
+                    </td>
+                    <td className={`${TD} overflow-hidden text-left`}>
+                      <ConditionCell collection={collection} onMore={setMoreFor} />
+                    </td>
+                    <td className={`${TD_CENTER} font-semibold`}>
+                      {count(collection.products_count)}
+                    </td>
+                    {showStore && (
+                      <td className={`${TD_CENTER} overflow-hidden`}>
+                        <span
+                          className="block truncate"
+                          title={collection.shop?.name ?? ''}
                         >
-                          <Highlight text={collection.title} />
-                        </button>
-                      </span>
-                    </span>
-                  </td>
-                  <td className={TD_CENTER}>
-                    <TypeBadge
-                      type={collection.collection_type}
-                      className="w-24 justify-center"
-                    />
-                  </td>
-                  <td className={`${TD_CENTER} font-semibold`}>
-                    {count(collection.products_count)}
-                  </td>
-                  {showStore && (
-                    <td className={`${TD_CENTER} overflow-hidden`}>
-                      <span
-                        className="block truncate"
-                        title={collection.shop?.name ?? ''}
-                      >
-                        {collection.shop?.name ?? '—'}
-                      </span>
+                          {collection.shop?.name ?? '—'}
+                        </span>
+                      </td>
+                    )}
+                    <td className={TD_CENTER}>
+                      {updated(collection.shopify_updated_at)}
                     </td>
-                  )}
-                  <td className={TD_CENTER}>{updated(collection.shopify_updated_at)}</td>
-                  <td className={TD_CENTER}>
-                    <ViewButton collection={collection} onOpen={onOpen} />
-                  </td>
-                </tr>
-              ))}
-        </tbody>
-      </table>
-    </div>
+                    <td className={TD_CENTER}>
+                      <ViewButton collection={collection} onOpen={onOpen} />
+                    </td>
+                  </tr>
+                ))}
+          </tbody>
+        </table>
+      </div>
+      {moreFor && (
+        <MoreConditionsDialog collection={moreFor} onClose={() => setMoreFor(null)} />
+      )}
+    </>
   )
 }

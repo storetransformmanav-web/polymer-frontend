@@ -2307,6 +2307,22 @@ const collectionListItemSchema = z.object({
   products_count: z.number().nullish(),
   shop: shopRefSchema.nullish(),
   shopify_updated_at: z.string().nullish(),
+  /**
+   * A smart collection's conditions, as the list answer carries them: only each one's own wording
+   * (`condition`) is read here — a rule set that does not fit is left out rather than failing the list.
+   */
+  rule_set: z
+    .object({
+      conditions: z
+        .array(
+          z.object({
+            condition: z.union([z.string(), z.number()]).transform(String).nullish(),
+          }),
+        )
+        .default([]),
+    })
+    .nullish()
+    .catch(null),
 })
 
 const collectionListResponseSchema = z.object({

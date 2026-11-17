@@ -1,4 +1,10 @@
-import { CheckCircleIcon, DownloadIcon, SpinnerIcon, XIcon } from './icons.tsx'
+import {
+  CheckCircleIcon,
+  DownloadIcon,
+  RefreshIcon,
+  SpinnerIcon,
+  XIcon,
+} from './icons.tsx'
 
 /** The state of an export, as `useTableExport` reports it. */
 interface ExportProgress {
@@ -65,6 +71,32 @@ export function ExportStatus({
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * The **Refresh** button, just before Export: it asks the API for the list again (the page the
+ * table is on, with its filters) and nothing else — no page reload. The icon spins while the
+ * request is in flight and the button is off until it ends.
+ */
+export function RefreshButton({
+  refreshing,
+  onClick,
+}: {
+  refreshing: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-busy={refreshing}
+      disabled={refreshing}
+      onClick={onClick}
+      className="border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+    >
+      <RefreshIcon width={16} height={16} className={refreshing ? 'animate-spin' : ''} />
+      Refresh
+    </button>
   )
 }
 

@@ -350,6 +350,10 @@ export function CustomersPage() {
           total={data?.total ?? 0}
           // The whole list of people's details: only for those who may export customers.
           visible={!activeId && !creatingRoute && canExport}
+          // Refresh asks for the list again — whoever may see the page, not only who may export.
+          onRefresh={customers.retry}
+          refreshing={customers.isFetching}
+          refreshVisible={!activeId && !creatingRoute}
         />
 
         <section

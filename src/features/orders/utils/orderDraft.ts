@@ -33,18 +33,8 @@ export interface VariantLine {
   imageUrl: string | null
 }
 
-/** A line that is not a product of the store, priced here. */
-export interface CustomLine {
-  key: string
-  kind: 'custom'
-  title: string
-  price: string
-  quantity: string
-  taxable: boolean
-  requiresShipping: boolean
-}
-
-export type DraftLine = VariantLine | CustomLine
+/** An order line is always one of the store's variants (no custom products). */
+export type DraftLine = VariantLine
 
 export interface OrderDraft {
   /** The store key; empty means the form's default store. */
@@ -55,7 +45,6 @@ export interface OrderDraft {
     lastName: string
     company: string
     address1: string
-    address2: string
     city: string
     zip: string
     countryCode: string
@@ -83,7 +72,6 @@ export function blankOrderDraft(): OrderDraft {
       lastName: '',
       company: '',
       address1: '',
-      address2: '',
       city: '',
       zip: '',
       countryCode: '',
@@ -122,16 +110,43 @@ export function withVariant(
   return [...lines, { ...variant, key: newKey(), kind: 'variant', quantity: '1' }]
 }
 
-/** A new, empty custom line (taxable and not shipped, as a service usually is). */
-export function blankCustomLine(): CustomLine {
+/** One fewer of a variant; at 1 the line goes (a quantity of zero is no line). */
+export function withoutOne(lines: DraftLine[], variantId: string): DraftLine[] {
+  return lines.flatMap((line) => {
+    if (line.variantId !== variantId) return [line]
+    const current = Number.parseInt(line.quantity, 10)
+    if (!Number.isFinite(current) || current <= 1) return []
+    return [{ ...line, quantity: String(current - 1) }]
+  })
+}
+
+/**
+ * Whether a delivery address has been started. The name alone does not count: it is filled in
+ * from the customer when the Addresses step opens, and a name with no street is no address.
+ */
+export function addressStarted(address: OrderDraft['address']): boolean {
+  return [
+    address.company,
+    address.address1,
+    address.city,
+    address.zip,
+    address.countryCode,
+    address.phone,
+  ].some((value) => value.trim())
+}
+
+/** The customer's name as the delivery name, when the address has none yet. */
+export function withCustomerNameOnAddress(draft: OrderDraft): OrderDraft {
+  const { address, customer } = draft
+  if (address.firstName.trim() || address.lastName.trim()) return draft
+  if (!customer.firstName.trim() && !customer.lastName.trim()) return draft
   return {
-    key: newKey(),
-    kind: 'custom',
-    title: '',
-    price: '',
-    quantity: '1',
-    taxable: true,
-    requiresShipping: false,
+    ...draft,
+    address: {
+      ...address,
+      firstName: customer.firstName.trim(),
+      lastName: customer.lastName.trim(),
+    },
   }
 }
 
@@ -164,7 +179,6 @@ export const FIELD = {
   lastName: 'order-customer-last-name',
   phone: 'order-customer-phone',
   address1: 'order-address1',
-  address2: 'order-address2',
   city: 'order-city',
   zip: 'order-zip',
   country: 'order-country',
@@ -179,9 +193,103 @@ export const FIELD = {
   discountCodes: 'order-discount-codes',
   paymentMethod: 'order-payment-method',
   lineQuantity: (key: string) => `order-line-${key}-quantity`,
-  lineTitle: (key: string) => `order-line-${key}-title`,
-  linePrice: (key: string) => `order-line-${key}-price`,
 } as const
+
+/** How a payment status reads on screen. */
+export const PAYMENT_LABELS: Record<OrderPaymentStatus, string> = {
+  paid: 'Paid',
+  pending: 'Payment pending',
+}
+
+/** The wizard's steps, in order. */
+export const ORDER_STEPS = [
+  { id: 'order', label: 'Order & Customer' },
+  { id: 'addresses', label: 'Addresses' },
+  { id: 'items', label: 'Items' },
+  { id: 'review', label: 'Review & Create' },
+] as const
+
+export type OrderStepId = (typeof ORDER_STEPS)[number]['id']
+
+const ORDER_STEP_FIELDS: string[] = [
+  FIELD.shop,
+  FIELD.email,
+  FIELD.firstName,
+  FIELD.lastName,
+  FIELD.phone,
+  FIELD.tags,
+  FIELD.discountCodes,
+  FIELD.paymentMethod,
+  FIELD.note,
+]
+
+/** The step a field (by its id) lives on; the review step has no fields of its own. */
+export function stepOfField(field: string): OrderStepId {
+  if (ORDER_STEP_FIELDS.includes(field)) return 'order'
+  if (field.startsWith('order-line')) return 'items'
+  return 'addresses'
+}
+
+/** What each field is called on screen, for the alert that lists what needs fixing. */
+const FIELD_LABELS: Record<string, string> = {
+  [FIELD.shop]: 'Store',
+  [FIELD.email]: 'Email',
+  [FIELD.firstName]: 'First Name',
+  [FIELD.lastName]: 'Last Name',
+  [FIELD.phone]: 'Phone',
+  [FIELD.discountCodes]: 'Discount codes',
+  [FIELD.tags]: 'Tags',
+  [FIELD.paymentMethod]: 'Payment method',
+  [FIELD.note]: 'Notes',
+  [FIELD.lines]: 'Items',
+  [FIELD.addressFirstName]: 'Shipping address: First name',
+  [FIELD.addressLastName]: 'Shipping address: Last name',
+  [FIELD.company]: 'Shipping address: Company',
+  [FIELD.address1]: 'Shipping address: Address',
+  [FIELD.city]: 'Shipping address: City',
+  [FIELD.zip]: 'Shipping address: Postcode',
+  [FIELD.country]: 'Shipping address: Country',
+  [FIELD.addressPhone]: 'Shipping address: Phone',
+  [FIELD.shippingTitle]: 'Shipping method',
+  [FIELD.shippingPrice]: 'Shipping cost',
+}
+
+export interface OrderProblem {
+  /** The field's id, so the alert can take the person to it. */
+  field: string
+  label: string
+  message: string
+}
+
+/**
+ * The problems as a list for the alert — which field, and what is wrong with it — in the order
+ * the fields appear (an item's quantity is named after its product).
+ */
+export function problemList(draft: OrderDraft, errors: OrderErrors): OrderProblem[] {
+  const list: OrderProblem[] = Object.keys(FIELD_LABELS)
+    .filter((field) => errors[field])
+    .map((field) => ({ field, label: FIELD_LABELS[field], message: errors[field] }))
+  for (const line of draft.lines) {
+    const field = FIELD.lineQuantity(line.key)
+    if (!errors[field]) continue
+    const name = [line.productTitle, line.variantTitle].filter(Boolean).join(' – ')
+    list.push({ field, label: `Quantity of ${name}`, message: errors[field] })
+  }
+  return list
+}
+
+/** Only the problems that belong to one step. */
+export function stepProblems(errors: OrderErrors, step: OrderStepId): OrderErrors {
+  return Object.fromEntries(
+    Object.entries(errors).filter(([field]) => stepOfField(field) === step),
+  )
+}
+
+/** The first step (in order) that has a problem, or null when there is none. */
+export function firstStepWithProblem(errors: OrderErrors): OrderStepId | null {
+  const found = new Set(Object.keys(errors).map(stepOfField))
+  return ORDER_STEPS.find((step) => found.has(step.id))?.id ?? null
+}
 
 /** Checks the draft against the API's limits; an empty result means it can be sent. */
 export function validateOrderDraft(draft: OrderDraft): OrderErrors {
@@ -189,7 +297,7 @@ export function validateOrderDraft(draft: OrderDraft): OrderErrors {
   if (!draft.shop.trim()) errors[FIELD.shop] = 'Choose the store the order is for.'
 
   if (draft.lines.length === 0) {
-    errors[FIELD.lines] = 'Add at least one product or custom item.'
+    errors[FIELD.lines] = 'Add at least one product.'
   } else if (draft.lines.length > ORDER_LIMITS.lines) {
     errors[FIELD.lines] = `An order can have at most ${ORDER_LIMITS.lines} lines.`
   }
@@ -199,15 +307,6 @@ export function validateOrderDraft(draft: OrderDraft): OrderErrors {
       errors[FIELD.lineQuantity(line.key)] = 'A whole number, 1 or more.'
     } else if (Number(quantity) > ORDER_LIMITS.quantity) {
       errors[FIELD.lineQuantity(line.key)] = `At most ${ORDER_LIMITS.quantity}.`
-    }
-    if (line.kind === 'custom') {
-      if (!line.title.trim()) errors[FIELD.lineTitle(line.key)] = 'Name the item.'
-      else if (line.title.trim().length > ORDER_LIMITS.title) {
-        errors[FIELD.lineTitle(line.key)] = `At most ${ORDER_LIMITS.title} characters.`
-      }
-      if (!MONEY.test(line.price.trim())) {
-        errors[FIELD.linePrice(line.key)] = 'A price such as 25.00.'
-      }
     }
   }
 
@@ -232,7 +331,7 @@ export function validateOrderDraft(draft: OrderDraft): OrderErrors {
   }
 
   const address = draft.address
-  if (Object.values(address).some((value) => value.trim())) {
+  if (addressStarted(address)) {
     if (!address.address1.trim()) errors[FIELD.address1] = 'Enter the street address.'
     if (!address.city.trim()) errors[FIELD.city] = 'Enter the town or city.'
     if (!/^[A-Za-z]{2}$/.test(address.countryCode.trim())) {
@@ -289,21 +388,15 @@ function filled<T extends Record<string, string | undefined>>(record: T): Partia
 const money = (value: string) => Number(value.trim()).toFixed(2)
 
 /**
- * The request for a checked draft: only what was filled in. A variant line is sent by its id
- * and quantity (the store prices it); a custom line with its own title, price and flags.
+ * The request for a checked draft: only what was filled in. A line is sent by its variant id
+ * and quantity (the store prices it).
  */
 export function buildOrderBody(draft: OrderDraft): OrderCreateBody {
-  const lineItems: OrderCreateLineItem[] = draft.lines.map((line) =>
-    line.kind === 'variant'
-      ? { variant_id: line.variantId, quantity: Number(line.quantity.trim()) }
-      : {
-          title: line.title.trim(),
-          price: money(line.price),
-          quantity: Number(line.quantity.trim()),
-          taxable: line.taxable,
-          requires_shipping: line.requiresShipping,
-        },
-  )
+  // Only the variant's id and the quantity: the store prices the line.
+  const lineItems: OrderCreateLineItem[] = draft.lines.map((line) => ({
+    variant_id: line.variantId,
+    quantity: Number(line.quantity.trim()),
+  }))
   const body: OrderCreateBody = { shop: draft.shop.trim(), line_items: lineItems }
 
   const customer: OrderCreateCustomer = filled({
@@ -315,13 +408,12 @@ export function buildOrderBody(draft: OrderDraft): OrderCreateBody {
   if (Object.keys(customer).length > 0) body.customer = customer
 
   const a = draft.address
-  if (Object.values(a).some((value) => value.trim())) {
+  if (addressStarted(a)) {
     body.shipping_address = {
       ...filled({
         first_name: a.firstName,
         last_name: a.lastName,
         company: a.company,
-        address2: a.address2,
         zip: a.zip,
         phone: a.phone,
       }),
