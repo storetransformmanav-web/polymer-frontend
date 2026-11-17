@@ -61,7 +61,7 @@ function ChangeQuestion({
         <p className="text-text-muted m-0 text-[0.7rem] font-bold tracking-wide uppercase">
           {change.label}
         </p>
-        <p className="m-0 break-words">
+        <p className="m-0 break-words whitespace-pre-wrap">
           <span className="text-text-muted line-through">{show(change.from)}</span>
           {' → '}
           <strong>{show(change.to)}</strong>
@@ -128,7 +128,9 @@ export function CollectionTextValue({
   const [asking, setAsking] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const shown = display ?? (
-    <span className={`break-words ${value.trim() ? '' : 'text-text-muted'}`}>
+    <span
+      className={`break-words ${field === 'seo_description' ? 'whitespace-pre-wrap' : ''} ${value.trim() ? '' : 'text-text-muted'}`}
+    >
       {show(value)}
     </span>
   )
@@ -141,6 +143,8 @@ export function CollectionTextValue({
         showIcon
         busy={sending}
         maxLength={TEXT_LIMITS[field]}
+        // The meta description is a few sentences: a text area, not a one-line box.
+        multiline={field === 'seo_description'}
         validate={(next) => textProblem(field, next)}
         onCommit={(next) => {
           if (next.trim() !== value.trim()) setAsking(next.trim())

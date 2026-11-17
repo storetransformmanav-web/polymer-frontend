@@ -18,6 +18,25 @@ const TD = 'px-3 py-1.5 align-middle whitespace-nowrap'
 const TD_CENTER = `${TD} text-center`
 const SKELETON_ROWS = 8
 
+// Every column gets a share of the table's width (it is fixed-layout), so the gaps between them
+// stay even at any window width instead of the Collection column taking all the spare room.
+const COLUMN_WIDTHS = {
+  collection: 38,
+  type: 15,
+  products: 12,
+  store: 0,
+  updated: 22,
+  actions: 13,
+}
+const COLUMN_WIDTHS_WITH_STORE = {
+  collection: 30,
+  type: 13,
+  products: 10,
+  store: 17,
+  updated: 20,
+  actions: 10,
+}
+
 interface CollectionsListProps {
   items: CollectionListItem[]
   isPending: boolean
@@ -77,6 +96,7 @@ export function CollectionsList({
   emptyAction,
 }: CollectionsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const width = showStore ? COLUMN_WIDTHS_WITH_STORE : COLUMN_WIDTHS
 
   if (error) {
     return (
@@ -168,12 +188,26 @@ export function CollectionsList({
       >
         <thead>
           <tr>
-            <th className={TH_LEFT}>Collection</th>
-            <th className={`${TH_CENTER} w-32`}>Type</th>
-            <th className={`${TH_CENTER} w-28`}>Products</th>
-            {showStore && <th className={`${TH_CENTER} w-44`}>Store</th>}
-            <th className={`${TH_CENTER} w-48`}>Updated</th>
-            <th className={`${TH_CENTER} w-24`}>Actions</th>
+            <th className={TH_LEFT} style={{ width: `${width.collection}%` }}>
+              Collection
+            </th>
+            <th className={TH_CENTER} style={{ width: `${width.type}%` }}>
+              Type
+            </th>
+            <th className={TH_CENTER} style={{ width: `${width.products}%` }}>
+              Products
+            </th>
+            {showStore && (
+              <th className={TH_CENTER} style={{ width: `${width.store}%` }}>
+                Store
+              </th>
+            )}
+            <th className={TH_CENTER} style={{ width: `${width.updated}%` }}>
+              Updated
+            </th>
+            <th className={TH_CENTER} style={{ width: `${width.actions}%` }}>
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>

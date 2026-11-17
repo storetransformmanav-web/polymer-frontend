@@ -22,6 +22,7 @@ export function DoubleClickEdit({
   showIcon = false,
   busy = false,
   autoWidth = false,
+  multiline = false,
   className = '',
 }: {
   /** The value as saved. */
@@ -49,6 +50,12 @@ export function DoubleClickEdit({
    * minimum keeps a short number easy to hit) — instead of filling its place.
    */
   autoWidth?: boolean
+  /**
+   * A text area (four lines, taller by dragging) instead of a one-line box, for text that can run
+   * long: Enter starts a new line, **Ctrl + Enter** (⌘ + Enter) or leaving the box keeps it,
+   * Escape puts the old text back, and a counter shows how much of `maxLength` is used.
+   */
+  multiline?: boolean
   className?: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -89,8 +96,10 @@ export function DoubleClickEdit({
     onCommit(next)
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
     if (event.key === 'Enter') {
+      // In a text area Enter is a new line; only Ctrl / ⌘ + Enter keeps the text.
+      if (multiline && !(event.ctrlKey || event.metaKey)) return
       event.preventDefault()
       finish(true)
     } else if (event.key === 'Escape') {
@@ -112,35 +121,73 @@ export function DoubleClickEdit({
               : ''
         } ${className}`}
       >
-        <input
-          autoFocus
-          aria-label={label}
-          aria-invalid={problem ? true : undefined}
-          autoComplete="off"
-          spellCheck={false}
-          value={draft}
-          inputMode={inputMode}
-          maxLength={maxLength}
-          placeholder={placeholder}
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => {
-            setDraft(event.target.value)
-            setProblem(null)
-          }}
-          onKeyDown={handleKeyDown}
-          onBlur={() => finish(true)}
-          // One `ch` per character typed, plus one spare and the padding and border.
-          style={
-            autoWidth
-              ? { width: `calc(${Math.max(draft.length, 1) + 1}ch + 1.25rem)` }
-              : undefined
-          }
-          className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 ${
-            autoWidth ? 'max-w-none min-w-16' : 'w-full min-w-0'
-          } rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
-            highlighted ? 'bg-accent-tint/40' : 'bg-bg'
-          } ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : ''}`}
-        />
+        {multiline ? (
+          <>
+            <textarea
+              autoFocus
+              aria-label={label}
+              aria-invalid={problem ? true : undefined}
+              autoComplete="off"
+              spellCheck
+              rows={4}
+              value={draft}
+              maxLength={maxLength}
+              placeholder={placeholder}
+              onFocus={(event) => {
+                // Put the cursor at the end (long text is edited, not replaced).
+                const end = event.currentTarget.value.length
+                event.currentTarget.setSelectionRange(end, end)
+              }}
+              onChange={(event) => {
+                setDraft(event.target.value)
+                setProblem(null)
+              }}
+              onKeyDown={handleKeyDown}
+              onBlur={() => finish(true)}
+              className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger min-h-24 w-full min-w-0 resize-y rounded-lg border px-2 py-1.5 text-[0.8rem] leading-snug font-medium outline-none focus:outline-2 ${
+                highlighted ? 'bg-accent-tint/40' : 'bg-bg'
+              }`}
+            />
+            <span className="text-text-muted flex flex-wrap items-center justify-between gap-x-3 text-[0.7rem] font-normal">
+              <span>Ctrl + Enter to save · Esc to cancel</span>
+              {maxLength !== undefined && (
+                <span aria-live="off" className="tabular-nums">
+                  {draft.length} / {maxLength}
+                </span>
+              )}
+            </span>
+          </>
+        ) : (
+          <input
+            autoFocus
+            aria-label={label}
+            aria-invalid={problem ? true : undefined}
+            autoComplete="off"
+            spellCheck={false}
+            value={draft}
+            inputMode={inputMode}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setProblem(null)
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={() => finish(true)}
+            // One `ch` per character typed, plus one spare and the padding and border.
+            style={
+              autoWidth
+                ? { width: `calc(${Math.max(draft.length, 1) + 1}ch + 1.25rem)` }
+                : undefined
+            }
+            className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 ${
+              autoWidth ? 'max-w-none min-w-16' : 'w-full min-w-0'
+            } rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
+              highlighted ? 'bg-accent-tint/40' : 'bg-bg'
+            } ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : ''}`}
+          />
+        )}
         {problem && (
           <span role="alert" className="text-danger text-[0.72rem] font-normal">
             {problem}

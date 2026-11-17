@@ -157,11 +157,18 @@ export function CollectionDetailsView({
         </span>
       </HeaderChip>
 
+      {/* The visible words are for the eye; `HeaderChip` already gives a screen reader its label. */}
       <HeaderChip icon={ArrowUpDownIcon} label="Product order">
+        <span aria-hidden="true" className="text-text-muted">
+          Product order:
+        </span>{' '}
         {sortOrderLabel(collection.sort_order)}
       </HeaderChip>
       {collection.shopify_updated_at && (
         <HeaderChip icon={ClockIcon} label="Last updated in Shopify">
+          <span aria-hidden="true" className="text-text-muted">
+            Shopify updated at:
+          </span>{' '}
           {formatDateTimeAmPm(collection.shopify_updated_at)}
         </HeaderChip>
       )}
@@ -177,7 +184,12 @@ export function CollectionDetailsView({
         titleHint={collection.title}
         status={
           <>
-            <TypeBadge type={collection.collection_type} />
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-text-muted text-[0.8rem] font-medium">
+                Collection type:
+              </span>
+              <TypeBadge type={collection.collection_type} />
+            </span>
             {collection.shop?.name && (
               <span className="text-text-muted text-[0.8rem]">
                 {collection.shop.name}

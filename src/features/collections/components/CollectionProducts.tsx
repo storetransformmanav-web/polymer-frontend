@@ -270,7 +270,7 @@ export function CollectionProducts({
             <table className="w-full min-w-[820px] border-collapse text-[0.85rem]">
               <thead>
                 <tr>
-                  <th className={`${TH} w-14 text-center`}>#</th>
+                  <th className={`${TH} w-14 text-center`}>position</th>
                   <th className={`${TH} text-left`}>Product</th>
                   <th className={`${TH} text-left`}>SKU</th>
                   <th className={`${TH} text-center`}>Status</th>
