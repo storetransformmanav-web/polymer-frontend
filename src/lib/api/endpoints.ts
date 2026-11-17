@@ -433,6 +433,8 @@ export type ActivityActionCount = z.infer<typeof activityActionSchema>
 export interface ActivityListParams {
   /** Only this user (omit for everyone). */
   user_id?: string
+  /** Only users with this role, a name from `GET /roles` (omit for every role). */
+  role?: string
   /** Exact action name, e.g. "update_user". */
   action?: string
   entity_type?: string

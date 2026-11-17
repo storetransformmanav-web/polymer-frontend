@@ -1,4 +1,5 @@
 import { AppBarSlot, RefreshSlot } from '../../components/ui/AppBarSlot.tsx'
+import { InfoIcon } from '../../components/ui/icons.tsx'
 import { SyncCustomersButton } from '../../features/customers/index.ts'
 import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
@@ -22,6 +23,29 @@ function ShopScope() {
       selected={shops.selected}
       onSelect={shops.select}
     />
+  )
+}
+
+const ORDERS_DATA_NOTE = 'Order data from 23 July 2026 onward.'
+const ORDERS_DATA_NOTE_DETAIL =
+  'We are displaying order data from 23 July 2026 onward. Orders created before this date are not included in the listing.'
+
+/**
+ * Beside the store dropdown on the Orders page: a soft green pill with an (i), a bold "Note:" and a
+ * short line saying where the order data starts (the hover text spells it out in full). One line, so it
+ * shows from wide screens up.
+ */
+function OrdersDataNote() {
+  return (
+    <p
+      title={ORDERS_DATA_NOTE_DETAIL}
+      className="border-accent/30 bg-accent-tint/60 text-text m-0 hidden min-w-0 shrink items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.85rem] min-[1400px]:flex"
+    >
+      <InfoIcon width={16} height={16} className="text-accent shrink-0" />
+      <span className="truncate">
+        <strong className="text-[0.95rem] font-bold">Note:</strong> {ORDERS_DATA_NOTE}
+      </span>
+    </p>
   )
 }
 
@@ -50,6 +74,7 @@ export function AppBar() {
             <ShopScope />
           </>
         )}
+        {activeItem?.to === '/orders' && <OrdersDataNote />}
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-3">
         <StoreClock />

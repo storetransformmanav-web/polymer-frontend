@@ -1,30 +1,35 @@
 import { useState } from 'react'
 import {
-  ArrowUpDownIcon,
   CalendarIcon,
   ChevronDownIcon,
-  ListChecksIcon,
   SearchIcon,
   SlidersIcon,
+  UserCogIcon,
+  UsersIcon,
   XIcon,
 } from '../../../components/ui/icons.tsx'
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
-import {
-  ACTIVITY_METHODS,
-  type ActivityActionCount,
-  type ActivityMethod,
-} from '../../../lib/api/endpoints.ts'
+import { type Role, type UserItem } from '../../../lib/api/endpoints.ts'
 import { toDateFilters, type ActivityFilters } from '../hooks/activityQueries.ts'
-import { actionLabel } from '../utils/format.ts'
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
+/** A person as the User dropdown shows them: name, then email. */
+const personLabel = (
+  user: Pick<UserItem, 'full_name' | 'first_name' | 'last_name' | 'email'>,
+) => {
+  const name =
+    user.full_name.trim() ||
+    [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+  return name ? `${name} (${user.email})` : user.email
+}
 
 interface ActivityToolbarProps {
   filters: ActivityFilters
-  actions: ActivityActionCount[]
-  total: number | null
+  /** The people and roles the dropdowns offer (loaded when the Filters grid opens). */
+  users: UserItem[]
+  roles: Role[]
   hasFilters: boolean
   rangeInvalid: boolean
   onChange: (changes: Partial<ActivityFilters>) => void
@@ -35,14 +40,14 @@ interface ActivityToolbarProps {
 
 /**
  * Search, the Filters button and Clear All in one row, and the collapsible filter grid under
- * it (method — "All Methods (total)" — and action; the date range sits in the search row). Typing in the search box is
+ * it (user and role; the date range sits in the search row). Typing in the search box is
  * instant locally and sent to the API once the user pauses (see useDebouncedField);
  * dropdowns and dates apply immediately.
  */
 export function ActivityToolbar({
   filters,
-  actions,
-  total,
+  users,
+  roles,
   hasFilters,
   rangeInvalid,
   onChange,
@@ -56,28 +61,20 @@ export function ActivityToolbar({
     onChange({ search }),
   )
 
-  const actionOptions: SelectOption[] = [
-    { value: '', label: 'All Actions' },
-    ...actions.map((item) => ({
-      value: item.action,
-      label: `${actionLabel(item.action)} (${item.count.toLocaleString('en-GB')})`,
-    })),
+  const userOptions: SelectOption[] = [
+    { value: '', label: 'All Users' },
+    ...users.map((user) => ({ value: user.id, label: personLabel(user) })),
   ]
-  // "All Methods" carries the list's total (the open choice's own number, no extra request: a
-  // count per method would be one more request each, and every request is logged here).
-  const methodOptions: SelectOption[] = [
-    {
-      value: '',
-      label:
-        total !== null && filters.method === ''
-          ? `All Methods (${total.toLocaleString('en-GB')})`
-          : 'All Methods',
-    },
-    ...ACTIVITY_METHODS.map((method) => ({ value: method, label: method })),
+  // The chosen person / role is always listed, even before its list has loaded.
+  if (filters.userId && !users.some((user) => user.id === filters.userId)) {
+    userOptions.push({ value: filters.userId, label: filters.userId })
+  }
+  const roleOptions: SelectOption[] = [
+    { value: '', label: 'All Roles' },
+    ...roles.map((role) => ({ value: role.name, label: role.label || role.name })),
   ]
-  // The chosen value is always listed, even before its list has loaded.
-  if (filters.action && !actions.some((item) => item.action === filters.action)) {
-    actionOptions.push({ value: filters.action, label: actionLabel(filters.action) })
+  if (filters.role && !roles.some((role) => role.name === filters.role)) {
+    roleOptions.push({ value: filters.role, label: filters.role })
   }
 
   return (
@@ -171,22 +168,22 @@ export function ActivityToolbar({
         }`}
       >
         <div className="-m-1 overflow-hidden p-1">
-          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-2">
             <SelectField
-              id="filter-method"
-              label="Method"
-              icon={ArrowUpDownIcon}
-              value={filters.method}
-              options={methodOptions}
-              onChange={(method) => onChange({ method: method as ActivityMethod | '' })}
+              id="filter-user"
+              label="User"
+              icon={UsersIcon}
+              value={filters.userId}
+              options={userOptions}
+              onChange={(userId) => onChange({ userId })}
             />
             <SelectField
-              id="filter-action"
-              label="Action"
-              icon={ListChecksIcon}
-              value={filters.action}
-              options={actionOptions}
-              onChange={(action) => onChange({ action })}
+              id="filter-role"
+              label="Role"
+              icon={UserCogIcon}
+              value={filters.role}
+              options={roleOptions}
+              onChange={(role) => onChange({ role })}
             />
           </div>
         </div>

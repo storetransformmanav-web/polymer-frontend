@@ -31,8 +31,8 @@ export function ActivityPage() {
       <HeaderRefresh refreshing={activity.isFetching} onRefresh={activity.retry} />
       <ActivityToolbar
         filters={filters}
-        actions={options.actions}
-        total={data?.total ?? null}
+        users={options.users}
+        roles={options.roles}
         hasFilters={activity.hasFilters}
         rangeInvalid={activity.rangeInvalid}
         onChange={activity.setFilters}

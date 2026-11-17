@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { activityActionsOptions } from './activityQueries.ts'
+import { activityRolesOptions, activityUsersOptions } from './activityQueries.ts'
 
 /**
- * The choices for the "Action" dropdown: the actions found in the log itself, with how
- * many times each happened.
+ * The choices for the dropdowns of the Filters grid: the users (name and id) and the roles.
  *
  * Nothing is requested until `enabled`: the page opens with just its list, and the choices
  * are fetched when the Filters grid is opened.
  */
 export function useActivityFilterOptions(enabled = true) {
-  const actions = useQuery({ ...activityActionsOptions(), enabled })
-  return { actions: actions.data ?? [] }
+  const users = useQuery({ ...activityUsersOptions(), enabled })
+  const roles = useQuery({ ...activityRolesOptions(), enabled })
+  return {
+    users: users.data?.items ?? [],
+    roles: roles.data ?? [],
+  }
 }

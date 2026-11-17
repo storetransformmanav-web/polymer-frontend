@@ -1,9 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import {
-  api,
-  type ActivityListParams,
-  type ActivityMethod,
-} from '../../../lib/api/endpoints.ts'
+import { api, type ActivityListParams } from '../../../lib/api/endpoints.ts'
 import { storeTimeToIso } from '../../../lib/storeTime.ts'
 
 /**
@@ -19,10 +15,10 @@ export const ACTIVITY_OPTIONS_STALE_MS = 5 * 60_000
 
 export interface ActivityFilters {
   search: string
-  /** An exact action name ('' = every action). */
-  action: string
-  /** An HTTP method ('' = every method). */
-  method: ActivityMethod | ''
+  /** One user's id ('' = everyone). */
+  userId: string
+  /** A role name from `GET /roles` ('' = every role). */
+  role: string
   /** `datetime-local` values ("2026-10-14T09:30", the browser's local time) or ''. */
   from: string
   to: string
@@ -32,8 +28,8 @@ export interface ActivityFilters {
 
 export const DEFAULT_ACTIVITY_FILTERS: ActivityFilters = {
   search: '',
-  action: '',
-  method: '',
+  userId: '',
+  role: '',
   from: '',
   to: '',
   page: 1,
@@ -74,8 +70,8 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
 
   const search = filters.search.trim()
   if (search) params.search = search
-  if (filters.action) params.action = filters.action
-  if (filters.method) params.method = filters.method
+  if (filters.userId) params.user_id = filters.userId
+  if (filters.role) params.role = filters.role
   const from = toIso(filters.from)
   if (from) params.from = from
   const to = toIso(filters.to)
@@ -88,8 +84,8 @@ export function toActivityParams(filters: ActivityFilters): ActivityListParams {
 export function hasActiveActivityFilters(filters: ActivityFilters): boolean {
   return (
     filters.search.trim() !== '' ||
-    filters.action !== '' ||
-    filters.method !== '' ||
+    filters.userId !== '' ||
+    filters.role !== '' ||
     filters.from !== '' ||
     filters.to !== ''
   )
@@ -106,10 +102,21 @@ export const activityListOptions = (params: ActivityListParams) =>
     refetchOnReconnect: false,
   })
 
-export const activityActionsOptions = () =>
+/** The people the User dropdown offers (asked for when the Filters grid is opened). */
+export const activityUsersOptions = () =>
   queryOptions({
-    queryKey: ['activity', 'actions'],
-    queryFn: api.activity.actions,
+    queryKey: ['activity', 'user-options'],
+    queryFn: () => api.users.list({ page: 1, page_size: 100 }),
+    staleTime: ACTIVITY_OPTIONS_STALE_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+/** The roles the Role dropdown offers (asked for when the Filters grid is opened). */
+export const activityRolesOptions = () =>
+  queryOptions({
+    queryKey: ['activity', 'role-options'],
+    queryFn: () => api.roles.list(),
     staleTime: ACTIVITY_OPTIONS_STALE_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
