@@ -3,6 +3,7 @@ import { ApiError } from './ApiError.ts'
 import { apiClient, refreshCsrfSession } from './client.ts'
 import { CSRF_PATH, setCsrfToken } from './csrf.ts'
 import { readInvoiceDetail, type InvoiceDetail } from './invoiceDetail.ts'
+import { readOrderSummary, type OrderSummary } from './orderSummary.ts'
 import {
   readInvoiceList,
   type InvoiceListParams,
@@ -74,6 +75,8 @@ export const ENDPOINTS = {
     detail: (ref: string) => `/orders/${encodeURIComponent(ref)}`,
     /** `GET` the orders as a Shopify-format CSV file (no paging: one call returns every match). */
     export: '/orders/export',
+    /** `GET` the figures for the cards above the list (`summary.cards`, `statuses`, `channels`), for the same filters as the list. */
+    summary: '/orders/summary',
   },
   customers: {
     list: '/customers',
@@ -899,6 +902,15 @@ export type OrderExportParams = Omit<
   /** Order ids, comma-separated. */
   ids?: string
 }
+
+/**
+ * Query parameters of `GET /orders/summary`: the list's filters, without its sorting and paging
+ * (the figures cover every matching order, not one page).
+ */
+export type OrderSummaryParams = Omit<
+  OrderListParams,
+  'sort' | 'order' | 'page' | 'page_size'
+>
 
 /** Query parameters accepted by `GET /orders` (all optional). */
 export interface OrderListParams {
@@ -3047,6 +3059,12 @@ async function findByNumber(
 
 export const api = {
   orders: {
+    /** The cards' figures for the orders matching `params` (`GET /orders/summary`). */
+    async summary(params: OrderSummaryParams): Promise<OrderSummary> {
+      const data = await apiClient.get(ENDPOINTS.orders.summary, { params })
+      return readOrderSummary(data)
+    },
+
     /** One page of orders, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: OrderListParams): Promise<OrderListResponse> {
       const data = await apiClient.get(ENDPOINTS.orders.list, { params })

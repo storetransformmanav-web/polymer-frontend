@@ -175,7 +175,7 @@ export function OrdersPage() {
           list, so an open order, the Add order form or a linked page takes their place (kept
           mounted, only hidden). */}
       <div className={activeRef || creatingRoute || linked ? 'hidden' : undefined}>
-        <OrdersKpis data={data} />
+        <OrdersKpis filters={filters} onChange={orders.setFilters} />
       </div>
 
       <OrderTabsBar

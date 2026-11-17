@@ -45,7 +45,16 @@ vi.mock('../../lib/api/endpoints.ts', async (importOriginal) => {
       shops: { list: record('shops.list', () => []) },
       products: { list: record('products.list', page) },
       customers: { list: record('customers.list', page) },
-      orders: { list: record('orders.list', (p) => ({ ...page(p), totals: null })) },
+      orders: {
+        list: record('orders.list', (p) => ({ ...page(p), totals: null })),
+        summary: record('orders.summary', () => ({
+          cards: {},
+          statuses: [],
+          channels: [],
+          currency: null,
+          mixedCurrencies: false,
+        })),
+      },
       activity: {
         list: record('activity.list', page),
         actions: record('activity.actions', () => []),
@@ -104,13 +113,20 @@ describe('what a page requests when it opens', () => {
     expect([...new Set(names())].sort()).toEqual(['products.list', 'shops.list'])
   })
 
-  it('Orders: its own list (page 1) and the store list — no other page, no counts', async () => {
+  it('Orders: its own list (page 1), the cards’ summary once, and the store list — no other page, no counts', async () => {
     renderAt('/orders')
     await waitFor(() => expect(callsTo('orders.list')).toHaveLength(1))
     await settle()
 
     expect(callsTo('orders.list')[0].params).toMatchObject({ page: 1, page_size: 25 })
-    expect([...new Set(names())].sort()).toEqual(['orders.list', 'shops.list'])
+    // The cards ask for the list's filters, without its paging and sorting.
+    expect(callsTo('orders.summary')).toHaveLength(1)
+    expect(callsTo('orders.summary')[0].params).not.toHaveProperty('page')
+    expect([...new Set(names())].sort()).toEqual([
+      'orders.list',
+      'orders.summary',
+      'shops.list',
+    ])
   })
 
   it('Customers: its own list asked for once, and the store list — the cards add no request', async () => {

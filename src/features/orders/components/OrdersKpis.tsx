@@ -1,57 +1,37 @@
-import {
-  CheckCircleIcon,
-  OrdersIcon,
-  PoundIcon,
-  RefreshIcon,
-} from '../../../components/ui/icons.tsx'
-import { KpiCards, type Kpi } from '../../../components/ui/KpiCards.tsx'
-import type { OrderListResponse } from '../../../lib/api/endpoints.ts'
-import { formatPrice } from '../../../lib/format.ts'
+import { KpiCards } from '../../../components/ui/KpiCards.tsx'
+import type { OrderFilters } from '../../../app/store/ordersSlice.ts'
+import { useOrderSummary } from '../hooks/useOrderSummary.ts'
+import { cardForFilters, summaryKpis } from '../utils/summary.ts'
 
-/**
- * The four figures the API's `totals` gives for every order that matches the filters
- * (not just this page): `orders`, `total_price`, `total_refunded` and `net_payment`.
- * The API gives no currency for the amounts, so the first order's is used.
- */
-function kpis(data: OrderListResponse | null): Kpi[] {
-  const totals = data?.totals
-  const currency = data?.items[0]?.currency
-  const money = (value: string | null | undefined) =>
-    value === null || value === undefined ? '—' : formatPrice(value, currency)
-
-  const orders = totals?.orders ?? data?.total ?? null
-
-  return [
-    {
-      label: 'Orders',
-      value: orders === null ? '—' : orders.toLocaleString('en-GB'),
-      // note: 'matching filters',
-      icon: OrdersIcon,
-    },
-    {
-      label: 'Total price',
-      value: money(totals?.total_price),
-      // note: 'of all orders',
-      icon: PoundIcon,
-    },
-    {
-      label: 'Total refunded',
-      value: money(totals?.total_refunded),
-      // note: 'returned to customers',
-      icon: RefreshIcon,
-      tone: 'warning',
-    },
-    {
-      label: 'Net payment',
-      value: money(totals?.net_payment),
-      // note: 'paid, after refunds',
-      icon: CheckCircleIcon,
-      tone: 'good',
-    },
-  ]
+interface OrdersKpisProps {
+  filters: OrderFilters
+  onChange: (changes: Partial<OrderFilters>) => void
 }
 
-/** The four figures above the list: orders, total price, total refunded, net payment. */
-export function OrdersKpis({ data }: { data: OrderListResponse | null }) {
-  return <KpiCards items={kpis(data)} />
+/**
+ * The five cards above the list — Total Orders, Total Revenue, Net Revenue, Paid Orders and Pending
+ * Orders — from `GET /orders/summary` for the list's own filters. Each is a filter button like the
+ * Products page's stock cards: it sets the list's payment / cancelled filter (and the Filters grid
+ * follows), and pressing the selected one again shows every matching order. **Total Orders** is the
+ * selected card while neither filter is on, so the page opens on it without narrowing anything.
+ * The (i) beside each arrow shows the API's own `info` text.
+ */
+export function OrdersKpis({ filters, onChange }: OrdersKpisProps) {
+  const { summary } = useOrderSummary(filters)
+  const selected = cardForFilters(filters)
+
+  return (
+    <KpiCards
+      items={summaryKpis(summary, selected, (card) => {
+        // The card that is on is pressed again: back to every matching order.
+        if (selected?.key === card.key) {
+          if (card.filter.financial !== '' || card.filter.cancelled !== '') {
+            onChange({ financial: '', cancelled: '' })
+          }
+          return
+        }
+        onChange(card.filter)
+      })}
+    />
+  )
 }
