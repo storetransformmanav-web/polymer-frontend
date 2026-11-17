@@ -2,10 +2,12 @@ import type { ComponentType } from 'react'
 import {
   ActivityIcon,
   DashboardIcon,
+  FileTextIcon,
   InventoryIcon,
   LayersIcon,
   LockIcon,
   OrdersIcon,
+  PoundIcon,
   ProductsIcon,
   StoreIcon,
   UserCogIcon,
@@ -119,6 +121,20 @@ export const NAV_ENTRIES: NavEntry[] = [
         area: 'access',
         icon: LockIcon,
         shopScoped: true,
+        fillHeight: true,
+      },
+    ],
+  },
+  {
+    // Sage 50: the accounts package's data (not Shopify's), so it is not store-scoped.
+    label: 'Sage 50',
+    icon: PoundIcon,
+    items: [
+      {
+        to: '/sage/invoices',
+        label: 'Invoices',
+        area: 'sage_invoices',
+        icon: FileTextIcon,
         fillHeight: true,
       },
     ],

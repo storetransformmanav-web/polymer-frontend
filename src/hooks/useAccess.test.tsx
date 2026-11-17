@@ -92,8 +92,24 @@ describe('visibleNavEntries', () => {
       customers: { view: false },
       inventory: { view: false },
       access: { view: false },
+      sage_invoices: { view: false },
     })
     expect(shown.some(isNavGroup)).toBe(false)
+  })
+
+  it('puts Invoices in their own Sage 50 group, and hides it for sage_invoices: view false', () => {
+    const sage = (permissions: AuthUser['permissions']) =>
+      visibleNavEntries(permissions).find(
+        (entry) => isNavGroup(entry) && entry.label === 'Sage 50',
+      )
+
+    const group = sage(undefined)
+    expect(group && isNavGroup(group) && group.items.map((item) => item.to)).toEqual([
+      '/sage/invoices',
+    ])
+    expect(sage({ sage_invoices: { view: false } })).toBeUndefined()
+    // Another area being off leaves it alone.
+    expect(sage({ orders: { view: false } })).toBeDefined()
   })
 
   it('shows the office role only the Shopify Management group', () => {
@@ -105,6 +121,7 @@ describe('visibleNavEntries', () => {
     expect(group.items.map((item) => item.label)).toEqual([
       'Orders',
       'Products',
+      'Collections',
       'Customers',
       'Inventory',
       'Lock Management',

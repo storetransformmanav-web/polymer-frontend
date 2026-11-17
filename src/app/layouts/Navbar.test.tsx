@@ -79,6 +79,38 @@ describe('Navbar', () => {
     expect(api.activity.actions).not.toHaveBeenCalled()
   })
 
+  describe('Sage 50 accordion', () => {
+    const SAGE = { name: 'Sage 50' }
+
+    it('is a group of its own, closed away from its pages, with Invoices inside', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<Navbar />, { route: '/' })
+
+      const heading = screen.getByRole('button', SAGE)
+      expect(heading).toHaveAttribute('aria-expanded', 'false')
+      // Separate from Shopify Management, which stays closed too.
+      expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
+
+      await user.click(heading)
+      expect(heading).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByRole('link', { name: 'Invoices' })).toHaveAttribute(
+        'href',
+        '/sage/invoices',
+      )
+    })
+
+    it('is already open on the invoices page, with its link active', () => {
+      renderWithProviders(<Navbar />, { route: '/sage/invoices' })
+
+      expect(screen.getByRole('button', SAGE)).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByRole('link', { name: 'Invoices' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
+      expect(screen.getByRole('button', GROUP)).toHaveAttribute('aria-expanded', 'false')
+    })
+  })
+
   describe('Shopify Management accordion', () => {
     it('starts closed away from its pages, then opens and closes on click', async () => {
       const user = userEvent.setup()

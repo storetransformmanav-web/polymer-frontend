@@ -2,6 +2,12 @@ import { z } from 'zod'
 import { ApiError } from './ApiError.ts'
 import { apiClient, refreshCsrfSession } from './client.ts'
 import { CSRF_PATH, setCsrfToken } from './csrf.ts'
+import { readInvoiceDetail, type InvoiceDetail } from './invoiceDetail.ts'
+import {
+  readInvoiceList,
+  type InvoiceListParams,
+  type InvoiceListResponse,
+} from './invoices.ts'
 import {
   buildImportForm,
   readImportPlan,
@@ -54,6 +60,12 @@ export const ENDPOINTS = {
     list: '/activity',
     /** Distinct action names with counts — feeds the action dropdown. */
     actions: '/activity/actions',
+  },
+  invoices: {
+    /** `GET` one page of the Sage 50 invoices (`/api/sage/invoices`), filtered, sorted and paged server-side. */
+    list: '/sage/invoices',
+    /** `GET` one invoice in full, by its number (`/api/sage/invoices/649409`). */
+    detail: (number: string) => `/sage/invoices/${encodeURIComponent(number)}`,
   },
   orders: {
     /** `GET` the list; `POST` creates an order. */
@@ -3775,6 +3787,39 @@ export const api = {
     async actions(): Promise<ActivityActionCount[]> {
       const data = await apiClient.get(ENDPOINTS.activity.actions)
       return activityActionsResponseSchema.parse(data).items
+    },
+  },
+
+  invoices: {
+    /**
+     * One page of the Sage 50 invoices — `items`, `totals` (for everything the filters match),
+     * `kind_counts` and the paging — filtered, searched, sorted and paged by the server.
+     */
+    async list(params: InvoiceListParams): Promise<InvoiceListResponse> {
+      try {
+        const data = await apiClient.get(ENDPOINTS.invoices.list, { params })
+        return readInvoiceList(data)
+      } catch (error) {
+        // A bare "Not Found" says nothing: name the address that was asked for.
+        if (error instanceof ApiError && error.status === 404) {
+          throw new ApiError(
+            `The server answered “Not Found” for GET /api${ENDPOINTS.invoices.list}: the invoices route is not at that address. Check its path in the API documentation.`,
+            { status: 404, data: error.data },
+          )
+        }
+        throw error
+      }
+    },
+  },
+
+  invoiceDetail: {
+    /**
+     * One invoice in full — its lines, addresses, totals, VAT analysis and payments — by its
+     * number, asked for when its page opens. The answer is the source of truth for the page.
+     */
+    async get(number: string): Promise<InvoiceDetail> {
+      const data = await apiClient.get(ENDPOINTS.invoices.detail(number))
+      return readInvoiceDetail(data)
     },
   },
 

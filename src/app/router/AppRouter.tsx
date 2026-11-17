@@ -6,6 +6,7 @@ import { CollectionsPage } from '../../features/collections/index.ts'
 import { CustomersPage } from '../../features/customers/index.ts'
 import { DashboardPage } from '../../features/dashboard/index.ts'
 import { InventoryPage } from '../../features/inventory/index.ts'
+import { InvoicesPage } from '../../features/invoices/index.ts'
 import { LoginPage } from '../../features/auth/index.ts'
 import { LocksPage } from '../../features/locks/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
@@ -49,6 +50,9 @@ const router = createBrowserRouter([
           // `*` lets LocksPage also serve /locks/new (Add lock) and /locks/:handle (one lock).
           { path: 'locks/*', element: <LocksPage /> },
           { path: 'activity', element: <ActivityPage /> },
+          // Sage 50 → Invoices (a group in the sidebar; more Sage pages can sit beside it). `*` lets
+          // InvoicesPage also serve /sage/invoices/<number> and /sage/invoices/customer/<ref>.
+          { path: 'sage/invoices/*', element: <InvoicesPage /> },
         ],
       },
     ],
