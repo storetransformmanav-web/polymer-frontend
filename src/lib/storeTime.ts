@@ -284,6 +284,29 @@ export function formatStoreClock(
   }).format(date)
 }
 
+/**
+ * "12:38:57 PM GMT" — the time of day on the store's clock, 12-hour with seconds and upper-case
+ * AM / PM, followed by what the clock is called then (GMT in winter, BST in summer).
+ */
+export function formatStoreClockAmPm(
+  iso: string | null | undefined,
+  timeZone: string = current,
+): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\s/g, ' ')
+  return `${time} ${storeTimeZoneAbbreviation(iso, timeZone)}`.trim()
+}
+
 /** "BST" or "GMT" — what the store's clock is called at this moment (summer or winter time). */
 export function storeTimeZoneAbbreviation(
   iso: string | null | undefined,

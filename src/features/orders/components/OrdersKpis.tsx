@@ -23,6 +23,7 @@ export function OrdersKpis({ filters, onChange }: OrdersKpisProps) {
 
   return (
     <KpiCards
+      compact
       items={summaryKpis(summary, selected, (card) => {
         // The card that is on is pressed again: back to every matching order.
         if (selected?.key === card.key) {

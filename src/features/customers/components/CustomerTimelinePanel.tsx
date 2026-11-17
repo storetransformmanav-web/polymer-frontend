@@ -19,9 +19,9 @@ import {
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
 import type { CustomerDetail } from '../../../lib/api/endpoints.ts'
-import { formatTimestamp } from '../../../lib/format.ts'
+import { formatDateTimeAmPm } from '../../../lib/format.ts'
 import {
-  formatStoreClock,
+  formatStoreClockAmPm,
   getStoreTimeZone,
   storeTimeZoneAbbreviation,
 } from '../../../lib/storeTime.ts'
@@ -81,7 +81,7 @@ function EventRow({
 }) {
   const Icon = ICONS[event.icon]
   const bodyId = `customer-timeline-${event.key}`
-  const time = formatStoreClock(event.occurredAt)
+  const time = formatStoreClockAmPm(event.occurredAt)
 
   return (
     <li className="border-border bg-bg overflow-hidden rounded-lg border">
@@ -139,8 +139,8 @@ function EventRow({
           </p>
           <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-2 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <Detail label="Time">
-              {formatTimestamp(event.occurredAt)
-                ? `${formatTimestamp(event.occurredAt)} ${storeTimeZoneAbbreviation(event.occurredAt)}`.trim()
+              {event.occurredAt
+                ? `${formatDateTimeAmPm(event.occurredAt)} ${storeTimeZoneAbbreviation(event.occurredAt)}`.trim()
                 : '—'}
             </Detail>
             <Detail label="Time zone">{getStoreTimeZone()}</Detail>

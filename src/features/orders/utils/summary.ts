@@ -187,9 +187,6 @@ function cardMoney(card: OrderSummaryCard, summary: OrderSummary): string | null
 
 const isMoneyCard = (card: OrderSummaryCard) => /revenue|average|avg|aov/.test(card.key)
 
-const percent = (value: number | null) =>
-  value === null ? undefined : `${Number(value.toFixed(1))}% of orders`
-
 const plain = (text: string) => text.toLowerCase().replace(/[^a-z]/g, '')
 
 /**
@@ -251,9 +248,10 @@ function findCard(summary: OrderSummary | null, def: CardDef): OrderSummaryCard 
 }
 
 /**
- * The cards' figures, from the answer when there is one (a dash until then). The label, the (i)
- * text (`info`), the extra line (`detail`), the amount and the share of orders are all the API's.
- * Only the cards with a filter are buttons; the money cards are plain.
+ * The cards' figures, from the answer when there is one (a dash until then): just the title, the
+ * one value and the (i) text (`info`) — the share of orders, the money beside a count and the extra
+ * detail line are left out to keep the cards minimal. Only the cards with a filter are buttons; the
+ * money cards are plain.
  */
 export function summaryKpis(
   summary: OrderSummary | null,
@@ -262,29 +260,12 @@ export function summaryKpis(
 ): Kpi[] {
   return ORDER_SUMMARY_CARDS.map((def) => {
     const card = findCard(summary, def)
-    const mixed = !!summary && (summary.mixedCurrencies || !!card?.mixedCurrencies)
     const money = card && summary ? cardMoney(card, summary) : null
-
-    let value: string
-    let hint: string | undefined
-    if (def.kind === 'money') {
-      value = money ?? '—'
-      hint = [
-        card?.detail,
-        mixed && !card?.currency && !summary?.currency ? 'Mixed currencies' : '',
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    } else {
-      value = number(card?.value ?? null)
-      hint = [money, card?.detail].filter(Boolean).join(' · ')
-    }
+    const value = def.kind === 'money' ? (money ?? '—') : number(card?.value ?? null)
 
     return {
       label: card?.label || def.label,
       value,
-      note: percent(card?.percentOfOrders ?? null),
-      hint: hint || undefined,
       info: card?.info || def.description,
       icon: def.icon,
       tone: def.tone,

@@ -87,7 +87,7 @@ describe('CollectionsList — columns and the Updated date', () => {
     const headers = screen
       .getAllByRole('columnheader')
       .map((header) => header.textContent)
-    expect(headers).toEqual(['Collection', 'Type', 'Products', 'Updated', 'Actions'])
+    expect(headers).toEqual(['Collection', 'Condition', 'Products', 'Updated', 'Actions'])
     expect(screen.queryByText('Best selling')).not.toBeInTheDocument()
   })
 

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Dialog } from '../../../components/ui/Dialog.tsx'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
@@ -9,7 +9,7 @@ import { formatDateTime } from '../../../lib/format.ts'
 import { formatUpdatedAt } from '../../../lib/storeTime.ts'
 import { CollectionImage, Message, TypeBadge } from './CollectionParts.tsx'
 import { CONDITIONS_SHOWN, conditionTexts } from '../utils/conditions.ts'
-import { count, MESSAGE_BUTTON, SECONDARY_BUTTON } from '../utils/ui.ts'
+import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
 
 // No alignment in the base classes: each column sets its own, header and cells alike.
 const TH_BASE =
@@ -23,21 +23,19 @@ const SKELETON_ROWS = 8
 // Every column gets a share of the table's width (it is fixed-layout), so the gaps between them
 // stay even at any window width instead of the Collection column taking all the spare room.
 const COLUMN_WIDTHS = {
-  collection: 27,
-  type: 11,
-  condition: 25,
-  products: 9,
+  collection: 31,
+  condition: 29,
+  products: 10,
   store: 0,
-  updated: 17,
+  updated: 19,
   actions: 11,
 }
 const COLUMN_WIDTHS_WITH_STORE = {
-  collection: 23,
-  type: 10,
-  condition: 21,
-  products: 8,
-  store: 13,
-  updated: 15,
+  collection: 26,
+  condition: 24,
+  products: 9,
+  store: 15,
+  updated: 16,
   actions: 10,
 }
 
@@ -62,21 +60,118 @@ interface CollectionsListProps {
 const updated = (value: string | null | undefined) =>
   value ? <span title={formatDateTime(value)}>{formatUpdatedAt(value) || '—'}</span> : '—'
 
+/** Width of the dropdown, used to keep it on the screen. */
+const PANEL_WIDTH = 340
+
 /**
- * A collection's first two conditions, one under the other (the backend's own wording, cut with "…"
- * when long; the full text is the hover text), then "+ More Conditions" when it has more. A collection
- * with none shows a dash.
+ * The conditions after the first two, as a small dropdown card under the "+ More Conditions" link
+ * (like the "+N" of a tag list): drawn on the page body, fixed to the screen, so the table's scroll
+ * box never clips it. It closes on an outside click, Escape, or a scroll or resize.
  */
-function ConditionCell({
+function MoreConditions({
   collection,
-  onMore,
+  rest,
 }: {
   collection: CollectionListItem
-  onMore: (collection: CollectionListItem) => void
+  rest: string[]
 }) {
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const panelId = useId()
+  const open = position !== null
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = () => setPosition(null)
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (panel.current?.contains(target) || button.current?.contains(target)) return
+      close()
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        close()
+        button.current?.focus()
+      }
+    }
+    // A card fixed to the screen would drift from its row, so a scroll or resize closes it.
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  function toggle() {
+    if (open) {
+      setPosition(null)
+      return
+    }
+    const rect = button.current?.getBoundingClientRect()
+    if (!rect) return
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8))
+    setPosition({ top: rect.bottom + 6, left })
+  }
+
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        aria-label={`Show ${rest.length} more ${rest.length === 1 ? 'condition' : 'conditions'} of ${collection.title}`}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={toggle}
+        className="text-accent cursor-pointer border-none bg-transparent p-0 text-[0.76rem] font-semibold hover:underline"
+      >
+        + More Conditions
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={panel}
+            id={panelId}
+            role="group"
+            aria-label={`More conditions of ${collection.title}`}
+            style={{ top: position.top, left: position.left, width: PANEL_WIDTH }}
+            className="border-border bg-bg fixed z-50 flex flex-col gap-2 rounded-xl border p-3 text-left whitespace-normal shadow-lg"
+          >
+            <p className="text-text-muted m-0 text-[0.68rem] font-bold tracking-wide uppercase">
+              More conditions ({rest.length})
+            </p>
+            <ul className="m-0 flex max-h-56 list-none flex-col gap-1.5 overflow-auto p-0">
+              {rest.map((condition, index) => (
+                <li
+                  key={`${condition}-${index}`}
+                  className="bg-surface border-border text-text rounded-lg border px-2.5 py-1 text-[0.76rem] font-medium [overflow-wrap:anywhere]"
+                >
+                  {condition}
+                </li>
+              ))}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </>
+  )
+}
+
+/**
+ * A collection's first two conditions, one under the other (the backend's own wording, cut with "…"
+ * when long; the full text is the hover text), then "+ More Conditions" when it has more, which
+ * opens the rest in a small dropdown. A collection with none shows a dash.
+ */
+function ConditionCell({ collection }: { collection: CollectionListItem }) {
   const conditions = conditionTexts(collection)
   if (conditions.length === 0) return <span className="text-text-muted">—</span>
-  const more = conditions.length - CONDITIONS_SHOWN
+  const rest = conditions.slice(CONDITIONS_SHOWN)
   return (
     <span className="flex min-w-0 flex-col items-start gap-1">
       {conditions.slice(0, CONDITIONS_SHOWN).map((condition, index) => (
@@ -88,68 +183,8 @@ function ConditionCell({
           {condition}
         </span>
       ))}
-      {more > 0 && (
-        <button
-          type="button"
-          aria-label={`Show ${more} more ${more === 1 ? 'condition' : 'conditions'} of ${collection.title}`}
-          onClick={() => onMore(collection)}
-          className="text-accent cursor-pointer border-none bg-transparent p-0 text-[0.76rem] font-semibold hover:underline"
-        >
-          + More Conditions
-        </button>
-      )}
+      {rest.length > 0 && <MoreConditions collection={collection} rest={rest} />}
     </span>
-  )
-}
-
-/** Every condition after the first two, in a white dialog, one per row. */
-function MoreConditionsDialog({
-  collection,
-  onClose,
-}: {
-  collection: CollectionListItem
-  onClose: () => void
-}) {
-  const rest = conditionTexts(collection).slice(CONDITIONS_SHOWN)
-  return (
-    <Dialog
-      title={`More conditions of ${collection.title}`}
-      role="dialog"
-      wide
-      banded
-      heading="More conditions"
-      subtitle={`${collection.title} · ${rest.length} more ${rest.length === 1 ? 'condition' : 'conditions'}`}
-      icon={
-        <span className="bg-accent-tint text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-          <LayersIcon width={18} height={18} />
-        </span>
-      }
-      onClose={onClose}
-      footer={
-        <button
-          type="button"
-          data-autofocus
-          className={SECONDARY_BUTTON}
-          onClick={onClose}
-        >
-          Close
-        </button>
-      }
-    >
-      <ol className="m-0 flex max-h-[55svh] list-none flex-col gap-2 overflow-y-auto p-0">
-        {rest.map((condition, index) => (
-          <li
-            key={`${condition}-${index}`}
-            className="border-border bg-bg text-text flex items-start gap-3 rounded-lg border px-3 py-2.5 text-[0.85rem] font-medium"
-          >
-            <span className="bg-accent-tint text-accent flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1 text-[0.7rem] font-bold">
-              {CONDITIONS_SHOWN + index + 1}
-            </span>
-            <span className="min-w-0 break-words">{condition}</span>
-          </li>
-        ))}
-      </ol>
-    </Dialog>
   )
 }
 
@@ -174,7 +209,7 @@ function ViewButton({
 }
 
 /**
- * The collections: a sticky-header table from `md` up (picture, title and handle, type, products,
+ * The collections: a sticky-header table from `md` up (picture, title and handle, products,
  * store, last updated, View), stacked cards below it. It draws the loading, error
  * and empty states itself.
  */
@@ -191,8 +226,6 @@ export function CollectionsList({
   emptyAction,
 }: CollectionsListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  // The collection whose remaining conditions are open in the dialog.
-  const [moreFor, setMoreFor] = useState<CollectionListItem | null>(null)
   const width = showStore ? COLUMN_WIDTHS_WITH_STORE : COLUMN_WIDTHS
 
   if (error) {
@@ -289,9 +322,6 @@ export function CollectionsList({
               <th className={TH_LEFT} style={{ width: `${width.collection}%` }}>
                 Collection
               </th>
-              <th className={TH_CENTER} style={{ width: `${width.type}%` }}>
-                Type
-              </th>
               <th className={TH_LEFT} style={{ width: `${width.condition}%` }}>
                 Condition
               </th>
@@ -320,7 +350,7 @@ export function CollectionsList({
             {isPending
               ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                   <tr key={row} aria-hidden="true" className="border-border border-b">
-                    {Array.from({ length: showStore ? 7 : 6 }, (_, cell) => (
+                    {Array.from({ length: showStore ? 6 : 5 }, (_, cell) => (
                       <td key={cell} className={TD}>
                         <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                       </td>
@@ -347,14 +377,8 @@ export function CollectionsList({
                         </span>
                       </span>
                     </td>
-                    <td className={TD_CENTER}>
-                      <TypeBadge
-                        type={collection.collection_type}
-                        className="w-24 justify-center"
-                      />
-                    </td>
                     <td className={`${TD} overflow-hidden text-left`}>
-                      <ConditionCell collection={collection} onMore={setMoreFor} />
+                      <ConditionCell collection={collection} />
                     </td>
                     <td className={`${TD_CENTER} font-semibold`}>
                       {count(collection.products_count)}
@@ -380,9 +404,6 @@ export function CollectionsList({
           </tbody>
         </table>
       </div>
-      {moreFor && (
-        <MoreConditionsDialog collection={moreFor} onClose={() => setMoreFor(null)} />
-      )}
     </>
   )
 }
