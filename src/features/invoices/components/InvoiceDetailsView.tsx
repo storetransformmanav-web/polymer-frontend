@@ -608,6 +608,46 @@ function Items({ detail, currency }: { detail: InvoiceDetail; currency: string |
   )
 }
 
+const ACRONYMS: Record<string, string> = {
+  id: 'ID',
+  crm: 'CRM',
+  vat: 'VAT',
+  sku: 'SKU',
+  url: 'URL',
+  po: 'PO',
+  ref: 'Reference',
+  no: 'Number',
+}
+
+/** A field's label written for people: "Crm id" → "CRM ID", "Account ref" → "Account Reference". */
+function tidyLabel(label: string): string {
+  return label
+    .split(' ')
+    .map((word) => {
+      const key = word.toLowerCase()
+      if (ACRONYMS[key]) return ACRONYMS[key]
+      return word.length > 0 && word === word.toLowerCase()
+        ? word.charAt(0).toUpperCase() + word.slice(1)
+        : word
+    })
+    .join(' ')
+}
+
+const isNumeric = (value: string) => /^-?\d+(\.\d+)?$/.test(value.trim())
+
+/** "30" → "30 days" (a bare number of days); anything else as the API sent it. */
+const daysText = (value: string) =>
+  isNumeric(value) ? `${value.trim()} ${Number(value) === 1 ? 'day' : 'days'}` : value
+
+/** "2.5" → "2.5%" (a bare rate); anything else as the API sent it. */
+const rateText = (value: string) => (isNumeric(value) ? `${value.trim()}%` : value)
+
+/**
+ * The Additional information tab: clearly labelled cards — **Invoice notes**, **Delivery** (courier and
+ * consignment), **Settlement terms** (days and discount), **Sales order details** (only when the
+ * invoice has them) and **Other details** (every remaining field the API sent, so nothing is lost).
+ * A missing value is a dash.
+ */
 function Additional({
   detail,
   currency,
@@ -617,35 +657,46 @@ function Additional({
 }) {
   const a = detail.additional
   return (
-    <div className="flex flex-col gap-4">
-      <DetailSection title="Additional information" icon={FileTextIcon}>
-        <FieldGrid>
-          <Field label="Courier">{a.courier}</Field>
-          <Field label="Consignment">{copyable(a.consignment, 'Copy consignment')}</Field>
-          <Field label="Settlement due days">{a.settlementDueDays}</Field>
-          <Field label="Settlement discount rate">{a.settlementDiscountRate}</Field>
-        </FieldGrid>
-        <div className="mt-5">
-          <p className="text-text-muted mb-1 text-[0.68rem] font-bold tracking-wide uppercase">
-            Invoice notes
+    <div className="flex min-w-0 flex-col gap-4">
+      <DetailSection title="Invoice Notes" icon={FileTextIcon}>
+        {a.notes ? (
+          <p
+            className={`bg-surface border-border m-0 rounded-md border px-4 py-3 leading-relaxed font-medium break-words whitespace-pre-wrap ${SMALL_TEXT}`}
+          >
+            {a.notes}
           </p>
-          {a.notes ? (
-            <p
-              className={`m-0 font-medium break-words whitespace-pre-wrap ${SMALL_TEXT}`}
-            >
-              {a.notes}
-            </p>
-          ) : (
-            <p className="text-text-muted m-0 text-[0.85rem]">No notes.</p>
-          )}
-        </div>
+        ) : (
+          <p className="text-text-muted m-0 text-[0.85rem]">No notes have been added.</p>
+        )}
       </DetailSection>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DetailSection title="Delivery" icon={TruckIcon}>
+          <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 min-[520px]:grid-cols-2">
+            <Field label="Courier">{a.courier}</Field>
+            <Field label="Consignment number">
+              {copyable(a.consignment, 'Copy consignment number')}
+            </Field>
+          </dl>
+        </DetailSection>
+
+        <DetailSection title="Settlement Terms" icon={CreditCardIcon}>
+          <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-5 min-[520px]:grid-cols-2">
+            <Field label="Settlement due">
+              {a.settlementDueDays ? daysText(a.settlementDueDays) : ''}
+            </Field>
+            <Field label="Settlement discount">
+              {a.settlementDiscountRate ? rateText(a.settlementDiscountRate) : ''}
+            </Field>
+          </dl>
+        </DetailSection>
+      </div>
+
       {detail.salesOrder && detail.salesOrder.length > 0 && (
-        <DetailSection title="Sales order details" icon={ProductsIcon}>
+        <DetailSection title="Sales Order Details" icon={ProductsIcon}>
           <FieldGrid>
             {detail.salesOrder.map(([label, value]) => (
-              <Field key={label} label={label}>
+              <Field key={label} label={tidyLabel(label)}>
                 {looseValue(label.toLowerCase(), value, currency)}
               </Field>
             ))}
@@ -654,10 +705,14 @@ function Additional({
       )}
 
       {detail.moreFields.length > 0 && (
-        <DetailSection title="More details" icon={GridIcon} defaultOpen={false}>
+        <DetailSection
+          title="Other Details"
+          icon={GridIcon}
+          count={detail.moreFields.length}
+        >
           <FieldGrid>
             {detail.moreFields.map(([label, value]) => (
-              <Field key={label} label={label}>
+              <Field key={label} label={tidyLabel(label)}>
                 {looseValue(label.toLowerCase(), value, currency)}
               </Field>
             ))}
