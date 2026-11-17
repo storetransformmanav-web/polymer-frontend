@@ -49,7 +49,8 @@ const router = createBrowserRouter([
           { path: 'users/*', element: <UsersPage /> },
           // `*` lets LocksPage also serve /locks/new (Add lock) and /locks/:handle (one lock).
           { path: 'locks/*', element: <LocksPage /> },
-          { path: 'activity', element: <ActivityPage /> },
+          // `*` lets ActivityPage also serve /activity/:id (one entry's details).
+          { path: 'activity/*', element: <ActivityPage /> },
           // Sage 50 → Invoices (a group in the sidebar; more Sage pages can sit beside it). `*` lets
           // InvoicesPage also serve /sage/invoices/<number> and /sage/invoices/customer/<ref>.
           { path: 'sage/invoices/*', element: <InvoicesPage /> },

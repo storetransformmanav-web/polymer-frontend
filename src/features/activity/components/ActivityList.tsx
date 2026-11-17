@@ -5,7 +5,7 @@ import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/i
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { ActivityItem } from '../../../lib/api/endpoints.ts'
-import { formatTimestamp, initials } from '../../../lib/format.ts'
+import { formatDateTimeAmPm, formatTimestamp, initials } from '../../../lib/format.ts'
 import {
   actionLabel,
   readableSummary,
@@ -18,7 +18,6 @@ import {
 const TH_BASE =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
-const TH_RIGHT = `${TH_BASE} text-right`
 const TH_CENTER = `${TH_BASE} text-center`
 // No alignment in the cell base: cells are left-aligned by default, and a
 // `text-left` here would fight any `text-center`/`text-right` added later.
@@ -195,9 +194,6 @@ export function ActivityList({
             <th className={TH}>User</th>
             <th className={TH}>Action</th>
             <th className={TH}>Summary</th>
-            <th className={TH}>Method</th>
-            <th className={TH}>Status</th>
-            <th className={TH_RIGHT}>Duration</th>
             <th className={`${TH} ${FROM_2XL}`}>Device</th>
             <th className={TH_CENTER}>View</th>
           </tr>
@@ -211,7 +207,7 @@ export function ActivityList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 8 }, (_, cell) => (
+                  {Array.from({ length: 5 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -225,7 +221,7 @@ export function ActivityList({
                     key={item.id}
                     className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors"
                   >
-                    <td className={TD}>{formatTimestamp(item.time)}</td>
+                    <td className={TD}>{formatDateTimeAmPm(item.time)}</td>
                     <td className={TD}>
                       <span className="flex items-center gap-3">
                         <Avatar name={name} />
@@ -253,15 +249,6 @@ export function ActivityList({
                       >
                         <Highlight text={readableSummary(item.summary, item.action)} />
                       </span>
-                    </td>
-                    <td className={TD}>
-                      <MethodBadge method={item.method} />
-                    </td>
-                    <td className={TD}>
-                      <StatusBadge code={item.status_code} />
-                    </td>
-                    <td className={`${TD} text-right`}>
-                      {formatDuration(item.duration_ms)}
                     </td>
                     <td className={`${TD} ${FROM_2XL}`}>
                       <span className="flex min-w-0 flex-col">
