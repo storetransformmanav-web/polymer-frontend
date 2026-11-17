@@ -1,3 +1,4 @@
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -157,6 +158,11 @@ export function UsersPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <HeaderRefresh
+        visible={!creatingRoute && !activeId}
+        refreshing={users.isFetching}
+        onRefresh={users.retry}
+      />
       {/* The figures belong to the list, so the form takes their place (kept mounted, only hidden). */}
       <div className={creatingRoute || activeId ? 'hidden' : undefined}>
         <UsersKpis

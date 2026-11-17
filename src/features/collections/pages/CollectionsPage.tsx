@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { LayersIcon, PlusIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
@@ -302,6 +303,12 @@ export function CollectionsPage() {
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
+        <HeaderRefresh
+          visible={!activeId && !creating && !linkedProduct}
+          refreshing={collections.isFetching}
+          onRefresh={collections.retry}
+        />
+
         <CollectionsToolbar
           filters={collections.filters}
           hasFilters={collections.hasFilters}

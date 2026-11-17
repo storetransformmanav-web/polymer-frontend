@@ -1,11 +1,7 @@
 import { useState } from 'react'
 import { InAppBar } from '../../../components/ui/AppBarSlot.tsx'
 import type { ProductFilters } from '../../../app/store/productsSlice.ts'
-import {
-  ExportButton,
-  ExportStatus,
-  RefreshButton,
-} from '../../../components/ui/ExportControls.tsx'
+import { ExportButton, ExportStatus } from '../../../components/ui/ExportControls.tsx'
 import type { ProductListItem } from '../../../lib/api/endpoints.ts'
 import { useProductsExport } from '../hooks/useProductsExport.ts'
 import { ProductsExportDialog } from './ProductsExportDialog.tsx'
@@ -21,12 +17,6 @@ interface ProductsExportProps {
   total: number
   /** Show the button (the list is on screen); the progress and the dialog stay either way. */
   visible?: boolean
-  /** Asks the API for the list again (the Refresh button, just before Export). */
-  onRefresh?: () => void
-  /** The list is being read right now. */
-  refreshing?: boolean
-  /** Show Refresh; it follows `visible` unless the page says otherwise. */
-  refreshVisible?: boolean
 }
 
 /**
@@ -41,9 +31,6 @@ export function ProductsExport({
   filters,
   total,
   visible = true,
-  onRefresh,
-  refreshing = false,
-  refreshVisible,
 }: ProductsExportProps) {
   const { state, start, cancel, dismiss } = useProductsExport()
   const [open, setOpen] = useState(false)
@@ -55,9 +42,6 @@ export function ProductsExport({
         <div className="max-w-[16rem] min-w-0">
           <ExportStatus state={state} onCancel={cancel} onDismiss={dismiss} />
         </div>
-        {(refreshVisible ?? visible) && onRefresh && (
-          <RefreshButton refreshing={refreshing} onClick={onRefresh} />
-        )}
         {visible && (
           <ExportButton
             disabled={running || (items.length === 0 && total === 0)}

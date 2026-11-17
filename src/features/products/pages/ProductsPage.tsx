@@ -1,3 +1,4 @@
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -550,6 +551,13 @@ export function ProductsPage() {
             : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
+        {/* Refresh sits in the top bar, right of the clock: it asks for the list again. */}
+        <HeaderRefresh
+          visible={!activeId && !bulkItems && !showCreate && !lockView}
+          refreshing={products.isFetching}
+          onRefresh={products.retry}
+        />
+
         <ProductsImport
           visible={
             !products.isPending &&
@@ -562,8 +570,6 @@ export function ProductsPage() {
         />
 
         <ProductsExport
-          onRefresh={products.retry}
-          refreshing={products.isFetching}
           items={products.items}
           selected={selectedItems}
           filters={filters}

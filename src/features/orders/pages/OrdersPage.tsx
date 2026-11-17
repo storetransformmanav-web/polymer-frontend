@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CustomerDetailsView } from '../../customers/index.ts'
@@ -319,18 +320,23 @@ export function OrdersPage() {
           }}
         />
 
+        {/* Refresh sits in the top bar, right of the clock: it asks for the list again, and the
+            figures that go with it — nothing reloads. */}
+        <HeaderRefresh
+          visible={!activeRef && !creatingRoute && !linked}
+          refreshing={orders.isFetching}
+          onRefresh={() => {
+            orders.retry()
+            void queryClient.invalidateQueries({ queryKey: ['order-summary'] })
+          }}
+        />
+
         {/* The Export button sits in the top bar; it only shows while the list is on screen. */}
         <OrdersExport
           items={orders.items}
           filters={filters}
           total={data?.total ?? 0}
           visible={!activeRef && !creatingRoute && !linked}
-          // Refresh asks for the list again (and the cards' figures that go with it) — no reload.
-          onRefresh={() => {
-            orders.retry()
-            void queryClient.invalidateQueries({ queryKey: ['order-summary'] })
-          }}
-          refreshing={orders.isFetching}
         />
 
         <section

@@ -1,4 +1,4 @@
-import { AppBarSlot } from '../../components/ui/AppBarSlot.tsx'
+import { AppBarSlot, RefreshSlot } from '../../components/ui/AppBarSlot.tsx'
 import { SyncCustomersButton } from '../../features/customers/index.ts'
 import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
@@ -53,6 +53,7 @@ export function AppBar() {
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-3">
         <StoreClock />
+        <RefreshSlot />
         <AppBarSlot />
         {canSync && activeItem?.syncs === 'orders' && <SyncOrdersButton />}
         {canSync && activeItem?.syncs === 'products' && <SyncProductsButton />}

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 const SLOT_ID = 'app-bar-actions'
+export const REFRESH_SLOT_ID = 'app-bar-refresh'
 
 /**
  * The spot in the top bar, just before the global actions, where a page can put its own
@@ -12,18 +13,33 @@ export function AppBarSlot() {
 }
 
 /**
+ * The spot in the top bar right after the clock, where a listing page's **Refresh** button goes
+ * (see `HeaderRefresh`). It takes no room while nothing is in it.
+ */
+export function RefreshSlot() {
+  return <div id={REFRESH_SLOT_ID} className="flex items-center empty:hidden" />
+}
+
+/**
  * Shows `children` in the top bar's `AppBarSlot` while this component is mounted, however
  * deep in the page it is — so the page keeps the state behind a button (what it exports,
  * which filters it has) and the button sits beside the bar's other actions. Without a bar
  * (a page rendered on its own) the children stay where they are.
  */
-export function InAppBar({ children }: { children: ReactNode }) {
+export function InAppBar({
+  children,
+  slotId = SLOT_ID,
+}: {
+  children: ReactNode
+  /** Which spot of the bar (default: the page actions; `REFRESH_SLOT_ID`: just after the clock). */
+  slotId?: string
+}) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
 
   // The bar and the page mount together, so the slot is only there once they have.
   useEffect(() => {
-    setSlot(document.getElementById(SLOT_ID))
-  }, [])
+    setSlot(document.getElementById(slotId))
+  }, [slotId])
 
   return slot ? createPortal(children, slot) : children
 }

@@ -1,3 +1,4 @@
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -341,6 +342,13 @@ export function CustomersPage() {
           }
         />
 
+        {/* Refresh sits in the top bar, right of the clock: it asks for the list again. */}
+        <HeaderRefresh
+          visible={!activeId && !creatingRoute}
+          refreshing={customers.isFetching}
+          onRefresh={customers.retry}
+        />
+
         {/* The Import and Export buttons sit in the top bar; they only show while the list is. */}
         <CustomersImport visible={!activeId && !creatingRoute} />
 
@@ -350,10 +358,6 @@ export function CustomersPage() {
           total={data?.total ?? 0}
           // The whole list of people's details: only for those who may export customers.
           visible={!activeId && !creatingRoute && canExport}
-          // Refresh asks for the list again — whoever may see the page, not only who may export.
-          onRefresh={customers.retry}
-          refreshing={customers.isFetching}
-          refreshVisible={!activeId && !creatingRoute}
         />
 
         <section

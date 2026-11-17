@@ -1,3 +1,4 @@
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { useCallback, useState } from 'react'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -27,6 +28,7 @@ export function ActivityPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <HeaderRefresh refreshing={activity.isFetching} onRefresh={activity.retry} />
       <ActivityToolbar
         filters={filters}
         actions={options.actions}

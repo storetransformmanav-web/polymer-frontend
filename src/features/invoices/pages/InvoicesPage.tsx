@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { FileTextIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
@@ -118,6 +119,11 @@ export function InvoicesPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      <HeaderRefresh
+        visible={!activeKey}
+        refreshing={invoices.isFetching}
+        onRefresh={invoices.retry}
+      />
       {/* The figures belong to the list: a record's page takes their place (the list stays mounted). */}
       <div className={activeKey ? 'hidden' : undefined}>
         <InvoicesKpis

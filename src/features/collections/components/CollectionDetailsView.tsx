@@ -21,7 +21,6 @@ import {
   LayersIcon,
   ListChecksIcon,
   ProductsIcon,
-  RefreshIcon,
 } from '../../../components/ui/icons.tsx'
 import { RichTextEditor } from '../../../components/ui/RichTextEditor.tsx'
 import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
@@ -38,7 +37,6 @@ import { ProductLightbox, type LightboxSlide } from '../../products/index.ts'
 import {
   useCollectionDetails,
   useCollectionRuleOptions,
-  useRefreshCollection,
   useUpdateCollection,
 } from '../hooks/useCollections.ts'
 import {
@@ -50,7 +48,7 @@ import {
   type CollectionDraft,
   type DraftErrors,
 } from '../utils/collectionDraft.ts'
-import { count, MESSAGE_BUTTON, SECONDARY_BUTTON } from '../utils/ui.ts'
+import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
 import { ImageFields, RulesEditor } from './CollectionFormParts.tsx'
 import {
   CollectionTextValue,
@@ -80,7 +78,7 @@ interface CollectionDetailsViewProps {
 
 /**
  * One collection, laid out like a product's page: a header (picture, title, type, the facts as
- * chips, **Refresh**, Back to list), then tabs — **Overview** (picture, details, description,
+ * chips, Back to list), then tabs — **Overview** (picture, details, description,
  * search engine listing and, for an automated collection, its conditions — each value and card has
  * its own pencil, as on a product's page, and sends only its own change with
  * `PUT /collections/{id}`) and **Products** (one page at a time). Writes need the `products`
@@ -100,7 +98,6 @@ export function CollectionDetailsView({
   const ref = collection?.id ?? id
   const writeShop = collection?.shop?.key ?? shop
   const { update } = useUpdateCollection(ref, writeShop)
-  const refresh = useRefreshCollection(ref, writeShop)
   const smart = isSmart(collection?.collection_type)
   // The condition choices and Shopify's product orders (for the pencils), loaded once and kept.
   const rules = useCollectionRuleOptions(canManage || smart)
@@ -195,7 +192,7 @@ export function CollectionDetailsView({
                 {collection.shop.name}
               </span>
             )}
-            {(details.isFetching || refresh.isRefreshing) && (
+            {details.isFetching && (
               <span className="text-text-muted text-[0.75rem]" role="status">
                 Updating…
               </span>
@@ -203,33 +200,6 @@ export function CollectionDetailsView({
           </>
         }
         chips={facts}
-        actions={
-          canManage ? (
-            <button
-              type="button"
-              disabled={refresh.isRefreshing}
-              title="Read this collection and its products again from Shopify"
-              onClick={async () => {
-                setNotice(null)
-                refresh.clearError()
-                try {
-                  const result = await refresh.refresh()
-                  setNotice(result.message)
-                } catch {
-                  // Shown from `refresh.error`.
-                }
-              }}
-              className={`${SECONDARY_BUTTON} h-9 rounded-full px-3.5 text-[0.82rem]`}
-            >
-              <RefreshIcon
-                width={15}
-                height={15}
-                className={refresh.isRefreshing ? 'animate-spin' : ''}
-              />
-              Refresh
-            </button>
-          ) : null
-        }
         onBack={onBack}
       />
 
@@ -274,7 +244,6 @@ export function CollectionDetailsView({
         className="flex flex-col gap-4 p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
-        {refresh.error && <FormMessage tone="error">{refresh.error}</FormMessage>}
 
         {tab === 'overview' ? (
           <Overview

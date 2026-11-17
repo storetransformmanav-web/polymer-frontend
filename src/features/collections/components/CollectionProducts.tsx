@@ -190,7 +190,7 @@ export function CollectionProducts({
         <p className="text-text-muted border-border m-0 border-t px-4 py-2.5 text-[0.8rem] sm:px-5">
           This is a {typeLabel(collection.collection_type).toLowerCase()} collection: its
           products come from its conditions. Change the conditions on the Overview tab, or
-          use Refresh after Shopify has matched them.
+          open this collection again after Shopify has matched them.
         </p>
       )}
 
@@ -257,7 +257,7 @@ export function CollectionProducts({
                 ? 'No product in this collection matches your search.'
                 : manual
                   ? 'This collection has no products yet.'
-                  : 'No product matches the conditions yet. Shopify can take a few seconds — use Refresh.'}
+                  : 'No product matches the conditions yet. Shopify can take a few seconds — open the collection again shortly.'}
             </p>
           </Message>
         ) : (

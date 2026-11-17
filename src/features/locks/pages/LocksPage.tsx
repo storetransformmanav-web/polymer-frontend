@@ -4,6 +4,7 @@ import type { AccessLock } from '../../../lib/api/endpoints.ts'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { Highlight, HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { LockIcon, PlusIcon, RefreshIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
@@ -320,6 +321,7 @@ export function LocksPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      <HeaderRefresh refreshing={locks.isFetching} onRefresh={locks.retry} />
       {tabsBar}
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 

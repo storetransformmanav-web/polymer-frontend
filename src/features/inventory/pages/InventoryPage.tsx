@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { HistoryIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -73,6 +74,11 @@ export function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+      <HeaderRefresh
+        visible={onList}
+        refreshing={inventory.isFetching}
+        onRefresh={inventory.retry}
+      />
       {/* The figures belong to the list: a variant and the history take their place. */}
       <div className={onList ? undefined : 'hidden'}>
         {/* The figures without a stock status, so choosing "Out of stock" doesn't zero "In stock". */}
