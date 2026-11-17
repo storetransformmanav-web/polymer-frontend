@@ -29,6 +29,15 @@ function kpis(
       hint: 'Products in this list, whatever their stock',
       value: count(total),
       icon: BoxesIcon,
+      // Selected to begin with: no stock filter is on. Pressing it clears one that is.
+      active: stock === '',
+      onClick: () => {
+        if (stock !== '') onStock('')
+      },
+      title:
+        stock === ''
+          ? 'Showing all products'
+          : 'Show all products (clear the stock filter)',
     },
     {
       label: 'In stock',
@@ -69,8 +78,9 @@ function kpis(
 
 /**
  * The total number of products and the four stock figures above the products list.
- * **In stock** and **Out of stock** are buttons: pressing one shows only those products in the table (the same filter as Stock in
- * Filters), pressing it again shows everything. Pressing a card only adds that filter to the
+ * **Total products** is the selected card to begin with (no stock filter is on) and pressing it
+ * clears one that is. **In stock** and **Out of stock** are buttons: pressing one shows only those
+ * products in the table (the same filter as Stock in Filters), pressing it again shows everything. Pressing a card only adds that filter to the
  * table — the four figures keep their values (see `useStockSummary`).
  */
 export function ProductsKpis({

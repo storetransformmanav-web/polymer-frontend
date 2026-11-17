@@ -34,6 +34,9 @@ function renderList(items: CollectionListItem[]) {
       hasFilters={false}
       isStale={false}
       showStore={false}
+      sort="title"
+      order="asc"
+      onSort={vi.fn()}
       onOpen={vi.fn()}
       onRetry={vi.fn()}
       onClearFilters={vi.fn()}

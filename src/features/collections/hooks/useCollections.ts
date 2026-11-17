@@ -37,7 +37,7 @@ export const DEFAULT_COLLECTION_FILTERS: CollectionFilters = {
   search: '',
   type: '',
   sort: 'title',
-  order: 'asc',
+  order: 'desc',
   page: 1,
   pageSize: 50,
 }

@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
+import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CollectionListItem } from '../../../lib/api/endpoints.ts'
+import type { CollectionFilters } from '../hooks/useCollections.ts'
 import { formatDateTime } from '../../../lib/format.ts'
 import { formatUpdatedAt } from '../../../lib/storeTime.ts'
 import { CollectionImage, Message, TypeBadge } from './CollectionParts.tsx'
@@ -48,6 +50,11 @@ interface CollectionsListProps {
   isStale: boolean
   /** Several stores are listed (All shops): show which one each collection is in. */
   showStore: boolean
+  /** The column the list is sorted by and which way (only Collection, Products and Updated sort). */
+  sort: CollectionFilters['sort']
+  order: CollectionFilters['order']
+  /** A sortable header was pressed: sort by that column (the same one again flips the direction). */
+  onSort: (sort: CollectionFilters['sort']) => void
   onOpen: (collection: CollectionListItem) => void
   onRetry: () => void
   onClearFilters: () => void
@@ -220,6 +227,9 @@ export function CollectionsList({
   hasFilters,
   isStale,
   showStore,
+  sort,
+  order,
+  onSort,
   onOpen,
   onRetry,
   onClearFilters,
@@ -319,22 +329,49 @@ export function CollectionsList({
         >
           <thead>
             <tr>
-              <th className={TH_LEFT} style={{ width: `${width.collection}%` }}>
-                Collection
+              <th
+                className={TH_LEFT}
+                style={{ width: `${width.collection}%` }}
+                aria-sort={ariaSort(sort === 'title', order)}
+              >
+                <SortButton
+                  label="Collection"
+                  active={sort === 'title'}
+                  order={order}
+                  onClick={() => onSort('title')}
+                />
               </th>
               <th className={TH_LEFT} style={{ width: `${width.condition}%` }}>
                 Condition
               </th>
-              <th className={TH_CENTER} style={{ width: `${width.products}%` }}>
-                Products
+              <th
+                className={TH_CENTER}
+                style={{ width: `${width.products}%` }}
+                aria-sort={ariaSort(sort === 'products', order)}
+              >
+                <SortButton
+                  label="Products"
+                  active={sort === 'products'}
+                  order={order}
+                  onClick={() => onSort('products')}
+                />
               </th>
               {showStore && (
                 <th className={TH_CENTER} style={{ width: `${width.store}%` }}>
                   Store
                 </th>
               )}
-              <th className={TH_CENTER} style={{ width: `${width.updated}%` }}>
-                Updated
+              <th
+                className={TH_CENTER}
+                style={{ width: `${width.updated}%` }}
+                aria-sort={ariaSort(sort === 'updated', order)}
+              >
+                <SortButton
+                  label="Updated"
+                  active={sort === 'updated'}
+                  order={order}
+                  onClick={() => onSort('updated')}
+                />
               </th>
               <th className={TH_CENTER} style={{ width: `${width.actions}%` }}>
                 Actions

@@ -331,6 +331,16 @@ export function CollectionsPage() {
               hasFilters={collections.hasFilters}
               isStale={collections.isShowingPrevious}
               showStore={listShop === ''}
+              sort={collections.filters.sort}
+              order={collections.filters.order}
+              // A new column starts ascending; the same column flips the direction.
+              onSort={(sort) =>
+                collections.setFilters(
+                  sort === collections.filters.sort
+                    ? { order: collections.filters.order === 'asc' ? 'desc' : 'asc' }
+                    : { sort, order: 'asc' },
+                )
+              }
               onOpen={openCollection}
               onRetry={collections.retry}
               onClearFilters={collections.resetFilters}
