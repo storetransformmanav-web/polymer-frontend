@@ -12,3 +12,11 @@ export const SECONDARY_BUTTON =
 /** A count with thousands separators, or a dash. */
 export const count = (value: number | null | undefined) =>
   value == null ? '—' : value.toLocaleString('en-GB')
+
+/**
+ * A product opened from a collection's Products tab: `/collections/product/<id>`, shown in the
+ * Collections page as a "Product" tab (the way an order's items open a product). `product` is
+ * not a collection handle the page can take as one, so it can't be mistaken for one.
+ */
+export const collectionProductPath = (productId: string) =>
+  `/collections/product/${encodeURIComponent(productId)}`

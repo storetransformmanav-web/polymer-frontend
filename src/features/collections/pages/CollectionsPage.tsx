@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
@@ -7,7 +7,9 @@ import { LayersIcon, PlusIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { useAccess } from '../../../hooks/useAccess.ts'
+import { readLinkedFrom } from '../../../hooks/useLinkedState.ts'
 import type { CollectionDetail, CollectionListItem } from '../../../lib/api/endpoints.ts'
+import { ProductDetailsView } from '../../products/index.ts'
 import { CollectionCreateView } from '../components/CollectionCreateView.tsx'
 import { CollectionDetailsView } from '../components/CollectionDetailsView.tsx'
 import { PRIMARY_BUTTON } from '../utils/ui.ts'
@@ -18,6 +20,8 @@ import { useCollections, useCollectionShop } from '../hooks/useCollections.ts'
 const LIST_PATH = '/collections'
 const NEW_PATH = '/collections/new'
 const DRAFT_TAB = '__new__'
+// Not a collection's id: the tab of a product opened from a collection's Products tab.
+const LINKED_ID = '__linked-product__'
 const MAX_TABS = 10
 const NOTICE_MS = 10_000
 const detailsPath = (id: string) => `${LIST_PATH}/${encodeURIComponent(id)}`
@@ -29,6 +33,14 @@ const SCROLL_VIEW = 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 interface Tab {
   id: string
   title: string | null
+}
+
+/** The product opened from a collection, remembered so its tab stays open. */
+interface LinkedTab {
+  id: string
+  name: string | null
+  /** The address it was opened from (the collection), where its Back and its X return. */
+  from: string | null
 }
 
 /**
@@ -44,15 +56,56 @@ export function CollectionsPage() {
   const { canManage } = useAccess('products')
   const navigate = useNavigate()
   const { '*': splat } = useParams()
-  const first = splat ? decodeURIComponent(splat.split('/')[0]) : ''
+  const location = useLocation()
+  const segments = splat ? splat.split('/') : []
+  const first = segments[0] ? decodeURIComponent(segments[0]) : ''
+  // `/collections/product/<id>`: a product opened from a collection's Products tab, shown in this
+  // same page as a tab of its own (the way an order's items open a product).
+  const linkedProduct =
+    first === 'product' && segments[1] ? decodeURIComponent(segments[1]) || null : null
+  const rawName = (location.state as { linkedName?: unknown } | null)?.linkedName
+  const linkedName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : null
   const creating = first === 'new'
-  const activeId = first && !creating ? first : null
+  const activeId = first && !creating && !linkedProduct ? first : null
 
   const [tabs, setTabs] = useState<Tab[]>([])
   const [formOpen, setFormOpen] = useState(creating)
   const [dirty, setDirty] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // The product's tab: what the address lacks (no router state after a reload) is taken from the
+  // remembered tab of the same product. Remembering happens while rendering (React's pattern for
+  // state derived from props).
+  const linkedFrom = readLinkedFrom(location.state, LIST_PATH)
+  const [linkedTab, setLinkedTab] = useState<LinkedTab | null>(null)
+  const sameAsRemembered = !!linkedProduct && linkedTab?.id === linkedProduct
+  const shownLinked: LinkedTab | null = linkedProduct
+    ? {
+        id: linkedProduct,
+        name: linkedName ?? (sameAsRemembered ? linkedTab.name : null),
+        from: linkedFrom ?? (sameAsRemembered ? linkedTab.from : null),
+      }
+    : linkedTab
+  if (
+    linkedProduct &&
+    shownLinked &&
+    !(
+      sameAsRemembered &&
+      linkedTab.name === shownLinked.name &&
+      linkedTab.from === shownLinked.from
+    )
+  ) {
+    setLinkedTab(shownLinked)
+  }
+
+  // The collection a product was opened from stays mounted (hidden) behind the product's page, so
+  // Back returns to the very tab and page of products it was on.
+  const [keptId, setKeptId] = useState<string | null>(null)
+  if (activeId && keptId !== activeId) setKeptId(activeId)
+  const mountedId =
+    activeId ??
+    (linkedProduct && keptId && tabs.some((tab) => tab.id === keptId) ? keptId : null)
 
   useEffect(() => {
     if (!notice) return undefined
@@ -86,6 +139,24 @@ export function CollectionsPage() {
     setNotice(null)
     openTab(collection.id, collection.title)
     navigate(detailsPath(collection.id))
+  }
+
+  /** Closing the product goes to the address it was opened from (the collection), or the list. */
+  function leaveLinked() {
+    navigate(shownLinked?.from ?? LIST_PATH, { replace: true })
+  }
+
+  /** The X on the product's tab: forget it, and leave it when it is on screen. */
+  function closeLinked() {
+    setLinkedTab(null)
+    if (linkedProduct) leaveLinked()
+  }
+
+  /** The product's tab, picked while another page of this strip is showing. */
+  function showLinked(tab: LinkedTab) {
+    navigate(`${LIST_PATH}/product/${encodeURIComponent(tab.id)}`, {
+      state: { linkedName: tab.name ?? undefined, from: tab.from ?? undefined },
+    })
   }
 
   function closeTab(id: string) {
@@ -142,34 +213,71 @@ export function CollectionsPage() {
             label: tab.title ?? 'Collection',
             title: tab.title ?? undefined,
           })),
+          ...(shownLinked
+            ? [
+                {
+                  id: LINKED_ID,
+                  label: shownLinked.name ?? 'Product',
+                  kind: 'Product',
+                  title: shownLinked.name ?? undefined,
+                },
+              ]
+            : []),
           ...(formShown ? [{ id: DRAFT_TAB, label: 'New collection' }] : []),
         ]}
-        activeId={creating ? DRAFT_TAB : activeId}
+        activeId={linkedProduct ? LINKED_ID : creating ? DRAFT_TAB : activeId}
         navLabel="Open collections"
         listLabel="All Collections"
         kind="Collection"
         historyLabel="Opened collections"
         icon={LayersIcon}
         onShowList={() => navigate(LIST_PATH)}
-        onSelect={(id) => navigate(id === DRAFT_TAB ? NEW_PATH : detailsPath(id))}
-        onClose={(id) => (id === DRAFT_TAB ? requestClose() : closeTab(id))}
+        onSelect={(id) => {
+          if (id === LINKED_ID) {
+            if (linkedTab && !linkedProduct) showLinked(linkedTab)
+          } else navigate(id === DRAFT_TAB ? NEW_PATH : detailsPath(id))
+        }}
+        onClose={(id) =>
+          id === DRAFT_TAB
+            ? requestClose()
+            : id === LINKED_ID
+              ? closeLinked()
+              : closeTab(id)
+        }
         onClear={() => {
           setTabs([])
-          if (activeId) navigate(LIST_PATH)
+          setLinkedTab(null)
+          if (activeId || linkedProduct) navigate(LIST_PATH)
           if (formShown) requestClose()
         }}
       />
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
-      {activeId && (
-        <div className={`${SCROLL_VIEW} flex flex-col`}>
+      {mountedId && (
+        <div className={activeId ? `${SCROLL_VIEW} flex flex-col` : 'hidden'}>
           <CollectionDetailsView
-            key={activeId}
-            id={activeId}
+            key={mountedId}
+            id={mountedId}
             shop={listShop}
             onBack={() => navigate(LIST_PATH)}
-            onLoaded={(collection) => openTab(activeId, collection.title)}
+            onLoaded={(collection) => openTab(mountedId, collection.title)}
+          />
+        </div>
+      )}
+
+      {/* A product opened from a collection's Products tab: its own page, like a product's. */}
+      {linkedProduct && (
+        <div className={SCROLL_VIEW}>
+          <ProductDetailsView
+            key={`product-${linkedProduct}`}
+            id={linkedProduct}
+            backLabel={
+              shownLinked?.from && shownLinked.from !== LIST_PATH
+                ? 'Back to collection'
+                : 'Back to list'
+            }
+            onBack={leaveLinked}
           />
         </div>
       )}
@@ -189,7 +297,9 @@ export function CollectionsPage() {
 
       <div
         className={
-          activeId || creating ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
+          activeId || creating || linkedProduct
+            ? 'hidden'
+            : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'
         }
       >
         <CollectionsToolbar

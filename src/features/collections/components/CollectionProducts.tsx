@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -22,13 +23,13 @@ import {
 } from '../../../components/ui/rowActions.ts'
 import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
+import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import type {
   CollectionDetail,
   CollectionProduct,
   CollectionProductSort,
 } from '../../../lib/api/endpoints.ts'
 import { formatPrice } from '../../../lib/format.ts'
-import { ProductDetailsView } from '../../products/index.ts'
 import type {
   CollectionProductsState,
   useCollectionDetails,
@@ -37,7 +38,13 @@ import { isSmart, typeLabel } from '../utils/collectionDraft.ts'
 import { CollectionConfirm } from './CollectionConfirm.tsx'
 import { ProductPicker, type PickedProduct } from './CollectionFormParts.tsx'
 import { CollectionImage, Message } from './CollectionParts.tsx'
-import { count, MESSAGE_BUTTON, PRIMARY_BUTTON, SECONDARY_BUTTON } from '../utils/ui.ts'
+import {
+  collectionProductPath,
+  count,
+  MESSAGE_BUTTON,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+} from '../utils/ui.ts'
 
 const SORT_OPTIONS: SelectOption[] = [
   { value: 'position', label: 'Collection order' },
@@ -103,23 +110,11 @@ export function CollectionProducts({
   const [picked, setPicked] = useState<PickedProduct[]>([])
   const [confirmAdd, setConfirmAdd] = useState(false)
   const [removing, setRemoving] = useState<CollectionProduct | null>(null)
-  // The product being looked at: its own page opens in place of this table (same page).
-  const [viewing, setViewing] = useState<CollectionProduct | null>(null)
+  // A product's name and View icon are links to its own page (a "Product" tab, like an order's
+  // items): they carry where they were opened from, so Back returns to this tab.
+  const linkedState = useLinkedState()
   const inCollection = new Set(details.products.map((product) => product.id))
   const shop = collection.shop?.key ?? ''
-
-  if (viewing) {
-    return (
-      <div className="relative">
-        <ProductDetailsView
-          key={viewing.id}
-          id={viewing.id}
-          backLabel="Back to collection"
-          onBack={() => setViewing(null)}
-        />
-      </div>
-    )
-  }
 
   return (
     <section
@@ -302,14 +297,14 @@ export function CollectionProducts({
                           <span className="flex items-center gap-3">
                             <CollectionImage src={product.image_url} />
                             <span className="flex min-w-0 flex-col">
-                              <button
-                                type="button"
-                                onClick={() => setViewing(product)}
-                                className="text-text hover:text-accent cursor-pointer truncate border-none bg-transparent p-0 text-left font-semibold transition-colors hover:underline"
+                              <Link
+                                to={collectionProductPath(product.id)}
+                                state={linkedState(product.title)}
+                                className="text-text hover:text-accent truncate text-left font-semibold no-underline transition-colors hover:underline"
                                 title={`Open ${product.title}`}
                               >
                                 <Highlight text={product.title} />
-                              </button>
+                              </Link>
                               <span className="text-text-muted truncate text-[0.75rem]">
                                 {[product.vendor, product.product_type]
                                   .filter(Boolean)
@@ -338,15 +333,15 @@ export function CollectionProducts({
                         </td>
                         <td className={`${TD} text-center`}>
                           <span className={ROW_ACTIONS}>
-                            <button
-                              type="button"
+                            <Link
+                              to={collectionProductPath(product.id)}
+                              state={linkedState(product.title)}
                               aria-label={`View ${product.title}`}
                               title="View"
-                              onClick={() => setViewing(product)}
                               className={ROW_ACTION}
                             >
                               <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
-                            </button>
+                            </Link>
                             {editable && (
                               <button
                                 type="button"
