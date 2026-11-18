@@ -3,6 +3,13 @@ import { ApiError } from './ApiError.ts'
 import { apiClient, refreshCsrfSession } from './client.ts'
 import { CSRF_PATH, setCsrfToken } from './csrf.ts'
 import { readInvoiceDetail, type InvoiceDetail } from './invoiceDetail.ts'
+import {
+  readCreatedDefinition,
+  readMetafieldDefinitions,
+  readMetaobjects,
+  type MetafieldDefinition,
+  type MetaobjectPage,
+} from './collectionMetafields.ts'
 import { readOrderSummary, type OrderSummary } from './orderSummary.ts'
 import {
   readInvoiceList,
@@ -144,6 +151,13 @@ export const ENDPOINTS = {
     /** `POST` re-reads a collection and all its products from Shopify (nothing changes there). */
     refresh: (id: string) => `/collections/${encodeURIComponent(id)}/refresh`,
     /**
+     * `GET` the metafields collections have in the store, in Shopify's pinned order (`input` says which
+     * editor: `html` = rich text, `reference_list` = pick several entries); `POST` adds a new one.
+     */
+    metafieldDefinitions: '/collections/metafield-definitions',
+    /** `GET` the entries a reference metafield can pick (the FAQ entries…), by name, with paging. */
+    metaobjects: '/collections/metaobjects',
+    /**
      * `GET` what deleting a collection would affect (call it before `DELETE …/{ref}`, which is the
      * `detail` address with the DELETE method): how many products come out of it, and whether it is
      * marked "Do not delete".
@@ -151,10 +165,8 @@ export const ENDPOINTS = {
     deleteCheck: (id: string) => `/collections/${encodeURIComponent(id)}/delete-check`,
   },
   sync: {
-    /** `POST` starts a background sync of every product of one store. */
+    /** `POST` starts a background products sync from Shopify (`days`, `shop`). */
     products: '/sync/products',
-    /** `POST` checks one product against Shopify and saves Shopify's version (`dry_run` only compares). */
-    product: (shopifyId: string) => `/sync/products/${encodeURIComponent(shopifyId)}`,
     /** `POST` starts a background import of orders (`mode` new | refresh, `days`, `query`, `shop`). */
     orders: '/sync/orders',
     /** `POST` starts a background sync of every customer of one store. */
@@ -1957,58 +1969,19 @@ export interface OrderSyncOptions {
   shop?: string | null
 }
 
-/** What `POST /sync/products/{shopify_product_id}` reported, read leniently (its answer is not documented). */
-export interface ProductSyncResult {
-  message: string
-  /** The differences between Shopify and the CRM, in words (empty when none were listed). */
-  differences: string[]
-}
+/** `days` of a products sync: whole days, 1 to 365 (the API's limits; its own default is 5). */
+export const PRODUCT_SYNC_DAYS_MIN = 1
+export const PRODUCT_SYNC_DAYS_MAX = 365
+export const PRODUCT_SYNC_DAYS_DEFAULT = 5
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const asText = (value: unknown): string =>
-  value === null || value === undefined
-    ? '—'
-    : typeof value === 'string'
-      ? value
-      : typeof value === 'number' || typeof value === 'boolean'
-        ? String(value)
-        : JSON.stringify(value)
-
-/** One difference as a line: "price: 9.99 → 10.99", or the text the backend sent. */
-function differenceLine(entry: unknown, key?: string): string {
-  if (!isRecord(entry)) return key ? `${key}: ${asText(entry)}` : asText(entry)
-  const name = entry.field ?? entry.name ?? entry.path ?? entry.key ?? key
-  const from = entry.crm ?? entry.from ?? entry.old ?? entry.before
-  const to = entry.shopify ?? entry.to ?? entry.new ?? entry.after
-  if (from !== undefined || to !== undefined) {
-    return `${name ? `${asText(name)}: ` : ''}${asText(from)} → ${asText(to)}`
-  }
-  const text = entry.message ?? entry.description
-  if (text !== undefined) return `${name ? `${asText(name)}: ` : ''}${asText(text)}`
-  return key ? `${key}: ${JSON.stringify(entry)}` : JSON.stringify(entry)
-}
-
-/** Reads the one-product sync answer: its `message` and any list of differences, flat or in `result`. */
-export function readProductSync(data: unknown): ProductSyncResult {
-  const body = isRecord(data) ? data : {}
-  const inner = isRecord(body.result) ? body.result : isRecord(body.data) ? body.data : {}
-  const message = asText(inner.message ?? body.message ?? '').trim()
-  const list = [
-    inner.differences,
-    inner.diff,
-    inner.changes,
-    body.differences,
-    body.diff,
-    body.changes,
-  ].find((value) => value !== undefined && value !== null)
-  const differences = Array.isArray(list)
-    ? list.map((entry) => differenceLine(entry))
-    : isRecord(list)
-      ? Object.entries(list).map(([key, value]) => differenceLine(value, key))
-      : []
-  return { message: message === '—' ? '' : message, differences }
+export interface ProductSyncOptions {
+  /** The store key or domain; empty means the backend's default store. */
+  shop?: string | null
+  /**
+   * Only the products changed in Shopify in the last `days` days (1–365); they are added when
+   * new and updated otherwise. Left out (`null`), every product of the store is imported.
+   */
+  days?: number | null
 }
 
 /** One push of this product to its store. */
@@ -2446,6 +2419,8 @@ const collectionDetailSchema = collectionListItemSchema.extend({
     .nullish(),
   seo_title: z.string().nullish(),
   seo_description: z.string().nullish(),
+  /** The metafield values the collection has (read by `readCollectionMetafieldValues`). */
+  metafields: z.unknown().nullish(),
   image_alt: z.string().nullish(),
   products: z.array(collectionProductSchema).default([]),
   products_page: collectionProductsPageSchema.nullish(),
@@ -2479,6 +2454,44 @@ export interface CollectionRules {
  * The body of `POST /collections`. A **manual** collection sends `products` (CRM ids, ≤ 250), a
  * **smart** one sends `rules` — never both. Only `shop` and `title` are required.
  */
+/**
+ * One metafield value of a collection, sent as `metafields: [...]` of `POST /collections` and
+ * `PUT /collections/{ref}`: the metafield's `namespace` and `key`, and its `value` — the text (HTML for
+ * a rich text one) or, for a reference metafield, the ids of the chosen entries. An empty value clears it.
+ */
+export interface CollectionMetafieldWrite {
+  namespace: string
+  key: string
+  value: string | string[]
+}
+
+/** The query of `GET /collections/metaobjects` (all optional). */
+export interface MetaobjectParams {
+  /** The reference metafield, e.g. `custom.faq_section_metafield`. */
+  metafield?: string
+  /** Or the metaobject definition's own id. */
+  definition_id?: string
+  /** Comma-separated entry ids, to show those entries by name. */
+  ids?: string
+  /** Words in the entry. */
+  search?: string
+  /** 1–100 (50 by default). */
+  first?: number
+  /** The previous page's `next_cursor`. */
+  after?: string
+  /** Store key or domain. */
+  shop?: string
+}
+
+/** The body of `POST /collections/metafield-definitions` ("Add definition"). */
+export interface MetafieldDefinitionBody {
+  name: string
+  description?: string
+  /** Shopify's type, e.g. `rich_text_field`. */
+  type: string
+  shop: string
+}
+
 export interface CollectionCreateBody {
   /** The new collection's name (unique in the store). */
   title: string
@@ -2488,6 +2501,8 @@ export interface CollectionCreateBody {
   products?: string[]
   /** The conditions that pick its products (smart collections). */
   rules?: CollectionRules
+  /** Values for the store's collection metafields (the short description, the FAQ entries…). */
+  metafields?: CollectionMetafieldWrite[]
   description_html?: string
   image_url?: string
   image_alt?: string
@@ -2520,6 +2535,8 @@ export interface CollectionUpdateBody {
   products_add?: string[]
   products_remove?: string[]
   rules?: CollectionRules
+  /** Metafield values to set (an empty value clears it); the others stay as they are. */
+  metafields?: CollectionMetafieldWrite[]
 }
 
 /** How a collection's products are sorted on its page (`position` = Shopify's own order). */
@@ -3553,6 +3570,35 @@ export const api = {
       return collectionProductsResponseSchema.parse(data)
     },
 
+    /** The metafields collections have in the store (`refresh` reads Shopify again, else kept 10 minutes). */
+    async metafieldDefinitions(
+      shop: string,
+      refresh = false,
+    ): Promise<MetafieldDefinition[]> {
+      const data = await apiClient.get(ENDPOINTS.collections.metafieldDefinitions, {
+        params: { ...(shop ? { shop } : {}), ...(refresh ? { refresh: true } : {}) },
+      })
+      return readMetafieldDefinitions(data)
+    },
+
+    /** Adds a metafield to collections in Shopify ("Add definition"); answers the new one and the backend's message. */
+    async createMetafieldDefinition(body: MetafieldDefinitionBody) {
+      const data = await apiClient.post(
+        ENDPOINTS.collections.metafieldDefinitions,
+        body,
+        {
+          params: { shop: body.shop },
+        },
+      )
+      return readCreatedDefinition(data)
+    },
+
+    /** The entries a reference metafield can pick, a page at a time (`after` = the last page's cursor). */
+    async metaobjects(params: MetaobjectParams): Promise<MetaobjectPage> {
+      const data = await apiClient.get(ENDPOINTS.collections.metaobjects, { params })
+      return readMetaobjects(data)
+    },
+
     /** The products that match a set of conditions, before the collection exists (see `previewRules`). */
     async previewRules(body: CollectionRulePreviewBody): Promise<CollectionRulePreview> {
       const data = await apiClient.post(ENDPOINTS.collections.previewRules, body)
@@ -3695,14 +3741,21 @@ export const api = {
 
   sync: {
     /**
-     * Starts a sync of every product of a store (`shop` = its key; empty means
-     * the backend's default store). It runs in the background — follow it with
-     * `status`. Only success matters here, so the answer is read leniently:
-     * the backend's message when it sent one. Never retried automatically.
+     * Starts a products sync from Shopify (`POST /sync/products?shop=&days=`). It runs in the
+     * background — follow it with `status`. `days` (1–365) brings in every product changed in
+     * Shopify in that time (added when new, updated otherwise); without it every product of the
+     * store is imported. Only one products sync runs at a time (409 otherwise — the backend's
+     * message is shown). Only success matters here, so the answer is read leniently. Never retried.
      */
-    async triggerProducts(shop?: string | null): Promise<{ message: string }> {
+    async triggerProducts(
+      options: ProductSyncOptions = {},
+    ): Promise<{ message: string }> {
+      const { shop, days } = options
       const data = await apiClient.post<unknown>(ENDPOINTS.sync.products, undefined, {
-        params: shop ? { shop } : undefined,
+        params: {
+          ...(shop ? { shop } : {}),
+          ...(days ? { days } : {}),
+        },
       })
       const message =
         typeof data === 'object' && data !== null && 'message' in data
@@ -3750,26 +3803,6 @@ export const api = {
           ? String((data as { message: unknown }).message ?? '')
           : ''
       return { message }
-    },
-
-    /**
-     * Checks one product against Shopify and updates the CRM copy (`POST
-     * /sync/products/{shopify_product_id}?shop=&dry_run=`). With `dryRun` it only compares and
-     * lists the differences; nothing is saved. Never retried automatically.
-     */
-    async product(
-      shopifyId: string,
-      shop: string,
-      dryRun: boolean,
-    ): Promise<ProductSyncResult> {
-      const data = await apiClient.post<unknown>(
-        ENDPOINTS.sync.product(shopifyId),
-        undefined,
-        {
-          params: { shop, dry_run: dryRun },
-        },
-      )
-      return readProductSync(data)
     },
 
     /** The most recent sync runs, newest first. */

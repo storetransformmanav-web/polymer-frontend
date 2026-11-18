@@ -37,11 +37,7 @@ export function CollectionTypeToggle({
   onChange: (kind: CollectionKind) => void
 }) {
   return (
-    <div
-      role="radiogroup"
-      aria-label="Collection type"
-      className="border-border bg-surface inline-flex gap-1 rounded-xl border p-1"
-    >
+    <div role="radiogroup" aria-label="Collection type" className="inline-flex gap-2">
       {KINDS.map((item) => {
         const active = item.kind === kind
         return (
@@ -51,13 +47,20 @@ export function CollectionTypeToggle({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(item.kind)}
-            className={`flex h-8 min-w-24 cursor-pointer items-center justify-center gap-1.5 rounded-lg border-none px-3.5 text-[0.8rem] font-semibold transition-colors ${
+            className={`bg-bg flex h-9 min-w-28 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3.5 text-[0.82rem] font-semibold transition-colors ${
               active
-                ? 'bg-accent text-accent-contrast shadow-sm'
-                : 'bg-bg text-text hover:bg-accent-tint/60'
+                ? 'border-accent text-text'
+                : 'border-border text-text hover:border-accent'
             }`}
           >
-            <item.icon width={14} height={14} />
+            <span
+              aria-hidden="true"
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                active ? 'border-accent' : 'border-border-strong'
+              }`}
+            >
+              {active && <span className="bg-accent h-2 w-2 rounded-full" />}
+            </span>
             {item.label}
           </button>
         )

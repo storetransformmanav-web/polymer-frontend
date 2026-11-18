@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { DETAIL_CARD } from '../../../components/ui/DetailSection.tsx'
 import {
+  ChevronDownIcon,
+  CloudUploadIcon,
   PlusIcon,
   SearchIcon,
   SpinnerIcon,
   TrashIcon,
   XIcon,
   type IconProps,
-  UploadIcon,
 } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import { ROW_ACTION_DANGER, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
@@ -42,34 +43,44 @@ const LABEL = 'text-[0.76rem] font-semibold'
 const HINT = 'text-text-muted text-[0.7rem]'
 const ERROR = 'text-danger text-[0.74rem]'
 
-/** A form card: a bold heading (and a line under it), then its fields. */
+/**
+ * A form card: a bold heading (an accent icon before it, a line under it), then its fields. A card
+ * that has fields gets a light sage header band and a chevron that folds it (open to begin with;
+ * the fields stay mounted while it is folded, so nothing typed is lost) — `invalid` keeps it open
+ * while one of its fields has a problem.
+ */
 export function FormCard({
   title,
   description,
   icon: Icon,
   actions,
   error,
+  invalid = false,
   children,
 }: {
   title: string
   description?: string
-  /** A small accent tile before the title (the Add collection cards use it). */
+  /** An accent icon before the title (the Add collection cards use it). */
   icon?: ComponentType<IconProps>
   actions?: ReactNode
   error?: string
+  /** A field inside has a problem: the card can't stay folded over it. */
+  invalid?: boolean
   /** Left out for a card that is only a header (the Collection type card's toggle). */
   children?: ReactNode
 }) {
+  const [open, setOpen] = useState(true)
+  const shown = open || invalid
   return (
-    <section aria-label={title} className={`${DETAIL_CARD} flex flex-col`}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        {Icon && (
-          <span className="bg-accent-tint text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-            <Icon width={16} height={16} />
-          </span>
-        )}
+    <section aria-label={title} className={`${DETAIL_CARD} flex min-w-0 flex-col`}>
+      <div
+        className={`flex items-center justify-between gap-3 px-4 py-3 ${
+          children ? 'bg-accent-tint/60' : ''
+        }`}
+      >
+        {Icon && <Icon width={20} height={20} className="text-accent shrink-0" />}
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-[0.88rem] leading-tight font-semibold">{title}</h3>
+          <h3 className="m-0 text-[0.95rem] leading-tight font-bold">{title}</h3>
           {description && (
             <p className="text-text-muted m-0 mt-0.5 text-[0.74rem] leading-snug">
               {description}
@@ -77,6 +88,21 @@ export function FormCard({
           )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {children && (
+          <button
+            type="button"
+            aria-expanded={shown}
+            aria-label={`${shown ? 'Fold' : 'Open'} ${title}`}
+            onClick={() => setOpen(!shown)}
+            className="text-text-muted hover:text-accent flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent p-0 transition-colors"
+          >
+            <ChevronDownIcon
+              width={16}
+              height={16}
+              className={`transition-transform ${shown ? 'rotate-180' : ''}`}
+            />
+          </button>
+        )}
       </div>
       {error && (
         <p role="alert" className="text-danger m-0 px-4 pb-3 text-[0.76rem]">
@@ -84,7 +110,9 @@ export function FormCard({
         </p>
       )}
       {children && (
-        <div className="border-border-strong flex flex-col gap-3.5 border-t p-4">
+        <div
+          className={`${shown ? 'flex' : 'hidden'} border-border-strong flex-col gap-3.5 border-t p-4`}
+        >
           {children}
         </div>
       )}
@@ -128,7 +156,7 @@ export function TextField({
         </label>
         {max !== undefined && (
           <span className={HINT}>
-            {value.length}/{max}
+            {value.length} / {max}
           </span>
         )}
       </div>
@@ -367,16 +395,17 @@ export function ImageUploadField({
             setDragging(false)
             choose(event.dataTransfer.files[0])
           }}
-          className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
+          className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors ${
             dragging
               ? 'border-accent bg-accent-tint/50'
               : 'border-border hover:border-accent hover:bg-accent-tint/30'
           }`}
         >
-          <UploadIcon width={22} height={22} className="text-accent" />
-          <span className="text-[0.85rem] font-semibold">Upload from your computer</span>
+          <CloudUploadIcon width={32} height={32} className="text-accent mb-1" />
+          <span className="text-[0.88rem] font-semibold">Upload from your computer</span>
+          <span className="text-text-muted text-[0.76rem]">or drop a picture here</span>
           <span className="text-text-muted text-[0.74rem]">
-            or drop a picture here · JPG, PNG, WebP or GIF · up to 20 MB
+            JPG, PNG, WEBP or GIF • up to 20 MB
           </span>
         </label>
       )}
@@ -422,7 +451,7 @@ export function SeoFields({
   idPrefix: string
 }) {
   return (
-    <>
+    <div className="grid items-start gap-4 md:grid-cols-2">
       <TextField
         id={`${idPrefix}-seo-title`}
         label="Page title"
@@ -440,7 +469,7 @@ export function SeoFields({
         onChange={(seoDescription) => onChange({ seoDescription })}
         error={errors.seoDescription}
       />
-    </>
+    </div>
   )
 }
 

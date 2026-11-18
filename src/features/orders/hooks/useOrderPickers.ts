@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api/endpoints.ts'
 
@@ -17,24 +17,32 @@ export function usePaused(text: string): string {
   return paused
 }
 
+/** Products a page of the picker's list holds (the next page loads as the list is scrolled). */
+export const PRODUCT_PAGE = 20
+
 /**
- * The store's products matching what was typed (`GET /products?search=&shop=`), to add to an
- * order. Nothing is asked until something is typed; the previous answer stays while the next
- * loads.
+ * The store's products **that are in stock** (`GET /products?in_stock=true&shop=`), A–Z, to add to
+ * an order: every one of them when nothing is typed, narrowed by `search` as you type. 20 at a time —
+ * `fetchNextPage` brings the next 20 when the list is scrolled to its end. Nothing is asked until
+ * `enabled` (the box was focused or something typed); the previous answer stays while the next loads.
  */
-export function usePickProducts(shop: string, text: string) {
+export function usePickProducts(shop: string, text: string, enabled: boolean) {
   const search = usePaused(text)
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['order-picker', 'products', shop, search],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.products.list({
-        search,
+        ...(search ? { search } : {}),
         shop: shop || undefined,
-        page_size: PICK_LIMIT,
+        in_stock: true,
+        page: pageParam,
+        page_size: PRODUCT_PAGE,
         sort: 'title',
         order: 'asc',
       }),
-    enabled: search.length > 0,
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.has_next ? last.page + 1 : undefined),
+    enabled: enabled || search.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
   })

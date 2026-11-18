@@ -8,11 +8,7 @@ import {
 } from '../../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../../lib/format.ts'
 import type { ProductListItem } from '../../../../lib/api/endpoints.ts'
-import {
-  PICK_LIMIT,
-  usePickProducts,
-  usePickVariants,
-} from '../../hooks/useOrderPickers.ts'
+import { usePickProducts, usePickVariants } from '../../hooks/useOrderPickers.ts'
 import {
   FIELD,
   orderSubtotal,
@@ -117,7 +113,11 @@ function ProductResult({
 }) {
   const [open, setOpen] = useState(false)
   const details = usePickVariants(open ? product.id : null)
-  const variants = details.data?.variants ?? []
+  // A variant known to have no stock is not offered (one with no stock figure — not tracked — is).
+  const allVariants = details.data?.variants ?? []
+  const variants = allVariants.filter(
+    (variant) => variant.inventory_quantity == null || variant.inventory_quantity > 0,
+  )
   const range =
     product.price_min && product.price_max && product.price_min !== product.price_max
       ? `${formatPrice(product.price_min, product.currency)} – ${formatPrice(product.price_max, product.currency)}`
@@ -179,7 +179,9 @@ function ProductResult({
           )}
           {details.data && variants.length === 0 && (
             <p className="text-text-muted py-2 text-[0.8rem]">
-              This product has no variants.
+              {allVariants.length === 0
+                ? 'This product has no variants.'
+                : 'None of its variants is in stock.'}
             </p>
           )}
           <ul className="m-0 flex list-none flex-col p-0">
@@ -299,8 +301,9 @@ function QuantityStepper({
 }
 
 /**
- * A search over the store's products (nothing is asked until something is typed) whose matches
- * drop down under the box; opening one lists its variants. With `lines`, a variant already on the
+ * A search over the store's products **that are in stock** whose list drops down under the box as
+ * soon as it is focused — every one, A–Z, 20 at a time as it is scrolled — and narrows as you type;
+ * opening one lists its variants that are in stock. With `lines`, a variant already on the
  * order shows its quantity counter in place of **Add**.
  */
 export function ProductSearch({
@@ -318,9 +321,12 @@ export function ProductSearch({
   lines?: DraftLine[]
 }) {
   const [text, setText] = useState('')
-  const found = usePickProducts(shop, text)
-  const products = found.data?.items ?? []
-  const total = found.data?.total ?? 0
+  // The list is asked for the moment the box is focused: every product in stock, A–Z.
+  const [activated, setActivated] = useState(false)
+  const found = usePickProducts(shop, text, activated)
+  const products = found.data?.pages.flatMap((page) => page.items) ?? []
+  const total = found.data?.pages[0]?.total ?? 0
+  const searching = text.trim() !== ''
 
   return (
     <SearchDropdown
@@ -329,21 +335,34 @@ export function ProductSearch({
       value={text}
       placeholder="Search products by name or SKU"
       onChange={setText}
+      showWhenEmpty
+      onActivate={() => setActivated(true)}
+      onListScroll={(list) => {
+        if (
+          found.hasNextPage &&
+          !found.isFetchingNextPage &&
+          list.scrollTop + list.clientHeight >= list.scrollHeight - 80
+        ) {
+          void found.fetchNextPage()
+        }
+      }}
     >
       {found.isFetching && products.length === 0 && (
         <p className="text-text-muted flex items-center gap-2 px-3 py-3 text-[0.8rem]">
           <SpinnerIcon width={14} height={14} className="animate-spin" />
-          Searching products…
+          {searching ? 'Searching products…' : 'Loading products…'}
         </p>
       )}
       {found.isError && (
         <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
-          Could not search the products. Try again in a moment.
+          Could not load the products. Try again in a moment.
         </p>
       )}
       {found.data && products.length === 0 && !found.isFetching && (
         <p className="text-text-muted px-3 py-3 text-[0.8rem]">
-          No product matches “{text.trim()}”. {noMatchHint}
+          {searching
+            ? `No product in stock matches “${text.trim()}”. ${noMatchHint}`
+            : 'No product is in stock.'}
         </p>
       )}
       {products.length > 0 && (
@@ -358,11 +377,21 @@ export function ProductSearch({
           ))}
         </ul>
       )}
-      {total > PICK_LIMIT && (
-        <p className="border-border text-text-muted border-t px-3 py-2 text-[0.76rem]">
-          Showing {PICK_LIMIT} of {total.toLocaleString('en-GB')} — keep typing to narrow
-          the list.
-        </p>
+      {products.length > 0 && (
+        <div className="border-border bg-bg text-text-muted sticky bottom-0 flex items-center justify-between border-t px-3 py-1.5 text-[0.74rem]">
+          <span>
+            {products.length.toLocaleString('en-GB')} of {total.toLocaleString('en-GB')}{' '}
+            in stock
+          </span>
+          {found.isFetchingNextPage ? (
+            <span className="flex items-center gap-1">
+              <SpinnerIcon width={11} height={11} className="animate-spin" />
+              Loading more…
+            </span>
+          ) : found.hasNextPage ? (
+            <span>Scroll for more</span>
+          ) : null}
+        </div>
       )}
     </SearchDropdown>
   )

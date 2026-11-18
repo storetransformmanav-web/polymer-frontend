@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
-import { PlusIcon, SpinnerIcon, XIcon } from '../../../../components/ui/icons.tsx'
+import { SpinnerIcon, XIcon } from '../../../../components/ui/icons.tsx'
 import { SuggestInput } from '../../../../components/ui/SuggestInput.tsx'
 import { countryOptions } from '../../../../lib/countries.ts'
 import type { CustomerListItem } from '../../../../lib/api/endpoints.ts'
@@ -8,6 +8,7 @@ import { usePickCustomers } from '../../hooks/useOrderPickers.ts'
 import {
   FIELD,
   ORDER_LIMITS,
+  PHONE,
   type OrderDraft,
   type OrderErrors,
 } from '../../utils/orderDraft.ts'
@@ -17,7 +18,6 @@ import {
   FIELD_TEXTAREA,
   FormSection,
   MoneyInput,
-  SECONDARY_BUTTON,
   SearchDropdown,
   TEXT_BUTTON,
   TextInput,
@@ -38,25 +38,33 @@ export interface LinkedCustomer {
 /** Offered in the shipping method box (any other can be typed). */
 const SHIPPING_METHODS = ['Standard Shipping', 'Next day delivery', 'Collection']
 
-const BLANK_CUSTOMER: OrderDraft['customer'] = {
-  email: '',
-  firstName: '',
-  lastName: '',
-  phone: '',
-}
-
 const customerName = (customer: CustomerListItem) =>
   customer.full_name?.trim() ||
   [customer.first_name, customer.last_name].filter(Boolean).join(' ') ||
   customer.email ||
   'Customer'
 
+/** One read-only line of the chosen customer's details. */
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-text-muted text-[0.7rem] font-bold tracking-wide uppercase">
+        {label}
+      </dt>
+      <dd className="m-0 truncate text-[0.85rem]" title={value || undefined}>
+        {value || <span className="text-text-muted">—</span>}
+      </dd>
+    </div>
+  )
+}
+
 /**
- * "CUSTOMER" and "NOTES" of the first step. **Existing customer** searches the store's customers
- * (nothing is asked until something is typed); choosing one fills the boxes below and shows
- * "Linked to …" with **Unlink** (keeps what was filled in). **Add Customer** empties the boxes for
- * a new buyer — the store links an email that matches a customer it already has. Optional, but a
- * customer needs an email.
+ * "CUSTOMER" and "NOTES" of the first step. **Only a customer the store already has can be
+ * chosen**: the box searches the store's customers (nothing is asked until something is typed) and
+ * the one picked from the list fills the order — their email, phone and name are shown as they are
+ * and can't be typed over. There is no way to add a new customer here (that is done on the
+ * Customers page). The ✕ takes the customer off again; leaving it empty makes an order with no
+ * customer.
  */
 export function OrderCustomerSection({
   draft,
@@ -72,34 +80,34 @@ export function OrderCustomerSection({
   const found = usePickCustomers(draft.shop, text)
   const customers = found.data?.items ?? []
   const customer = draft.customer
-  const set = (patch: Partial<OrderDraft['customer']>) =>
-    update({ customer: { ...customer, ...patch } })
-  const anyCustomer = Object.values(customer).some((value) => value.trim())
-  // The link ends when the email is changed to another one.
+  // A customer is "chosen" only while the order still carries the email that was picked.
   const active =
     linked && linked.email.trim().toLowerCase() === customer.email.trim().toLowerCase()
       ? linked
       : null
 
   function choose(picked: CustomerListItem) {
+    const phone = (picked.phone ?? '').trim()
     update({
       customer: {
-        email: picked.email ?? '',
-        firstName: picked.first_name ?? '',
-        lastName: picked.last_name ?? '',
-        phone: picked.phone ?? '',
+        email: (picked.email ?? '').trim(),
+        firstName: (picked.first_name ?? '').trim().slice(0, ORDER_LIMITS.text),
+        lastName: (picked.last_name ?? '').trim().slice(0, ORDER_LIMITS.text),
+        // A phone the store would refuse is left out, so a chosen customer never blocks the order.
+        phone: PHONE.test(phone) ? phone : '',
       },
     })
-    onLink({ name: customerName(picked), email: picked.email ?? '' })
+    onLink({ name: customerName(picked), email: (picked.email ?? '').trim() })
     setText('')
   }
 
-  function addNew() {
-    update({ customer: BLANK_CUSTOMER })
+  function clear() {
+    update({ customer: { email: '', firstName: '', lastName: '', phone: '' } })
     onLink(null)
     setText('')
-    window.setTimeout(() => document.getElementById(FIELD.email)?.focus(), 0)
   }
+
+  const problem = errors[FIELD.email] ?? errors[FIELD.phone]
 
   return (
     <>
@@ -108,22 +116,31 @@ export function OrderCustomerSection({
           <span className="text-text text-[0.82rem] font-semibold">
             Existing customer
           </span>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            {active ? (
-              <div
-                className={`${FIELD_INPUT} flex items-center justify-between gap-2 sm:flex-1`}
-              >
+          {active ? (
+            <>
+              <div className={`${FIELD_INPUT} flex items-center justify-between gap-2`}>
                 <span className="truncate">{active.name}</span>
                 <button
                   type="button"
                   aria-label="Clear customer"
-                  onClick={addNew}
+                  onClick={clear}
                   className="text-text-muted hover:text-text inline-flex cursor-pointer border-none bg-transparent p-0.5"
                 >
                   <XIcon width={16} height={16} />
                 </button>
               </div>
-            ) : (
+              <dl
+                aria-label="Customer details"
+                className="border-border-strong bg-accent-tint/50 m-0 grid gap-3 rounded-lg border px-3 py-2.5 sm:grid-cols-2"
+              >
+                <Detail label="Email" value={customer.email} />
+                <Detail label="Phone" value={customer.phone} />
+                <Detail label="First name" value={customer.firstName} />
+                <Detail label="Last name" value={customer.lastName} />
+              </dl>
+            </>
+          ) : (
+            <>
               <SearchDropdown
                 id="order-customer-search"
                 label="Find a customer"
@@ -139,14 +156,12 @@ export function OrderCustomerSection({
                 )}
                 {found.isError && (
                   <p role="alert" className="text-danger px-3 py-3 text-[0.8rem]">
-                    Could not search the customers. Use Add Customer to type their
-                    details.
+                    Could not search the customers. Try again in a moment.
                   </p>
                 )}
                 {found.data && customers.length === 0 && !found.isFetching && (
                   <p className="text-text-muted px-3 py-3 text-[0.8rem]">
-                    No customer matches “{text.trim()}”. Use Add Customer — the store will
-                    add them.
+                    No customer matches “{text.trim()}”.
                   </p>
                 )}
                 {customers.length > 0 && (
@@ -175,75 +190,17 @@ export function OrderCustomerSection({
                   </ul>
                 )}
               </SearchDropdown>
-            )}
-            <button type="button" onClick={addNew} className={SECONDARY_BUTTON}>
-              <PlusIcon width={16} height={16} />
-              Add Customer
-            </button>
-          </div>
-          {active ? (
-            <div className="border-border-strong bg-accent-tint/50 flex items-center justify-between gap-3 rounded-lg border px-3 py-1.5 text-[0.82rem]">
-              <span>
-                Linked to <strong>{active.name}</strong>
-              </span>
-              <button type="button" onClick={() => onLink(null)} className={TEXT_BUTTON}>
-                Unlink
-              </button>
-            </div>
-          ) : (
-            <p className="text-text-muted m-0 text-[0.76rem]">
-              Or enter a new customer below. An email that matches an existing customer is
-              linked to them. Leave everything empty for an order with no customer.
+              <p className="text-text-muted m-0 text-[0.76rem]">
+                Choose a customer that is already in the store. New customers can&apos;t
+                be added here. Leave it empty for an order with no customer.
+              </p>
+            </>
+          )}
+          {problem && (
+            <p role="alert" className="text-danger m-0 text-[0.78rem]">
+              {problem}
             </p>
           )}
-        </div>
-
-        <div className="grid items-start gap-4 md:grid-cols-2">
-          <Field
-            id={FIELD.email}
-            label="Email"
-            error={errors[FIELD.email]}
-            required={anyCustomer}
-          >
-            <TextInput
-              id={FIELD.email}
-              type="email"
-              inputMode="email"
-              value={customer.email}
-              error={errors[FIELD.email]}
-              placeholder="e.g. buyer@company.com"
-              onChange={(email) => set({ email })}
-            />
-          </Field>
-          <Field id={FIELD.phone} label="Phone" error={errors[FIELD.phone]}>
-            <TextInput
-              id={FIELD.phone}
-              type="tel"
-              inputMode="tel"
-              value={customer.phone}
-              error={errors[FIELD.phone]}
-              placeholder="e.g. +447700900123"
-              onChange={(phone) => set({ phone })}
-            />
-          </Field>
-          <Field id={FIELD.firstName} label="First Name" error={errors[FIELD.firstName]}>
-            <TextInput
-              id={FIELD.firstName}
-              value={customer.firstName}
-              error={errors[FIELD.firstName]}
-              placeholder="e.g. John"
-              onChange={(firstName) => set({ firstName })}
-            />
-          </Field>
-          <Field id={FIELD.lastName} label="Last Name" error={errors[FIELD.lastName]}>
-            <TextInput
-              id={FIELD.lastName}
-              value={customer.lastName}
-              error={errors[FIELD.lastName]}
-              placeholder="e.g. Smith"
-              onChange={(lastName) => set({ lastName })}
-            />
-          </Field>
         </div>
       </FormSection>
 

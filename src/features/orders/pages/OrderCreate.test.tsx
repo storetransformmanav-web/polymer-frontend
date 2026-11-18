@@ -89,6 +89,15 @@ const PRODUCT = {
       sku: 'PB14',
       price: '12.00',
       currency: 'GBP',
+      inventory_quantity: 25,
+      image_url: null,
+    },
+    {
+      id: 'variant-3',
+      title: '16 inch',
+      sku: 'PB16',
+      price: '14.00',
+      currency: 'GBP',
       inventory_quantity: 0,
       image_url: null,
     },
@@ -236,65 +245,68 @@ describe('Add order', () => {
     expect(within(form).getByRole('button', { name: /^Step 3: Items/ })).toBeDisabled()
   })
 
-  it('links an existing customer found in the store, and Unlink / Clear customer undo it', async () => {
+  it('only an existing customer can be chosen: the details are read-only and there is no way to add a new one', async () => {
     const { user, form } = await openForm()
+
+    // No boxes to type a customer into, and no Add Customer button.
+    expect(within(form).queryByLabelText(/^Email/)).not.toBeInTheDocument()
+    expect(within(form).queryByLabelText('First Name')).not.toBeInTheDocument()
+    expect(
+      within(form).queryByRole('button', { name: 'Add Customer' }),
+    ).not.toBeInTheDocument()
 
     await user.type(within(form).getByLabelText('Find a customer'), 'sam')
     await user.click(await within(form).findByRole('button', { name: /Sam Taylor/ }))
     expect(customersList).toHaveBeenCalledWith(
       expect.objectContaining({ search: 'sam', role: 'all', shop: 'polymer-uk' }),
     )
-    expect(within(form).getByText('Linked to')).toBeInTheDocument()
-    expect(within(form).getByLabelText(/^Email/)).toHaveValue('buyer@example.com')
-    expect(within(form).getByLabelText('First Name')).toHaveValue('Sam')
-    expect(within(form).getByLabelText('Phone')).toHaveValue('+447700900123')
 
-    // Unlink keeps what was filled in, and the search is back.
-    await user.click(within(form).getByRole('button', { name: 'Unlink' }))
-    expect(within(form).queryByText('Linked to')).not.toBeInTheDocument()
-    expect(within(form).getByLabelText(/^Email/)).toHaveValue('buyer@example.com')
-    expect(within(form).getByLabelText('Find a customer')).toBeInTheDocument()
+    // The chosen customer's details are shown as text, not as boxes.
+    const details = within(form).getByLabelText('Customer details')
+    expect(within(details).getByText('buyer@example.com')).toBeInTheDocument()
+    expect(within(details).getByText('Sam')).toBeInTheDocument()
+    expect(within(details).getByText('+447700900123')).toBeInTheDocument()
+    expect(within(form).queryByLabelText(/^Email/)).not.toBeInTheDocument()
 
-    // Choosing again and then clearing empties the boxes.
-    await user.type(within(form).getByLabelText('Find a customer'), 'sam')
-    await user.click(await within(form).findByRole('button', { name: /Sam Taylor/ }))
+    // The ✕ takes the customer off and the search is back.
     await user.click(within(form).getByRole('button', { name: 'Clear customer' }))
-    expect(within(form).getByLabelText(/^Email/)).toHaveValue('')
-    expect(within(form).queryByText('Linked to')).not.toBeInTheDocument()
-
-    // Typing another email ends the link too.
-    await user.type(within(form).getByLabelText('Find a customer'), 'sam')
-    await user.click(await within(form).findByRole('button', { name: /Sam Taylor/ }))
-    await user.type(within(form).getByLabelText(/^Email/), 'x')
-    expect(within(form).queryByText('Linked to')).not.toBeInTheDocument()
+    expect(within(form).queryByLabelText('Customer details')).not.toBeInTheDocument()
+    expect(within(form).getByLabelText('Find a customer')).toBeInTheDocument()
   })
 
-  it('step 1: a customer needs an email; Next stays and shows the reason, then goes on once fixed', async () => {
+  it('step 1: with a customer chosen, Next goes on to the addresses', async () => {
     const { user, form } = await openForm()
-    await user.type(within(form).getByLabelText('First Name'), 'Sam')
-    await next(user, form)
-
-    expect(
-      within(form).getByText('The customer needs an email address.'),
-    ).toBeInTheDocument()
-    expect(
-      within(form).getByText('Please fix this field to continue:'),
-    ).toBeInTheDocument()
-    expect(within(form).getByLabelText(/^Email/)).toHaveFocus()
-    // The alert names the field and what is wrong with it.
-    expect(within(form).getByRole('button', { name: 'Email' })).toBeInTheDocument()
-    expect(currentStep()).toContain('Order & Customer')
-
-    await user.type(within(form).getByLabelText(/^Email/), 'not-an-email')
-    await next(user, form)
-    expect(
-      within(form).getByText('Enter an email address such as name@example.com.'),
-    ).toBeInTheDocument()
-
-    await user.clear(within(form).getByLabelText(/^Email/))
-    await user.type(within(form).getByLabelText(/^Email/), 'sam@example.com')
+    await user.type(within(form).getByLabelText('Find a customer'), 'sam')
+    await user.click(await within(form).findByRole('button', { name: /Sam Taylor/ }))
     await next(user, form)
     expect(currentStep()).toContain('Addresses')
+  })
+
+  it('lists every product in stock as soon as the product box is focused, and leaves out sold-out variants', async () => {
+    const { user, form } = await openForm()
+    await next(user, form)
+    await next(user, form)
+    expect(productsList).not.toHaveBeenCalled()
+
+    // Nothing typed: the whole in-stock list (A–Z, 20 at a time), asked for with in_stock=true.
+    await user.click(within(form).getByLabelText('Search products'))
+    await waitFor(() =>
+      expect(productsList).toHaveBeenCalledWith({
+        shop: 'polymer-uk',
+        in_stock: true,
+        page: 1,
+        page_size: 20,
+        sort: 'title',
+        order: 'asc',
+      }),
+    )
+    await user.click(await within(form).findByRole('button', { name: /Pizza Box/ }))
+    expect(
+      await within(form).findByRole('button', { name: 'Add Pizza Box – 12 inch' }),
+    ).toBeInTheDocument()
+    // The 16 inch variant has no stock: it is not offered (the 14 inch one is).
+    expect(within(form).getByText('14 inch')).toBeInTheDocument()
+    expect(within(form).queryByText('16 inch')).not.toBeInTheDocument()
   })
 
   it('step 2: an address needs a street, a city and a country, and a delivery cost needs a method', async () => {
@@ -417,7 +429,9 @@ describe('Add order', () => {
       expect(productsList).toHaveBeenCalledWith({
         search: 'pizza',
         shop: 'polymer-uk',
-        page_size: 8,
+        in_stock: true,
+        page: 1,
+        page_size: 20,
         sort: 'title',
         order: 'asc',
       }),
@@ -522,22 +536,19 @@ describe('Add order', () => {
     await next(user, form)
     expect(currentStep()).toContain('Review & Create')
 
-    // Go back, spoil step 1, and jump straight to the review through the stepper.
-    await user.click(within(form).getByRole('button', { name: /^Step 1:/ }))
-    await user.type(within(form).getByLabelText(/^Email/), 'nope')
+    // Go back, spoil step 2 (a company with no street), and jump straight to the review through the stepper.
+    await user.click(within(form).getByRole('button', { name: /^Step 2:/ }))
+    await user.type(within(form).getByLabelText('Company'), 'Taylor Foods')
     await user.click(within(form).getByRole('button', { name: /^Step 4:/ }))
     await user.click(within(form).getByRole('button', { name: 'Create order' }))
 
-    expect(currentStep()).toContain('Order & Customer')
-    expect(
-      within(form).getByText('Enter an email address such as name@example.com.'),
-    ).toBeInTheDocument()
-    expect(within(form).getByLabelText(/^Email/)).toHaveFocus()
+    expect(currentStep()).toContain('Addresses')
+    expect(within(form).getByText('Enter the street address.')).toBeInTheDocument()
     // The stepper marks a step with a problem when you are elsewhere.
-    await user.click(within(form).getByRole('button', { name: /^Step 2:/ }))
+    await user.click(within(form).getByRole('button', { name: /^Step 1:/ }))
     expect(
       within(form).getByRole('button', {
-        name: 'Step 1: Order & Customer (needs attention)',
+        name: 'Step 2: Addresses (needs attention)',
       }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()

@@ -11,7 +11,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {
     shops: { list: vi.fn() },
-    sync: { triggerProducts: vi.fn(), status: vi.fn(), product: vi.fn() },
+    sync: { triggerProducts: vi.fn(), status: vi.fn() },
     products: { list: vi.fn() },
     auth: {},
   },
@@ -59,7 +59,6 @@ const run = (overrides: Partial<SyncRun>): SyncRun => ({
 const shopsList = vi.mocked(api.shops.list)
 const trigger = vi.mocked(api.sync.triggerProducts)
 const status = vi.mocked(api.sync.status)
-const syncOne = vi.mocked(api.sync.product)
 const productsList = vi.mocked(api.products.list)
 const never = () => new Promise<never>(() => undefined)
 
@@ -115,14 +114,13 @@ describe('the Sync products button', () => {
     // A panel, not a window.
     expect(screen.queryByRole('dialog')).toBeNull()
     const panel = within(screen.getByRole('group', { name: 'Sync products' }))
-    expect(panel.getByLabelText(/Shopify ID/)).toHaveFocus()
-    expect(panel.getByRole('button', { name: 'Sync' })).toBeInTheDocument()
-    expect(panel.getByRole('checkbox', { name: /^Only compare/ })).not.toBeChecked()
+    expect(panel.getByLabelText(/Last Days/)).toHaveFocus()
+    expect(panel.getByLabelText(/Last Days/)).toHaveValue(5)
+    expect(panel.getByRole('button', { name: 'Execute' })).toBeInTheDocument()
+    expect(panel.getByRole('button', { name: 'Close' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Sync all products' })).toBeInTheDocument()
-    // One store is picked in the top bar: no store to choose.
-    expect(panel.queryByRole('combobox')).toBeNull()
+    expect(panel.queryByLabelText(/Shopify ID/)).toBeNull()
     expect(trigger).not.toHaveBeenCalled()
-    expect(syncOne).not.toHaveBeenCalled()
 
     // Escape (or a click outside, or the button again) closes it.
     await user.keyboard('{Escape}')
@@ -140,9 +138,11 @@ describe('the Sync products button', () => {
 
     expect(screen.queryByRole('group', { name: 'Sync products' })).toBeNull()
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
+    // A full import: no days.
+    expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-uk', days: null })
   })
 
-  describe('one product (POST /sync/products/{shopify_product_id})', () => {
+  describe('the last days (POST /sync/products?days=N)', () => {
     const open = async (selected?: string) => {
       const view = await setup(selected)
       await view.user.click(view.button)
@@ -150,88 +150,89 @@ describe('the Sync products button', () => {
       return { ...view, panel }
     }
 
-    it('syncs the product by its Shopify ID, closes the panel and shows the result beside the button', async () => {
-      syncOne.mockResolvedValue({
-        message: 'Product synced from Shopify.',
-        differences: ['price: 9.99 → 10.99'],
-      })
+    it('Execute syncs the products changed in the last days (5 to begin with) and closes the panel', async () => {
       const { user, panel } = await open('polymer-uk')
 
-      await user.type(panel.getByLabelText(/Shopify ID/), '15497136308609')
-      await user.click(panel.getByRole('button', { name: 'Sync' }))
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
 
       await waitFor(() =>
-        expect(syncOne).toHaveBeenCalledWith('15497136308609', 'polymer-uk', false),
+        expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-uk', days: 5 }),
       )
+      expect(screen.queryByRole('group', { name: 'Sync products' })).toBeNull()
+    })
+
+    it('sends the number typed, and Enter sends it too', async () => {
+      const { user, panel } = await open('polymer-uk')
+      const box = panel.getByLabelText(/Last Days/)
+
+      await user.clear(box)
+      await user.type(box, '30{Enter}')
+
       await waitFor(() =>
-        expect(screen.queryByRole('group', { name: 'Sync products' })).toBeNull(),
+        expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-uk', days: 30 }),
       )
-      const result = screen.getByRole('status')
-      expect(result).toHaveTextContent('Synced product 15497136308609')
-      expect(result).toHaveAttribute(
-        'title',
-        'Product synced from Shopify.\nprice: 9.99 → 10.99',
-      )
+    })
+
+    it('the ✕ closes the panel without sending anything', async () => {
+      const { user, panel } = await open('polymer-uk')
+
+      await user.click(panel.getByRole('button', { name: 'Close' }))
+
+      expect(screen.queryByRole('group', { name: 'Sync products' })).toBeNull()
       expect(trigger).not.toHaveBeenCalled()
     })
 
-    it('Only compare sends dry_run (nothing saved); Enter sends it too', async () => {
-      syncOne.mockResolvedValue({ message: '', differences: ['title: A → B'] })
+    it('takes whole days from 1 to 365 and says why before sending', async () => {
       const { user, panel } = await open('polymer-uk')
+      const box = panel.getByLabelText(/Last Days/)
 
-      await user.click(panel.getByRole('checkbox', { name: /^Only compare/ }))
-      expect(panel.getByRole('button', { name: 'Compare' })).toBeInTheDocument()
-      await user.type(panel.getByLabelText(/Shopify ID/), '42{Enter}')
-
-      await waitFor(() => expect(syncOne).toHaveBeenCalledWith('42', 'polymer-uk', true))
-      expect(await screen.findByRole('status')).toHaveTextContent(
-        'Compared product 42: 1 difference',
-      )
-    })
-
-    it('takes digits only, at most 30 characters, and says why before sending', async () => {
-      const { user, panel } = await open('polymer-uk')
-      const box = panel.getByLabelText(/Shopify ID/)
-
-      await user.click(panel.getByRole('button', { name: 'Sync' }))
-      expect(panel.getByRole('alert')).toHaveTextContent(
-        'Enter the product’s Shopify ID.',
-      )
-
-      await user.type(box, 'abc-12')
-      await user.click(panel.getByRole('button', { name: 'Sync' }))
-      expect(panel.getByRole('alert')).toHaveTextContent('Digits only')
-
-      // The box itself stops at 30 characters.
       await user.clear(box)
-      await user.type(box, '1'.repeat(40))
-      expect(box).toHaveValue('1'.repeat(30))
-      expect(panel.getByText('30/30')).toBeInTheDocument()
-      expect(syncOne).not.toHaveBeenCalled()
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      expect(panel.getByRole('alert')).toHaveTextContent('Enter the number of days')
+
+      // Only digits can be typed: letters are dropped.
+      await user.type(box, 'ab')
+      expect(box).toHaveValue(null)
+
+      await user.clear(box)
+      await user.type(box, '366')
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      expect(panel.getByRole('alert')).toHaveTextContent('Between 1 and 365 days')
+
+      await user.clear(box)
+      await user.type(box, '0')
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      expect(panel.getByRole('alert')).toHaveTextContent('Between 1 and 365 days')
+
+      // The box itself stops at 3 characters.
+      await user.clear(box)
+      await user.type(box, '12345')
+      expect(box).toHaveValue(123)
+      expect(trigger).not.toHaveBeenCalled()
     })
 
-    it('asks which store when "All shops" is selected', async () => {
-      syncOne.mockResolvedValue({ message: 'ok', differences: [] })
+    it('syncs every active store when "All shops" is selected', async () => {
       const { user, panel } = await open()
 
-      await user.selectOptions(panel.getByLabelText('Store'), 'polymer-eu')
-      await user.type(panel.getByLabelText(/Shopify ID/), '7')
-      await user.click(panel.getByRole('button', { name: 'Sync' }))
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
 
-      await waitFor(() => expect(syncOne).toHaveBeenCalledWith('7', 'polymer-eu', false))
+      await waitFor(() => expect(trigger).toHaveBeenCalledTimes(2))
+      expect(trigger).toHaveBeenNthCalledWith(1, { shop: 'polymer-uk', days: 5 })
+      expect(trigger).toHaveBeenNthCalledWith(2, { shop: 'polymer-eu', days: 5 })
     })
 
-    it('keeps the panel open with the backend’s message when it refuses', async () => {
-      syncOne.mockRejectedValue(
-        new ApiError('No product 7 in Polymer UK.', { status: 404 }),
+    it('shows the backend message when another products sync is already running (409)', async () => {
+      trigger.mockRejectedValue(
+        new ApiError('A product sync is already running.', { status: 409 }),
       )
       const { user, panel } = await open('polymer-uk')
 
-      await user.type(panel.getByLabelText(/Shopify ID/), '7')
-      await user.click(panel.getByRole('button', { name: 'Sync' }))
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
 
-      expect(await panel.findByText('No product 7 in Polymer UK.')).toBeInTheDocument()
-      expect(screen.getByRole('group', { name: 'Sync products' })).toBeInTheDocument()
+      expect(
+        await screen.findByText('A product sync is already running.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Sync products' })).toBeEnabled()
     })
   })
 
@@ -245,7 +246,7 @@ describe('the Sync products button', () => {
     await syncAll(user, button)
 
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
-    expect(trigger).toHaveBeenCalledWith('polymer-eu')
+    expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-eu', days: null })
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 
@@ -255,8 +256,8 @@ describe('the Sync products button', () => {
     await syncAll(user, button)
 
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(2))
-    expect(trigger).toHaveBeenNthCalledWith(1, 'polymer-uk')
-    expect(trigger).toHaveBeenNthCalledWith(2, 'polymer-eu')
+    expect(trigger).toHaveBeenNthCalledWith(1, { shop: 'polymer-uk', days: null })
+    expect(trigger).toHaveBeenNthCalledWith(2, { shop: 'polymer-eu', days: null })
   })
 
   it('shows it is syncing at once, with the progress read from the run, and cannot be started twice', async () => {

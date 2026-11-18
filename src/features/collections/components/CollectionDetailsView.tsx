@@ -5,7 +5,6 @@ import {
   DetailSection,
   DetailSkeleton,
   Field,
-  FieldGrid,
 } from '../../../components/ui/DetailSection.tsx'
 import { DetailsHeader, HeaderChip } from '../../../components/ui/DetailsHeader.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
@@ -52,6 +51,7 @@ import {
 } from '../utils/collectionDraft.ts'
 import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
 import { CollectionConfirm } from './CollectionConfirm.tsx'
+import { CollectionMetafieldsPanel } from './CollectionMetafields.tsx'
 import { CollectionDeleteDialog } from './CollectionDeleteDialog.tsx'
 import { CollectionImageDialog } from './CollectionImageDialog.tsx'
 import { ImageFields, RulesEditor } from './CollectionFormParts.tsx'
@@ -500,42 +500,53 @@ function Overview({
 
       <div className="flex min-w-0 flex-col gap-4">
         <DetailSection title="Collection details" icon={LayersIcon}>
-          <FieldGrid>
-            <Field label="Title">{textValue('title', collection.title)}</Field>
-            <Field label="Type">
-              <TypeBadge type={collection.collection_type} />
-            </Field>
-            <Field label="Products">{count(collection.products_count)}</Field>
-            <Field label="URL handle">
-              {textValue('handle', collection.handle, <span>/{collection.handle}</span>)}
-            </Field>
-            <Field label="Product order">
-              <SortOrderValue
-                value={collection.sort_order ?? ''}
-                sortOrders={ruleOptions?.sort_orders ?? []}
-                canEdit={canManage}
-                onSave={onSave}
-                collectionTitle={title}
-              />
-            </Field>
-            <Field label="Store">{collection.shop?.name}</Field>
-            <Field label="Shopify ID">
-              {collection.shopify_id ? (
-                <span className="inline-flex items-center gap-1.5">
-                  {collection.shopify_id}
-                  <CopyButton
-                    value={String(collection.shopify_id)}
-                    label="Copy Shopify ID"
-                  />
-                </span>
-              ) : null}
-            </Field>
-            <Field label="Last updated in Shopify">
-              {collection.shopify_updated_at
-                ? formatDateTimeAmPm(collection.shopify_updated_at)
-                : null}
-            </Field>
-          </FieldGrid>
+          {/* Three columns with a thin rule between them, like the reference: what it is called, what it is, how big. */}
+          <div className="grid gap-5 md:grid-cols-3 md:gap-0">
+            <dl className="m-0 flex min-w-0 flex-col gap-5 md:pr-6">
+              <Field label="Title">{textValue('title', collection.title)}</Field>
+              <Field label="URL handle">
+                {textValue(
+                  'handle',
+                  collection.handle,
+                  <span>/{collection.handle}</span>,
+                )}
+              </Field>
+              <Field label="Shopify ID">
+                {collection.shopify_id ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    {collection.shopify_id}
+                    <CopyButton
+                      value={String(collection.shopify_id)}
+                      label="Copy Shopify ID"
+                    />
+                  </span>
+                ) : null}
+              </Field>
+            </dl>
+            <dl className="border-border m-0 flex min-w-0 flex-col gap-5 md:border-l md:px-6">
+              <Field label="Type">
+                <TypeBadge type={collection.collection_type} />
+              </Field>
+              <Field label="Product order">
+                <SortOrderValue
+                  value={collection.sort_order ?? ''}
+                  sortOrders={ruleOptions?.sort_orders ?? []}
+                  canEdit={canManage}
+                  onSave={onSave}
+                  collectionTitle={title}
+                />
+              </Field>
+              <Field label="Last updated in Shopify">
+                {collection.shopify_updated_at
+                  ? formatDateTimeAmPm(collection.shopify_updated_at)
+                  : null}
+              </Field>
+            </dl>
+            <dl className="border-border m-0 flex min-w-0 flex-col gap-5 md:border-l md:pl-6">
+              <Field label="Products">{count(collection.products_count)}</Field>
+              <Field label="Store">{collection.shop?.name}</Field>
+            </dl>
+          </div>
         </DetailSection>
 
         {isSmart(collection.collection_type) && (
@@ -629,16 +640,29 @@ function Overview({
           )}
         />
 
-        <DetailSection title="Search engine listing" icon={GlobeIcon}>
-          <FieldGrid>
-            <Field label="Page title">
-              {textValue('seo_title', collection.seo_title ?? '')}
-            </Field>
-            <Field label="Meta description">
-              {textValue('seo_description', collection.seo_description ?? '')}
-            </Field>
-          </FieldGrid>
-        </DetailSection>
+        {/* Metafields beside the search engine listing, like the reference. */}
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          <CollectionMetafieldsPanel
+            collection={collection}
+            canManage={canManage}
+            onSave={onSave}
+          />
+
+          <DetailSection title="Search engine listing" icon={GlobeIcon}>
+            <div className="grid gap-5 sm:grid-cols-2 sm:gap-0">
+              <dl className="m-0 flex min-w-0 flex-col sm:pr-6">
+                <Field label="Page title">
+                  {textValue('seo_title', collection.seo_title ?? '')}
+                </Field>
+              </dl>
+              <dl className="border-border m-0 flex min-w-0 flex-col sm:border-l sm:pl-6">
+                <Field label="Meta description">
+                  {textValue('seo_description', collection.seo_description ?? '')}
+                </Field>
+              </dl>
+            </div>
+          </DetailSection>
+        </div>
       </div>
     </div>
   )

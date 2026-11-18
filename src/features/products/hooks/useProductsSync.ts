@@ -31,15 +31,17 @@ function runSince(runs: SyncRun[] | undefined, since: number): SyncRun | undefin
 }
 
 /**
- * Syncing the products of a store from Shopify (`POST /sync/products`), and
+ * Syncing the products of a store from Shopify (`POST /sync/products?days=`), and
  * following the run (`GET /sync/status`) until it ends.
  *
  * The sync runs in the background on the server, so the button answers at
  * once: it starts, shows the progress as it is read from the run's status, and
  * keeps the product list refreshing in the background while the run goes (each
  * time its progress moved), so products appear as the server saves them instead
- * of only at the end. When the run finishes the tab counts are refreshed too. With "All
- * shops" selected every store the user can see is synced (the API's own
+ * of only at the end. When the run finishes the tab counts are refreshed too. `days` brings in
+ * the products changed in Shopify that long ago (added when new, updated otherwise); `null`
+ * imports every product. Only one products sync runs at a time on the server (409: the
+ * backend's message is shown). With "All shops" selected every store the user can see is synced (the API's own
  * default would cover only one store); with one store selected, just that one.
  */
 export function useProductsSync() {
@@ -58,14 +60,14 @@ export function useProductsSync() {
   }, [shops, selected])
 
   const start = useMutation({
-    mutationFn: async (keys: string[]) => {
+    mutationFn: async ({ keys, days }: { keys: string[]; days: number | null }) => {
       const startedAt = Date.now()
       const started: string[] = []
       let failure: string | null = null
       // One store after another: a failure stops there but keeps the ones already started.
       for (const key of keys) {
         try {
-          await api.sync.triggerProducts(key)
+          await api.sync.triggerProducts({ shop: key, days })
           started.push(key)
         } catch (error) {
           failure = toUserMessage(error)
@@ -163,6 +165,8 @@ export function useProductsSync() {
       startError ??
       (phase === 'failed' ? (failedRun?.error ?? 'The sync failed.') : null),
     isStarting: start.isPending,
-    start: () => start.mutate(targets.map((shop) => shopValue(shop))),
+    /** Starts the sync: the products changed in the last `days` days, or - with `null` - every product. */
+    start: (days: number | null) =>
+      start.mutate({ keys: targets.map((shop) => shopValue(shop)), days }),
   }
 }

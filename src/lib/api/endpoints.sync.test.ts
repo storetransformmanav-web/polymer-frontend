@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from './client.ts'
-import { api, readProductSync } from './endpoints.ts'
+import { api } from './endpoints.ts'
 
 vi.mock('./client.ts', () => ({
   apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -8,63 +8,34 @@ vi.mock('./client.ts', () => ({
 
 const post = vi.mocked(apiClient.post)
 
-describe('POST /sync/products/{shopify_product_id} (api.sync.product)', () => {
+describe('POST /sync/products (api.sync.triggerProducts)', () => {
   beforeEach(() => {
     post.mockReset()
+    post.mockResolvedValue({ message: 'Products sync started' })
   })
 
-  it('sends the documented example: the id in the path, shop and dry_run in the query, no body', async () => {
-    post.mockResolvedValue({ message: 'Compared.' })
+  it('sends the documented example: days in the query, plus the store, no body', async () => {
+    const answer = await api.sync.triggerProducts({ shop: 'polymer-uk', days: 5 })
 
-    await api.sync.product('15497136308609', 'polymer-uk', true)
-
-    expect(post).toHaveBeenCalledWith('/sync/products/15497136308609', undefined, {
-      params: { shop: 'polymer-uk', dry_run: true },
+    expect(post).toHaveBeenCalledWith('/sync/products', undefined, {
+      params: { shop: 'polymer-uk', days: 5 },
     })
+    expect(answer).toEqual({ message: 'Products sync started' })
   })
 
-  it('sends dry_run=false for a real sync (the API’s own default only compares)', async () => {
-    post.mockResolvedValue({})
-    await api.sync.product('42', 'polymer-uk', false)
-    expect(post).toHaveBeenCalledWith('/sync/products/42', undefined, {
-      params: { shop: 'polymer-uk', dry_run: false },
+  it('sends no days for a full import, and no shop when none is given', async () => {
+    await api.sync.triggerProducts({ shop: 'polymer-uk', days: null })
+    expect(post).toHaveBeenLastCalledWith('/sync/products', undefined, {
+      params: { shop: 'polymer-uk' },
     })
-  })
-})
 
-describe('readProductSync', () => {
-  it('reads the message, flat or inside result', () => {
-    expect(readProductSync({ message: 'Saved.' })).toEqual({
-      message: 'Saved.',
-      differences: [],
-    })
-    expect(readProductSync({ code: 200, result: { message: 'Synced.' } }).message).toBe(
-      'Synced.',
-    )
+    await api.sync.triggerProducts()
+    expect(post).toHaveBeenLastCalledWith('/sync/products', undefined, { params: {} })
   })
 
-  it('lists the differences in words, whatever their shape', () => {
-    expect(
-      readProductSync({
-        result: {
-          differences: [
-            { field: 'price', crm: '9.99', shopify: '10.99' },
-            'title changed',
-            { field: 'tags', message: 'added b2b' },
-          ],
-        },
-      }).differences,
-    ).toEqual(['price: 9.99 → 10.99', 'title changed', 'tags: added b2b'])
-
-    expect(
-      readProductSync({ changes: { status: { from: 'DRAFT', to: 'ACTIVE' } } })
-        .differences,
-    ).toEqual(['status: DRAFT → ACTIVE'])
-  })
-
-  it('copes with an answer that is not an object', () => {
-    expect(readProductSync(null)).toEqual({ message: '', differences: [] })
-    expect(readProductSync('ok')).toEqual({ message: '', differences: [] })
+  it('copes with an answer that has no message', async () => {
+    post.mockResolvedValue(null)
+    expect(await api.sync.triggerProducts({ days: 5 })).toEqual({ message: '' })
   })
 })
 

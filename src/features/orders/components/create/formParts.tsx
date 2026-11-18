@@ -61,6 +61,9 @@ export function SearchDropdown({
   value,
   placeholder,
   onChange,
+  showWhenEmpty = false,
+  onActivate,
+  onListScroll,
   children,
 }: {
   id: string
@@ -68,10 +71,16 @@ export function SearchDropdown({
   value: string
   placeholder: string
   onChange: (value: string) => void
+  /** Open the list as soon as the box is focused, before anything is typed. */
+  showWhenEmpty?: boolean
+  /** The box was focused (the list can start loading). */
+  onActivate?: () => void
+  /** The list itself was scrolled (to load more at its end). */
+  onListScroll?: (list: HTMLElement) => void
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const showing = open && value.trim() !== ''
+  const showing = open && (showWhenEmpty || value.trim() !== '')
   return (
     <div
       className="relative min-w-0 flex-1"
@@ -100,7 +109,10 @@ export function SearchDropdown({
         autoComplete="off"
         value={value}
         placeholder={placeholder}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true)
+          onActivate?.()
+        }}
         onChange={(event) => {
           setOpen(true)
           onChange(event.target.value)
@@ -120,6 +132,7 @@ export function SearchDropdown({
       {showing && (
         <div
           onMouseDown={(event) => event.preventDefault()}
+          onScroll={(event) => onListScroll?.(event.currentTarget)}
           className="border-border bg-bg absolute inset-x-0 top-full z-30 mt-1 max-h-96 overflow-y-auto rounded-xl border shadow-lg"
         >
           {children}

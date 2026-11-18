@@ -772,6 +772,24 @@ export function UploadIcon(props: IconProps) {
   )
 }
 
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 3.8v12.4a.6.6 0 0 0 .92.5l9.6-6.2a.6.6 0 0 0 0-1L6.92 3.3a.6.6 0 0 0-.92.5Z" />
+    </svg>
+  )
+}
+
+export function CloudUploadIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6.2 14.5a3.7 3.7 0 0 1-.5-7.36 4.6 4.6 0 0 1 8.9 1A3.2 3.2 0 0 1 14 14.5" />
+      <path d="M10 17v-6.5" />
+      <path d="m7.5 12.8 2.5-2.5 2.5 2.5" />
+    </svg>
+  )
+}
+
 export function PaperclipIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

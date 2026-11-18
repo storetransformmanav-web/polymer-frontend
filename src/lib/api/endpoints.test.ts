@@ -600,7 +600,7 @@ describe('api.sync', () => {
       result: { status: 'started', entity: 'products', mode: 'all' },
     })
 
-    const result = await api.sync.triggerProducts('polymer-uk')
+    const result = await api.sync.triggerProducts({ shop: 'polymer-uk' })
 
     expect(apiClient.post).toHaveBeenCalledWith('/sync/products', undefined, {
       params: { shop: 'polymer-uk' },
@@ -611,10 +611,10 @@ describe('api.sync', () => {
   it('accepts whatever the backend answers, so a started sync is never reported as failed', async () => {
     vi.mocked(apiClient.post).mockResolvedValue(undefined)
     expect((await api.sync.triggerProducts()).message).toBe('')
-    expect(vi.mocked(apiClient.post).mock.calls[0][2]).toEqual({ params: undefined })
+    expect(vi.mocked(apiClient.post).mock.calls[0][2]).toEqual({ params: {} })
 
     vi.mocked(apiClient.post).mockResolvedValue({ status: 'started' })
-    expect((await api.sync.triggerProducts('x')).message).toBe('')
+    expect((await api.sync.triggerProducts({ shop: 'x' })).message).toBe('')
   })
 
   it('GETs /sync/status with the entity, limit and store', async () => {

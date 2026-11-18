@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ALL_SHOPS, shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
 import { useShops } from '../../../hooks/useShops.ts'
 import { ApiError, toUserMessage } from '../../../lib/api/ApiError.ts'
+import { isShownMetafield } from '../utils/metafieldDraft.ts'
 import {
   api,
   type CollectionCreateBody,
@@ -19,6 +20,7 @@ import {
   type CollectionProductsParams,
   type CollectionRules,
   type CollectionUpdateBody,
+  type MetafieldDefinitionBody,
 } from '../../../lib/api/endpoints.ts'
 
 const STALE_MS = 30_000
@@ -452,5 +454,111 @@ export function useDeleteCollection() {
     error: mutation.isError ? toUserMessage(mutation.error) : null,
     conflict: status === 409,
     clearError: mutation.reset,
+  }
+}
+
+/**
+ * The metafields collections have in the store (`GET /collections/metafield-definitions`), in the
+ * backend's order: what each is called, which editor it takes (`input`) and whether it is editable.
+ * Kept 5 minutes; asked for only once there is a store.
+ */
+export function useMetafieldDefinitions(shop: string, enabled = true) {
+  const query = useQuery({
+    queryKey: [ROOT, 'metafield-definitions', shop],
+    queryFn: () => api.collections.metafieldDefinitions(shop),
+    enabled: enabled && shop !== '',
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  return {
+    /** Every metafield the store has for collections. */
+    allDefinitions: query.data ?? [],
+    /** The ones the forms show (the FAQ, the description and the short description). */
+    definitions: (query.data ?? []).filter(isShownMetafield),
+    isPending: query.isPending && enabled && shop !== '',
+    error: query.isError ? toUserMessage(query.error) : null,
+    retry: () => void query.refetch(),
+  }
+}
+
+/** `POST /collections/metafield-definitions`: adds a metafield to collections; the definitions are read again. */
+export function useCreateMetafieldDefinition() {
+  const client = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body: MetafieldDefinitionBody) =>
+      api.collections.createMetafieldDefinition(body),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: [ROOT, 'metafield-definitions'] }),
+  })
+  return { create: mutation.mutateAsync, isCreating: mutation.isPending }
+}
+
+/**
+ * The entries a reference metafield can pick (the FAQ entries…), a page at a time as the list is
+ * scrolled (`GET /collections/metaobjects`, `first` 50, `after` = the last page's cursor), narrowed by
+ * `search`. Nothing is asked until `enabled` (the box was clicked into).
+ */
+export function useMetaobjects(
+  shop: string,
+  metafield: string,
+  search: string,
+  enabled: boolean,
+) {
+  const text = search.trim()
+  const query = useInfiniteQuery({
+    queryKey: [ROOT, 'metaobjects', shop, metafield, text],
+    queryFn: ({ pageParam }) =>
+      api.collections.metaobjects({
+        metafield,
+        ...(text ? { search: text } : {}),
+        first: 50,
+        ...(pageParam ? { after: pageParam } : {}),
+        ...(shop ? { shop } : {}),
+      }),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: enabled && metafield !== '' && shop !== '',
+    staleTime: STALE_MS,
+    // A refusal (the store's app lacking a scope…) is shown as it is, not asked again on every focus.
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+  return {
+    items: query.data?.pages.flatMap((page) => page.items) ?? [],
+    hasMore: query.hasNextPage,
+    isFetching: query.isFetching,
+    isFetchingMore: query.isFetchingNextPage,
+    fetchMore: () => void query.fetchNextPage(),
+    error: query.isError ? toUserMessage(query.error) : null,
+  }
+}
+
+/** The names of entries already chosen (`GET /collections/metaobjects?ids=…`), for a collection's saved metafield. */
+export function useMetaobjectNames(
+  shop: string,
+  metafield: string,
+  ids: readonly string[],
+) {
+  const joined = ids.join(',')
+  const query = useQuery({
+    queryKey: [ROOT, 'metaobject-names', shop, metafield, joined],
+    queryFn: () =>
+      api.collections.metaobjects({
+        metafield,
+        ids: joined,
+        first: 100,
+        ...(shop ? { shop } : {}),
+      }),
+    enabled: joined !== '' && metafield !== '' && shop !== '',
+    staleTime: STALE_MS,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+  })
+  return {
+    items: query.data?.items ?? [],
+    isLoading: query.isPending && joined !== '',
+    error: query.isError ? toUserMessage(query.error) : null,
   }
 }
