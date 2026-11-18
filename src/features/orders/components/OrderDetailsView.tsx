@@ -26,8 +26,7 @@ import {
   humanize,
   orderCustomer,
   orderLabel,
-  financialTone,
-  fulfillmentTone,
+  financialTone
 } from '../utils/format.ts'
 import { notesCount } from '../utils/tracking.ts'
 import { OrderDetailsPanel } from './OrderDetailsPanel.tsx'
@@ -169,12 +168,7 @@ export function OrderDetailsView({
                 tone={financialTone(known.financial_status)}
               />
             )}
-            {known?.fulfillment_status && (
-              <StatusPill
-                label={`Fulfillment: ${humanize(known.fulfillment_status)}`}
-                tone={fulfillmentTone(known.fulfillment_status)}
-              />
-            )}
+           
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.72rem]" role="status">
                 Updating…
