@@ -772,14 +772,6 @@ export function UploadIcon(props: IconProps) {
   )
 }
 
-export function PlayIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <path d="M6 3.8v12.4a.6.6 0 0 0 .92.5l9.6-6.2a.6.6 0 0 0 0-1L6.92 3.3a.6.6 0 0 0-.92.5Z" />
-    </svg>
-  )
-}
-
 export function CloudUploadIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

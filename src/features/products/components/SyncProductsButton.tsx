@@ -107,6 +107,7 @@ export function SyncProductsButton() {
 
       {open && (
         <SyncProductsPanel
+          targets={sync.targets}
           canSync={sync.ready && !busy}
           onSync={sync.start}
           onClose={() => setOpen(false)}

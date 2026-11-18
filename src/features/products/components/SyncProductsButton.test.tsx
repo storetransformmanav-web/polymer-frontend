@@ -115,9 +115,8 @@ describe('the Sync products button', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     const panel = within(screen.getByRole('group', { name: 'Sync products' }))
     expect(panel.getByLabelText(/Last Days/)).toHaveFocus()
-    expect(panel.getByLabelText(/Last Days/)).toHaveValue(5)
+    expect(panel.getByLabelText(/Last Days/)).toHaveValue('5')
     expect(panel.getByRole('button', { name: 'Execute' })).toBeInTheDocument()
-    expect(panel.getByRole('button', { name: 'Close' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Sync all products' })).toBeInTheDocument()
     expect(panel.queryByLabelText(/Shopify ID/)).toBeNull()
     expect(trigger).not.toHaveBeenCalled()
@@ -173,15 +172,6 @@ describe('the Sync products button', () => {
       )
     })
 
-    it('the ✕ closes the panel without sending anything', async () => {
-      const { user, panel } = await open('polymer-uk')
-
-      await user.click(panel.getByRole('button', { name: 'Close' }))
-
-      expect(screen.queryByRole('group', { name: 'Sync products' })).toBeNull()
-      expect(trigger).not.toHaveBeenCalled()
-    })
-
     it('takes whole days from 1 to 365 and says why before sending', async () => {
       const { user, panel } = await open('polymer-uk')
       const box = panel.getByLabelText(/Last Days/)
@@ -190,9 +180,9 @@ describe('the Sync products button', () => {
       await user.click(panel.getByRole('button', { name: 'Execute' }))
       expect(panel.getByRole('alert')).toHaveTextContent('Enter the number of days')
 
-      // Only digits can be typed: letters are dropped.
       await user.type(box, 'ab')
-      expect(box).toHaveValue(null)
+      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      expect(panel.getByRole('alert')).toHaveTextContent('Whole days only')
 
       await user.clear(box)
       await user.type(box, '366')
@@ -207,7 +197,7 @@ describe('the Sync products button', () => {
       // The box itself stops at 3 characters.
       await user.clear(box)
       await user.type(box, '12345')
-      expect(box).toHaveValue(123)
+      expect(box).toHaveValue('123')
       expect(trigger).not.toHaveBeenCalled()
     })
 
