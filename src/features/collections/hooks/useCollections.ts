@@ -26,7 +26,7 @@ import {
 const STALE_MS = 30_000
 
 /** Every cached collection read starts with this (a write marks them all stale). */
-const ROOT = 'collections'
+export const ROOT = 'collections'
 
 /** The list's filters (local to the page). */
 export interface CollectionFilters {

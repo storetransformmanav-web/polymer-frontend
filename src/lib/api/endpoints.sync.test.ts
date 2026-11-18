@@ -98,3 +98,64 @@ describe('POST /sync/customers (api.sync.triggerCustomers)', () => {
     expect(post).toHaveBeenCalledWith('/sync/customers', undefined, { params: undefined })
   })
 })
+
+describe('POST /sync/collections (api.sync.triggerCollections)', () => {
+  beforeEach(() => {
+    post.mockReset()
+  })
+
+  it('sends all_products and the store in the query, no body, and reads the documented answer', async () => {
+    post.mockResolvedValue({
+      code: 200,
+      status: 'OK',
+      message: 'Collections synced from Shopify',
+      result: [
+        {
+          shop: 'polymer-uk',
+          run_id: '73d35452-e7c5-4254-9f9c-0de03b2d1565',
+          collections: 155,
+          updated: 6,
+          unchanged: 149,
+          removed: 0,
+          product_links: 7348,
+          left_for_next_sync: 0,
+          error: null,
+        },
+      ],
+    })
+
+    const answer = await api.sync.triggerCollections({ shop: 'polymer-uk' })
+
+    expect(post).toHaveBeenCalledWith('/sync/collections', undefined, {
+      params: { all_products: false, shop: 'polymer-uk' },
+      timeout: 180_000,
+    })
+    expect(answer.message).toBe('Collections synced from Shopify')
+    expect(answer.results).toEqual([
+      {
+        shop: 'polymer-uk',
+        collections: 155,
+        updated: 6,
+        unchanged: 149,
+        removed: 0,
+        productLinks: 7348,
+        leftForNextSync: 0,
+        error: null,
+      },
+    ])
+  })
+
+  it('sends all_products=true for the repair, and no shop when none is given', async () => {
+    post.mockResolvedValue({})
+    await api.sync.triggerCollections({ allProducts: true })
+    expect(post).toHaveBeenCalledWith('/sync/collections', undefined, {
+      params: { all_products: true },
+      timeout: 180_000,
+    })
+  })
+
+  it('copes with an answer that is not in the expected form', async () => {
+    post.mockResolvedValue(null)
+    expect(await api.sync.triggerCollections()).toEqual({ message: '', results: [] })
+  })
+})

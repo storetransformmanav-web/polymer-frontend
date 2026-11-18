@@ -167,6 +167,8 @@ export const ENDPOINTS = {
   sync: {
     /** `POST` starts a background products sync from Shopify (`days`, `shop`). */
     products: '/sync/products',
+    /** `POST` syncs the collections from Shopify and answers when it is done (`all_products`, `shop`). */
+    collections: '/sync/collections',
     /** `POST` starts a background import of orders (`mode` new | refresh, `days`, `query`, `shop`). */
     orders: '/sync/orders',
     /** `POST` starts a background sync of every customer of one store. */
@@ -1993,6 +1995,62 @@ export interface ProductSyncOptions {
   days?: number | null
 }
 
+/** A collections sync can take a while (it answers only when it is done): longer than a normal request. */
+export const COLLECTION_SYNC_TIMEOUT_MS = 180_000
+
+export interface CollectionSyncOptions {
+  /** The store key or domain; empty means every connected store (administrators) / the default one. */
+  shop?: string | null
+  /**
+   * `true` copies the products of every collection again, not only of the changed ones (first run /
+   * repair); `false` (the API's default) only the changed ones.
+   */
+  allProducts?: boolean
+}
+
+/**
+ * What `POST /sync/collections` answers: `{ code, status, message, result: [{ shop, run_id,
+ * collections, updated, unchanged, removed, product_links, left_for_next_sync, error }] }`, one entry
+ * per store. Every figure is read leniently: a missing or odd one is `null`, never a failed sync.
+ */
+const collectionSyncItemSchema = z.object({
+  shop: z.string().nullish().catch(null),
+  run_id: z.string().nullish().catch(null),
+  collections: z.number().nullish().catch(null),
+  updated: z.number().nullish().catch(null),
+  unchanged: z.number().nullish().catch(null),
+  removed: z.number().nullish().catch(null),
+  product_links: z.number().nullish().catch(null),
+  left_for_next_sync: z.number().nullish().catch(null),
+  error: z.string().nullish().catch(null),
+})
+
+const collectionSyncResponseSchema = z.object({
+  message: z.string().nullish().catch(null),
+  result: z.array(collectionSyncItemSchema).nullish().catch(null),
+})
+
+/** One store's part of a finished collections sync. */
+export interface CollectionSyncResult {
+  shop: string | null
+  /** Collections the store has (read). */
+  collections: number
+  updated: number
+  unchanged: number
+  removed: number
+  /** Product-to-collection links copied. */
+  productLinks: number
+  /** Collections whose products are still to be copied by the next sync (a long run is split). */
+  leftForNextSync: number
+  /** Why this store's sync failed, when it did. */
+  error: string | null
+}
+
+export interface CollectionSyncAnswer {
+  message: string
+  results: CollectionSyncResult[]
+}
+
 /** One push of this product to its store. */
 const productPushSchema = z.object({
   id: z.string(),
@@ -3771,6 +3829,38 @@ export const api = {
           ? String((data as { message: unknown }).message ?? '')
           : ''
       return { message }
+    },
+
+    /**
+     * Syncs the collections of a store from Shopify into the CRM (`POST /sync/collections?shop=&all_products=`).
+     * Unlike the others it answers when it is done, with what it did per store. `all_products` is
+     * always sent (`false` = only the changed collections' products). Never retried (a repeat would
+     * start a second run).
+     */
+    async triggerCollections(
+      options: CollectionSyncOptions = {},
+    ): Promise<CollectionSyncAnswer> {
+      const { shop, allProducts = false } = options
+      const data = await apiClient.post<unknown>(ENDPOINTS.sync.collections, undefined, {
+        params: { all_products: allProducts, ...(shop ? { shop } : {}) },
+        timeout: COLLECTION_SYNC_TIMEOUT_MS,
+      })
+      const parsed = collectionSyncResponseSchema.safeParse(data)
+      const body = parsed.success ? parsed.data : { message: null, result: null }
+      const figure = (value: number | null | undefined) => value ?? 0
+      return {
+        message: body.message?.trim() ?? '',
+        results: (body.result ?? []).map((item) => ({
+          shop: item.shop ?? null,
+          collections: figure(item.collections),
+          updated: figure(item.updated),
+          unchanged: figure(item.unchanged),
+          removed: figure(item.removed),
+          productLinks: figure(item.product_links),
+          leftForNextSync: figure(item.left_for_next_sync),
+          error: item.error?.trim() || null,
+        })),
+      }
     },
 
     /**
