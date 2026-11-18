@@ -39,6 +39,8 @@ export interface RichTextEditorProps {
   value: string
   /** Called with the new HTML each time the content is changed by the user ('' when empty). */
   onChange: (html: string) => void
+  /** A shorter writing area (about three lines tall; it still grows with the text). */
+  compact?: boolean
 }
 
 const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
@@ -431,6 +433,7 @@ export default function RichTextEditorView({
   label,
   value,
   onChange,
+  compact = false,
 }: RichTextEditorProps) {
   const [source, setSource] = useState(false)
   // What is typed in the HTML view. What the form gets (`onChange`) is the same text, unless it
@@ -715,7 +718,9 @@ export default function RichTextEditorView({
       </div>
 
       {/* Both stay mounted, so the editor keeps its undo history while the HTML is viewed. */}
-      <div className={`${CONTENT} ${source ? 'hidden' : ''}`}>
+      <div
+        className={`${CONTENT} ${compact ? '[&_.ProseMirror]:min-h-20!' : ''} ${source ? 'hidden' : ''}`}
+      >
         <EditorContent editor={editor} />
       </div>
       {source && (
@@ -724,7 +729,7 @@ export default function RichTextEditorView({
           spellCheck={false}
           value={sourceText}
           onChange={(event) => changeSource(event.target.value)}
-          className="text-text block min-h-44 w-full resize-y border-none bg-transparent px-4 py-3 font-mono text-[0.82rem] leading-relaxed outline-none"
+          className={`text-text block w-full resize-y border-none bg-transparent px-4 py-3 font-mono text-[0.82rem] leading-relaxed outline-none ${compact ? 'min-h-20' : 'min-h-44'}`}
         />
       )}
       {source && sourceCleaned && (

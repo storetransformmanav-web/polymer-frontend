@@ -133,6 +133,19 @@ export const ENDPOINTS = {
     create: '/collections',
     /** `GET` the choices of a smart collection's conditions form (match, columns, sort orders). */
     ruleOptions: '/collections/rule-options',
+    /**
+     * `POST` the products that WOULD match a set of conditions, before the collection exists (the
+     * "Matching products" preview of Add collection). The backend answers `{ code, status, message,
+     * items, total, page, page_size, total_pages, has_next }` — see `CollectionRulePreviewBody`.
+     */
+    previewRules: '/collections/rules/preview',
+    /**
+     * `POST` where to send a picture chosen from the computer, before the collection exists (like
+     * `POST /products/{id}/media/upload-target`): answers the upload address and the `resource_url`
+     * that then goes in `image_url` of `POST /collections`. **Asked of the backend team — not in the
+     * API yet.**
+     */
+    uploadTarget: '/collections/upload-target',
     /** `GET` one page of a collection's products. */
     products: (id: string) => `/collections/${encodeURIComponent(id)}/products`,
     /** `POST` re-reads a collection and all its products from Shopify (nothing changes there). */
@@ -2523,6 +2536,31 @@ const collectionRuleOptionsSchema = z.object({
   }),
 })
 
+/**
+ * The answer of `POST /collections/rules/preview`: the products (as `GET /products` lists them) that
+ * match the conditions, with the paging. Read leniently — only what the preview shows is required.
+ */
+const collectionRulePreviewSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        image_url: z.string().nullish(),
+        status: z.string().nullish(),
+        price_min: priceSchema,
+        currency: z.string().nullish(),
+      }),
+    )
+    .default([]),
+  page: z.number().nullish(),
+  page_size: z.number().nullish(),
+  total: z.number().nullish(),
+  total_pages: z.number().nullish(),
+  /** The backend's own words, e.g. "21 products match these conditions." */
+  message: z.string().nullish(),
+})
+
 /** `PUT`, `POST …/refresh`: `{ message, collection }` (the collection with its first products page). */
 const collectionWriteResponseSchema = z.object({
   message: z.string().nullish(),
@@ -2534,6 +2572,19 @@ export type CollectionCondition = z.infer<typeof collectionConditionSchema>
 export type CollectionProductsResponse = z.infer<typeof collectionProductsResponseSchema>
 export type CollectionRuleOptions = z.infer<typeof collectionRuleOptionsSchema>['options']
 export type CollectionRuleColumn = CollectionRuleOptions['columns'][number]
+export type CollectionRulePreview = z.infer<typeof collectionRulePreviewSchema>
+export type CollectionRulePreviewItem = CollectionRulePreview['items'][number]
+
+/**
+ * What the preview asks: the store, the same `rules` as `POST /collections` and the page wanted.
+ * The backend answers with the products that match them (Shopify's own matching, not a guess).
+ */
+export interface CollectionRulePreviewBody {
+  shop: string
+  rules: CollectionRules
+  page?: number
+  page_size?: number
+}
 
 export interface CollectionCreateResult {
   /** What the backend says it did, e.g. "Collection 'Juice Bottles' created in Shopify with 1 product(s).". */
@@ -3388,6 +3439,20 @@ export const api = {
     ): Promise<CollectionProductsResponse> {
       const data = await apiClient.get(ENDPOINTS.collections.products(id), { params })
       return collectionProductsResponseSchema.parse(data)
+    },
+
+    /** Where to send a collection's picture (see `ENDPOINTS.collections.uploadTarget`). Never retried. */
+    async uploadTarget(file: UploadTargetRequest, shop: string): Promise<UploadTarget> {
+      const data = await apiClient.post(ENDPOINTS.collections.uploadTarget, file, {
+        params: { shop },
+      })
+      return readUploadTarget(data)
+    },
+
+    /** The products that match a set of conditions, before the collection exists (see `previewRules`). */
+    async previewRules(body: CollectionRulePreviewBody): Promise<CollectionRulePreview> {
+      const data = await apiClient.post(ENDPOINTS.collections.previewRules, body)
+      return collectionRulePreviewSchema.parse(data)
     },
 
     /** The choices of a smart collection's conditions form. */

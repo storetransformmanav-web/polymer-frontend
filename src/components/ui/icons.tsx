@@ -904,3 +904,21 @@ export function BarcodeIcon(props: IconProps) {
     </svg>
   )
 }
+
+/** A pointing hand: something done by hand (a manual setup). */
+export function HandIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7.5 10.5V4.2a1.4 1.4 0 0 1 2.8 0V9m0-1.6a1.4 1.4 0 0 1 2.8 0V10m0-1.2a1.4 1.4 0 0 1 2.8 0v4.2A4.5 4.5 0 0 1 11.4 17.5H10a4.5 4.5 0 0 1-3.6-1.8L3.8 12.2a1.4 1.4 0 0 1 2.2-1.7l1.5 1.6" />
+    </svg>
+  )
+}
+
+/** A lightning bolt: something that happens on its own (a smart setup). */
+export function BoltIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11.2 2 4.5 11h4.8l-.9 7 6.7-9H10.3l.9-7Z" />
+    </svg>
+  )
+}

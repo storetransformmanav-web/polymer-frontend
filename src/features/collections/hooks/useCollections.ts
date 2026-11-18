@@ -1,13 +1,14 @@
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ALL_SHOPS, shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
 import { useShops } from '../../../hooks/useShops.ts'
-import { toUserMessage } from '../../../lib/api/ApiError.ts'
+import { ApiError, toUserMessage } from '../../../lib/api/ApiError.ts'
 import {
   api,
   type CollectionCreateBody,
@@ -15,6 +16,7 @@ import {
   type CollectionListParams,
   type CollectionProductSort,
   type CollectionProductsParams,
+  type CollectionRules,
   type CollectionUpdateBody,
 } from '../../../lib/api/endpoints.ts'
 
@@ -278,26 +280,117 @@ export function useRefreshCollection(id: string, shop: string) {
  * The store's products for picking (`GET /products?search=&shop=`), asked only once something is
  * typed. Used to add products to a manual collection.
  */
-export function usePickProducts(shop: string, search: string, page: number) {
+export function usePickProducts(
+  shop: string,
+  search: string,
+  page: number,
+  /** List every product of the store (A–Z) even before anything is typed. */
+  listAll = false,
+  enabled = true,
+) {
   const text = search.trim()
+  const active = enabled && (listAll || text !== '')
   const query = useQuery({
-    queryKey: [ROOT, 'pick-products', shop, text, page],
+    queryKey: [ROOT, 'pick-products', shop, text, page, listAll],
     queryFn: () =>
       api.products.list({
-        search: text,
+        ...(text ? { search: text } : {}),
+        ...(listAll ? { sort: 'title', order: 'asc' as const } : {}),
         page,
         page_size: 10,
         ...(shop ? { shop } : {}),
       }),
-    enabled: text !== '',
+    enabled: active,
     placeholderData: keepPreviousData,
     staleTime: STALE_MS,
   })
   return {
-    items: text ? (query.data?.items ?? []) : [],
-    total: text ? (query.data?.total ?? 0) : 0,
+    items: active ? (query.data?.items ?? []) : [],
+    total: active ? (query.data?.total ?? 0) : 0,
     totalPages: query.data?.total_pages ?? 1,
     isFetching: query.isFetching,
+    error: query.isError ? toUserMessage(query.error) : null,
+  }
+}
+
+/**
+ * The products that match a set of conditions (the Smart collection's "Matching products"): asked of
+ * the backend (`POST /collections/rules/preview`) once the conditions are complete and the person has
+ * stopped changing them for a moment. Nothing is asked while `rules` is null (incomplete conditions).
+ * The previous page of products stays on screen while the next one loads.
+ */
+export function useRulePreview(
+  shop: string,
+  rules: CollectionRules | null,
+  page: number,
+  pageSize = 10,
+) {
+  const key = JSON.stringify(rules)
+  const [settled, setSettled] = useState(key)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(key), 600)
+    return () => window.clearTimeout(timer)
+  }, [key])
+
+  const ready = rules !== null && settled === key && shop !== ''
+  const query = useQuery({
+    queryKey: [ROOT, 'rule-preview', shop, key, page, pageSize],
+    queryFn: () =>
+      api.collections.previewRules({ shop, rules: rules!, page, page_size: pageSize }),
+    enabled: ready,
+    placeholderData: keepPreviousData,
+    staleTime: STALE_MS,
+    // A missing route will not appear by asking again.
+    retry: false,
+  })
+  const status = query.error instanceof ApiError ? query.error.status : undefined
+  return {
+    items: query.data?.items ?? [],
+    total: query.data?.total ?? query.data?.items.length ?? 0,
+    totalPages: query.data?.total_pages ?? 1,
+    /** Waiting for the pause after typing, or for the answer. */
+    isLoading: rules !== null && (!ready || query.isFetching),
+    hasAnswer: query.data !== undefined,
+    /** The backend's own sentence about the result ("21 products match these conditions."). */
+    message: query.data?.message ?? null,
+    error: query.isError ? toUserMessage(query.error) : null,
+    /** The backend has no such route yet (404 / 405 / 501). */
+    unavailable: status === 404 || status === 405 || status === 501,
+  }
+}
+
+/**
+ * Every product of the store, A–Z, 20 at a time, for a suggestion list that **loads more as it is
+ * scrolled** (Add collection's product search): `fetchNext` asks for the next page and the pages
+ * already read stay in the list. A search narrows it; nothing is asked until `enabled` (the box was
+ * clicked into or something was typed).
+ */
+export function usePickProductsScroll(shop: string, search: string, enabled: boolean) {
+  const text = search.trim()
+  const query = useInfiniteQuery({
+    queryKey: [ROOT, 'pick-products-scroll', shop, text],
+    queryFn: ({ pageParam }) =>
+      api.products.list({
+        ...(text ? { search: text } : {}),
+        sort: 'title',
+        order: 'asc',
+        page: pageParam,
+        page_size: 20,
+        ...(shop ? { shop } : {}),
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.page < last.total_pages ? last.page + 1 : undefined,
+    enabled,
+    staleTime: STALE_MS,
+  })
+  return {
+    items: query.data?.pages.flatMap((page) => page.items) ?? [],
+    total: query.data?.pages[0]?.total ?? 0,
+    hasMore: query.hasNextPage,
+    isFetching: query.isFetching,
+    isFetchingMore: query.isFetchingNextPage,
+    fetchMore: () => void query.fetchNextPage(),
     error: query.isError ? toUserMessage(query.error) : null,
   }
 }
