@@ -140,7 +140,14 @@ export const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },
-  { to: '/activity', label: 'Activity Management', icon: ActivityIcon, area: 'activity' },
+  {
+    to: '/activity',
+    label: 'Activity Management',
+    icon: ActivityIcon,
+    area: 'activity',
+    // The page fills the window from `lg`: the table scrolls in its own box, not the page.
+    fillHeight: true,
+  },
 ]
 
 /** The paths inside the Shopify Management group — the only pages the "office" role may open. */

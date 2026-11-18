@@ -31,8 +31,8 @@ const VALUE_TONE = {
 /**
  * A row of four (or five) headline figures above a list (label, big value, icon) — generic.
  * `compact` is the dense look for a long row (the Orders page's eight cards): smaller type, tighter
- * padding, a small icon tile that gives way when the card is narrow, and eight to a row from 1280px
- * up (four on medium screens, two on phones). It applies to cards that have an `info` tooltip.
+ * padding, a small icon tile that gives way when the card is narrow, and all of them (seven or eight)
+ * in one row from 1280px up (four on medium screens, two on phones). It applies to cards that have an `info` tooltip.
  */
 export function KpiCards({
   items,
@@ -45,7 +45,9 @@ export function KpiCards({
     <div
       className={
         compact
-          ? 'grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8'
+          ? `grid grid-cols-2 gap-3 md:grid-cols-4 ${
+              items.length === 7 ? 'xl:grid-cols-7' : 'xl:grid-cols-8'
+            }`
           : `grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 ${
               items.length === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
             }`

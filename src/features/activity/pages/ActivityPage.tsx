@@ -84,7 +84,7 @@ export function ActivityPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       <HeaderRefresh refreshing={activity.isFetching} onRefresh={activity.retry} />
 
       <OpenTabsBar
@@ -118,7 +118,7 @@ export function ActivityPage() {
       )}
 
       {/* Kept mounted but hidden while an entry is open, so Back finds the search, filters and page. */}
-      <div className={activeRef ? 'hidden' : 'flex flex-col gap-4'}>
+      <div className={activeRef ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'}>
         <ActivityToolbar
           filters={filters}
           users={options.users}
@@ -132,7 +132,7 @@ export function ActivityPage() {
 
         <section
           aria-label="Activity"
-          className="border-border bg-bg relative overflow-hidden rounded-2xl border"
+          className="border-border bg-bg relative flex flex-col overflow-hidden rounded-2xl border lg:min-h-0 lg:flex-1"
         >
           {/* Thin activity bar: results stay on screen while a refresh runs. */}
           <div
