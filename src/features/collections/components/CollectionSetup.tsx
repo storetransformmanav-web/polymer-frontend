@@ -92,7 +92,7 @@ export function RulePreview({
     <section aria-label="Matching products" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <h4 className="m-0 text-[0.85rem] font-bold">Matching products</h4>
-        {preview.hasAnswer && !preview.unavailable && (
+        {preview.hasAnswer && (
           <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[0.72rem] font-bold">
             {preview.total.toLocaleString('en-GB')}
           </span>
@@ -102,7 +102,7 @@ export function RulePreview({
         )}
       </div>
 
-      {preview.hasAnswer && !preview.unavailable && preview.message && (
+      {preview.hasAnswer && preview.message && (
         <p className="text-text-muted m-0 text-[0.78rem]">{preview.message}</p>
       )}
 
@@ -110,17 +110,9 @@ export function RulePreview({
         <p className="text-text-muted m-0 text-[0.82rem]">
           Complete the conditions above to see which products match them.
         </p>
-      ) : preview.unavailable ? (
-        <p
-          role="note"
-          className="border-warning/40 bg-warning-bg text-text m-0 rounded-lg border px-3 py-2.5 text-[0.82rem] leading-snug"
-        >
-          The live preview of matching products is not available yet. Shopify adds the
-          matching products as soon as the collection is created.
-        </p>
       ) : preview.error ? (
         <p role="alert" className="text-danger m-0 text-[0.82rem]">
-          {`Could not load the matching products: ${preview.error}`}
+          {preview.error}
         </p>
       ) : !preview.hasAnswer ? (
         <p className="text-text-muted m-0 text-[0.82rem]">

@@ -139,17 +139,16 @@ export const ENDPOINTS = {
      * items, total, page, page_size, total_pages, has_next }` — see `CollectionRulePreviewBody`.
      */
     previewRules: '/collections/rules/preview',
-    /**
-     * `POST` where to send a picture chosen from the computer, before the collection exists (like
-     * `POST /products/{id}/media/upload-target`): answers the upload address and the `resource_url`
-     * that then goes in `image_url` of `POST /collections`. **Asked of the backend team — not in the
-     * API yet.**
-     */
-    uploadTarget: '/collections/upload-target',
     /** `GET` one page of a collection's products. */
     products: (id: string) => `/collections/${encodeURIComponent(id)}/products`,
     /** `POST` re-reads a collection and all its products from Shopify (nothing changes there). */
     refresh: (id: string) => `/collections/${encodeURIComponent(id)}/refresh`,
+    /**
+     * `GET` what deleting a collection would affect (call it before `DELETE …/{ref}`, which is the
+     * `detail` address with the DELETE method): how many products come out of it, and whether it is
+     * marked "Do not delete".
+     */
+    deleteCheck: (id: string) => `/collections/${encodeURIComponent(id)}/delete-check`,
   },
   sync: {
     /** `POST` starts a background sync of every product of one store. */
@@ -181,6 +180,12 @@ export const ENDPOINTS = {
     create: '/products',
     /** `POST` attaches images/videos by public URL (`id` is the product's CRM UUID). */
     media: (id: string) => `/products/${encodeURIComponent(id)}/media`,
+    /**
+     * `POST` a picture chosen from the computer (multipart form: `files`, `shop`); the answer's
+     * `items[0].url` is then sent as `image_url` of `POST /collections` or `PUT /collections/{ref}`
+     * within a few minutes (a collection's picture, Add collection and its details page).
+     */
+    mediaUpload: '/products/media/upload',
     /** `POST` asks for a place to upload a file from the computer (`id` is the product's CRM UUID). */
     uploadTarget: (id: string) =>
       `/products/${encodeURIComponent(id)}/media/upload-target`,
@@ -2164,6 +2169,39 @@ const targetFieldsSchema = z.object({
   fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).nullish(),
 })
 
+/**
+ * The address of the picture `POST /products/media/upload` stored. The answer is
+ * `{ code, status, message, upload: { accepted, rejected, items: [{ file_name, …, url, error }], message } }`
+ * (`items` at the top is accepted too): the first item's `url`. An item the store rejected carries its
+ * own `error`, and an answer without an address is reported with the backend's own words — nothing
+ * is made up here.
+ */
+export function readUploadedMediaUrl(data: unknown): string {
+  const root = asRecord(data)
+  const upload = asRecord(root?.upload)
+  const lists = [upload?.items, root?.items]
+  let first: Record<string, unknown> | null = null
+  for (const list of lists) {
+    if (Array.isArray(list) && list.length > 0) {
+      first = asRecord(list[0])
+      break
+    }
+  }
+  const failure = typeof first?.error === 'string' ? first.error.trim() : ''
+  if (failure) throw new ApiError(failure, {})
+  for (const holder of [first, upload, root]) {
+    for (const name of ['url', 'resource_url', 'src']) {
+      const value = holder?.[name]
+      if (typeof value === 'string' && value.trim() !== '') return value.trim()
+    }
+  }
+  const message =
+    [upload?.message, root?.message].find(
+      (value): value is string => typeof value === 'string' && value.trim() !== '',
+    ) ?? ''
+  throw new ApiError(message || 'The upload did not return the picture’s address.', {})
+}
+
 /** Finds the upload target in the backend's answer, wherever it nests it. */
 export function readUploadTarget(data: unknown): UploadTarget {
   const holders = ['result', 'target', 'upload', 'data']
@@ -2323,14 +2361,17 @@ const collectionListItemSchema = z.object({
   shop: shopRefSchema.nullish(),
   shopify_updated_at: z.string().nullish(),
   /**
-   * A smart collection's conditions, as the list answer carries them: only each one's own wording
-   * (`condition`) is read here — a rule set that does not fit is left out rather than failing the list.
+   * A smart collection's conditions, as the list answer carries them: what each checks (`column`),
+   * how (`relation`) and its value (`condition`) — the table writes them as "Tag includes b2b".
+   * A rule set that does not fit is left out rather than failing the list.
    */
   rule_set: z
     .object({
       conditions: z
         .array(
           z.object({
+            column: z.string().nullish().catch(null),
+            relation: z.string().nullish().catch(null),
             condition: z.union([z.string(), z.number()]).transform(String).nullish(),
           }),
         )
@@ -2566,6 +2607,77 @@ const collectionWriteResponseSchema = z.object({
   message: z.string().nullish(),
   collection: collectionDetailSchema,
 })
+
+/**
+ * `DELETE /collections/{ref}` answers `{ code, status, message, deleted: { id, shopify_id, title,
+ * handle, products_unlinked, already_gone_in_shopify } }`. Only the message is needed to show; the
+ * rest says what went (read leniently: a different shape never turns a done delete into an error).
+ */
+const collectionDeleteResponseSchema = z.object({
+  message: z.string().nullish(),
+  deleted: z
+    .object({
+      id: z.string().nullish(),
+      shopify_id: z.number().nullish(),
+      title: z.string().nullish(),
+      handle: z.string().nullish(),
+      products_unlinked: z.number().nullish(),
+      already_gone_in_shopify: z.boolean().nullish(),
+    })
+    .nullish()
+    .catch(null),
+})
+
+/** What a finished delete reports. */
+export interface CollectionDeleteResult {
+  message: string
+  id: string | null
+  handle: string | null
+  title: string | null
+  /** How many products were taken out of the collection (they are not deleted). */
+  productsUnlinked: number | null
+  /** The collection was already gone in Shopify; only the CRM's copy was removed. */
+  alreadyGoneInShopify: boolean
+}
+
+/** What `GET /collections/{ref}/delete-check` says deleting would do. */
+export interface CollectionDeleteCheck {
+  /** The title says "Do not delete": the API refuses (409) unless `force=true` is sent. */
+  protected: boolean
+  /** How many products would be taken out of it, when the answer says. */
+  productsCount: number | null
+  /** The backend's own words about it, when it sends any. */
+  message: string
+}
+
+/**
+ * Reads the delete-check answer leniently (its fields are not documented): the answer itself or
+ * under `check` / `result`; `protected` (or `do_not_delete`) as a yes/no; the number of products as
+ * `products_count` / `products_unlinked` / `product_count` / `products` (a number or a list).
+ */
+export function readCollectionDeleteCheck(data: unknown): CollectionDeleteCheck {
+  const top = asRecord(data) ?? {}
+  const root = asRecord(top.check) ?? asRecord(top.result) ?? top
+  const flag = (value: unknown) =>
+    value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true')
+  const countOf = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : Array.isArray(value)
+        ? value.length
+        : null
+  const message = root.message ?? top.message
+  return {
+    protected:
+      flag(root.protected) || flag(root.do_not_delete) || flag(root.is_protected),
+    productsCount:
+      countOf(root.products_count) ??
+      countOf(root.products_unlinked) ??
+      countOf(root.product_count) ??
+      countOf(root.products),
+    message: typeof message === 'string' ? message.trim() : '',
+  }
+}
 
 export type CollectionProduct = z.infer<typeof collectionProductSchema>
 export type CollectionCondition = z.infer<typeof collectionConditionSchema>
@@ -3441,14 +3553,6 @@ export const api = {
       return collectionProductsResponseSchema.parse(data)
     },
 
-    /** Where to send a collection's picture (see `ENDPOINTS.collections.uploadTarget`). Never retried. */
-    async uploadTarget(file: UploadTargetRequest, shop: string): Promise<UploadTarget> {
-      const data = await apiClient.post(ENDPOINTS.collections.uploadTarget, file, {
-        params: { shop },
-      })
-      return readUploadTarget(data)
-    },
-
     /** The products that match a set of conditions, before the collection exists (see `previewRules`). */
     async previewRules(body: CollectionRulePreviewBody): Promise<CollectionRulePreview> {
       const data = await apiClient.post(ENDPOINTS.collections.previewRules, body)
@@ -3486,6 +3590,42 @@ export const api = {
       return {
         message: parsed.message ?? 'Collection refreshed from Shopify.',
         collection: parsed.collection,
+      }
+    },
+
+    /** What deleting this collection would affect (see `ENDPOINTS.collections.deleteCheck`). */
+    async deleteCheck(id: string, shop?: string | null): Promise<CollectionDeleteCheck> {
+      const data = await apiClient.get(ENDPOINTS.collections.deleteCheck(id), {
+        params: shop ? { shop } : undefined,
+      })
+      return readCollectionDeleteCheck(data)
+    },
+
+    /**
+     * `DELETE /collections/{ref}?force=&shop=`: deletes the collection in Shopify, then in the CRM.
+     * The products are **not** deleted — they are only taken out of it. `force` is sent as asked
+     * (`true` only for a collection marked "Do not delete", which the API otherwise refuses with
+     * 409). Can't be undone; never retried.
+     */
+    async remove(
+      id: string,
+      options: { shop?: string | null; force: boolean },
+    ): Promise<CollectionDeleteResult> {
+      const data = await apiClient.delete(ENDPOINTS.collections.detail(id), {
+        params: {
+          force: options.force,
+          ...(options.shop ? { shop: options.shop } : {}),
+        },
+      })
+      const parsed = collectionDeleteResponseSchema.parse(data)
+      const deleted = parsed.deleted
+      return {
+        message: parsed.message?.trim() || 'Collection deleted.',
+        id: deleted?.id ?? null,
+        handle: deleted?.handle ?? null,
+        title: deleted?.title ?? null,
+        productsUnlinked: deleted?.products_unlinked ?? null,
+        alreadyGoneInShopify: deleted?.already_gone_in_shopify ?? false,
       }
     },
 
@@ -3776,6 +3916,22 @@ export const api = {
         params: shop ? { shop } : undefined,
       })
       return readUploadTarget(data)
+    },
+
+    /**
+     * Uploads one picture from the computer (`POST /products/media/upload`, form `files` + `shop`) and
+     * answers the address the store gives it (`items[0].url`), which then goes in `image_url`. The
+     * request goes through our API, so a refusal (a wrong type, too big, no right…) is the backend's
+     * own message. Never retried.
+     */
+    async uploadMedia(file: File, shop: string): Promise<string> {
+      const form = new FormData()
+      form.append('files', file, file.name)
+      form.append('shop', shop)
+      const data = await apiClient.post<unknown>(ENDPOINTS.products.mediaUpload, form, {
+        timeout: PRODUCT_IMPORT_TIMEOUT_MS,
+      })
+      return readUploadedMediaUrl(data)
     },
 
     /** Removes one media attachment from a product ("Media removal queued"). Never retried automatically. */

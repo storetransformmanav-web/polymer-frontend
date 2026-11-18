@@ -15,6 +15,10 @@ import { CollectionCreateView } from '../components/CollectionCreateView.tsx'
 import { CollectionDetailsView } from '../components/CollectionDetailsView.tsx'
 import { PRIMARY_BUTTON } from '../utils/ui.ts'
 import { CollectionsList } from '../components/CollectionsList.tsx'
+import {
+  CollectionDeleteDialog,
+  type CollectionToDelete,
+} from '../components/CollectionDeleteDialog.tsx'
 import { CollectionsToolbar } from '../components/CollectionsToolbar.tsx'
 import { useCollections, useCollectionShop } from '../hooks/useCollections.ts'
 
@@ -74,6 +78,8 @@ export function CollectionsPage() {
   const [dirty, setDirty] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // The collection a delete question is open for (from the list's bin).
+  const [deleting, setDeleting] = useState<CollectionToDelete | null>(null)
 
   // The product's tab: what the address lacks (no router state after a reload) is taken from the
   // remembered tab of the same product. Remembering happens while rendering (React's pattern for
@@ -165,6 +171,17 @@ export function CollectionsPage() {
     const neighbour = tabs[index + 1] ?? tabs[index - 1]
     setTabs((current) => current.filter((tab) => tab.id !== id))
     if (id === activeId) navigate(neighbour ? detailsPath(neighbour.id) : LIST_PATH)
+  }
+
+  /**
+   * A collection was deleted (from the list's bin or its own page): its tab closes, its page —
+   * when it is on screen — gives way to the list, and the backend's message is shown.
+   */
+  function handleDeleted(id: string, message: string) {
+    setDeleting(null)
+    setTabs((current) => current.filter((tab) => tab.id !== id))
+    if (activeId === id || mountedId === id) navigate(LIST_PATH)
+    setNotice(message)
   }
 
   const closeForm = useCallback(() => {
@@ -263,6 +280,7 @@ export function CollectionsPage() {
             shop={listShop}
             onBack={() => navigate(LIST_PATH)}
             onLoaded={(collection) => openTab(mountedId, collection.title)}
+            onDeleted={(message) => handleDeleted(mountedId, message)}
           />
         </div>
       )}
@@ -349,6 +367,17 @@ export function CollectionsPage() {
                 )
               }
               onOpen={openCollection}
+              onDelete={
+                canManage
+                  ? (collection) =>
+                      setDeleting({
+                        id: collection.id,
+                        title: collection.title,
+                        shop: collection.shop?.key ?? (listShop || null),
+                        productsCount: collection.products_count ?? null,
+                      })
+                  : undefined
+              }
               onRetry={collections.retry}
               onClearFilters={collections.resetFilters}
               emptyAction={addButton}
@@ -367,6 +396,14 @@ export function CollectionsPage() {
           )}
         </section>
       </div>
+
+      {deleting && (
+        <CollectionDeleteDialog
+          collection={deleting}
+          onClose={() => setDeleting(null)}
+          onDone={(message) => handleDeleted(deleting.id, message)}
+        />
+      )}
 
       {confirmingClose && (
         <ConfirmCancelDialog

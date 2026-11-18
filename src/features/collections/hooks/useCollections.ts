@@ -14,6 +14,7 @@ import {
   type CollectionCreateBody,
   type CollectionDetail,
   type CollectionListParams,
+  type CollectionListResponse,
   type CollectionProductSort,
   type CollectionProductsParams,
   type CollectionRules,
@@ -340,10 +341,9 @@ export function useRulePreview(
     enabled: ready,
     placeholderData: keepPreviousData,
     staleTime: STALE_MS,
-    // A missing route will not appear by asking again.
+    // A refusal (the backend's own message) is shown as it is, not asked for again.
     retry: false,
   })
-  const status = query.error instanceof ApiError ? query.error.status : undefined
   return {
     items: query.data?.items ?? [],
     total: query.data?.total ?? query.data?.items.length ?? 0,
@@ -354,8 +354,6 @@ export function useRulePreview(
     /** The backend's own sentence about the result ("21 products match these conditions."). */
     message: query.data?.message ?? null,
     error: query.isError ? toUserMessage(query.error) : null,
-    /** The backend has no such route yet (404 / 405 / 501). */
-    unavailable: status === 404 || status === 405 || status === 501,
   }
 }
 
@@ -392,5 +390,67 @@ export function usePickProductsScroll(shop: string, search: string, enabled: boo
     isFetchingMore: query.isFetchingNextPage,
     fetchMore: () => void query.fetchNextPage(),
     error: query.isError ? toUserMessage(query.error) : null,
+  }
+}
+
+/**
+ * `GET /collections/{id}/delete-check`: what deleting would affect, asked only when the delete
+ * question opens (and never kept: it must be current). A failure is not fatal — the question can
+ * still be answered.
+ */
+export function useCollectionDeleteCheck(id: string, shop: string) {
+  const query = useQuery({
+    queryKey: [ROOT, 'delete-check', id, shop],
+    queryFn: () => api.collections.deleteCheck(id, shop || null),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  })
+  return {
+    check: query.data ?? null,
+    isChecking: query.isPending,
+    failed: query.isError,
+  }
+}
+
+/**
+ * `DELETE /collections/{id}`: deletes the collection in Shopify and the CRM (its products stay).
+ * The moment the server confirms, the collection leaves every cached list page (the total is
+ * corrected) and the lists are re-read quietly. Never retried. `conflict` is true when the API
+ * refused because the collection is marked "Do not delete" (409) — the question then asks for
+ * `force`.
+ */
+export function useDeleteCollection() {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (variables: { id: string; shop: string | null; force: boolean }) =>
+      api.collections.remove(variables.id, {
+        shop: variables.shop,
+        force: variables.force,
+      }),
+    onSuccess: (_result, variables) => {
+      queryClient.setQueriesData<CollectionListResponse>(
+        { queryKey: [ROOT, 'list'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.filter((item) => item.id !== variables.id),
+                total: Math.max(0, current.total - 1),
+              }
+            : current,
+      )
+      void queryClient.invalidateQueries({ queryKey: [ROOT, 'list'] })
+      // What was read about it is gone (a page still showing it keeps its copy until it leaves).
+      queryClient.removeQueries({ queryKey: detailKey(variables.id), type: 'inactive' })
+    },
+  })
+  const status = mutation.error instanceof ApiError ? mutation.error.status : undefined
+  return {
+    remove: mutation.mutateAsync,
+    isDeleting: mutation.isPending,
+    error: mutation.isError ? toUserMessage(mutation.error) : null,
+    conflict: status === 409,
+    clearError: mutation.reset,
   }
 }

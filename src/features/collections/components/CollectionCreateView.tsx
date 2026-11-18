@@ -13,9 +13,7 @@ import {
   SearchIcon,
   SpinnerIcon,
 } from '../../../components/ui/icons.tsx'
-import { ApiError } from '../../../lib/api/ApiError.ts'
-import { api, type CollectionDetail } from '../../../lib/api/endpoints.ts'
-import { sendFileToTarget } from '../../../lib/api/upload.ts'
+import type { CollectionDetail } from '../../../lib/api/endpoints.ts'
 import { useStoreTags } from '../../products/index.ts'
 import { useCollectionRuleOptions, useCreateCollection } from '../hooks/useCollections.ts'
 import {
@@ -33,6 +31,7 @@ import {
 import { CollectionConfirm } from './CollectionConfirm.tsx'
 import { CollectionTypeToggle, RulePreview } from './CollectionSetup.tsx'
 import { fieldErrorsFrom } from '../utils/fieldErrors.ts'
+import { uploadCollectionImage } from '../utils/uploadImage.ts'
 import {
   BasicsFields,
   FormCard,
@@ -296,31 +295,7 @@ export function CollectionCreateView({
               const body = buildCreateBody(draft, shop, columns)
               if (imageFile) {
                 // The picture goes to the store's file storage first; its address then goes in the body.
-                let target
-                try {
-                  target = await api.collections.uploadTarget(
-                    {
-                      filename: imageFile.name,
-                      mime_type: imageFile.type,
-                      size_bytes: imageFile.size,
-                      media_type: 'IMAGE',
-                    },
-                    shop,
-                  )
-                } catch (error) {
-                  if (
-                    error instanceof ApiError &&
-                    [404, 405, 501].includes(error.status ?? 0)
-                  ) {
-                    throw new ApiError(
-                      'Uploading a picture from the computer is not available yet. Remove the picture to create the collection without one.',
-                      { status: error.status },
-                    )
-                  }
-                  throw error
-                }
-                await sendFileToTarget(target, imageFile)
-                body.image_url = target.resourceUrl
+                body.image_url = await uploadCollectionImage(imageFile, shop)
               } else {
                 // An alt text needs a picture to belong to.
                 delete body.image_alt

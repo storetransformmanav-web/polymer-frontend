@@ -1,8 +1,18 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
-import { AlertTriangleIcon, EyeIcon, LayersIcon } from '../../../components/ui/icons.tsx'
-import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
+import {
+  AlertTriangleIcon,
+  EyeIcon,
+  LayersIcon,
+  TrashIcon,
+} from '../../../components/ui/icons.tsx'
+import {
+  ROW_ACTION,
+  ROW_ACTION_DANGER,
+  ROW_ACTION_ICON,
+  ROW_ACTIONS,
+} from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { CollectionListItem } from '../../../lib/api/endpoints.ts'
@@ -10,7 +20,11 @@ import type { CollectionFilters } from '../hooks/useCollections.ts'
 import { formatDateTime } from '../../../lib/format.ts'
 import { formatUpdatedAt } from '../../../lib/storeTime.ts'
 import { CollectionImage, Message, TypeBadge } from './CollectionParts.tsx'
-import { CONDITIONS_SHOWN, conditionTexts } from '../utils/conditions.ts'
+import {
+  CONDITIONS_SHOWN,
+  conditionLines,
+  type ConditionLine,
+} from '../utils/conditions.ts'
 import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
 
 // No alignment in the base classes: each column sets its own, header and cells alike.
@@ -56,6 +70,8 @@ interface CollectionsListProps {
   /** A sortable header was pressed: sort by that column (the same one again flips the direction). */
   onSort: (sort: CollectionFilters['sort']) => void
   onOpen: (collection: CollectionListItem) => void
+  /** Shows a bin beside View that asks to delete the collection (only for those who may manage). */
+  onDelete?: (collection: CollectionListItem) => void
   onRetry: () => void
   onClearFilters: () => void
   /** The empty list's own call to action (Add collection). */
@@ -77,10 +93,11 @@ const PANEL_WIDTH = 340
  */
 function MoreConditions({
   collection,
-  rest,
+  lines,
 }: {
   collection: CollectionListItem
-  rest: string[]
+  /** Every condition line, in full (a joined tag line names all its tags here). */
+  lines: ConditionLine[]
 }) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -131,7 +148,7 @@ function MoreConditions({
       <button
         ref={button}
         type="button"
-        aria-label={`Show ${rest.length} more ${rest.length === 1 ? 'condition' : 'conditions'} of ${collection.title}`}
+        aria-label={`Show all ${lines.length} ${lines.length === 1 ? 'condition' : 'conditions'} of ${collection.title}`}
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -151,15 +168,16 @@ function MoreConditions({
             className="border-border bg-bg fixed z-50 flex flex-col gap-2 rounded-xl border p-3 text-left whitespace-normal shadow-lg"
           >
             <p className="text-text-muted m-0 text-[0.68rem] font-bold tracking-wide uppercase">
-              More conditions ({rest.length})
+              All conditions ({lines.length})
             </p>
             <ul className="m-0 flex max-h-56 list-none flex-col gap-1.5 overflow-auto p-0">
-              {rest.map((condition, index) => (
+              {lines.map((condition, index) => (
                 <li
-                  key={`${condition}-${index}`}
-                  className="bg-surface border-border text-text rounded-lg border px-2.5 py-1 text-[0.76rem] font-medium [overflow-wrap:anywhere]"
+                  key={`${condition.full}-${index}`}
+                  title={condition.full}
+                  className="bg-surface border-border text-text rounded-lg border px-2.5 py-1 text-[0.8rem] [overflow-wrap:anywhere]"
                 >
-                  {condition}
+                  {condition.full}
                 </li>
               ))}
             </ul>
@@ -171,26 +189,30 @@ function MoreConditions({
 }
 
 /**
- * A collection's first two conditions, one under the other (the backend's own wording, cut with "…"
- * when long; the full text is the hover text), then "+ More Conditions" when it has more, which
- * opens the rest in a small dropdown. A collection with none shows a dash.
+ * A collection's conditions as plain readable lines, one under the other — "Tag includes b2b",
+ * "Price is greater than £35.00" — the first two, then "+ More Conditions" when it has more, which
+ * opens every condition in a small dropdown. Long lines are cut with "…" (the full text is the hover
+ * text). A collection with none shows a dash.
  */
 function ConditionCell({ collection }: { collection: CollectionListItem }) {
-  const conditions = conditionTexts(collection)
+  const conditions = conditionLines(collection)
   if (conditions.length === 0) return <span className="text-text-muted">—</span>
-  const rest = conditions.slice(CONDITIONS_SHOWN)
+  // The link is there when some conditions are not on show, or a joined tag line is cut short.
+  const hasMore =
+    conditions.length > CONDITIONS_SHOWN ||
+    conditions.some((condition) => condition.text !== condition.full)
   return (
-    <span className="flex min-w-0 flex-col items-start gap-1">
+    <span className="flex min-w-0 flex-col items-start gap-0.5">
       {conditions.slice(0, CONDITIONS_SHOWN).map((condition, index) => (
         <span
-          key={`${condition}-${index}`}
-          title={condition}
-          className="border-border bg-surface text-text block max-w-full truncate rounded-md border px-2 py-0.5 text-[0.76rem] font-medium"
+          key={`${condition.full}-${index}`}
+          title={condition.full}
+          className="text-text block max-w-full truncate text-[0.82rem]"
         >
-          {condition}
+          {condition.text}
         </span>
       ))}
-      {rest.length > 0 && <MoreConditions collection={collection} rest={rest} />}
+      {hasMore && <MoreConditions collection={collection} lines={conditions} />}
     </span>
   )
 }
@@ -231,6 +253,7 @@ export function CollectionsList({
   order,
   onSort,
   onOpen,
+  onDelete,
   onRetry,
   onClearFilters,
   emptyAction,
@@ -434,7 +457,20 @@ export function CollectionsList({
                       {updated(collection.shopify_updated_at)}
                     </td>
                     <td className={TD_CENTER}>
-                      <ViewButton collection={collection} onOpen={onOpen} />
+                      <span className={ROW_ACTIONS}>
+                        <ViewButton collection={collection} onOpen={onOpen} />
+                        {onDelete && (
+                          <button
+                            type="button"
+                            aria-label={`Delete collection ${collection.title}`}
+                            title="Delete"
+                            onClick={() => onDelete(collection)}
+                            className={ROW_ACTION_DANGER}
+                          >
+                            <TrashIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+                          </button>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))}

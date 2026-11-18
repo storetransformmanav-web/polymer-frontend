@@ -21,6 +21,8 @@ import {
   LayersIcon,
   ListChecksIcon,
   ProductsIcon,
+  UploadIcon,
+  TrashIcon,
 } from '../../../components/ui/icons.tsx'
 import { RichTextEditor } from '../../../components/ui/RichTextEditor.tsx'
 import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
@@ -49,6 +51,9 @@ import {
   type DraftErrors,
 } from '../utils/collectionDraft.ts'
 import { count, MESSAGE_BUTTON } from '../utils/ui.ts'
+import { CollectionConfirm } from './CollectionConfirm.tsx'
+import { CollectionDeleteDialog } from './CollectionDeleteDialog.tsx'
+import { CollectionImageDialog } from './CollectionImageDialog.tsx'
 import { ImageFields, RulesEditor } from './CollectionFormParts.tsx'
 import {
   CollectionTextValue,
@@ -74,6 +79,8 @@ interface CollectionDetailsViewProps {
   onBack: () => void
   /** The collection is known: its title for the tab. */
   onLoaded?: (collection: CollectionDetail) => void
+  /** The collection was deleted (in Shopify and the CRM): the page closes it; `message` is the backend's. */
+  onDeleted?: (message: string) => void
 }
 
 /**
@@ -89,12 +96,14 @@ export function CollectionDetailsView({
   shop,
   onBack,
   onLoaded,
+  onDeleted,
 }: CollectionDetailsViewProps) {
   const details = useCollectionDetails(id, shop)
   const collection = details.collection
   const { canManage } = useAccess('products')
   const [tab, setTab] = useState<TabId>('overview')
   const [notice, setNotice] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const ref = collection?.id ?? id
   const writeShop = collection?.shop?.key ?? shop
   const { update } = useUpdateCollection(ref, writeShop)
@@ -200,6 +209,19 @@ export function CollectionDetailsView({
           </>
         }
         chips={facts}
+        actions={
+          canManage ? (
+            <button
+              type="button"
+              onClick={() => setDeleting(true)}
+              title="Delete this collection"
+              className="border-border bg-bg text-text-muted hover:text-danger hover:border-danger inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-3.5 text-[0.82rem] font-semibold transition-colors"
+            >
+              <TrashIcon width={15} height={15} />
+              Delete
+            </button>
+          ) : null
+        }
         onBack={onBack}
       />
 
@@ -261,6 +283,22 @@ export function CollectionDetailsView({
           />
         )}
       </div>
+
+      {deleting && (
+        <CollectionDeleteDialog
+          collection={{
+            id: collection.id,
+            title: collection.title,
+            shop: collection.shop?.key ?? (shop || null),
+            productsCount: collection.products_count ?? null,
+          }}
+          onClose={() => setDeleting(false)}
+          onDone={(message) => {
+            setDeleting(false)
+            onDeleted?.(message)
+          }}
+        />
+      )}
     </article>
   )
 }
@@ -291,6 +329,10 @@ function Overview({
   const columns = ruleOptions?.columns ?? []
   // The picture opens in the same viewer as a product's pictures; its alt text is changed there.
   const [lightbox, setLightbox] = useState(false)
+  // The window to add or change the picture from the computer.
+  const [uploading, setUploading] = useState(false)
+  // The question before the picture is taken off (`PUT /collections/{ref}` `{ remove_image: true }`).
+  const [removing, setRemoving] = useState(false)
   const [altSaving, setAltSaving] = useState(false)
   const [altError, setAltError] = useState<string | null>(null)
   const pictureSrc = safeUrl(collection.image_url)
@@ -362,6 +404,54 @@ function Overview({
             />
           )}
         </div>
+        {canManage && (
+          <>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setUploading(true)}
+                className="border-border bg-bg text-text hover:border-accent hover:text-accent flex h-9 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border text-[0.82rem] font-semibold transition-colors"
+              >
+                <UploadIcon width={15} height={15} />
+                {collection.image_url ? 'Change image' : 'Upload image'}
+              </button>
+              {collection.image_url && (
+                <button
+                  type="button"
+                  onClick={() => setRemoving(true)}
+                  aria-label="Remove the image"
+                  title="Remove the image"
+                  className="border-border bg-bg text-text-muted hover:border-danger hover:text-danger flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border transition-colors"
+                >
+                  <TrashIcon width={15} height={15} />
+                </button>
+              )}
+            </div>
+            {removing && (
+              <CollectionConfirm
+                title="Remove the picture?"
+                confirmLabel="Yes, remove"
+                danger
+                onClose={() => setRemoving(false)}
+                onConfirm={async () => {
+                  await onSave({ remove_image: true })
+                  setRemoving(false)
+                }}
+              >
+                <p className="m-0">
+                  The picture is taken off the collection, also in Shopify.
+                </p>
+              </CollectionConfirm>
+            )}
+            {uploading && (
+              <CollectionImageDialog
+                collection={collection}
+                onSave={onSave}
+                onClose={() => setUploading(false)}
+              />
+            )}
+          </>
+        )}
         <ProductLightbox
           slides={slides}
           index={lightbox ? 0 : null}
