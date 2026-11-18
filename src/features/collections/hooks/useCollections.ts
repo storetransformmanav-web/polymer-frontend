@@ -36,7 +36,8 @@ export interface CollectionFilters {
 export const DEFAULT_COLLECTION_FILTERS: CollectionFilters = {
   search: '',
   type: '',
-  sort: 'title',
+  // Newest first: sorted by the Updated column, descending.
+  sort: 'updated',
   order: 'desc',
   page: 1,
   pageSize: 50,
