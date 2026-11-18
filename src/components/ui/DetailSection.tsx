@@ -20,6 +20,8 @@ interface DetailSectionProps {
   flush?: boolean
   /** A shorter title row and a tighter body (the order's pages). */
   compact?: boolean
+  /** The title row always has the light sage tint (the collection pages), not only on hover. */
+  tinted?: boolean
   children: ReactNode
 }
 
@@ -34,6 +36,7 @@ export function DetailSection({
   titleExtra,
   flush = false,
   compact = false,
+  tinted = false,
   children,
 }: DetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen || forceOpen)
@@ -49,7 +52,7 @@ export function DetailSection({
     <section className={DETAIL_CARD}>
       {/* Only the title row takes the hover tint, not the whole card. */}
       <div
-        className={`hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] transition-colors ${compact ? 'pr-3 pl-4' : 'pr-4 pl-5'} ${open ? '' : 'rounded-b-[0.7rem]'}`}
+        className={`${tinted ? 'bg-accent-tint/60' : ''} hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] transition-colors ${compact ? 'pr-3 pl-4' : 'pr-4 pl-5'} ${open ? '' : 'rounded-b-[0.7rem]'}`}
       >
         <button
           type="button"

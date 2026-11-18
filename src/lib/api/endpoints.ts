@@ -650,6 +650,15 @@ const orderListItemSchema = z.object({
   financial_status: z.string().nullish(),
   fulfillment_status: z.string().nullish(),
   return_status: z.string().nullish(),
+  /** Shipping progress ("DELIVERED"…); null until a parcel has a status. */
+  delivery_status: z.string().nullish(),
+  /** "Shipping", "Pickup"… */
+  delivery_method: z.string().nullish(),
+  /** "London, ENG, GB". */
+  destination: z.string().nullish(),
+  po_number: z.union([z.string(), z.number()]).nullish(),
+  /** "No label"… */
+  label_status: z.string().nullish(),
   payment_gateway_names: z.array(z.string()).default([]),
   source_name: z.string().nullish(),
   tags: z.array(z.string()).default([]),

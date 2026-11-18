@@ -4,8 +4,7 @@ import type { ColumnConfig as BaseColumnConfig } from '../../../lib/columnConfig
  * The orders table's columns. **Order** (the number, always first) and **Actions** (always last)
  * are fixed; every other column is here, can be shown or hidden and put in any order from the
  * Columns menu (`components/ui/ColumnsMenu.tsx`). Only what the list answer (`GET /orders`)
- * carries is a column: the store admin's Fulfill by, Delivery status, Delivery method,
- * Destination, PO number and Label status have no field in it, so they are not offered.
+ * carries is a column (the store admin's Fulfill by has no field in it, so it is not offered).
  */
 export const ORDER_COLUMN_IDS = [
   'created',
@@ -21,6 +20,11 @@ export const ORDER_COLUMN_IDS = [
   'tags',
   'products',
   'return_status',
+  'delivery_status',
+  'delivery_method',
+  'destination',
+  'po_number',
+  'label_status',
   'phone',
   'subtotal',
   'discounts',
@@ -67,6 +71,11 @@ export const ORDER_COLUMNS: Record<OrderColumnId, OrderColumnDef> = Object.fromE
   column('tags', 'Tags', 12),
   column('products', 'Products', 16),
   column('return_status', 'Return status', 9, 'center'),
+  column('delivery_status', 'Delivery status', 9, 'center'),
+  column('delivery_method', 'Delivery method', 10),
+  column('destination', 'Destination', 12),
+  column('po_number', 'PO number', 9),
+  column('label_status', 'Label status', 9, 'center'),
   column('phone', 'Customer phone', 10),
   column('subtotal', 'Subtotal', 7, 'right'),
   column('discounts', 'Discounts', 7, 'right'),

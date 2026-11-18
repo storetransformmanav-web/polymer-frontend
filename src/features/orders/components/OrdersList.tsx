@@ -191,6 +191,16 @@ function ColumnCell({
       return <TextCell value={order.line_items_preview.join(', ')} />
     case 'return_status':
       return <TextCell value={humanize(order.return_status)} />
+    case 'delivery_status':
+      return <TextCell value={humanize(order.delivery_status)} />
+    case 'delivery_method':
+      return <TextCell value={order.delivery_method?.trim() ?? ''} />
+    case 'destination':
+      return <TextCell value={order.destination?.trim() ?? ''} />
+    case 'po_number':
+      return <TextCell value={String(order.po_number ?? '').trim()} />
+    case 'label_status':
+      return <TextCell value={humanize(order.label_status)} />
     case 'phone':
       return <TextCell value={order.customer?.phone?.trim() ?? ''} />
     case 'subtotal':

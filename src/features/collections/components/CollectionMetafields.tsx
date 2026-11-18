@@ -242,8 +242,8 @@ function MetafieldField({
   )
   if (reference) {
     return (
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-        <div className="md:w-60 md:shrink-0 md:pt-1">{heading}</div>
+      <div className="flex flex-col gap-2 @lg:flex-row @lg:items-start @lg:gap-4">
+        <div className="@lg:w-60 @lg:shrink-0 @lg:pt-1">{heading}</div>
         <div className="min-w-0 flex-1">
           <EntryPicker
             shop={shop}
@@ -311,10 +311,12 @@ function MetafieldsEditor({
   const references = editable.filter((definition) => isReferenceInput(definition))
   const others = editable.filter((definition) => !isReferenceInput(definition))
   return (
-    <div className="flex flex-col gap-4">
+    <div className="@container flex min-w-0 flex-col gap-4">
       {references.map(field)}
       {others.length > 0 && (
-        <div className="grid items-start gap-4 md:grid-cols-2">{others.map(field)}</div>
+        <div className="grid grid-cols-1 items-start gap-4 @2xl:grid-cols-2">
+          {others.map(field)}
+        </div>
       )}
     </div>
   )
@@ -513,6 +515,89 @@ function SavedEntries({
   )
 }
 
+/** One metafield's saved value: its name over the value (entries by name, rich text in a small scrolling box, text as it is). */
+function MetafieldValue({
+  shop,
+  definition,
+  value,
+}: {
+  shop: string
+  definition: MetafieldDefinition
+  value: ReturnType<typeof readCollectionMetafieldValues> extends Map<string, infer V>
+    ? V | undefined
+    : never
+}) {
+  const filled = isReferenceInput(definition)
+    ? (value?.ids.length ?? 0) > 0
+    : Boolean(value?.text.trim())
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
+        {definition.name}
+      </dt>
+      <dd className="m-0 min-w-0 text-[0.82rem] break-words">
+        {!filled || !value ? (
+          <span className="text-text-muted">—</span>
+        ) : isReferenceInput(definition) ? (
+          <SavedEntries shop={shop} definition={definition} ids={value.ids} />
+        ) : isHtmlInput(definition) ? (
+          // A long saved value scrolls inside its own short box, with small headings, so it never stretches the card.
+          <SafeHtml
+            html={value.text}
+            className="border-border bg-surface max-h-28 overflow-y-auto rounded-lg border px-3 py-2 text-[0.82rem] leading-relaxed [&_h1]:text-[0.92rem] [&_h2]:text-[0.88rem] [&_h3]:text-[0.84rem] [&_p]:my-1.5"
+          />
+        ) : (
+          value.text
+        )}
+      </dd>
+    </div>
+  )
+}
+
+/**
+ * The saved values of a collection's metafields in two columns with a thin rule between them (one
+ * column when the card is narrow): the 1st, 3rd… metafield on the left, the 2nd, 4th… on the right,
+ * each left one divided from the next by a line.
+ */
+function MetafieldValues({
+  shop,
+  definitions,
+  values,
+}: {
+  shop: string
+  definitions: MetafieldDefinition[]
+  values: ReturnType<typeof readCollectionMetafieldValues>
+}) {
+  const left = definitions.filter((_, index) => index % 2 === 0)
+  const right = definitions.filter((_, index) => index % 2 === 1)
+  const column = (items: MetafieldDefinition[]) => (
+    <dl className="m-0 flex min-w-0 flex-col gap-3">
+      {items.map((definition, index) => (
+        <div
+          key={definition.id}
+          className={index > 0 ? 'border-border border-t pt-3' : undefined}
+        >
+          <MetafieldValue
+            shop={shop}
+            definition={definition}
+            value={values.get(definition.id)}
+          />
+        </div>
+      ))}
+    </dl>
+  )
+  return (
+    <div className="@container min-w-0">
+      <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2 @3xl:gap-0">
+        <div className="@3xl:pr-6">{column(left)}</div>
+        {right.length > 0 && (
+          <div className="border-border @3xl:border-l @3xl:pl-6">{column(right)}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /**
  * **Metafields** on a collection's details page: every metafield the store has for collections
  * (as the backend lists them) with what this collection has saved in it — rich text drawn through
@@ -568,35 +653,7 @@ export function CollectionMetafieldsPanel({
             The store has no metafields for collections.
           </p>
         ) : (
-          <dl className="m-0 flex flex-col gap-4">
-            {definitions.map((definition) => {
-              const value = values.get(definition.id)
-              const filled = isReferenceInput(definition)
-                ? (value?.ids.length ?? 0) > 0
-                : Boolean(value?.text.trim())
-              return (
-                <div key={definition.id} className="flex min-w-0 flex-col gap-1">
-                  <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
-                    {definition.name}
-                  </dt>
-                  <dd className="m-0 min-w-0 text-[0.82rem] break-words">
-                    {!filled || !value ? (
-                      <span className="text-text-muted">—</span>
-                    ) : isReferenceInput(definition) ? (
-                      <SavedEntries shop={shop} definition={definition} ids={value.ids} />
-                    ) : isHtmlInput(definition) ? (
-                      <SafeHtml
-                        html={value.text}
-                        className="text-[0.82rem] leading-relaxed [&_p]:my-1.5"
-                      />
-                    ) : (
-                      value.text
-                    )}
-                  </dd>
-                </div>
-              )
-            })}
-          </dl>
+          <MetafieldValues shop={shop} definitions={definitions} values={values} />
         )
       }
       editor={(draft, change) => (

@@ -413,7 +413,7 @@ function Overview({
                 className="border-border bg-bg text-text hover:border-accent hover:text-accent flex h-9 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border text-[0.82rem] font-semibold transition-colors"
               >
                 <UploadIcon width={15} height={15} />
-                {collection.image_url ? 'Change image' : 'Upload image'}
+                {collection.image_url ? 'Change Image' : 'Upload Image'}
               </button>
               {collection.image_url && (
                 <button
@@ -499,19 +499,21 @@ function Overview({
       </aside>
 
       <div className="flex min-w-0 flex-col gap-4">
-        <DetailSection title="Collection details" icon={LayersIcon}>
-          {/* Three columns with a thin rule between them, like the reference: what it is called, what it is, how big. */}
-          <div className="grid gap-5 md:grid-cols-3 md:gap-0">
-            <dl className="m-0 flex min-w-0 flex-col gap-5 md:pr-6">
-              <Field label="Title">{textValue('title', collection.title)}</Field>
-              <Field label="URL handle">
+        <DetailSection tinted title="Collection details" icon={LayersIcon}>
+          {/* One row of facts with a thin rule between them, like the reference (two or four to a row on a smaller screen). */}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 xl:flex xl:items-start xl:gap-0">
+            {[
+              <Field key="title" label="Title">
+                {textValue('title', collection.title)}
+              </Field>,
+              <Field key="handle" label="URL handle">
                 {textValue(
                   'handle',
                   collection.handle,
                   <span>/{collection.handle}</span>,
                 )}
-              </Field>
-              <Field label="Shopify ID">
+              </Field>,
+              <Field key="shopify-id" label="Shopify ID">
                 {collection.shopify_id ? (
                   <span className="inline-flex items-center gap-1.5">
                     {collection.shopify_id}
@@ -521,13 +523,11 @@ function Overview({
                     />
                   </span>
                 ) : null}
-              </Field>
-            </dl>
-            <dl className="border-border m-0 flex min-w-0 flex-col gap-5 md:border-l md:px-6">
-              <Field label="Type">
+              </Field>,
+              <Field key="type" label="Type">
                 <TypeBadge type={collection.collection_type} />
-              </Field>
-              <Field label="Product order">
+              </Field>,
+              <Field key="order" label="Product order">
                 <SortOrderValue
                   value={collection.sort_order ?? ''}
                   sortOrders={ruleOptions?.sort_orders ?? []}
@@ -535,17 +535,26 @@ function Overview({
                   onSave={onSave}
                   collectionTitle={title}
                 />
-              </Field>
-              <Field label="Last updated in Shopify">
+              </Field>,
+              <Field key="updated" label="Last updated in Shopify">
                 {collection.shopify_updated_at
                   ? formatDateTimeAmPm(collection.shopify_updated_at)
                   : null}
-              </Field>
-            </dl>
-            <dl className="border-border m-0 flex min-w-0 flex-col gap-5 md:border-l md:pl-6">
-              <Field label="Products">{count(collection.products_count)}</Field>
-              <Field label="Store">{collection.shop?.name}</Field>
-            </dl>
+              </Field>,
+              <Field key="products" label="Products">
+                {count(collection.products_count)}
+              </Field>,
+              <Field key="store" label="Store">
+                {collection.shop?.name}
+              </Field>,
+            ].map((field) => (
+              <dl
+                key={field.key}
+                className="border-border m-0 min-w-0 xl:flex-auto xl:border-l xl:px-4 xl:first:border-l-0 xl:first:pl-0 xl:last:pr-0"
+              >
+                {field}
+              </dl>
+            ))}
           </div>
         </DetailSection>
 
@@ -640,15 +649,15 @@ function Overview({
           )}
         />
 
-        {/* Metafields beside the search engine listing, like the reference. */}
-        <div className="grid items-start gap-4 xl:grid-cols-2">
+        {/* Metafields, then the search engine listing, each the full width (a long saved value would otherwise stretch one card beside a short one). */}
+        <div className="flex flex-col gap-4">
           <CollectionMetafieldsPanel
             collection={collection}
             canManage={canManage}
             onSave={onSave}
           />
 
-          <DetailSection title="Search engine listing" icon={GlobeIcon}>
+          <DetailSection tinted title="Search engine listing" icon={GlobeIcon}>
             <div className="grid gap-5 sm:grid-cols-2 sm:gap-0">
               <dl className="m-0 flex min-w-0 flex-col sm:pr-6">
                 <Field label="Page title">

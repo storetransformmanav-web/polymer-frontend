@@ -367,6 +367,7 @@ export function EditableCard<T>({
   return (
     <>
       <DetailSection
+        tinted
         title={title}
         icon={icon}
         count={count}
