@@ -21,7 +21,14 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { formatDateTime } from '../../../lib/format.ts'
 import { useOrderDetails } from '../hooks/useOrderDetails.ts'
-import { customerPath, orderCustomer, orderLabel, orderStatus } from '../utils/format.ts'
+import {
+  customerPath,
+  humanize,
+  orderCustomer,
+  orderLabel,
+  financialTone,
+  fulfillmentTone,
+} from '../utils/format.ts'
 import { notesCount } from '../utils/tracking.ts'
 import { OrderDetailsPanel } from './OrderDetailsPanel.tsx'
 import {
@@ -46,7 +53,7 @@ interface OrderDetailsViewProps {
 
 /**
  * An order's full details, shown in place of the list (same page, no overlay). A header card —
- * the order number and its overall status, then its date, customer and store, and under them a
+ * the order number and its payment and fulfillment status (a pill each, and Cancelled when it is), then its date, customer and store, and under them a
  * summary strip: payment status, fulfillment status, payment method, total items, number of
  * fulfillments and shipping charged — then the tabs **Details**, **Notes & Tracking** and
  * **Timeline**. The header and summary draw straight from the list row while the full record
@@ -73,7 +80,6 @@ export function OrderDetailsView({
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
   const created = known?.shopify_created_at
-  const status = known ? orderStatus(known) : null
   // Who it is for: the customer's name — a link to their page when they are in the CRM — and,
   // when the addresses name one, their company. (The Customer card doesn't repeat the name.)
   const linkedState = useLinkedState()
@@ -156,7 +162,19 @@ export function OrderDetailsView({
         title={<>Order #{title}</>}
         status={
           <>
-            {status && <StatusPill label={status.label} tone={status.tone} />}
+            {known?.cancelled_at && <StatusPill label="Cancelled" tone="danger" />}
+            {known?.financial_status && (
+              <StatusPill
+                label={`Payment: ${humanize(known.financial_status)}`}
+                tone={financialTone(known.financial_status)}
+              />
+            )}
+            {known?.fulfillment_status && (
+              <StatusPill
+                label={`Fulfillment: ${humanize(known.fulfillment_status)}`}
+                tone={fulfillmentTone(known.fulfillment_status)}
+              />
+            )}
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.72rem]" role="status">
                 Updating…
@@ -169,6 +187,9 @@ export function OrderDetailsView({
             <>
               {created && (
                 <HeaderChip icon={CalendarIcon} label="Order date">
+                  <span aria-hidden="true" className="text-text-muted">
+                    Order date:
+                  </span>{' '}
                   {formatDateTime(created)}
                 </HeaderChip>
               )}
