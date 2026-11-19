@@ -18,6 +18,7 @@ import {
 } from './invoices.ts'
 import {
   readSageOrderList,
+  type SageOrderExportParams,
   type SageOrderListParams,
   type SageOrderListResponse,
 } from './sageOrders.ts'
@@ -98,6 +99,8 @@ export const ENDPOINTS = {
   sageOrders: {
     /** `GET` one page of the Sage 50 sales orders (`/api/sage/orders`), with `totals` and `status_counts`. */
     list: '/sage/orders',
+    /** `GET` the orders matching the filters (or the chosen order numbers) as a CSV file — one row per order line or per order. */
+    export: '/sage/orders/export',
   },
   sageCustomers: {
     /** `GET` one page of the Sage 50 customers (`/api/sage/customers`), with `totals` and `tab_counts`. */
@@ -4362,6 +4365,11 @@ export const api = {
     async list(params: SageOrderListParams): Promise<SageOrderListResponse> {
       const data = await apiClient.get(ENDPOINTS.sageOrders.list, { params })
       return readSageOrderList(data)
+    },
+
+    /** The orders as a CSV file (the backend builds it; one call returns every match). */
+    async export(params: SageOrderExportParams, signal?: AbortSignal): Promise<string> {
+      return readCsvFile(ENDPOINTS.sageOrders.export, params, signal)
     },
   },
 

@@ -8,6 +8,7 @@ import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import type { SageOrderSort } from '../../../lib/api/sageOrders.ts'
 import { SageCustomerDetailsView } from '../../sageCustomers/index.ts'
+import { SageOrdersExport } from '../components/SageOrdersExport.tsx'
 import { SageOrdersKpis } from '../components/SageOrdersKpis.tsx'
 import { SageOrdersList } from '../components/SageOrdersList.tsx'
 import { SageOrdersToolbar } from '../components/SageOrdersToolbar.tsx'
@@ -48,7 +49,7 @@ const decode = (value: string) => {
  * ones on screen. A customer's name opens that customer's Sage details page (`/sage/orders/customer/<ref>`)
  * **in this same page, as a tab of its own** — the list stays mounted behind, so Back finds it as it
  * was — and an invoice number the invoice's; the API has no call for one order, so a row has no page
- * of its own. The top bar has the page's Refresh.
+ * of its own. The top bar has the page's Refresh and Export (a CSV).
  */
 export function SageOrdersPage() {
   const orders = useSageOrders()
@@ -111,6 +112,12 @@ export function SageOrdersPage() {
         visible={!activeKey}
         refreshing={orders.isFetching}
         onRefresh={orders.retry}
+      />
+      <SageOrdersExport
+        items={orders.items}
+        filters={filters}
+        total={data?.total ?? 0}
+        visible={!activeKey}
       />
 
       {/* The figures belong to the list: a customer's page takes their place (the list stays mounted). */}

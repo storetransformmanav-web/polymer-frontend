@@ -37,6 +37,16 @@ export const SAGE_ORDER_MAX_PAGE_SIZE = 100
 /** The query of `GET /api/sage/orders` (empty ones are left out). */
 export type SageOrderListParams = Partial<Record<string, string | number | boolean>>
 
+/**
+ * How an export lays the orders out (the API's own `layout` values): `lines` is one row per order line
+ * (the order's fields repeated), `orders` one row per order.
+ */
+export const SAGE_ORDER_EXPORT_LAYOUTS = ['lines', 'orders'] as const
+export type SageOrderExportLayout = (typeof SAGE_ORDER_EXPORT_LAYOUTS)[number]
+
+/** The query of `GET /api/sage/orders/export`: the list's own filters, without paging, and the `layout`. */
+export type SageOrderExportParams = Partial<Record<string, string | number | boolean>>
+
 const amount = z
   .union([z.string(), z.number()])
   .nullish()
