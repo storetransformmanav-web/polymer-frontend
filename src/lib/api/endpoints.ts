@@ -17,6 +17,19 @@ import {
   type InvoiceListResponse,
 } from './invoices.ts'
 import {
+  readSageContactHistory,
+  readSageCustomerDetail,
+  readSageCustomerList,
+  readSageTransactions,
+  type SageCustomerDetail,
+  type SageCustomerExportParams,
+  type SageCustomerListParams,
+  type SageCustomerListResponse,
+  type SageContactHistoryResponse,
+  type SageTransactionParams,
+  type SageTransactionsResponse,
+} from './sageCustomers.ts'
+import {
   buildImportForm,
   readImportPlan,
   readImportProgress,
@@ -74,6 +87,20 @@ export const ENDPOINTS = {
     list: '/sage/invoices',
     /** `GET` one invoice in full, by its number (`/api/sage/invoices/649409`). */
     detail: (number: string) => `/sage/invoices/${encodeURIComponent(number)}`,
+  },
+  sageCustomers: {
+    /** `GET` one page of the Sage 50 customers (`/api/sage/customers`), with `totals` and `tab_counts`. */
+    list: '/sage/customers',
+    /** `GET` the customers matching the filters (or the chosen account references) as a CSV file. */
+    export: '/sage/customers/export',
+    /** `GET` one customer in full: credit control, aged debt, addresses, activity, recent documents. */
+    detail: (accountRef: string) => `/sage/customers/${encodeURIComponent(accountRef)}`,
+    /** `GET` the customer's sales ledger (a statement), filtered and paged. */
+    transactions: (accountRef: string) =>
+      `/sage/customers/${encodeURIComponent(accountRef)}/transactions`,
+    /** `GET` the calls, letters, emails and meetings logged against the account, newest first. */
+    contactHistory: (accountRef: string) =>
+      `/sage/customers/${encodeURIComponent(accountRef)}/contact-history`,
   },
   orders: {
     /** `GET` the list; `POST` creates an order. */
@@ -4212,6 +4239,53 @@ export const api = {
         }
         throw error
       }
+    },
+  },
+
+  sageCustomers: {
+    /** One page of the Sage 50 customers: `items`, `totals` and `tab_counts` for everything the filters match, and the paging. */
+    async list(params: SageCustomerListParams): Promise<SageCustomerListResponse> {
+      const data = await apiClient.get(ENDPOINTS.sageCustomers.list, { params })
+      return readSageCustomerList(data)
+    },
+
+    /** The customers as a CSV file (the backend builds it; one call returns every match). */
+    async export(
+      params: SageCustomerExportParams,
+      signal?: AbortSignal,
+    ): Promise<string> {
+      return readCsvFile(ENDPOINTS.sageCustomers.export, params, signal)
+    },
+
+    /** One customer in full, asked for when its page opens. */
+    async detail(accountRef: string): Promise<SageCustomerDetail> {
+      const data = await apiClient.get(ENDPOINTS.sageCustomers.detail(accountRef))
+      return readSageCustomerDetail(data)
+    },
+
+    /** The customer's statement: every transaction matching the filters, with the totals. */
+    async transactions(
+      accountRef: string,
+      params: SageTransactionParams,
+    ): Promise<SageTransactionsResponse> {
+      const data = await apiClient.get(ENDPOINTS.sageCustomers.transactions(accountRef), {
+        params,
+      })
+      return readSageTransactions(data)
+    },
+
+    /** The customer's contact history, newest first, a page at a time. */
+    async contactHistory(
+      accountRef: string,
+      params: { page: number; page_size: number },
+    ): Promise<SageContactHistoryResponse> {
+      const data = await apiClient.get(
+        ENDPOINTS.sageCustomers.contactHistory(accountRef),
+        {
+          params,
+        },
+      )
+      return readSageContactHistory(data)
     },
   },
 

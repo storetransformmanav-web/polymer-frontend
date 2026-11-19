@@ -51,7 +51,7 @@ describe('DashboardLayout', () => {
     vi.mocked(api.orders.list).mockResolvedValue({ ...emptyList, totals: null })
   })
 
-  it('marks only the list pages (Orders, Products, Collections, Customers, Inventory, Lock Management, Sage 50 Invoices) as pages that fill the window’s height', () => {
+  it('marks only the list pages (Orders, Products, Collections, Customers, Inventory, Lock Management, Sage 50 Invoices and Customers) as pages that fill the window’s height', () => {
     expect(NAV_ITEMS.filter((item) => item.fillHeight).map((item) => item.to)).toEqual([
       '/orders',
       '/products',
@@ -60,6 +60,7 @@ describe('DashboardLayout', () => {
       '/inventory',
       '/locks',
       '/sage/invoices',
+      '/sage/customers',
     ])
   })
 

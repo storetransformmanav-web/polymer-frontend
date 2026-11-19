@@ -71,7 +71,8 @@ describe('Navbar', () => {
     await user.hover(screen.getByRole('link', { name: 'Activity Management' }))
     await user.hover(screen.getByRole('link', { name: /^Orders/ }))
     await user.hover(screen.getByRole('link', { name: 'Products' }))
-    await user.hover(screen.getByRole('link', { name: 'Customers' }))
+    // The Shopify Management page comes first; the Sage 50 one (also "Customers") is in the closed group below.
+    await user.hover(screen.getAllByRole('link', { name: 'Customers' })[0])
     screen.getByRole('link', { name: 'Activity Management' }).focus()
     await new Promise((resolve) => setTimeout(resolve, 20))
 

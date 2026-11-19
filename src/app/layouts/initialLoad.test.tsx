@@ -193,12 +193,13 @@ describe('clicking a page in the sidebar', () => {
     // Moving over the links asks for nothing…
     await user.hover(screen.getByRole('link', { name: /^Orders/ }))
     await user.hover(screen.getByRole('link', { name: 'Products' }))
-    await user.hover(screen.getByRole('link', { name: 'Customers' }))
+    // The Shopify Management page comes first; the Sage 50 one (also "Customers") is in the closed group below.
+    await user.hover(screen.getAllByRole('link', { name: 'Customers' })[0])
     await settle()
     expect(names()).toEqual([])
 
     // …the click loads that page, and only that page, asking for customers once.
-    await user.click(screen.getByRole('link', { name: 'Customers' }))
+    await user.click(screen.getAllByRole('link', { name: 'Customers' })[0])
     await waitFor(() => expect(callsTo('customers.list')).toHaveLength(1))
     await settle()
     expect(callsTo('customers.list')).toHaveLength(1)

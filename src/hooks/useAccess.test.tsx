@@ -97,7 +97,7 @@ describe('visibleNavEntries', () => {
     expect(shown.some(isNavGroup)).toBe(false)
   })
 
-  it('puts Invoices in their own Sage 50 group, and hides it for sage_invoices: view false', () => {
+  it('puts Invoices and Customers in their own Sage 50 group, and hides it for sage_invoices: view false', () => {
     const sage = (permissions: AuthUser['permissions']) =>
       visibleNavEntries(permissions).find(
         (entry) => isNavGroup(entry) && entry.label === 'Sage 50',
@@ -106,6 +106,7 @@ describe('visibleNavEntries', () => {
     const group = sage(undefined)
     expect(group && isNavGroup(group) && group.items.map((item) => item.to)).toEqual([
       '/sage/invoices',
+      '/sage/customers',
     ])
     expect(sage({ sage_invoices: { view: false } })).toBeUndefined()
     // Another area being off leaves it alone.

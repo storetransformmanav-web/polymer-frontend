@@ -138,6 +138,14 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: FileTextIcon,
         fillHeight: true,
       },
+      {
+        to: '/sage/customers',
+        label: 'Customers',
+        // The backend names no separate customers area, so it follows the Sage 50 one.
+        area: 'sage_invoices',
+        icon: UsersIcon,
+        fillHeight: true,
+      },
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },
