@@ -100,10 +100,6 @@ export function SageCustomerDetailsView({
           label={labelled('Status', humanize(text) || text)}
           tone={statusTone}
         />
-        <StatusPill
-          label={source.on_hold ? 'On Hold' : 'Not on Hold'}
-          tone={source.on_hold ? 'danger' : 'success'}
-        />
       </>
     )
   }

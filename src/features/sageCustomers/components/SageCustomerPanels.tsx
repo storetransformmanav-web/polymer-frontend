@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailEmpty } from '../../../components/ui/DetailSection.tsx'
 import {
-  ArrowUpDownIcon,
   CalendarIcon,
   CheckCircleIcon,
   ChevronRightIcon,
@@ -12,8 +11,6 @@ import {
   FileTextIcon,
   GlobeIcon,
   GridIcon,
-  HistoryIcon,
-  InfoIcon,
   ListChecksIcon,
   MailIcon,
   MapPinIcon,
@@ -28,14 +25,7 @@ import {
 import type { SageAddress, SageCustomerDetail } from '../../../lib/api/sageCustomers.ts'
 import { count, humanize, money, yesNo } from '../utils/format.ts'
 import { crmCustomerPath } from '../utils/paths.ts'
-import {
-  CardBadge,
-  CardShell,
-  FigureCard,
-  PageHeading,
-  Row,
-  RowList,
-} from './SageCards.tsx'
+import { CardBadge, CardShell, FigureCard, Row, RowList } from './SageCards.tsx'
 import {
   RecentInvoicesTable,
   RecentOrdersTable,
@@ -139,163 +129,127 @@ export function OverviewPanel({
   onTab,
 }: PanelProps & { onTab: (id: string) => void }) {
   const contact = detail.contact
-  const company = detail.company
   const crm = detail.crm_customer
   const delivery = (detail.addresses ?? []).filter((entry) => isDelivery(entry.kind))
   const email = contact?.emails[0] ?? ''
 
+  // An address as one comparable text ("Name <a@b.com>" → "a@b.com"), so an email already shown
+  // is not shown again under another label.
+  const bare = (value: string) =>
+    (/<([^>]+)>/.exec(value)?.[1] ?? value).trim().toLowerCase()
+  const shown = new Set((contact?.emails ?? []).map(bare))
+  const directDebits = contact?.direct_debits_email ?? ''
+  const showDirectDebits = directDebits !== '' && !shown.has(bare(directDebits))
+  const showCrmEmail = !!crm?.email && !shown.has(bare(crm.email))
+
   return (
     <>
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <CardShell title="Customer Information" icon={UsersIcon}>
-            <RowList>
-              <Row label="Account Reference">
-                {copyable(detail.account_ref, 'Copy account reference')}
-              </Row>
-              <Row label="Customer Name">{detail.name}</Row>
-            </RowList>
-          </CardShell>
-
-          <CardShell title="CRM / Shopify Link" icon={UsersIcon}>
-            <RowList>
-              <Row label="Shopify Customer ID">
-                {copyable(detail.shopify_customer_id, 'Copy Shopify customer ID')}
-              </Row>
-              <Row label="CRM Customer ID">
-                {crm ? (
-                  <span className="flex items-center gap-1.5">
-                    <Link
-                      to={crmCustomerPath(crm.id)}
-                      state={{ linkedName: crm.name }}
-                      className="text-text hover:text-accent break-all no-underline hover:underline"
-                      title="Open the CRM customer"
-                    >
-                      {crm.id}
-                    </Link>
-                    <CopyButton value={crm.id} label="Copy CRM customer ID" />
-                  </span>
-                ) : null}
-              </Row>
-              <Row label="Email">
-                {crm?.email ? <EmailLink email={crm.email} /> : null}
-              </Row>
-              <Row label="Orders Count">{crm ? count(crm.orders_count) : null}</Row>
-              <Row label="Total Spent">
-                {crm ? money(crm.total_spent, currency) : null}
-              </Row>
-              <Row label="Matched By">
-                {crm?.matched_by ? (
-                  <span className="bg-accent-tint text-accent rounded-md px-2 py-0.5 text-[0.78rem] font-semibold">
-                    {crm.matched_by}
-                  </span>
-                ) : null}
-              </Row>
-            </RowList>
-          </CardShell>
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-4">
-          <CardShell title="Primary Contact" icon={UsersIcon}>
-            <p className="m-0 mb-3 text-[1.05rem] font-bold break-words uppercase">
-              {contact?.contact_name || (
-                <span className="text-text-muted normal-case">—</span>
-              )}
-            </p>
-            <div className="grid gap-3 min-[640px]:grid-cols-2 2xl:grid-cols-3">
-              <ContactLine icon={MailIcon}>
-                {email ? <EmailLink email={email} /> : '—'}
-              </ContactLine>
-              <ContactLine icon={PhoneIcon}>{contact?.telephone || '—'}</ContactLine>
-              <ContactLine icon={PhoneIcon}>{contact?.telephone_2 || '—'}</ContactLine>
-            </div>
-            <div className="border-border mt-4 grid gap-3 border-t pt-4 min-[640px]:grid-cols-2">
-              <ContactLine icon={MailIcon} label="Direct Debits Email">
-                {contact?.direct_debits_email || '—'}
-              </ContactLine>
-              <ContactLine icon={CheckCircleIcon} label="Letters Via Email">
-                {yesNo(contact?.letters_via_email)}
-              </ContactLine>
-            </div>
-          </CardShell>
-
-          <div className="grid gap-4 min-[900px]:grid-cols-2">
-            <CardShell title="Invoice Address" icon={FileTextIcon}>
-              <AddressBlock
-                address={detail.invoice_address}
-                emptyText="No invoice address."
-              />
-            </CardShell>
-            <CardShell
-              title={`Delivery Addresses (${delivery.length})`}
-              icon={MapPinIcon}
-              action={
-                delivery.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => onTab('addresses')}
-                    className="text-accent inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[0.8rem] font-semibold hover:underline"
-                  >
-                    View All
-                    <ChevronRightIcon width={14} height={14} />
-                  </button>
-                ) : undefined
-              }
-            >
-              {delivery.length > 0 ? (
-                <ul className="m-0 flex list-none flex-col p-0">
-                  {delivery.slice(0, 4).map((entry, index) => (
-                    <li
-                      key={`${entry.reference}-${index}`}
-                      className="border-border flex items-center gap-3 border-b py-2 text-[0.85rem] last:border-b-0"
-                    >
-                      <TruckIcon
-                        width={16}
-                        height={16}
-                        className="text-accent shrink-0"
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {entry.description || entry.address?.lines[0] || entry.reference}
-                      </span>
-                      {entry.reference && (
-                        <span className="bg-surface text-text-muted shrink-0 rounded-md px-2 py-0.5 text-[0.72rem] font-semibold">
-                          {entry.reference}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <AddressBlock
-                  address={detail.default_delivery_address}
-                  emptyText="No delivery addresses."
-                />
-              )}
-            </CardShell>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <CardShell title="Primary Contact" icon={UsersIcon}>
+          <p className="m-0 mb-3 text-[1.05rem] font-bold break-words uppercase">
+            {contact?.contact_name || (
+              <span className="text-text-muted normal-case">—</span>
+            )}
+          </p>
+          <div className="grid gap-3 min-[640px]:grid-cols-2 2xl:grid-cols-3">
+            <ContactLine icon={MailIcon}>
+              {email ? <EmailLink email={email} /> : '—'}
+            </ContactLine>
+            <ContactLine icon={PhoneIcon}>{contact?.telephone || '—'}</ContactLine>
+            <ContactLine icon={PhoneIcon}>{contact?.telephone_2 || '—'}</ContactLine>
           </div>
+          <div className="border-border mt-4 grid gap-3 border-t pt-4 min-[640px]:grid-cols-2">
+            {showDirectDebits && (
+              <ContactLine icon={MailIcon} label="Direct Debits Email">
+                {directDebits}
+              </ContactLine>
+            )}
+            <ContactLine icon={CheckCircleIcon} label="Letters Via Email">
+              {yesNo(contact?.letters_via_email)}
+            </ContactLine>
+          </div>
+        </CardShell>
 
-          <CardShell title="Key Details" icon={InfoIcon}>
-            <dl className="m-0 grid grid-cols-1 gap-y-4 min-[560px]:grid-cols-2 xl:grid-cols-4">
-              {[
-                ['VAT Registration No.', company?.vat_reg_number],
-                ['Company Reg. No.', company?.company_registration_number],
-                ['EORI Number', company?.eori_number],
-                ['DUNS Number', company?.duns_number],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="border-border min-w-0 px-3 first:pl-0 xl:border-l xl:first:border-l-0"
+        <CardShell title="CRM / Shopify Link" icon={UsersIcon}>
+          <RowList>
+            <Row label="Shopify Customer ID">
+              {copyable(detail.shopify_customer_id, 'Copy Shopify customer ID')}
+            </Row>
+            <Row label="CRM Customer ID">
+              {crm ? (
+                <span className="flex items-center gap-1.5">
+                  <Link
+                    to={crmCustomerPath(crm.id)}
+                    state={{ linkedName: crm.name }}
+                    className="text-text hover:text-accent break-all no-underline hover:underline"
+                    title="Open the CRM customer"
+                  >
+                    {crm.id}
+                  </Link>
+                  <CopyButton value={crm.id} label="Copy CRM customer ID" />
+                </span>
+              ) : null}
+            </Row>
+            {showCrmEmail && crm && (
+              <Row label="CRM Email">
+                <EmailLink email={crm.email} />
+              </Row>
+            )}
+            <Row label="Orders Count">{crm ? count(crm.orders_count) : null}</Row>
+            <Row label="Total Spent">{crm ? money(crm.total_spent, currency) : null}</Row>
+          </RowList>
+        </CardShell>
+      </div>
+
+      <div className="grid items-start gap-4 min-[900px]:grid-cols-2">
+        <CardShell title="Invoice Address" icon={FileTextIcon}>
+          <AddressBlock
+            address={detail.invoice_address}
+            emptyText="No invoice address."
+          />
+        </CardShell>
+        <CardShell
+          title={`Delivery Addresses (${delivery.length})`}
+          icon={MapPinIcon}
+          action={
+            delivery.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onTab('addresses')}
+                className="text-accent inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[0.8rem] font-semibold hover:underline"
+              >
+                View All
+                <ChevronRightIcon width={14} height={14} />
+              </button>
+            ) : undefined
+          }
+        >
+          {delivery.length > 0 ? (
+            <ul className="m-0 flex list-none flex-col p-0">
+              {delivery.slice(0, 4).map((entry, index) => (
+                <li
+                  key={`${entry.reference}-${index}`}
+                  className="border-border flex items-center gap-3 border-b py-2 text-[0.85rem] last:border-b-0"
                 >
-                  <dt className="text-[0.85rem] font-semibold">{label}</dt>
-                  <dd className="m-0 mt-1 text-[0.9rem] break-words">
-                    {value || <span className="text-text-muted">—</span>}
-                  </dd>
-                </div>
+                  <TruckIcon
+                    width={16}
+                    height={16}
+                    className="text-accent shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {entry.description || entry.address?.lines[0] || entry.reference}
+                  </span>
+                </li>
               ))}
-            </dl>
-          </CardShell>
-        </div>
+            </ul>
+          ) : (
+            <AddressBlock
+              address={detail.default_delivery_address}
+              emptyText="No delivery addresses."
+            />
+          )}
+        </CardShell>
       </div>
     </>
   )
@@ -681,12 +635,6 @@ export function FinancialsPanel({ detail, currency }: PanelProps) {
 
   return (
     <>
-      <PageHeading
-        icon={PoundIcon}
-        title="Financials"
-        description="Credit, payment terms, aged debt and other financial details for this customer."
-      />
-
       <div className="grid grid-cols-1 gap-4 min-[560px]:grid-cols-2 xl:grid-cols-4">
         <FigureCard
           label="Account Balance"
@@ -846,11 +794,6 @@ export function OrdersPanel({ detail, currency }: PanelProps) {
 export function TransactionsPanel({ detail, currency }: PanelProps) {
   return (
     <>
-      <PageHeading
-        icon={ArrowUpDownIcon}
-        title="Transactions"
-        description="The open items on this account: what is still to be paid."
-      />
       <section
         aria-label="Transactions"
         className="border-border-strong bg-bg overflow-hidden rounded-xl border"
@@ -874,11 +817,6 @@ export function TransactionsPanel({ detail, currency }: PanelProps) {
 export function ContactHistoryPanel({ detail, currency }: PanelProps) {
   return (
     <>
-      <PageHeading
-        icon={HistoryIcon}
-        title="Contact History"
-        description="The newest calls, letters, emails and meetings logged against this account."
-      />
       <section
         aria-label="Contact history"
         className="border-border-strong bg-bg overflow-hidden rounded-xl border"

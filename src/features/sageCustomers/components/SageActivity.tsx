@@ -1,15 +1,15 @@
+import { useState } from 'react'
 import {
   ActivityIcon,
   CalendarIcon,
   CheckCircleIcon,
   ClockIcon,
-  GridIcon,
-  ListChecksIcon,
   PoundIcon,
+  TableIcon,
 } from '../../../components/ui/icons.tsx'
 import type { SageCustomerDetail } from '../../../lib/api/sageCustomers.ts'
-import { count, dateText, money } from '../utils/format.ts'
-import { CardShell, FigureCard, PageHeading, Row, RowList } from './SageCards.tsx'
+import { dateText, money } from '../utils/format.ts'
+import { CardShell, FigureCard, Row, RowList } from './SageCards.tsx'
 
 type Months = NonNullable<NonNullable<SageCustomerDetail['activity']>['months']>
 
@@ -150,6 +150,46 @@ function MonthlyChart({ months, currency }: { months: Months; currency: string |
   )
 }
 
+/** The two ways the months can be read: as a chart or as a table. */
+const VIEWS = [
+  { id: 'chart', label: 'Chart', icon: ActivityIcon },
+  { id: 'table', label: 'Table', icon: TableIcon },
+] as const
+
+type View = (typeof VIEWS)[number]['id']
+
+/** A small two-tab switch (Chart | Table) for the Monthly Activity card's header. */
+function ViewTabs({ view, onChange }: { view: View; onChange: (view: View) => void }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Show the months as"
+      className="border-border bg-bg inline-flex rounded-lg border p-0.5"
+    >
+      {VIEWS.map((item) => {
+        const selected = item.id === view
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(item.id)}
+            className={`flex cursor-pointer items-center gap-1.5 rounded-md border-none px-3 py-1 text-[0.78rem] font-semibold transition-colors ${
+              selected
+                ? 'bg-accent text-accent-contrast'
+                : 'text-text-muted hover:text-text bg-transparent'
+            }`}
+          >
+            <item.icon width={14} height={14} />
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Period, month and the three amounts for each month of the year, with the totals under them. */
 function MonthlyBreakdown({
   months,
@@ -158,8 +198,6 @@ function MonthlyBreakdown({
   months: Months
   currency: string | null
 }) {
-  const total = (key: (typeof SERIES)[number]['key']) =>
-    months.reduce((sum, month) => sum + (month[key] ?? 0), 0)
   const suffix = currency ? ` (${currency})` : ''
   const NUMBER = 'px-3 py-1.5 text-right tabular-nums'
   return (
@@ -189,16 +227,6 @@ function MonthlyBreakdown({
               ))}
             </tr>
           ))}
-          <tr className="bg-accent-tint font-bold">
-            <td className="px-3 py-2" colSpan={2}>
-              Total
-            </td>
-            {SERIES.map((series) => (
-              <td key={series.key} className={`${NUMBER} py-2`}>
-                {money(total(series.key), currency)}
-              </td>
-            ))}
-          </tr>
         </tbody>
       </table>
     </div>
@@ -206,12 +234,11 @@ function MonthlyBreakdown({
 }
 
 /**
- * **Activity** (after the shared reference design): a heading and six figures — the first and last
- * invoice dates, the last payment date and the turnover this month, this year and last year —, then
- * the **Monthly Activity** chart and the **Activity Summary**, the **Financial Year** (its start) and the
- * **Records** counts beside it, the **Monthly Breakdown** table with its totals, **Key Insights**
- * (the year's totals and its highest invoice and payment months, worked out from the months) and the
- * Sage analysis. Everything is the customer's details answer; nothing is written in the app.
+ * **Activity** (after the shared reference design): a heading and six figures — the first and last invoice
+ * dates, the last payment date and the turnover this month, this year and last year —, the **Monthly
+ * Activity** chart and the **Monthly Breakdown** table of the financial year's months, and the **Financial
+ * Year** (its start). It shows only the customer's details answer's `activity` — nothing worked out from it
+ * and nothing from the answer's other blocks — and nothing is written in the app.
  */
 export function ActivityPanel({
   detail,
@@ -221,47 +248,11 @@ export function ActivityPanel({
   currency: string | null
 }) {
   const activity = detail.activity
-  const counts = detail.counts
-  const analysis = detail.analysis ?? []
   const months = activity?.months ?? []
-
-  const sum = (key: (typeof SERIES)[number]['key']) =>
-    months.reduce((total, month) => total + (month[key] ?? 0), 0)
-  const highest = (key: 'invoices' | 'payments') => {
-    const best = months.reduce<(typeof months)[number] | null>(
-      (top, month) => ((month[key] ?? 0) > (top?.[key] ?? 0) ? month : top),
-      null,
-    )
-    return best && (best[key] ?? 0) > 0 ? best : null
-  }
-  const topInvoice = highest('invoices')
-  const topPayment = highest('payments')
-
-  const insights: string[] = []
-  if (months.length > 0) {
-    insights.push(`Total invoices: ${money(sum('invoices'), currency)}`)
-    insights.push(`Total credits: ${money(sum('credits'), currency)}`)
-    insights.push(`Total payments: ${money(sum('payments'), currency)}`)
-    if (topInvoice) {
-      insights.push(
-        `Highest invoice month: ${topInvoice.month} (${money(topInvoice.invoices, currency)})`,
-      )
-    }
-    if (topPayment) {
-      insights.push(
-        `Highest payment month: ${topPayment.month} (${money(topPayment.payments, currency)})`,
-      )
-    }
-  }
+  const [view, setView] = useState<View>('chart')
 
   return (
     <>
-      <PageHeading
-        icon={ActivityIcon}
-        title="Activity"
-        description="Trading activity, turnover and monthly financial summary."
-      />
-
       <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <FigureCard
           label="First Invoice Date"
@@ -301,105 +292,35 @@ export function ActivityPanel({
         />
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
         <div className="flex min-w-0 flex-col gap-4">
           <CardShell
             title="Monthly Activity"
             icon={CalendarIcon}
-            badge={
-              activity?.financial_year_start ? (
-                <span className="text-text-muted truncate text-[0.74rem]">
-                  (Financial year from {dateText(activity.financial_year_start)})
-                </span>
-              ) : undefined
+            action={
+              months.length > 0 ? <ViewTabs view={view} onChange={setView} /> : undefined
             }
+            flush={view === 'table' && months.length > 0}
           >
-            {months.length > 0 ? (
-              <MonthlyChart months={months} currency={currency} />
-            ) : (
+            {months.length === 0 ? (
               <p className="text-text-muted m-0 text-[0.85rem]">
                 No activity this financial year.
               </p>
+            ) : view === 'chart' ? (
+              <MonthlyChart months={months} currency={currency} />
+            ) : (
+              <MonthlyBreakdown months={months} currency={currency} />
             )}
           </CardShell>
-
-          <div className="grid items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
-            <CardShell title="Monthly Breakdown" icon={ListChecksIcon} flush>
-              {months.length > 0 ? (
-                <MonthlyBreakdown months={months} currency={currency} />
-              ) : (
-                <p className="text-text-muted m-0 p-4 text-[0.85rem]">
-                  No activity this financial year.
-                </p>
-              )}
-            </CardShell>
-
-            {insights.length > 0 && (
-              <CardShell title="Key Insights" icon={GridIcon}>
-                <ul className="m-0 flex list-none flex-col gap-2.5 p-0 text-[0.82rem]">
-                  {insights.map((insight) => (
-                    <li key={insight} className="flex items-start gap-2">
-                      <CheckCircleIcon
-                        width={15}
-                        height={15}
-                        className="text-accent mt-0.5 shrink-0"
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 break-words">{insight}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardShell>
-            )}
-          </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <CardShell title="Activity Summary" icon={ActivityIcon}>
-            <RowList>
-              <Row label="Turnover MTD">{money(activity?.turnover_mtd, currency)}</Row>
-              <Row label="Turnover YTD">{money(activity?.turnover_ytd, currency)}</Row>
-              <Row label="Prior Year Turnover">
-                {money(activity?.turnover_prior_year, currency)}
-              </Row>
-            </RowList>
-          </CardShell>
-
-          <CardShell title="Financial Year" icon={ClockIcon}>
-            <RowList>
-              <Row label="Financial Year Start">
-                {dateText(activity?.financial_year_start)}
-              </Row>
-              <Row label="Months">{months.length > 0 ? count(months.length) : null}</Row>
-            </RowList>
-          </CardShell>
-
-          <CardShell title="Records" icon={GridIcon}>
-            <RowList>
-              <Row label="Invoices">{count(counts?.invoices)}</Row>
-              <Row label="Sales Orders">{count(counts?.sales_orders)}</Row>
-              <Row label="Open Sales Orders">{count(counts?.open_sales_orders)}</Row>
-              <Row label="Transactions">{count(counts?.transactions)}</Row>
-              <Row label="Open Transactions">{count(counts?.open_transactions)}</Row>
-              <Row label="Contact History Entries">{count(counts?.contact_history)}</Row>
-            </RowList>
-          </CardShell>
-
-          {analysis.length > 0 && (
-            <CardShell title="Sage Analysis" icon={GridIcon}>
-              <RowList>
-                {analysis.map((entry, index) => (
-                  <Row
-                    key={`${entry.number}-${index}`}
-                    label={`Analysis ${entry.number ?? index + 1}`}
-                  >
-                    {entry.value}
-                  </Row>
-                ))}
-              </RowList>
-            </CardShell>
-          )}
-        </div>
+        <CardShell title="Financial Year" icon={ClockIcon}>
+          <RowList>
+            <Row label="Financial Year Start">
+              {dateText(activity?.financial_year_start)}
+            </Row>
+          </RowList>
+        </CardShell>
       </div>
     </>
   )
