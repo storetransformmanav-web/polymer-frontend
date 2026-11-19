@@ -19,6 +19,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { InventoryItem, InventorySort } from '../../../lib/api/endpoints.ts'
 import { formatQuantity, stockLevel } from '../../../lib/inventoryStock.ts'
 import { statusLabel, statusTone, variantName } from '../utils/format.ts'
+import { StockQuickEdit } from './StockQuickEdit.tsx'
 import { StockTable, type StockEditRequest } from './StockTable.tsx'
 import { VariantImage } from './VariantImage.tsx'
 
@@ -344,14 +345,20 @@ export function InventoryList({
                       {editable ? (
                         <>
                           <td className={`${TD} text-right`}>
-                            <Figure
-                              value={item.totals.available}
-                              stock
-                              threshold={threshold}
-                            />
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <Figure
+                                value={item.totals.available}
+                                stock
+                                threshold={threshold}
+                              />
+                              <StockQuickEdit item={item} name="available" />
+                            </span>
                           </td>
                           <td className={`${TD} text-right`}>
-                            <Figure value={item.totals.on_hand} threshold={threshold} />
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <Figure value={item.totals.on_hand} threshold={threshold} />
+                              <StockQuickEdit item={item} name="on_hand" />
+                            </span>
                           </td>
                           <td className={`${TD} text-right`}>
                             <Figure value={item.totals.committed} threshold={threshold} />

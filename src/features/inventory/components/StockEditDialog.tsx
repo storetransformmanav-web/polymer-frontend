@@ -2,19 +2,14 @@ import { useState } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { SpinnerIcon } from '../../../components/ui/icons.tsx'
-import { SelectField, type SelectOption } from '../../../components/ui/SelectField.tsx'
+import { SelectField } from '../../../components/ui/SelectField.tsx'
 import {
-  EDITABLE_STOCK_QUANTITIES,
-  STOCK_REASONS,
   type EditableStockQuantity,
   type InventoryItem,
-  type StockReason,
 } from '../../../lib/api/endpoints.ts'
 import {
   MAX_NOTE,
-  QUANTITY_HINTS,
-  QUANTITY_LABELS,
-  REASON_LABELS,
+  quantityLabel,
   formatDelta,
   formatQuantity,
   quantityOf,
@@ -24,6 +19,7 @@ import {
 } from '../../../lib/inventoryStock.ts'
 import type { StockRequest } from '../../../app/store/inventorySlice.ts'
 import { useLocationChoices } from '../hooks/useLocationChoices.ts'
+import { useStockOptions } from '../hooks/useStockOptions.ts'
 import { useStockWrites } from '../hooks/useStockWrites.ts'
 import { fullName } from '../utils/format.ts'
 
@@ -32,22 +28,14 @@ const BUTTON =
 const MODE =
   'cursor-pointer rounded-md border px-3.5 py-1.5 text-[0.82rem] font-semibold transition-colors'
 
-const QUANTITY_OPTIONS: SelectOption[] = EDITABLE_STOCK_QUANTITIES.map((name) => ({
-  value: name,
-  label: `${QUANTITY_LABELS[name]} — ${QUANTITY_HINTS[name]}`,
-}))
-const REASON_OPTIONS: SelectOption[] = STOCK_REASONS.map((reason) => ({
-  value: reason,
-  label: REASON_LABELS[reason],
-}))
-
 type Mode = 'set' | 'adjust'
 
 /**
  * **Edit stock** — "Set to" (type the new number) or "Adjust by" (add or remove an amount) for
- * one variant at one location. Location (the row you clicked, to begin with), Quantity (the
- * editable names), the number, a Reason (default Correction) and an optional Note (500
- * characters). A live preview shows **before → after** from the numbers on the page. **Save
+ * one variant at one location. Location (the row you clicked, to begin with), Quantity and
+ * Reason — **both lists are the backend's** (`useStockOptions`; a box is left out when the backend
+ * sent no list: the quantity stays Available and no reason is sent; the first reason is the
+ * default) —, the number and an optional Note (500 characters). A live preview shows **before → after** from the numbers on the page. **Save
  * stock** sends it: the page shows the new numbers at once and the notice follows the change
  * to Shopify ("Sending to Shopify…", then "Confirmed"). A refusal is shown here and the window
  * stays open.
@@ -68,18 +56,20 @@ export function StockEditDialog({
 }) {
   const choices = useLocationChoices(variant)
   const writes = useStockWrites()
+  const stock = useStockOptions()
   const [mode, setMode] = useState<Mode>(initialMode)
   const [location, setLocation] = useState<string>(
     String(locationId ?? variant.locations[0]?.location_id ?? choices[0]?.id ?? ''),
   )
   const [quantity, setQuantityName] = useState<EditableStockQuantity>(initialQuantity)
   const [text, setText] = useState('')
-  const [reason, setReason] = useState<StockReason>('correction')
+  const [chosenReason, setReason] = useState('')
   const [note, setNote] = useState('')
   const [touched, setTouched] = useState(false)
   const [sending, setSending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
+  const reason = chosenReason || stock.reasons[0]?.value || ''
   const place = choices.find((choice) => String(choice.id) === location)
   const line = variant.locations.find(
     (candidate) => String(candidate.location_id) === location,
@@ -108,7 +98,7 @@ export function StockEditDialog({
             body: {
               location_id: place.id,
               quantities: { [quantity]: next },
-              reason,
+              ...(reason ? { reason } : {}),
               ...(note.trim() ? { note: note.trim() } : {}),
             },
           }
@@ -118,7 +108,7 @@ export function StockEditDialog({
               location_id: place.id,
               name: quantity,
               delta: Number(text),
-              reason,
+              ...(reason ? { reason } : {}),
               ...(note.trim() ? { note: note.trim() } : {}),
             },
           }
@@ -127,7 +117,7 @@ export function StockEditDialog({
     const outcome = await writes.save({
       ref: variant.variant_id,
       request,
-      label: `${QUANTITY_LABELS[quantity]} at ${place.name}: ${formatQuantity(current)} → ${formatQuantity(next)}`,
+      label: `${quantityLabel(quantity)} at ${place.name}: ${formatQuantity(current)} → ${formatQuantity(next)}`,
     })
     setSending(false)
     if (outcome.ok) onClose()
@@ -207,13 +197,18 @@ export function StockEditDialog({
             }))}
             onChange={setLocation}
           />
-          <SelectField
-            id="stock-quantity"
-            label="Quantity"
-            value={quantity}
-            options={QUANTITY_OPTIONS}
-            onChange={(value) => setQuantityName(value as EditableStockQuantity)}
-          />
+          {stock.quantities.length > 0 && (
+            <SelectField
+              id="stock-quantity"
+              label="Quantity"
+              value={quantity}
+              options={stock.quantities.map((choice) => ({
+                value: choice.name,
+                label: choice.label,
+              }))}
+              onChange={(value) => setQuantityName(value as EditableStockQuantity)}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -265,7 +260,7 @@ export function StockEditDialog({
                 className="m-0 flex flex-wrap items-baseline gap-x-2 text-[0.9rem]"
               >
                 <span className="text-text-muted w-32 shrink-0">
-                  {QUANTITY_LABELS[name]}
+                  {quantityLabel(name)}
                 </span>
                 <span className="text-text-muted">{formatQuantity(before)}</span>
                 <span aria-hidden="true" className="text-accent font-bold">
@@ -287,15 +282,20 @@ export function StockEditDialog({
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
-          <SelectField
-            id="stock-reason"
-            label="Reason"
-            value={reason}
-            options={REASON_OPTIONS}
-            onChange={(value) => setReason(value as StockReason)}
-          />
-        </div>
+        {stock.reasons.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+            <SelectField
+              id="stock-reason"
+              label="Reason"
+              value={reason}
+              options={stock.reasons.map((choice) => ({
+                value: choice.value,
+                label: choice.label,
+              }))}
+              onChange={setReason}
+            />
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-3">

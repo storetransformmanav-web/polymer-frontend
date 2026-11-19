@@ -1637,38 +1637,18 @@ export const STOCK_QUANTITY_NAMES = [
 ] as const
 export type StockQuantityName = (typeof STOCK_QUANTITY_NAMES)[number]
 
-/** The ones that can be set or adjusted (committed and incoming come from Shopify; unavailable is worked out). */
-export const EDITABLE_STOCK_QUANTITIES = [
-  'available',
-  'on_hand',
-  'reserved',
-  'safety_stock',
-  'damaged',
-  'quality_control',
-] as const
-export type EditableStockQuantity = (typeof EDITABLE_STOCK_QUANTITIES)[number]
+/**
+ * The names of the quantities that can be set or adjusted (committed and incoming come from Shopify;
+ * unavailable is worked out). Which of them a person may pick, and what each is called, comes from
+ * the backend (`quantities` of the stock list); this type only names the API's own keys.
+ */
+export type EditableStockQuantity = Exclude<
+  StockQuantityName,
+  'committed' | 'incoming' | 'unavailable'
+>
 
-/** Why stock changed (the dropdown on the edit window; the default is `correction`). */
-export const STOCK_REASONS = [
-  'correction',
-  'cycle_count_available',
-  'damaged',
-  'movement_created',
-  'movement_updated',
-  'movement_received',
-  'movement_canceled',
-  'other',
-  'promotion',
-  'quality_control',
-  'received',
-  'reservation_created',
-  'reservation_deleted',
-  'reservation_updated',
-  'restock',
-  'safety_stock',
-  'shrinkage',
-] as const
-export type StockReason = (typeof STOCK_REASONS)[number]
+/** Why stock changed — one of the values the backend lists (`reasons` of the stock list). */
+export type StockReason = string
 
 export const INVENTORY_SORTS = [
   'title',
@@ -1772,10 +1752,44 @@ const inventoryTotalsSchema = z.object({
 
 export type InventoryTotals = z.infer<typeof inventoryTotalsSchema>
 
+/**
+ * What the stock list says can be edited, as the backend sends it (a bare name, or `{ name, label,
+ * editable }`): the quantities the Edit stock window offers.
+ */
+const stockQuantityOptionSchema = z.union([
+  z.string().transform((name) => ({ name, label: '', editable: true })),
+  z
+    .object({
+      name: z.string(),
+      label: z.string().nullish(),
+      editable: z.boolean().nullish(),
+    })
+    .transform((option) => ({
+      name: option.name,
+      label: option.label?.trim() ?? '',
+      editable: option.editable ?? true,
+    })),
+])
+
+/** The reasons for a stock change the backend accepts (a bare value, or `{ value, label }`). */
+const stockReasonOptionSchema = z.union([
+  z.string().transform((value) => ({ value, label: '' })),
+  z
+    .object({ value: z.string(), label: z.string().nullish() })
+    .transform((option) => ({ value: option.value, label: option.label?.trim() ?? '' })),
+])
+
+export type StockQuantityOption = z.infer<typeof stockQuantityOptionSchema>
+export type StockReasonOption = z.infer<typeof stockReasonOptionSchema>
+
 const inventoryListResponseSchema = z.object({
   items: z.array(inventoryItemSchema).default([]),
   totals: inventoryTotalsSchema.default({}),
   locations: z.array(stockLocationSchema).default([]),
+  /** The quantities the Edit stock window offers (the backend decides which and how they are called). */
+  quantities: z.array(stockQuantityOptionSchema).catch([]),
+  /** The reasons for a stock change (the backend decides which; the first is the default). */
+  reasons: z.array(stockReasonOptionSchema).catch([]),
   page: z.number().default(1),
   page_size: z.number().default(25),
   total: z.number().default(0),

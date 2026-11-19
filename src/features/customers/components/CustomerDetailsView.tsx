@@ -144,10 +144,16 @@ export function CustomerDetailsView({
         status={
           <>
             {known && (
-              <StatusPill
-                label={state ? capitalize(state) : customerSource(known)}
-                tone={state ? stateTone(state) : 'neutral'}
-              />
+              <span className="inline-flex items-center gap-2">
+                {/* The label says what the pill is, as the chips below do ("Created", "Updated"). */}
+                <span className="text-text-muted text-[0.8rem]">
+                  {state ? 'Account status' : 'Source'}
+                </span>
+                <StatusPill
+                  label={state ? capitalize(state) : customerSource(known)}
+                  tone={state ? stateTone(state) : 'neutral'}
+                />
+              </span>
             )}
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.75rem]" role="status">

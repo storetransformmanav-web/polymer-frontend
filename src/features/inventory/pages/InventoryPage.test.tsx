@@ -106,6 +106,20 @@ const LIST: InventoryListResponse = {
     { id: UNIT9, name: 'Unit 9', variants: 2 },
     { id: STANMORE, name: 'Stanmore Warehouse', variants: 1 },
   ],
+  // The quantities and reasons the Edit stock window offers come from the backend's answer.
+  quantities: [
+    { name: 'available', label: 'Available', editable: true },
+    { name: 'on_hand', label: 'On hand', editable: true },
+    { name: 'reserved', label: 'Reserved', editable: true },
+    { name: 'safety_stock', label: 'Safety stock', editable: true },
+    { name: 'damaged', label: 'Damaged', editable: true },
+    { name: 'quality_control', label: 'Quality control', editable: true },
+    { name: 'committed', label: 'Committed', editable: false },
+  ],
+  reasons: [
+    { value: 'correction', label: 'Correction' },
+    { value: 'received', label: 'Received' },
+  ],
   page: 1,
   page_size: 25,
   total: 2,
@@ -396,6 +410,73 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
     expect(within(row).getByText('42')).toBeInTheDocument()
   })
 
+  it('the pencil beside Available opens a small box: Set to, a number and ✓ send one quantity', async () => {
+    const user = userEvent.setup()
+    set.mockImplementation(never)
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    const box = within(
+      screen.getByRole('dialog', { name: /^Edit available of Hippo Bag/ }),
+    )
+    // Location and Quantity are the backend's lists; Reason and Note sit behind the notes button.
+    expect(box.getByLabelText('Location')).toBeInTheDocument()
+    expect(box.getByLabelText('Quantity')).toHaveValue('available')
+    expect(box.queryByLabelText('Reason')).not.toBeInTheDocument()
+
+    await user.type(box.getByLabelText('New quantity'), '30')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    expect(set).toHaveBeenCalledWith('v-1', {
+      location_id: UNIT9,
+      quantities: { available: 30 },
+      reason: 'correction',
+    })
+  })
+
+  it('the small box: Adjust by checks the amount, and Reason and Note are behind the notes button', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit on hand of Hippo Bag/ }))
+    const box = within(screen.getByRole('dialog', { name: /^Edit on hand of Hippo Bag/ }))
+    await user.selectOptions(box.getByLabelText('How to change the stock'), 'adjust')
+    await user.type(box.getByLabelText('Amount to add or remove'), '0')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+    expect(box.getByRole('alert')).toHaveTextContent('The amount can’t be 0')
+    expect(adjust).not.toHaveBeenCalled()
+
+    await user.clear(box.getByLabelText('Amount to add or remove'))
+    await user.type(box.getByLabelText('Amount to add or remove'), '12')
+    await user.click(box.getByRole('button', { name: 'Reason and note' }))
+    await user.selectOptions(box.getByLabelText('Reason'), 'Received')
+    await user.type(box.getByLabelText('Note (optional)'), 'Delivery PO-1041')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    await waitFor(() => expect(adjust).toHaveBeenCalledTimes(1))
+    expect(adjust).toHaveBeenCalledWith('v-1', {
+      location_id: UNIT9,
+      name: 'on_hand',
+      delta: 12,
+      reason: 'received',
+      note: 'Delivery PO-1041',
+    })
+  })
+
+  it('the small box closes on Escape and sends nothing', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    expect(screen.getByRole('dialog', { name: /^Edit available of/ })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: /^Edit available of/ })).toBeNull()
+    expect(set).not.toHaveBeenCalled()
+  })
+
   it('shows the notice while Shopify has it, and "Confirmed by Shopify" once it is synced', async () => {
     const user = userEvent.setup()
     adjustment
@@ -490,6 +571,26 @@ describe('one variant’s stock', () => {
     await user.click(await screen.findByRole('button', { name: 'View Hippo Bag Small' }))
     await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
   }
+
+  it('the figures have the same small edit box: the pencil beside Available sends one quantity', async () => {
+    const user = userEvent.setup()
+    set.mockImplementation(() => new Promise<never>(() => undefined))
+    await openVariant(user)
+
+    const page = within(screen.getByRole('article'))
+    await user.click(page.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    const box = within(
+      screen.getByRole('dialog', { name: /^Edit available of Hippo Bag/ }),
+    )
+    await user.type(box.getByLabelText('New quantity'), '40')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    expect(set).toHaveBeenCalledWith('v-1', {
+      location_id: UNIT9,
+      quantities: { available: 40 },
+      reason: 'correction',
+    })
+  })
 
   it('opens it in the same page, with a tab, its header, the figures and the stock by location', async () => {
     const user = userEvent.setup()

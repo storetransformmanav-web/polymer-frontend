@@ -11,6 +11,7 @@ import {
   reasonLabel,
 } from '../../../lib/inventoryStock.ts'
 import { useStockHistory } from '../hooks/useStockHistory.ts'
+import { useStockOptions } from '../hooks/useStockOptions.ts'
 import { syncLabel, syncTone, userName, when } from '../utils/format.ts'
 
 const TH =
@@ -52,6 +53,8 @@ export function StockHistory({
     page_size: pageSize,
   }
   const history = useStockHistory(params)
+  // The reasons' own labels, as the backend sent them with the stock list.
+  const { reasons } = useStockOptions()
   const data = history.data
   const locationOptions: SelectOption[] = [
     { value: '', label: 'All locations' },
@@ -195,7 +198,7 @@ export function StockHistory({
                           </span>
                         </td>
                         <td className={`${TD} whitespace-nowrap`}>
-                          {reasonLabel(entry.reason)}
+                          {reasonLabel(entry.reason, reasons)}
                         </td>
                         <td className={TD}>
                           <span

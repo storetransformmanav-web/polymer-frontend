@@ -24,6 +24,8 @@ import {
   type StockQuantities,
   type StockSetBody,
   type StockWriteResult,
+  type StockQuantityOption,
+  type StockReasonOption,
 } from '../../lib/api/endpoints.ts'
 import {
   applyToLines,
@@ -174,6 +176,8 @@ export interface InventoryState {
   baseTotals: { key: string; totals: InventoryTotals } | null
   /** Locations seen in any list answer (the dropdowns are filled from them). */
   locations: StockLocation[]
+  /** The quantities and reasons the Edit stock window offers, as the latest list answer sent them. */
+  stockOptions: { quantities: StockQuantityOption[]; reasons: StockReasonOption[] }
   tabs: InventoryTab[]
   details: Record<string, Entry<InventoryVariant>>
   history: Record<string, Entry<StockHistoryResponse>>
@@ -191,6 +195,7 @@ const initialState: InventoryState = {
   lastData: null,
   baseTotals: null,
   locations: [],
+  stockOptions: { quantities: [], reasons: [] },
   tabs: [],
   details: {},
   history: {},
@@ -559,6 +564,8 @@ const inventorySlice = createSlice({
         state.entries[key] = { data, fetchedAt, error: null, isFetching: false }
         if (key === cacheKey(state.filters)) state.lastData = data
         if (data.locations.length > 0) state.locations = data.locations
+        if (data.quantities.length > 0) state.stockOptions.quantities = data.quantities
+        if (data.reasons.length > 0) state.stockOptions.reasons = data.reasons
         // The figures of a list that has no stock status on it feed the chips' counts.
         if (filters.status === '') {
           state.baseTotals = { key: baseKey(filters), totals: data.totals }

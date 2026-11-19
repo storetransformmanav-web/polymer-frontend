@@ -122,9 +122,13 @@ describe('small helpers', () => {
 
   it('names the quantities and reasons in words, and signs a change', () => {
     expect(quantityLabel('safety_stock')).toBe('Safety stock')
-    expect(quantityLabel('something_new')).toBe('something new')
-    expect(reasonLabel('cycle_count_available')).toBe('Cycle count')
-    expect(reasonLabel('brand_new')).toBe('brand_new')
+    expect(quantityLabel('something_new')).toBe('Something new')
+    // A reason is named by the backend's own label when it sent one, else its value in words.
+    const sent = [{ value: 'cycle_count_available', label: 'Cycle count' }]
+    expect(reasonLabel('cycle_count_available', sent)).toBe('Cycle count')
+    expect(reasonLabel('cycle_count_available')).toBe('Cycle count available')
+    expect(reasonLabel('brand_new', sent)).toBe('Brand new')
+    expect(reasonLabel(null)).toBe('—')
     expect(formatDelta(12)).toBe('+12')
     expect(formatDelta(-3)).toBe('-3')
     expect(formatDelta(0)).toBe('0')

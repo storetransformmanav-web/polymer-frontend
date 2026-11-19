@@ -772,6 +772,16 @@ export function UploadIcon(props: IconProps) {
   )
 }
 
+export function NotePlusIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11 3H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" />
+      <path d="M14 3v4M12 5h4" />
+      <path d="M7 11h6M7 14h4" />
+    </svg>
+  )
+}
+
 export function CloudUploadIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

@@ -4,54 +4,7 @@ import {
   type StockLine,
   type StockQuantities,
   type StockQuantityName,
-  type StockReason,
 } from './api/endpoints.ts'
-
-/** The labels of Shopify's own inventory screen. */
-export const QUANTITY_LABELS: Record<StockQuantityName, string> = {
-  available: 'Available',
-  on_hand: 'On hand',
-  committed: 'Committed',
-  incoming: 'Incoming',
-  reserved: 'Reserved',
-  safety_stock: 'Safety stock',
-  damaged: 'Damaged',
-  quality_control: 'Quality control',
-  unavailable: 'Unavailable',
-}
-
-/** What each quantity means, in a few words. */
-export const QUANTITY_HINTS: Record<StockQuantityName, string> = {
-  available: 'Can be sold',
-  on_hand: 'Physically there',
-  committed: 'In open orders',
-  incoming: 'On its way in',
-  reserved: 'Set aside',
-  safety_stock: 'Kept back',
-  damaged: 'Not sellable',
-  quality_control: 'Being checked',
-  unavailable: 'Reserved + safety stock + damaged + quality control',
-}
-
-export const REASON_LABELS: Record<StockReason, string> = {
-  correction: 'Correction',
-  cycle_count_available: 'Cycle count',
-  damaged: 'Damaged',
-  movement_created: 'Movement created',
-  movement_updated: 'Movement updated',
-  movement_received: 'Movement received',
-  movement_canceled: 'Movement canceled',
-  other: 'Other',
-  promotion: 'Promotion',
-  quality_control: 'Quality control',
-  received: 'Received',
-  reservation_created: 'Reservation created',
-  reservation_deleted: 'Reservation deleted',
-  reservation_updated: 'Reservation updated',
-  restock: 'Restock',
-  safety_stock: 'Safety stock',
-  shrinkage: 'Shrinkage',
-}
 
 /** The four quantities that add up to `unavailable`. */
 const UNAVAILABLE_PARTS = [
@@ -75,16 +28,24 @@ export function quantityOf(
   return zero(source?.[name])
 }
 
-/** The plain label of a reason (any text the API sends is shown as it is). */
-export function reasonLabel(reason: string | null | undefined): string {
+/** A key in words: "safety_stock" → "Safety stock" (no table of names — the key is the data). */
+export function humanize(key: string): string {
+  const words = key.replace(/_/g, ' ').trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : ''
+}
+
+/** The label of a reason: the backend's own label for it when it sent one, else its value in words. */
+export function reasonLabel(
+  reason: string | null | undefined,
+  options: { value: string; label: string }[] = [],
+): string {
   if (!reason) return '—'
-  return REASON_LABELS[reason as StockReason] ?? reason
+  return options.find((option) => option.value === reason)?.label || humanize(reason)
 }
 
 /** What a quantity name says in words ("safety_stock" → "Safety stock"). */
 export function quantityLabel(name: string | null | undefined): string {
-  if (!name) return '—'
-  return QUANTITY_LABELS[name as StockQuantityName] ?? name.replace(/_/g, ' ')
+  return name ? humanize(name) : '—'
 }
 
 /**

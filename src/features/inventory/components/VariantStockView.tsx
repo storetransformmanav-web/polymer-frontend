@@ -14,12 +14,7 @@ import {
   StoreIcon,
 } from '../../../components/ui/icons.tsx'
 import { formatPrice } from '../../../lib/format.ts'
-import {
-  formatQuantity,
-  quantityOf,
-  QUANTITY_HINTS,
-  QUANTITY_LABELS,
-} from '../../../lib/inventoryStock.ts'
+import { formatQuantity, quantityOf, quantityLabel } from '../../../lib/inventoryStock.ts'
 import type {
   InventoryItem,
   InventoryVariant,
@@ -31,6 +26,7 @@ import { statusLabel, statusTone, variantName } from '../utils/format.ts'
 import { StockEditDialog } from './StockEditDialog.tsx'
 import { StockHistory } from './StockHistory.tsx'
 import { StockTable, type StockEditRequest } from './StockTable.tsx'
+import { StockQuickEdit } from './StockQuickEdit.tsx'
 import { VariantImage } from './VariantImage.tsx'
 
 type TabId = 'stock' | 'history'
@@ -164,7 +160,7 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
               className="border-border bg-surface flex flex-col gap-0.5 rounded-xl border px-4 py-3"
             >
               <dt className="text-text-muted text-[0.68rem] font-bold tracking-wider uppercase">
-                {QUANTITY_LABELS[figure]}
+                {quantityLabel(figure)}
               </dt>
               <dd
                 className={`m-0 text-[1.4rem] leading-tight font-bold tabular-nums ${
@@ -175,10 +171,14 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
                     : ''
                 }`}
               >
-                {source ? formatQuantity(quantityOf(source.totals, figure)) : '—'}
-              </dd>
-              <dd className="text-text-muted m-0 text-[0.7rem] leading-snug">
-                {QUANTITY_HINTS[figure]}
+                <span className="inline-flex items-center gap-2">
+                  {source ? formatQuantity(quantityOf(source.totals, figure)) : '—'}
+                  {source &&
+                    source.tracked !== false &&
+                    (figure === 'available' || figure === 'on_hand') && (
+                      <StockQuickEdit item={source} name={figure} />
+                    )}
+                </span>
               </dd>
             </div>
           ))}

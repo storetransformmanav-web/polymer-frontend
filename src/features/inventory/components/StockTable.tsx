@@ -7,7 +7,7 @@ import type {
   StockQuantityName,
 } from '../../../lib/api/endpoints.ts'
 import {
-  QUANTITY_LABELS,
+  quantityLabel,
   formatQuantity,
   quantityOf,
   sumLines,
@@ -81,7 +81,7 @@ export function StockTable({
             <th className={`${TH} text-left`}>Location</th>
             {names.map((name) => (
               <th key={name} className={`${TH} text-right`}>
-                {QUANTITY_LABELS[name]}
+                {quantityLabel(name)}
               </th>
             ))}
             {columns === 'full' && <th className={`${TH} text-left`}>Updated</th>}
