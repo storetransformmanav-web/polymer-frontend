@@ -6,6 +6,7 @@ import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { UsersIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { InvoiceDetailsView } from '../../invoices/index.ts'
 import type { SageCustomerSort } from '../../../lib/api/sageCustomers.ts'
 import { SageCustomerDetailsView } from '../components/SageCustomerDetailsView.tsx'
 import { SageCustomersExport } from '../components/SageCustomersExport.tsx'
@@ -16,7 +17,7 @@ import { useSageCustomerColumns } from '../hooks/useSageCustomerColumns.ts'
 import { useSageCustomers } from '../hooks/useSageCustomers.ts'
 import { SAGE_CUSTOMER_COLUMNS } from '../utils/columns.ts'
 import { listCurrency } from '../utils/format.ts'
-import { customerPath, LIST_PATH } from '../utils/paths.ts'
+import { customerPath, invoicePath, LIST_PATH } from '../utils/paths.ts'
 
 const MAX_TABS = 10
 
@@ -24,9 +25,10 @@ const MAX_TABS = 10
 // box, and a customer's page scrolls inside this one.
 const SCROLL_VIEW = 'relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 
-/** An opened customer: a tab in the strip above the list. */
+/** An opened customer or invoice: a tab in the strip above the list. */
 interface DetailTab {
   key: string
+  kind: 'Customer' | 'Invoice'
   label: string
   /** Where its tab leads (pathname, as in the address bar). */
   path: string
@@ -60,31 +62,54 @@ export function SageCustomersPage() {
   // The API gives no currency for the totals: the first customer's is used (pounds otherwise).
   const currency = listCurrency(customers.items)
 
-  // `/sage/customers` → the list; `/sage/customers/<ref>` → one customer.
+  // `/sage/customers` → the list; `/sage/customers/<ref>` → one customer;
+  // `/sage/customers/invoice/<number>?kind=…` → one invoice, opened from a customer's page.
   const segments = splat ? splat.split('/').filter(Boolean).map(decode) : []
-  const accountRef = segments[0] ?? null
+  const first = segments[0] ?? ''
+  const invoiceNumber = first === 'invoice' && segments[1] ? segments[1] : null
+  const accountRef = first && first !== 'invoice' ? first : null
+  const kindParam = new URLSearchParams(location.search).get('kind') ?? ''
   const rawName = (location.state as { linkedName?: unknown } | null)?.linkedName
   const linkedName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : null
 
-  const activeKey = accountRef ? `customer:${accountRef}` : null
+  const activeKey = invoiceNumber
+    ? `invoice:${invoiceNumber}|${kindParam}`
+    : accountRef
+      ? `customer:${accountRef}`
+      : null
 
   const [tabs, setTabs] = useState<DetailTab[]>([])
-  // Every opened customer gets a tab — also one reached by a bare address. (React's "adjust state
-  // while rendering": a new address opens its tab in the same render.)
-  if (activeKey && accountRef && !tabs.some((tab) => tab.key === activeKey)) {
-    setTabs((current) =>
-      current.some((tab) => tab.key === activeKey)
-        ? current
-        : [
-            ...current,
-            {
-              key: activeKey,
-              label: linkedName ?? accountRef,
-              path: customerPath(accountRef),
-            },
-          ].slice(-MAX_TABS),
-    )
+  // The tab that was on screen before this one: a new tab opens right after it (an invoice opened from
+  // a customer's page sits to the right of that customer's tab).
+  const [lastKey, setLastKey] = useState<string | null>(null)
+  // Every opened customer or invoice gets a tab — also one reached by a bare address. (React's "adjust
+  // state while rendering": a new address opens its tab in the same render.)
+  if (activeKey && !tabs.some((tab) => tab.key === activeKey)) {
+    const tab: DetailTab = invoiceNumber
+      ? {
+          key: activeKey,
+          kind: 'Invoice',
+          label: invoiceNumber,
+          path: invoicePath(invoiceNumber, kindParam),
+        }
+      : {
+          key: activeKey,
+          kind: 'Customer',
+          label: linkedName ?? accountRef ?? '',
+          path: customerPath(accountRef ?? ''),
+        }
+    const after = lastKey
+    setTabs((current) => {
+      if (current.some((candidate) => candidate.key === activeKey)) return current
+      const at = after ? current.findIndex((candidate) => candidate.key === after) : -1
+      const next =
+        at >= 0
+          ? [...current.slice(0, at + 1), tab, ...current.slice(at + 1)]
+          : [...current, tab]
+      return next.slice(-MAX_TABS)
+    })
   }
+  if (activeKey !== null && activeKey !== lastKey) setLastKey(activeKey)
 
   function rename(key: string, label: string) {
     setTabs((current) =>
@@ -134,14 +159,14 @@ export function SageCustomersPage() {
         tabs={tabs.map((tab) => ({
           id: tab.key,
           label: tab.label,
-          kind: 'Customer',
+          kind: tab.kind,
           title: tab.label,
         }))}
         activeId={activeKey}
-        navLabel="Open customers"
+        navLabel="Open customers and invoices"
         listLabel="All Customers"
         kind="Customer"
-        historyLabel="Opened customers"
+        historyLabel="Opened customers and invoices"
         icon={UsersIcon}
         onShowList={() => navigate(LIST_PATH)}
         onSelect={(key) => {
@@ -164,6 +189,20 @@ export function SageCustomersPage() {
             linkedName={linkedName}
             onBack={() => navigate(LIST_PATH)}
             onLoaded={(name) => rename(`customer:${accountRef}`, name)}
+          />
+        </div>
+      )}
+
+      {invoiceNumber && (
+        <div className={SCROLL_VIEW}>
+          <InvoiceDetailsView
+            key={`invoice-${invoiceNumber}-${kindParam}`}
+            reference={invoiceNumber}
+            kind={kindParam || null}
+            preview={null}
+            onBack={() => navigate(LIST_PATH)}
+            onLoaded={(number) => rename(`invoice:${invoiceNumber}|${kindParam}`, number)}
+            customerPathOf={customerPath}
           />
         </div>
       )}

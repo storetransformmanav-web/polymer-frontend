@@ -191,7 +191,7 @@ describe('clicking a page in the sidebar', () => {
     await user.click(screen.getByRole('button', { name: 'Shopify Management' }))
 
     // Moving over the links asks for nothing…
-    await user.hover(screen.getByRole('link', { name: /^Orders/ }))
+    await user.hover(screen.getAllByRole('link', { name: /^Orders/ })[0])
     await user.hover(screen.getByRole('link', { name: 'Products' }))
     // The Shopify Management page comes first; the Sage 50 one (also "Customers") is in the closed group below.
     await user.hover(screen.getAllByRole('link', { name: 'Customers' })[0])

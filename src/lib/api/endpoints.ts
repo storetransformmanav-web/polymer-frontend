@@ -17,6 +17,11 @@ import {
   type InvoiceListResponse,
 } from './invoices.ts'
 import {
+  readSageOrderList,
+  type SageOrderListParams,
+  type SageOrderListResponse,
+} from './sageOrders.ts'
+import {
   readSageContactHistory,
   readSageCustomerDetail,
   readSageCustomerList,
@@ -89,6 +94,10 @@ export const ENDPOINTS = {
     list: '/sage/invoices',
     /** `GET` one invoice in full, by its number (`/api/sage/invoices/649409`). */
     detail: (number: string) => `/sage/invoices/${encodeURIComponent(number)}`,
+  },
+  sageOrders: {
+    /** `GET` one page of the Sage 50 sales orders (`/api/sage/orders`), with `totals` and `status_counts`. */
+    list: '/sage/orders',
   },
   sageCustomers: {
     /** `GET` one page of the Sage 50 customers (`/api/sage/customers`), with `totals` and `tab_counts`. */
@@ -4345,6 +4354,14 @@ export const api = {
         }
         throw error
       }
+    },
+  },
+
+  sageOrders: {
+    /** One page of the Sage 50 sales orders: `items`, `totals` and `status_counts` for everything the filters match, and the paging. */
+    async list(params: SageOrderListParams): Promise<SageOrderListResponse> {
+      const data = await apiClient.get(ENDPOINTS.sageOrders.list, { params })
+      return readSageOrderList(data)
     },
   },
 

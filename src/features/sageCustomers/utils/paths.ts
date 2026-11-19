@@ -8,8 +8,11 @@ export const customerPath = (accountRef: string) =>
 /** The matching CRM (Shopify) customer's own page — opened by its CRM id. */
 export const crmCustomerPath = (id: string) => `/customers/${encodeURIComponent(id)}`
 
-/** An invoice's page (Sage 50 → Invoices), with its document type when it has one. */
+/**
+ * An invoice's page, **in this same page as a tab of its own** (`/sage/customers/invoice/<number>`, with
+ * its document type when it has one) — it opens beside the customer's tab instead of leaving.
+ */
 export function invoicePath(number: string, kind: string): string {
   const type = kind ? `?kind=${encodeURIComponent(kind)}` : ''
-  return `/sage/invoices/${encodeURIComponent(number)}${type}`
+  return `${LIST_PATH}/invoice/${encodeURIComponent(number)}${type}`
 }

@@ -61,6 +61,8 @@ interface InvoiceDetailsViewProps {
   onBack: () => void
   /** Told the invoice's number once it is known, so the page can name its tab. */
   onLoaded?: (number: string) => void
+  /** Where the customer's name leads, when the page is shown inside another page (the invoices page's own by default). */
+  customerPathOf?: (accountRef: string) => string
 }
 
 const SMALL_TEXT = 'text-[0.82rem]'
@@ -289,7 +291,9 @@ export function InvoiceDetailsView({
   preview,
   onBack,
   onLoaded,
+  customerPathOf,
 }: InvoiceDetailsViewProps) {
+  const customerHref = customerPathOf ?? customerPath
   const state = useInvoiceDetail(reference)
   const detail = state.detail
   const [tab, setTab] = useState('overview')
@@ -359,7 +363,7 @@ export function InvoiceDetailsView({
           <HeaderChip icon={UsersIcon} label="Customer">
             {accountRef ? (
               <Link
-                to={customerPath(accountRef)}
+                to={customerHref(accountRef)}
                 state={{ linkedName: customerName }}
                 className="text-text hover:text-accent font-semibold no-underline hover:underline"
               >
@@ -434,7 +438,7 @@ export function InvoiceDetailsView({
       tab={tab}
       onTab={setTab}
     >
-      {tab === 'overview' && <Overview detail={detail} />}
+      {tab === 'overview' && <Overview detail={detail} customerHref={customerHref} />}
       {tab === 'items' && <Items detail={detail} currency={currency} />}
       {tab === 'payments' && (
         <PaymentsTable payments={detail.payments} currency={currency} />
@@ -460,7 +464,13 @@ function VatRow({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Overview({ detail }: { detail: InvoiceDetail }) {
+function Overview({
+  detail,
+  customerHref,
+}: {
+  detail: InvoiceDetail
+  customerHref: (accountRef: string) => string
+}) {
   const c = detail.customer
   const currency = detail.currency
   const vatNet = detail.vat.reduce((sum, row) => sum + (row.net ?? 0), 0)
@@ -507,7 +517,7 @@ function Overview({ detail }: { detail: InvoiceDetail }) {
               <Field label="Customer name">
                 {c.accountRef && c.name ? (
                   <Link
-                    to={customerPath(c.accountRef)}
+                    to={customerHref(c.accountRef)}
                     state={{ linkedName: c.name }}
                     className="text-text hover:text-accent font-semibold no-underline hover:underline"
                   >

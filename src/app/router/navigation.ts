@@ -146,6 +146,14 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: UsersIcon,
         fillHeight: true,
       },
+      {
+        to: '/sage/orders',
+        label: 'Orders',
+        // Likewise: no separate area for the Sage orders.
+        area: 'sage_invoices',
+        icon: OrdersIcon,
+        fillHeight: true,
+      },
     ],
   },
   { to: '/users', label: 'User Management', icon: UserCogIcon, area: 'users' },

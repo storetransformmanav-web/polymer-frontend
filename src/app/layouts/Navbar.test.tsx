@@ -29,7 +29,7 @@ describe('Navbar', () => {
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: /^Orders/ })).not.toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /^Orders/ })[0]).not.toHaveAttribute(
       'aria-current',
     )
   })
@@ -69,7 +69,7 @@ describe('Navbar', () => {
     renderWithProviders(<Navbar />, { route: '/' })
 
     await user.hover(screen.getByRole('link', { name: 'Activity Management' }))
-    await user.hover(screen.getByRole('link', { name: /^Orders/ }))
+    await user.hover(screen.getAllByRole('link', { name: /^Orders/ })[0])
     await user.hover(screen.getByRole('link', { name: 'Products' }))
     // The Shopify Management page comes first; the Sage 50 one (also "Customers") is in the closed group below.
     await user.hover(screen.getAllByRole('link', { name: 'Customers' })[0])
