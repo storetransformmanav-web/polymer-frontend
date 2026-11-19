@@ -13,6 +13,9 @@ export function invoicePath(invoice: Pick<Invoice, 'number' | 'kind'>): string |
   return `${LIST_PATH}/${encodeURIComponent(invoice.number)}${kind}`
 }
 
-/** One customer's page, by the Sage account reference: `/sage/invoices/customer/<ref>`. */
+/**
+ * One customer's page, by the Sage account reference: `/sage/invoices/customer/<ref>` — **in this same
+ * page as a tab of its own**, showing the Sage customer's details page (Sage 50 → Customers).
+ */
 export const customerPath = (accountRef: string) =>
   `${LIST_PATH}/customer/${encodeURIComponent(accountRef)}`

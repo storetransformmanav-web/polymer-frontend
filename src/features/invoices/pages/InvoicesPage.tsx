@@ -7,7 +7,7 @@ import { FileTextIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import type { InvoiceSort } from '../../../lib/api/invoices.ts'
-import { InvoiceCustomerView } from '../components/InvoiceCustomerView.tsx'
+import { SageCustomerDetailsView } from '../../sageCustomers/index.ts'
 import { InvoiceDetailsView } from '../components/InvoiceDetailsView.tsx'
 import { InvoicesKpis } from '../components/InvoicesKpis.tsx'
 import { InvoicesList } from '../components/InvoicesList.tsx'
@@ -161,11 +161,11 @@ export function InvoicesPage() {
 
       {customerRef && (
         <div className={SCROLL_VIEW}>
-          <InvoiceCustomerView
+          <SageCustomerDetailsView
             key={`customer-${customerRef}`}
             accountRef={customerRef}
+            preview={null}
             linkedName={linkedName}
-            columns={columnChoice.columns}
             onBack={() => navigate(LIST_PATH)}
             onLoaded={(name) => rename(`customer:${customerRef}`, name)}
           />

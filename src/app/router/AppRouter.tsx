@@ -58,8 +58,9 @@ const router = createBrowserRouter([
           { path: 'sage/invoices/*', element: <InvoicesPage /> },
           // Sage 50 → Customers; `*` lets SageCustomersPage also serve /sage/customers/<account ref>.
           { path: 'sage/customers/*', element: <SageCustomersPage /> },
-          // Sage 50 → Orders (the sales orders list; the API has no call for one order).
-          { path: 'sage/orders', element: <SageOrdersPage /> },
+          // Sage 50 → Orders (the sales orders list; the API has no call for one order). `*` lets
+          // SageOrdersPage also serve /sage/orders/customer/<account ref>, a customer opened as a tab.
+          { path: 'sage/orders/*', element: <SageOrdersPage /> },
         ],
       },
     ],

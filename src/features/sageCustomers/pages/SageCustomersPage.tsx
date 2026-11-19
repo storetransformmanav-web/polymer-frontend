@@ -79,37 +79,42 @@ export function SageCustomersPage() {
       : null
 
   const [tabs, setTabs] = useState<DetailTab[]>([])
-  // The tab that was on screen before this one: a new tab opens right after it (an invoice opened from
-  // a customer's page sits to the right of that customer's tab).
+  // The address that was on screen before this render (null = the list). (React's "adjust state while
+  // rendering": it is compared with the address now, so a new address opens its tab in the same render.)
+  // A tab is opened **when the address arrives at a record**, not whenever its tab is missing: closing a
+  // tab removes it a moment before the address leaves it, and that gap must not open it again — while
+  // going back to the list forgets the address, so the same record can be opened again afterwards.
   const [lastKey, setLastKey] = useState<string | null>(null)
-  // Every opened customer or invoice gets a tab — also one reached by a bare address. (React's "adjust
-  // state while rendering": a new address opens its tab in the same render.)
-  if (activeKey && !tabs.some((tab) => tab.key === activeKey)) {
-    const tab: DetailTab = invoiceNumber
-      ? {
-          key: activeKey,
-          kind: 'Invoice',
-          label: invoiceNumber,
-          path: invoicePath(invoiceNumber, kindParam),
-        }
-      : {
-          key: activeKey,
-          kind: 'Customer',
-          label: linkedName ?? accountRef ?? '',
-          path: customerPath(accountRef ?? ''),
-        }
-    const after = lastKey
-    setTabs((current) => {
-      if (current.some((candidate) => candidate.key === activeKey)) return current
-      const at = after ? current.findIndex((candidate) => candidate.key === after) : -1
-      const next =
-        at >= 0
-          ? [...current.slice(0, at + 1), tab, ...current.slice(at + 1)]
-          : [...current, tab]
-      return next.slice(-MAX_TABS)
-    })
+  if (activeKey !== lastKey) {
+    setLastKey(activeKey)
+    if (activeKey && !tabs.some((tab) => tab.key === activeKey)) {
+      const tab: DetailTab = invoiceNumber
+        ? {
+            key: activeKey,
+            kind: 'Invoice',
+            label: invoiceNumber,
+            path: invoicePath(invoiceNumber, kindParam),
+          }
+        : {
+            key: activeKey,
+            kind: 'Customer',
+            label: linkedName ?? accountRef ?? '',
+            path: customerPath(accountRef ?? ''),
+          }
+      // A new tab opens right after the one that was on screen (an invoice opened from a customer's
+      // page sits to the right of that customer's tab); from the list it goes to the end.
+      const after = lastKey
+      setTabs((current) => {
+        if (current.some((candidate) => candidate.key === activeKey)) return current
+        const at = after ? current.findIndex((candidate) => candidate.key === after) : -1
+        const next =
+          at >= 0
+            ? [...current.slice(0, at + 1), tab, ...current.slice(at + 1)]
+            : [...current, tab]
+        return next.slice(-MAX_TABS)
+      })
+    }
   }
-  if (activeKey !== null && activeKey !== lastKey) setLastKey(activeKey)
 
   function rename(key: string, label: string) {
     setTabs((current) =>
