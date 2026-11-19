@@ -43,7 +43,7 @@ export interface NavItem {
   /** A small status note shown beside the link in the sidebar (e.g. "In Progress"). */
   badge?: string
   /** The top bar shows this page's "Sync" button (it re-imports the page's data from Shopify). */
-  syncs?: 'products' | 'orders' | 'customers' | 'collections'
+  syncs?: 'products' | 'orders' | 'customers' | 'collections' | 'inventory'
 }
 
 /** A sidebar accordion: a heading that opens to reveal its own links. */
@@ -115,6 +115,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         icon: InventoryIcon,
         shopScoped: true,
         fillHeight: true,
+        syncs: 'inventory',
       },
       {
         to: '/locks',

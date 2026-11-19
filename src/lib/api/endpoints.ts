@@ -151,6 +151,11 @@ export const ENDPOINTS = {
     adjust: (ref: string) => `/inventory/${encodeURIComponent(ref)}/adjust`,
     /** `GET` the state of one stock change on its way to Shopify. */
     adjustment: (id: string) => `/inventory/adjustments/${encodeURIComponent(id)}`,
+    /**
+     * `POST` a Shopify → CRM stock check of a store (`dry_run`, `shop`). It runs at once and answers with
+     * the counts; nothing is changed in Shopify, and `dry_run=true` saves nothing in the CRM either.
+     */
+    sync: '/inventory/sync',
   },
   access: {
     /** `GET` the locked products (paged); `POST` locks products / gives customers the tags / sets the options. */
@@ -2119,6 +2124,85 @@ export interface CollectionSyncAnswer {
   results: CollectionSyncResult[]
 }
 
+/** `POST /inventory/sync`: a stock check of a store takes about 8 seconds for 2,000 variants. */
+export const INVENTORY_SYNC_TIMEOUT_MS = 120_000
+
+export interface InventorySyncOptions {
+  /** The store key or domain; empty means the default store. */
+  shop?: string | null
+  /** `true` only counts the differences with Shopify and saves nothing (the API's default); `false` saves them. */
+  dryRun?: boolean
+}
+
+/** One store's counts from a stock check: whatever numbers the backend reports, under readable names. */
+export interface InventorySyncResult {
+  shop: string | null
+  counts: { label: string; value: number }[]
+}
+
+export interface InventorySyncAnswer {
+  /** The backend's own words. */
+  message: string
+  results: InventorySyncResult[]
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** "variants_checked" → "Variants checked". */
+function countLabel(key: string): string {
+  const words = key.replace(/[_-]+/g, ' ').trim().toLowerCase()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : key
+}
+
+/** The numbers of one answer object (and of a `counts` object inside it), under readable names. */
+function countsOf(value: Record<string, unknown>): { label: string; value: number }[] {
+  const found: { label: string; value: number }[] = []
+  const add = (record: Record<string, unknown>) => {
+    for (const [key, entry] of Object.entries(record)) {
+      if (typeof entry === 'number' && Number.isFinite(entry) && key !== 'code') {
+        found.push({ label: countLabel(key), value: entry })
+      }
+    }
+  }
+  add(value)
+  if (isRecord(value.counts)) add(value.counts)
+  return found
+}
+
+/** The store an answer names: its `shop` / `shop_key` / `store` text, or the `key` / `name` of a shop object. */
+function shopOf(value: Record<string, unknown>): string | null {
+  for (const name of ['shop', 'shop_key', 'store']) {
+    const found = value[name]
+    if (typeof found === 'string' && found.trim()) return found.trim()
+    if (isRecord(found)) {
+      const label = found.name ?? found.key
+      if (typeof label === 'string' && label.trim()) return label.trim()
+    }
+  }
+  return null
+}
+
+/**
+ * Reads the answer of `POST /inventory/sync` — `{ code, status, message, result }` — leniently: the
+ * backend's own `message`, and the counts of each store, from `result` (an object, or a list of them),
+ * else from the answer itself. A missing or odd part is empty, never a failed sync.
+ */
+export function readInventorySync(data: unknown): InventorySyncAnswer {
+  const body = isRecord(data) ? data : {}
+  const message = typeof body.message === 'string' ? body.message.trim() : ''
+  const payload = body.result ?? body.results ?? body.counts ?? null
+  const rows = Array.isArray(payload) ? payload : payload === null ? [] : [payload]
+  const results = rows
+    .filter(isRecord)
+    .map((row) => ({ shop: shopOf(row), counts: countsOf(row) }))
+  if (results.length === 0) {
+    const flat = countsOf(body)
+    if (flat.length > 0) results.push({ shop: shopOf(body), counts: flat })
+  }
+  return { message, results }
+}
+
 /** One push of this product to its store. */
 const productPushSchema = z.object({
   id: z.string(),
@@ -3897,6 +3981,20 @@ export const api = {
         params: { page_size: 1, ...(shop ? { shop } : {}) },
       })
       return stockLocationsResponseSchema.parse(data).locations
+    },
+
+    /**
+     * Checks a store's stock against Shopify now (`POST /inventory/sync?dry_run=&shop=`) and answers with the
+     * counts. Nothing is changed in Shopify; with `dryRun` (the API's default) nothing is saved in the CRM
+     * either. Only one sync runs at a time — the backend answers 409 and its message is shown. Never retried.
+     */
+    async sync(options: InventorySyncOptions = {}): Promise<InventorySyncAnswer> {
+      const { shop, dryRun = true } = options
+      const data = await apiClient.post<unknown>(ENDPOINTS.inventory.sync, undefined, {
+        params: { dry_run: dryRun, ...(shop ? { shop } : {}) },
+        timeout: INVENTORY_SYNC_TIMEOUT_MS,
+      })
+      return readInventorySync(data)
     },
 
     /** Page 1: the stock list, with its `totals` and the `locations` for the dropdown. */

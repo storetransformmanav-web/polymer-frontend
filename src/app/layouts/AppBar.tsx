@@ -2,6 +2,7 @@ import { AppBarSlot, RefreshSlot } from '../../components/ui/AppBarSlot.tsx'
 import { InfoIcon } from '../../components/ui/icons.tsx'
 import { SyncCollectionsButton } from '../../features/collections/index.ts'
 import { SyncCustomersButton } from '../../features/customers/index.ts'
+import { SyncInventoryButton } from '../../features/inventory/index.ts'
 import { SyncOrdersButton } from '../../features/orders/index.ts'
 import { SyncProductsButton } from '../../features/products/index.ts'
 import { useAccess } from '../../hooks/useAccess.ts'
@@ -85,6 +86,7 @@ export function AppBar() {
         {canSync && activeItem?.syncs === 'products' && <SyncProductsButton />}
         {canSync && activeItem?.syncs === 'customers' && <SyncCustomersButton />}
         {canSync && activeItem?.syncs === 'collections' && <SyncCollectionsButton />}
+        {canSync && activeItem?.syncs === 'inventory' && <SyncInventoryButton />}
         <UserMenu />
       </div>
     </header>
