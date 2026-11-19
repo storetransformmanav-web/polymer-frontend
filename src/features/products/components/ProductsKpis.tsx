@@ -112,5 +112,9 @@ export function ProductsKpis({
   changed: boolean
   onChanged: (changed: boolean) => void
 }) {
-  return <KpiCards items={kpis(summary, total, stock, onStock, changed, onChanged)} />
+  // The compact look, like the Orders and Invoices cards: a short card whose caption is the (i) after its title.
+  const items = kpis(summary, total, stock, onStock, changed, onChanged).map(
+    ({ hint, ...kpi }) => ({ ...kpi, info: hint }),
+  )
+  return <KpiCards compact items={items} />
 }
