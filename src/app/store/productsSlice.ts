@@ -50,6 +50,8 @@ import { ALL_SHOPS, shopSelected } from './shopSlice.ts'
  */
 
 export const PRODUCTS_STALE_MS = 30_000
+/** The **Changed in last 7 days** card's filter: `GET /products?changed_days=7`. */
+export const CHANGED_DAYS = 7
 const MAX_TABS = 10
 
 export interface ProductFilters {
@@ -60,6 +62,8 @@ export interface ProductFilters {
   productType: string
   tag: string
   stock: '' | 'in' | 'out'
+  /** Only the products changed in the last 7 days (the card above the list). */
+  changedLast7Days: boolean
   minPrice: string
   maxPrice: string
   sort: ProductSort
@@ -75,6 +79,7 @@ export const DEFAULT_FILTERS: ProductFilters = {
   productType: '',
   tag: '',
   stock: '',
+  changedLast7Days: false,
   minPrice: '',
   maxPrice: '',
   sort: 'created_at',
@@ -99,6 +104,7 @@ export function toParams(filters: ProductFilters): ProductListParams {
   if (filters.productType) params.product_type = filters.productType
   if (filters.tag) params.tag = filters.tag
   if (filters.stock) params.in_stock = filters.stock === 'in'
+  if (filters.changedLast7Days) params.changed_days = CHANGED_DAYS
 
   const min = Number.parseFloat(filters.minPrice)
   if (Number.isFinite(min) && min >= 0) params.min_price = min
@@ -142,6 +148,7 @@ export function stockSummaryFilters(filters: ProductFilters): ProductFilters {
   return {
     ...filters,
     stock: '',
+    changedLast7Days: false,
     page: 1,
     pageSize: 1,
     sort: DEFAULT_FILTERS.sort,
@@ -157,6 +164,7 @@ export function hasActiveFilters(filters: ProductFilters): boolean {
     filters.productType !== '' ||
     filters.tag !== '' ||
     filters.stock !== '' ||
+    filters.changedLast7Days ||
     filters.minPrice !== '' ||
     filters.maxPrice !== ''
   )
@@ -459,6 +467,7 @@ function insertCreatedProduct(state: ProductsState, item: ProductListItem) {
     !f.productType &&
     !f.tag &&
     !f.stock &&
+    !f.changedLast7Days &&
     !f.minPrice &&
     !f.maxPrice
   // Newest first is where a new product belongs; other orders wait for the refetch.
@@ -491,7 +500,8 @@ function insertCreatedProduct(state: ProductsState, item: ProductListItem) {
       params.tag ||
       params.min_price !== undefined ||
       params.max_price !== undefined ||
-      params.in_stock !== undefined
+      params.in_stock !== undefined ||
+      params.changed_days !== undefined
     if (params.page_size !== 1 || params.page !== 1 || narrowed) continue
     if (params.shop && params.shop !== shopKey && params.shop !== item.shop?.domain)
       continue

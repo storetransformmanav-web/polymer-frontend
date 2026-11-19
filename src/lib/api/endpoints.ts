@@ -616,6 +616,8 @@ const stockSummarySchema = z.object({
   low_stock: z.number(),
   out_of_stock: z.number(),
   low_stock_threshold: z.number(),
+  /** How many products changed in the last 7 days (not part of the stock figures). */
+  changed_last_7_days: z.number().nullish(),
 })
 
 const productListResponseSchema = z.object({
@@ -2466,6 +2468,8 @@ export interface ProductListParams {
   min_price?: number
   max_price?: number
   in_stock?: boolean
+  /** Only the products changed in the last this many days — `changed_days=7` is the **Changed in last 7 days** card. */
+  changed_days?: number
   sort?: ProductSort
   order?: 'asc' | 'desc'
   page?: number

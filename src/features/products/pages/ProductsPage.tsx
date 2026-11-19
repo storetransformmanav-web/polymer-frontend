@@ -428,6 +428,8 @@ export function ProductsPage() {
           total={stockFigures.total}
           stock={filters.stock}
           onStock={(stock) => products.setFilters({ stock })}
+          changed={filters.changedLast7Days}
+          onChanged={(changedLast7Days) => products.setFilters({ changedLast7Days })}
         />
       </div>
 

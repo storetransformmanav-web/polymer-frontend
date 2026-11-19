@@ -19,7 +19,7 @@ export interface StockFigures {
 
 /**
  * The figures of the cards above the list. Normally they are the list answer's own
- * `stock_summary` and `total` (no request of their own). While a stock card is pressed,
+ * `stock_summary` and `total` (no request of their own). While a stock or changed card is pressed,
  * though, that answer describes only the narrowed list — "In stock" on makes "Out of stock"
  * read 0, and `total` is only the products in stock — so the cards then read the answer for
  * the same list **without** the stock filter: one cached one-row query
@@ -31,7 +31,7 @@ export function useStockSummary(
   data: ProductListResponse | null,
 ): StockFigures {
   const dispatch = useAppDispatch()
-  const narrowed = filters.stock !== ''
+  const narrowed = filters.stock !== '' || filters.changedLast7Days
   const unfiltered = useMemo(() => stockSummaryFilters(filters), [filters])
   const own = useAppSelector(
     (state) => state.products.entries[cacheKey(unfiltered)]?.data,

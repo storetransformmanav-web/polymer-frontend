@@ -2,6 +2,7 @@ import {
   AlertTriangleIcon,
   BoxesIcon,
   CheckCircleIcon,
+  ClockIcon,
   SlidersIcon,
   XCircleIcon,
 } from '../../../components/ui/icons.tsx'
@@ -19,6 +20,8 @@ function kpis(
   total: number | undefined,
   stock: ProductFilters['stock'],
   onStock: (stock: ProductFilters['stock']) => void,
+  changed: boolean,
+  onChanged: (changed: boolean) => void,
 ): Kpi[] {
   const count = (value: number | undefined) =>
     value === undefined ? '—' : value.toLocaleString('en-GB')
@@ -29,15 +32,16 @@ function kpis(
       hint: 'Products in this list, whatever their stock',
       value: count(total),
       icon: BoxesIcon,
-      // Selected to begin with: no stock filter is on. Pressing it clears one that is.
-      active: stock === '',
+      // Selected to begin with: no stock or changed filter is on. Pressing it clears them.
+      active: stock === '' && !changed,
       onClick: () => {
         if (stock !== '') onStock('')
+        if (changed) onChanged(false)
       },
       title:
-        stock === ''
+        stock === '' && !changed
           ? 'Showing all products'
-          : 'Show all products (clear the stock filter)',
+          : 'Show all products (clear the stock and changed filters)',
     },
     {
       label: 'In stock',
@@ -68,6 +72,14 @@ function kpis(
       onClick: () => onStock(stock === 'out' ? '' : 'out'),
     },
     {
+      label: 'Changed in last 7 days',
+      hint: 'Products changed in the last 7 days',
+      value: count(summary?.changed_last_7_days ?? undefined),
+      icon: ClockIcon,
+      active: changed,
+      onClick: () => onChanged(!changed),
+    },
+    {
       label: 'Low stock threshold',
       hint: 'Below this many counts as low',
       value: count(summary?.low_stock_threshold),
@@ -88,12 +100,17 @@ export function ProductsKpis({
   total,
   stock,
   onStock,
+  changed,
+  onChanged,
 }: {
   summary: ProductListResponse['stock_summary']
   /** The list answer's `total` (not part of `stock_summary`); a dash until it arrives. */
   total: number | undefined
   stock: ProductFilters['stock']
   onStock: (stock: ProductFilters['stock']) => void
+  /** Only the products changed in the last 7 days are shown. */
+  changed: boolean
+  onChanged: (changed: boolean) => void
 }) {
-  return <KpiCards items={kpis(summary, total, stock, onStock)} />
+  return <KpiCards items={kpis(summary, total, stock, onStock, changed, onChanged)} />
 }

@@ -39,6 +39,7 @@ export function hasExportableFilters(filters: ProductFilters): boolean {
 export function hasUnsupportedFilters(filters: ProductFilters): boolean {
   return (
     filters.stock !== '' ||
+    filters.changedLast7Days ||
     filters.minPrice.trim() !== '' ||
     filters.maxPrice.trim() !== ''
   )

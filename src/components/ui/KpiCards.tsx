@@ -49,7 +49,11 @@ export function KpiCards({
               items.length === 7 ? 'xl:grid-cols-7' : 'xl:grid-cols-8'
             }`
           : `grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 ${
-              items.length === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+              items.length === 6
+                ? 'xl:grid-cols-6'
+                : items.length === 5
+                  ? 'xl:grid-cols-5'
+                  : 'xl:grid-cols-4'
             }`
       }
     >

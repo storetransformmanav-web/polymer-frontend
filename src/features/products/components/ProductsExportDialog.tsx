@@ -141,7 +141,7 @@ export function ProductsExportDialog({
             onSelect={() => setScope('matching')}
             hint={
               unsupported
-                ? 'Stock and price filters can’t be used in an export.'
+                ? 'Stock, price and changed-recently filters can’t be used in an export.'
                 : undefined
             }
           >
