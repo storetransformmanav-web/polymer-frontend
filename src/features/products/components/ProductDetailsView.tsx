@@ -33,10 +33,18 @@ import {
 import { productStock } from '../utils/stock.ts'
 import { ProductImage } from './ProductImage.tsx'
 import { LockAccessPanel } from './LockAccessPanel.tsx'
+import { ProductActivityPanel } from './ProductActivityPanel.tsx'
 import { DetailSkeleton as PanelSkeleton } from '../../../components/ui/DetailSection.tsx'
 
 type TabId =
-  'overview' | 'variants' | 'inventory' | 'media' | 'seo' | 'metafields' | 'lock'
+  | 'overview'
+  | 'variants'
+  | 'inventory'
+  | 'media'
+  | 'seo'
+  | 'metafields'
+  | 'lock'
+  | 'activity'
 
 interface ProductDetailsViewProps {
   id: string
@@ -126,6 +134,8 @@ export function ProductDetailsView({
     { id: 'metafields', label: 'Metafields', count: metafieldCount || undefined },
     // Who can open the product when it is locked (the same data as Lock Management).
     { id: 'lock', label: 'Lock Access' },
+    // Everything recorded for the product: what changed, before / after, who and where.
+    { id: 'activity', label: 'Activity' },
   ]
 
   if (details.error) {
@@ -157,7 +167,11 @@ export function ProductDetailsView({
   }
 
   return (
-    <article className="border-border bg-bg overflow-hidden rounded-2xl border">
+    <article
+      className={`border-border bg-bg overflow-hidden rounded-2xl border ${
+        tab === 'activity' ? 'lg:flex lg:h-full lg:flex-col' : ''
+      }`}
+    >
       <header className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="flex items-start gap-4">
           <ProductImage src={imageUrl} alt="" productId={id} />
@@ -320,7 +334,9 @@ export function ProductDetailsView({
         id="product-tabpanel"
         role="tabpanel"
         aria-labelledby={`product-tab-${tab}`}
-        className={`bg-surface p-3 sm:p-5 ${editingVariants ? 'border-border border-t' : ''}`}
+        className={`bg-surface p-3 sm:p-5 ${editingVariants ? 'border-border border-t' : ''} ${
+          tab === 'activity' ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''
+        }`}
       >
         {tab === 'overview' && (
           <OverviewPanel product={product} preview={preview} onSaved={onSaved} />
@@ -342,6 +358,13 @@ export function ProductDetailsView({
           <MetafieldsPanel product={product} onSaved={onSaved} />
         )}
         {product && tab === 'lock' && <LockAccessPanel product={product} />}
+        {product && tab === 'activity' && (
+          <ProductActivityPanel
+            key={product.id}
+            productId={product.id}
+            shop={shop ?? undefined}
+          />
+        )}
       </div>
 
       {askedStatus && product && (

@@ -73,6 +73,8 @@ export const ENDPOINTS = {
     update: (id: string) => `/users/${encodeURIComponent(id)}`,
     /** `DELETE` — soft delete: deactivated and hidden, its activity history is kept. */
     remove: (id: string) => `/users/${encodeURIComponent(id)}`,
+    /** `PUT` — switch the email reminders of one or more users on or off (body `{ user_ids, enabled }`). */
+    reminders: '/users/reminders',
   },
   roles: {
     list: '/roles',
@@ -237,6 +239,8 @@ export const ENDPOINTS = {
     push: (id: string) => `/products/${encodeURIComponent(id)}/push`,
     /** History of this product's pushes to its store, newest first. */
     sync: (id: string) => `/products/${encodeURIComponent(id)}/sync`,
+    /** `GET` everything recorded for one product, newest first: what changed, before / after, who, and where. */
+    activity: (id: string) => `/products/${encodeURIComponent(id)}/activity`,
   },
 } as const
 
@@ -327,6 +331,12 @@ const userItemSchema = z.object({
   created_at: z.string().nullish(),
   /** Keys of the stores a non-admin user may see (admins see every store). */
   shop_keys: z.array(z.string()).default([]),
+  /**
+   * Whether this user gets the email reminders. The `PUT /users/reminders` spec doesn't say the
+   * list carries it, so it is optional and the Email toggle starts off while it is missing —
+   * the name is a guess to check in the Network tab.
+   */
+  reminders_enabled: z.boolean().nullish().catch(undefined),
 })
 
 const userListResponseSchema = z.object({
@@ -374,6 +384,9 @@ const userDetailResponseSchema = z.union([
  * updated user (bare, `{ user }` or `{ result }`) when there is one, and a `message` if any.
  */
 const userUpdateAnswerSchema = z.object({ message: z.string().nullish() })
+
+/** What `PUT /users/reminders` answers (the spec gives none; only a message is used, if any). */
+const userRemindersAnswerSchema = z.object({ message: z.string().nullish() })
 
 /** What deleting a user answers (the spec says nothing; only a message is used, if there is one). */
 const userDeleteAnswerSchema = z.object({ message: z.string().nullish() })
@@ -2116,6 +2129,70 @@ const productPushListSchema = z.union([
 
 export type ProductWriteResult = z.infer<typeof productWriteResultSchema>
 export type ProductPush = z.infer<typeof productPushSchema>
+
+/** The kinds of change the product history can be narrowed to (the API's own `group` values). */
+export const PRODUCT_ACTIVITY_GROUPS = [
+  'title',
+  'description',
+  'category',
+  'tags',
+  'collections',
+  'price',
+  'variants',
+  'stock',
+  'images',
+  'status',
+  'seo',
+  'metafields',
+  'options',
+  'other',
+] as const
+
+/** Where a change was made (the API's own `source` values). */
+export const PRODUCT_ACTIVITY_SOURCES = ['crm', 'shopify', 'csv_import'] as const
+
+/** The query of `GET /products/{id}/activity` (empty ones are left out). */
+export interface ProductActivityParams {
+  group?: string
+  source?: string
+  /** Store key or domain; empty or `all` = every store. */
+  shop?: string
+  page: number
+  /** 1–100. */
+  page_size: number
+}
+
+const productActivityItemSchema = z.object({
+  id: z.union([z.number(), z.string()]),
+  /** The variant the change was on (its SKU / id as the backend names it); null for the whole product. */
+  variant: z.union([z.string(), z.number()]).nullish(),
+  /** `crm`, `shopify` or `csv_import`. */
+  source: z.string().nullish(),
+  /** `update`, `create`… */
+  action: z.string().nullish(),
+  field: z.string().nullish(),
+  field_label: z.string().nullish(),
+  field_group: z.string().nullish(),
+  // Before and after can be text, a number, a yes / no or a list: shown as text, never as markup.
+  old_value: z.unknown(),
+  new_value: z.unknown(),
+  user: z.object({ id: z.string().nullish(), full_name: z.string().nullish() }).nullish(),
+  changed_by: z.string().nullish(),
+  push_status: z.string().nullish(),
+  created_at: z.string().nullish(),
+})
+
+const productActivityResponseSchema = z.object({
+  items: z.array(productActivityItemSchema),
+  page: z.number(),
+  page_size: z.number(),
+  total: z.number(),
+  total_pages: z.number(),
+  has_next: z.boolean(),
+})
+
+export type ProductActivityItem = z.infer<typeof productActivityItemSchema>
+export type ProductActivityResponse = z.infer<typeof productActivityResponseSchema>
 
 /** Statuses the API accepts for an edit (a product can't be edited *to* "unlisted"). */
 export const PRODUCT_EDIT_STATUSES = ['ACTIVE', 'DRAFT', 'ARCHIVED'] as const
@@ -4141,6 +4218,15 @@ export const api = {
       })
       return productPushListSchema.parse(data)
     },
+
+    /** One page of the product's change history, newest first — filtered and paged by the server. */
+    async activity(
+      id: string,
+      params: ProductActivityParams,
+    ): Promise<ProductActivityResponse> {
+      const data = await apiClient.get(ENDPOINTS.products.activity(id), { params })
+      return productActivityResponseSchema.parse(data)
+    },
   },
 
   shops: {
@@ -4185,6 +4271,22 @@ export const api = {
     async create(body: UserCreateBody): Promise<UserItem> {
       const data = await apiClient.post(ENDPOINTS.users.create, body)
       return userCreateResponseSchema.parse(data).user
+    },
+
+    /**
+     * Switches the email reminders of the given users on or off (`PUT /users/reminders`,
+     * body `{ user_ids, enabled }`). Never retried automatically.
+     */
+    async setReminders(
+      userIds: string[],
+      enabled: boolean,
+    ): Promise<{ message: string }> {
+      const data = await apiClient.put(ENDPOINTS.users.reminders, {
+        user_ids: userIds,
+        enabled,
+      })
+      const parsed = userRemindersAnswerSchema.safeParse(data)
+      return { message: parsed.success ? (parsed.data.message ?? '') : '' }
     },
 
     /**

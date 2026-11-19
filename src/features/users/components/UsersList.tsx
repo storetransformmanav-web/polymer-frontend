@@ -18,6 +18,7 @@ import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { UserItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime, initials } from '../../../lib/format.ts'
 import { isAdminRole, roleLabel, roleTone, userName } from '../utils/format.ts'
+import { UserReminderToggle } from './UserReminderToggle.tsx'
 
 const TH_BASE =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
@@ -248,6 +249,10 @@ export function UsersList({
                       <StatusBadge active={user.is_active} />
                       <SignIn user={user} />
                     </span>
+                    <span className="mt-1 flex items-center gap-2 text-[0.78rem]">
+                      <span className="text-text-muted">Email reminders</span>
+                      <UserReminderToggle user={user} name={name} />
+                    </span>
                     <span className="text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78rem]">
                       <Stores user={user} shopNames={shopNames} />
                       <span>
@@ -268,13 +273,14 @@ export function UsersList({
       className="max-h-[min(68svh,760px)] overflow-auto"
     >
       <table
-        className={`w-full min-w-[720px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        className={`w-full min-w-[820px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
             <th className={TH_BASE}>User</th>
             <th className={TH_BASE}>Role</th>
             <th className={TH_BASE}>Status</th>
+            <th className={TH_BASE}>Email Reminders</th>
             <th className={`${TH_BASE} ${FROM_XL}`}>Phone</th>
             <th className={TH_BASE}>Stores</th>
             <th className={`${TH_BASE} ${FROM_XL}`}>Sign-in</th>
@@ -292,7 +298,7 @@ export function UsersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 7 }, (_, cell) => (
+                  {Array.from({ length: 8 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -327,6 +333,9 @@ export function UsersList({
                     </td>
                     <td className={TD}>
                       <StatusBadge active={user.is_active} />
+                    </td>
+                    <td className={TD}>
+                      <UserReminderToggle user={user} name={name} />
                     </td>
                     <td className={`${TD} ${FROM_XL}`}>
                       {user.phone || <span className="text-text-muted">—</span>}

@@ -18,7 +18,13 @@ import { UsersPage } from './UsersPage.tsx'
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
   api: {
-    users: { list: vi.fn(), detail: vi.fn(), create: vi.fn(), remove: vi.fn() },
+    users: {
+      list: vi.fn(),
+      detail: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      setReminders: vi.fn(),
+    },
     roles: { list: vi.fn() },
     shops: { list: vi.fn() },
     auth: {},
@@ -127,6 +133,7 @@ function makeDetail(n: number): UserDetail {
 const list = vi.mocked(api.users.list)
 const create = vi.mocked(api.users.create)
 const remove = vi.mocked(api.users.remove)
+const setReminders = vi.mocked(api.users.setReminders)
 const detail = vi.mocked(api.users.detail)
 const rolesList = vi.mocked(api.roles.list)
 const shopsList = vi.mocked(api.shops.list)
@@ -170,6 +177,47 @@ describe('UsersPage', () => {
       )
     })
 
+    it('the Email Reminders toggle calls PUT /users/reminders only when it is turned on', async () => {
+      const user = userEvent.setup()
+      setReminders.mockResolvedValue({ message: '' })
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      const toggle = screen.getByRole('switch', {
+        name: 'Email reminders for First2 Last2',
+      })
+      expect(toggle).toHaveAttribute('aria-checked', 'false')
+
+      await user.click(toggle)
+      await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'))
+      expect(setReminders).toHaveBeenCalledTimes(1)
+      expect(setReminders).toHaveBeenCalledWith([expect.stringMatching(/^user-/)], true)
+
+      // Turning it off sends nothing.
+      await user.click(toggle)
+      expect(toggle).toHaveAttribute('aria-checked', 'false')
+      expect(setReminders).toHaveBeenCalledTimes(1)
+    })
+
+    it('the Email Reminders toggle stays off and shows the backend’s message when it refuses', async () => {
+      const user = userEvent.setup()
+      setReminders.mockRejectedValue(
+        new ApiError('Not allowed to change reminders.', { status: 403 }),
+      )
+      renderWithProviders(<UsersPage />)
+      await screen.findByText('First2 Last2')
+
+      const toggle = screen.getByRole('switch', {
+        name: 'Email reminders for First2 Last2',
+      })
+      await user.click(toggle)
+
+      expect(
+        await screen.findByText('Not allowed to change reminders.'),
+      ).toBeInTheDocument()
+      expect(toggle).toHaveAttribute('aria-checked', 'false')
+    })
+
     it('shows name, email, role, status, phone, stores, sign-in method and last login', async () => {
       renderWithProviders(<UsersPage />)
       await screen.findByText('First2 Last2')
@@ -182,6 +230,7 @@ describe('UsersPage', () => {
         'User',
         'Role',
         'Status',
+        'Email Reminders',
         'Phone',
         'Stores',
         'Sign-in',
