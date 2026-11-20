@@ -56,12 +56,13 @@ export function StockEditDialog({
 }) {
   const choices = useLocationChoices(variant)
   const writes = useStockWrites()
-  const stock = useStockOptions()
+  const stock = useStockOptions({ fresh: true })
   const [mode, setMode] = useState<Mode>(initialMode)
   const [location, setLocation] = useState<string>(
     String(locationId ?? variant.locations[0]?.location_id ?? choices[0]?.id ?? ''),
   )
-  const [quantity, setQuantityName] = useState<EditableStockQuantity>(initialQuantity)
+  const [chosenQuantity, setQuantityName] =
+    useState<EditableStockQuantity>(initialQuantity)
   const [text, setText] = useState('')
   const [chosenReason, setReason] = useState('')
   const [note, setNote] = useState('')
@@ -69,7 +70,19 @@ export function StockEditDialog({
   const [sending, setSending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
-  const reason = chosenReason || stock.reasons[0]?.value || ''
+  // "Set to" offers only the quantities the backend says it can set; "Adjust by" every editable one.
+  const settable = stock.quantities.filter((choice) => choice.setSupported)
+  const quantityChoices =
+    mode === 'set' && settable.length > 0 ? settable : stock.quantities
+  const quantity =
+    quantityChoices.length === 0 ||
+    quantityChoices.some((choice) => choice.name === chosenQuantity)
+      ? chosenQuantity
+      : quantityChoices[0].name
+  const reason =
+    chosenReason ||
+    (stock.reasons.find((choice) => choice.isDefault) ?? stock.reasons[0])?.value ||
+    ''
   const place = choices.find((choice) => String(choice.id) === location)
   const line = variant.locations.find(
     (candidate) => String(candidate.location_id) === location,
@@ -197,12 +210,12 @@ export function StockEditDialog({
             }))}
             onChange={setLocation}
           />
-          {stock.quantities.length > 0 && (
+          {quantityChoices.length > 0 && (
             <SelectField
               id="stock-quantity"
               label="Quantity"
               value={quantity}
-              options={stock.quantities.map((choice) => ({
+              options={quantityChoices.map((choice) => ({
                 value: choice.name,
                 label: choice.label,
               }))}

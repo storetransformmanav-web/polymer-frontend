@@ -23,6 +23,7 @@ vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
       adjust: vi.fn(),
       history: vi.fn(),
       adjustment: vi.fn(),
+      reasons: vi.fn(),
     },
     auth: {},
   },
@@ -140,7 +141,51 @@ const DETAIL: InventoryVariant = {
   },
 } as InventoryVariant
 
+/** What `GET /inventory/reasons` answers (the shape of the backend's own example, trimmed). */
+const REASONS = {
+  reasons: [
+    {
+      value: 'correction',
+      label: 'Correction',
+      description: 'The number in the system was wrong: put it right.',
+      direction: 'either',
+      suggested_mode: 'set',
+      is_default: true,
+    },
+    {
+      value: 'received',
+      label: 'Received',
+      direction: 'increase',
+      suggested_mode: 'adjust',
+      is_default: false,
+    },
+    {
+      value: 'damaged',
+      label: 'Damaged',
+      direction: 'decrease',
+      suggested_mode: 'adjust',
+      is_default: false,
+    },
+  ],
+  quantities: [
+    { name: 'available', label: 'Available', editable: true, set_supported: true },
+    { name: 'on_hand', label: 'On hand', editable: true, set_supported: true },
+    { name: 'committed', label: 'Committed', editable: false, set_supported: false },
+    {
+      name: 'damaged',
+      label: 'Unavailable: Damaged',
+      editable: true,
+      set_supported: false,
+    },
+  ],
+  modes: [
+    { value: 'set', label: 'Set to', help: 'Type the new total.' },
+    { value: 'adjust', label: 'Adjust by', help: 'Type + or - units.' },
+  ],
+}
+
 const list = vi.mocked(api.inventory.list)
+const reasonsCall = vi.mocked(api.inventory.reasons)
 const detail = vi.mocked(api.inventory.detail)
 const set = vi.mocked(api.inventory.set)
 const adjust = vi.mocked(api.inventory.adjust)
@@ -162,6 +207,7 @@ const never = () => new Promise<never>(() => undefined)
 
 beforeEach(() => {
   list.mockResolvedValue(LIST)
+  reasonsCall.mockResolvedValue(REASONS)
   detail.mockResolvedValue(DETAIL)
   set.mockResolvedValue(WRITE_OK)
   adjust.mockResolvedValue(WRITE_OK)
@@ -334,22 +380,18 @@ describe('the inventory list', () => {
     expect(card('Variants')).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('opens a row to one line per location', async () => {
-    const user = userEvent.setup()
+  it('has no row accordion and no Edit stock button: View is the only row action', async () => {
     renderPage()
     await screen.findByText('Hippo Bag')
 
-    await user.click(
-      screen.getByRole('button', { name: 'Show locations of Hippo Bag Small' }),
-    )
-
-    expect(screen.getByText('Unit 9')).toBeInTheDocument()
-    expect(screen.getByText('Stanmore Warehouse')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Show locations of/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edit stock of/ })).toBeNull()
     expect(
-      screen.getByRole('button', { name: 'Set stock at Unit 9' }),
+      screen.getByRole('button', { name: 'View Hippo Bag Small' }),
     ).toBeInTheDocument()
+    // The pencils beside Available and On hand are how a quantity is changed from the list.
     expect(
-      screen.getByRole('button', { name: 'Adjust stock at Stanmore Warehouse' }),
+      screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }),
     ).toBeInTheDocument()
   })
 
@@ -366,17 +408,16 @@ describe('the inventory list', () => {
 })
 
 describe('changing stock from the list — instant, then confirmed by Shopify', () => {
+  // The location lines are on the variant's own page (the list has no accordion any more).
   async function openLines(user: ReturnType<typeof userEvent.setup>) {
-    await screen.findByText('Hippo Bag')
-    await user.click(
-      screen.getByRole('button', { name: 'Show locations of Hippo Bag Small' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'View Hippo Bag Small' }))
+    await screen.findByRole('heading', { level: 1, name: 'Hippo Bag' })
   }
   /** The double-click cell of one location's line (its button says the number it holds). */
   const cell = (place: string, shows: string) =>
-    within(screen.getByText(place).closest('tr') as HTMLElement).getByRole('button', {
-      name: shows,
-    })
+    within(
+      within(screen.getByRole('article')).getByText(place).closest('tr') as HTMLElement,
+    ).getByRole('button', { name: shows })
 
   it('double-click, type, Enter, Yes: the numbers move at once, then "Sending to Shopify…" and "Confirmed"', async () => {
     const user = userEvent.setup()
@@ -405,9 +446,8 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
       quantities: { available: 22 },
       reason: 'correction',
     })
-    // 22 + 20 at the other location = 42 in the row — no reload.
-    const row = screen.getByText('HB-S').closest('tr') as HTMLElement
-    expect(within(row).getByText('42')).toBeInTheDocument()
+    // The line shows the new number at once — no reload.
+    expect(cell('Unit 9', '22')).toBeInTheDocument()
   })
 
   it('the pencil beside Available opens a small box: Set to, a number and ✓ send one quantity', async () => {
@@ -423,7 +463,27 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
     // Location and Quantity are the backend's lists; Reason and Note sit behind the notes button.
     expect(box.getByLabelText('Location')).toBeInTheDocument()
     expect(box.getByLabelText('Quantity')).toHaveValue('available')
+    // "Set to" is the mode it opens on, and lists every editable quantity the backend has.
+    expect(box.getByLabelText('How to change the stock')).toHaveValue('set')
+    await waitFor(() =>
+      expect(
+        within(box.getByLabelText('Quantity'))
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['Available', 'On hand', 'Unavailable: Damaged']),
+    )
+    // The reason is behind the highlighted button: every reason the backend has, none chosen to begin with.
     expect(box.queryByLabelText('Reason')).not.toBeInTheDocument()
+    await user.click(box.getByRole('button', { name: 'Reason and note' }))
+    await waitFor(() =>
+      expect(
+        within(box.getByLabelText('Reason'))
+          .getAllByRole('option')
+          .map((option) => option.textContent),
+      ).toEqual(['Add reason', 'Correction', 'Received', 'Damaged']),
+    )
+    expect(box.getByLabelText('Reason')).toHaveValue('')
+    await user.click(box.getByRole('button', { name: 'Reason and note' }))
 
     await user.type(box.getByLabelText('New quantity'), '30')
     await user.click(box.getByRole('button', { name: 'Save stock' }))
@@ -431,11 +491,10 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
     expect(set).toHaveBeenCalledWith('v-1', {
       location_id: UNIT9,
       quantities: { available: 30 },
-      reason: 'correction',
     })
   })
 
-  it('the small box: Adjust by checks the amount, and Reason and Note are behind the notes button', async () => {
+  it('the small box: Adjust by checks the amount; Reason and Note are behind the highlighted button', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Hippo Bag')
@@ -463,6 +522,78 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
       reason: 'received',
       note: 'Delivery PO-1041',
     })
+  })
+
+  it('the small box: Adjust by has From and To — an addition adds to a quantity, a removal takes from it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    const box = within(
+      screen.getByRole('dialog', { name: /^Edit available of Hippo Bag/ }),
+    )
+    await user.selectOptions(box.getByLabelText('How to change the stock'), 'adjust')
+    // Begins as an addition to the quantity the pencil is for.
+    expect(box.getByLabelText('From')).toHaveValue('@addition')
+    expect(box.getByLabelText('To')).toHaveValue('available')
+
+    // Taking away: from the quantity to Inventory removal.
+    await user.selectOptions(box.getByLabelText('From'), 'available')
+    await user.selectOptions(box.getByLabelText('To'), '@removal')
+    await user.type(box.getByLabelText('Amount to add or remove'), '2')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    await waitFor(() => expect(adjust).toHaveBeenCalledTimes(1))
+    expect(adjust).toHaveBeenCalledWith('v-1', {
+      location_id: UNIT9,
+      name: 'available',
+      delta: -2,
+    })
+  })
+
+  it('the small box: moving stock between two quantities is explained and not sent', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    const box = within(
+      screen.getByRole('dialog', { name: /^Edit available of Hippo Bag/ }),
+    )
+    await user.selectOptions(box.getByLabelText('How to change the stock'), 'adjust')
+    await user.selectOptions(box.getByLabelText('From'), 'available')
+    await user.selectOptions(box.getByLabelText('To'), 'damaged')
+    await user.type(box.getByLabelText('Amount to add or remove'), '2')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    expect(box.getByRole('alert')).toHaveTextContent(
+      'Moving stock from one quantity to another isn’t available yet.',
+    )
+    expect(adjust).not.toHaveBeenCalled()
+  })
+
+  it('the small box: "Set to" a quantity the backend cannot set directly is sent as an adjustment of the difference', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Hippo Bag')
+
+    await user.click(screen.getByRole('button', { name: /^Edit available of Hippo Bag/ }))
+    const box = within(
+      screen.getByRole('dialog', { name: /^Edit available of Hippo Bag/ }),
+    )
+    await user.selectOptions(box.getByLabelText('Quantity'), 'damaged')
+    await user.type(box.getByLabelText('New quantity'), '4')
+    await user.click(box.getByRole('button', { name: 'Save stock' }))
+
+    // Damaged was 0 at Unit 9, so "set to 4" is "adjust by +4".
+    await waitFor(() => expect(adjust).toHaveBeenCalledTimes(1))
+    expect(adjust).toHaveBeenCalledWith('v-1', {
+      location_id: UNIT9,
+      name: 'damaged',
+      delta: 4,
+    })
+    expect(set).not.toHaveBeenCalled()
   })
 
   it('the small box closes on Escape and sends nothing', async () => {
@@ -518,8 +649,7 @@ describe('changing stock from the list — instant, then confirmed by Shopify', 
     )
 
     expect(await screen.findByText('available can’t be negative.')).toBeInTheDocument()
-    const row = screen.getByText('HB-S').closest('tr') as HTMLElement
-    expect(within(row).getByText('25')).toBeInTheDocument()
+    expect(cell('Unit 9', '5')).toBeInTheDocument()
   })
 
   it('shows an error from Shopify with the reason and Try again, which sends it again', async () => {
@@ -588,7 +718,6 @@ describe('one variant’s stock', () => {
     expect(set).toHaveBeenCalledWith('v-1', {
       location_id: UNIT9,
       quantities: { available: 40 },
-      reason: 'correction',
     })
   })
 

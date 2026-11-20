@@ -165,6 +165,8 @@ export const ENDPOINTS = {
     list: '/inventory',
     /** `GET` the stock history (paged). */
     history: '/inventory/history',
+    /** `GET` what a stock change offers: the reasons (with their direction), the quantities and the two modes. */
+    reasons: '/inventory/reasons',
     /** `ref` is a variant's id: `GET` its stock by location, `PUT` sets quantities ("Set to"). */
     detail: (ref: string) => `/inventory/${encodeURIComponent(ref)}`,
     /** `POST` adds or removes an amount ("Adjust by"). */
@@ -1857,6 +1859,49 @@ const stockReasonOptionSchema = z.union([
     .object({ value: z.string(), label: z.string().nullish() })
     .transform((option) => ({ value: option.value, label: option.label?.trim() ?? '' })),
 ])
+
+/**
+ * `GET /inventory/reasons` — everything the stock-change box offers, as the backend sends it:
+ * `reasons` (each with a `direction` — `increase`, `decrease` or `either` — and the `suggested_mode`),
+ * `quantities` (which are `editable` and which the "Set to" call can take, `set_supported`) and the two
+ * `modes` (`set`, `adjust`, each with its label and help). Nothing here is written in the app.
+ */
+const stockChangeOptionsSchema = z.object({
+  reasons: z
+    .array(
+      z.object({
+        value: z.string(),
+        label: z.string().nullish(),
+        description: z.string().nullish(),
+        direction: z.string().nullish(),
+        suggested_mode: z.string().nullish(),
+        is_default: z.boolean().nullish(),
+      }),
+    )
+    .catch([]),
+  quantities: z
+    .array(
+      z.object({
+        name: z.string(),
+        label: z.string().nullish(),
+        editable: z.boolean().nullish(),
+        set_supported: z.boolean().nullish(),
+        description: z.string().nullish(),
+      }),
+    )
+    .catch([]),
+  modes: z
+    .array(
+      z.object({
+        value: z.string(),
+        label: z.string().nullish(),
+        help: z.string().nullish(),
+      }),
+    )
+    .catch([]),
+})
+
+export type StockChangeOptions = z.infer<typeof stockChangeOptionsSchema>
 
 export type StockQuantityOption = z.infer<typeof stockQuantityOptionSchema>
 export type StockReasonOption = z.infer<typeof stockReasonOptionSchema>
@@ -4015,6 +4060,12 @@ export const api = {
         timeout: INVENTORY_SYNC_TIMEOUT_MS,
       })
       return readInventorySync(data)
+    },
+
+    /** What a stock change offers (reasons, quantities, modes) — asked for when a stock-change box opens. */
+    async reasons(): Promise<StockChangeOptions> {
+      const data = await apiClient.get(ENDPOINTS.inventory.reasons)
+      return readAnswer(stockChangeOptionsSchema, data, 'stock change options')
     },
 
     /** Page 1: the stock list, with its `totals` and the `locations` for the dropdown. */

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
@@ -9,9 +8,7 @@ import { InventoryKpis } from '../components/InventoryKpis.tsx'
 import { InventoryList } from '../components/InventoryList.tsx'
 import { InventoryTabsBar } from '../components/InventoryTabsBar.tsx'
 import { InventoryToolbar } from '../components/InventoryToolbar.tsx'
-import { StockEditDialog } from '../components/StockEditDialog.tsx'
 import { StockHistoryView } from '../components/StockHistoryView.tsx'
-import type { StockEditRequest } from '../components/StockTable.tsx'
 import { SyncNotices } from '../components/SyncNotices.tsx'
 import { VariantStockView } from '../components/VariantStockView.tsx'
 import { useInventory } from '../hooks/useInventory.ts'
@@ -37,11 +34,6 @@ export function InventoryPage() {
   const navigate = useNavigate()
   const { '*': splat } = useParams()
   const { filters, data } = inventory
-  // The edit window opened from the list: the variant and where it starts.
-  const [editing, setEditing] = useState<{
-    item: InventoryItem
-    request: StockEditRequest
-  } | null>(null)
 
   // `/inventory/<id>[/…]` → the variant id; `/inventory/history` → the history; else the list.
   const first = splat ? splat.split('/')[0] || null : null
@@ -176,7 +168,6 @@ export function InventoryPage() {
               }
               onOpen={openVariant}
               onPrefetch={inventory.prefetchDetails}
-              onEdit={(item, request) => setEditing({ item, request })}
               onRetry={inventory.retry}
               onClearFilters={inventory.resetFilters}
             />
@@ -194,17 +185,6 @@ export function InventoryPage() {
           )}
         </section>
       </div>
-
-      {editing && (
-        <StockEditDialog
-          key={`edit-${editing.item.variant_id}-${editing.request.locationId}-${editing.request.mode}`}
-          variant={editing.item}
-          locationId={editing.request.locationId || undefined}
-          mode={editing.request.mode}
-          quantity={editing.request.quantity}
-          onClose={() => setEditing(null)}
-        />
-      )}
     </div>
   )
 }
