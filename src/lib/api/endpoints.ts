@@ -25,6 +25,11 @@ import {
   type SageOrderListResponse,
 } from './sageOrders.ts'
 import {
+  readSageStockList,
+  type SageStockListParams,
+  type SageStockListResponse,
+} from './sageStock.ts'
+import {
   readSageContactHistory,
   readSageCustomerDetail,
   readSageCustomerList,
@@ -105,6 +110,10 @@ export const ENDPOINTS = {
     export: '/sage/orders/export',
     /** `GET` one order in full, by its number (`/api/sage/orders/71103`): customer, addresses, lines, amounts and the invoices raised. */
     detail: (orderNumber: string) => `/sage/orders/${encodeURIComponent(orderNumber)}`,
+  },
+  sageStock: {
+    /** `GET` one page of the Sage 50 stock items (`/api/sage/stock`), with `totals` and `tab_counts`. */
+    list: '/sage/stock',
   },
   sageCustomers: {
     /** `GET` one page of the Sage 50 customers (`/api/sage/customers`), with `totals` and `tab_counts`. */
@@ -4478,6 +4487,14 @@ export const api = {
     async detail(orderNumber: string): Promise<SageOrderDetail> {
       const data = await apiClient.get(ENDPOINTS.sageOrders.detail(orderNumber))
       return readSageOrderDetail(data)
+    },
+  },
+
+  sageStock: {
+    /** One page of the Sage 50 stock items: `items`, `totals` and `tab_counts` for everything the filters match, and the paging. */
+    async list(params: SageStockListParams): Promise<SageStockListResponse> {
+      const data = await apiClient.get(ENDPOINTS.sageStock.list, { params })
+      return readSageStockList(data)
     },
   },
 

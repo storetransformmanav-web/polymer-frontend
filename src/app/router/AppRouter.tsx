@@ -9,6 +9,7 @@ import { InventoryPage } from '../../features/inventory/index.ts'
 import { InvoicesPage } from '../../features/invoices/index.ts'
 import { SageCustomersPage } from '../../features/sageCustomers/index.ts'
 import { SageOrdersPage } from '../../features/sageOrders/index.ts'
+import { SageStockPage } from '../../features/sageStock/index.ts'
 import { LoginPage } from '../../features/auth/index.ts'
 import { LocksPage } from '../../features/locks/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
@@ -61,6 +62,8 @@ const router = createBrowserRouter([
           // Sage 50 → Orders (the sales orders list; the API has no call for one order). `*` lets
           // SageOrdersPage also serve /sage/orders/customer/<account ref>, a customer opened as a tab.
           { path: 'sage/orders/*', element: <SageOrdersPage /> },
+          // Sage 50 → Stock (the stock items list; the API has no call for one item).
+          { path: 'sage/stock', element: <SageStockPage /> },
         ],
       },
     ],

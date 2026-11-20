@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import {
   ActivityIcon,
+  BoxesIcon,
   DashboardIcon,
   FileTextIcon,
   InventoryIcon,
@@ -153,6 +154,14 @@ export const NAV_ENTRIES: NavEntry[] = [
         // Likewise: no separate area for the Sage orders.
         area: 'sage_invoices',
         icon: OrdersIcon,
+        fillHeight: true,
+      },
+      {
+        to: '/sage/stock',
+        label: 'Stock',
+        // Likewise: no separate area for the Sage stock.
+        area: 'sage_invoices',
+        icon: BoxesIcon,
         fillHeight: true,
       },
     ],
