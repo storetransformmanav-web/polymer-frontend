@@ -2,13 +2,18 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
-import { AlertTriangleIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { SageOrder, SageOrderSort } from '../../../lib/api/sageOrders.ts'
-import { sageOrderTableMinWidthRem, type SageOrderColumnDef } from '../utils/columns.ts'
+import {
+  SAGE_ORDER_ACTION_COLUMN_REM,
+  sageOrderTableMinWidthRem,
+  type SageOrderColumnDef,
+} from '../utils/columns.ts'
 import { count, dateText, humanize, money, statusPill } from '../utils/format.ts'
-import { customerPath, invoicePath } from '../utils/paths.ts'
+import { customerPath, invoicePath, orderPath } from '../utils/paths.ts'
 
 // The same table text, header and cell sizes as the Orders, Products, Invoices and Sage customers
 // lists. A heading and its cells share one alignment, so the two always line up.
@@ -77,7 +82,37 @@ function CustomerLink({ order }: { order: SageOrder }) {
   )
 }
 
-/** The invoice raised for the order: a link to its page (Sage 50 → Invoices). */
+/** The order's number: a link to the order's own page. */
+function NumberLink({ order }: { order: SageOrder }) {
+  if (!order.order_number) return DASH
+  return (
+    <Link
+      to={orderPath(order.order_number)}
+      state={{ linkedName: order.order_number }}
+      className={`${LINK} font-semibold`}
+      title={`Open order ${order.order_number}`}
+    >
+      <Highlight text={order.order_number} />
+    </Link>
+  )
+}
+
+/** The Action column's View button: opens the order's own page. */
+function ViewButton({ order }: { order: SageOrder }) {
+  return (
+    <Link
+      to={orderPath(order.order_number)}
+      state={{ linkedName: order.order_number }}
+      aria-label={`View order ${order.order_number}`}
+      title="View"
+      className={ROW_ACTION}
+    >
+      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+    </Link>
+  )
+}
+
+/** The invoice raised for the order: a link to its page, opened in this same page as a tab. */
 function InvoiceLink({ order }: { order: SageOrder }) {
   if (!order.invoice_number) return DASH
   return (
@@ -106,13 +141,7 @@ function ColumnCell({ column, order }: { column: SageOrderColumnDef; order: Sage
   const cur = order.currency
   switch (column.id) {
     case 'number':
-      return order.order_number ? (
-        <span className="block truncate font-semibold" title={order.order_number}>
-          <Highlight text={order.order_number} />
-        </span>
-      ) : (
-        DASH
-      )
+      return <NumberLink order={order} />
     case 'date':
       return <span>{dateText(order.order_date)}</span>
     case 'customer':
@@ -174,8 +203,9 @@ const MESSAGE_BUTTON =
 /**
  * The results area: from `lg` up a table in its own scrolling box — it takes the height the page gives
  * it, scrolls up and down under a sticky header and sideways when the window is narrower than its
- * columns — and cards below that. The columns are the ones chosen in the Columns menu; the customer's
- * name opens the customer's page and the invoice number the invoice's. The headings of the columns
+ * columns — and cards below that. The columns are the ones chosen in the Columns menu, then **Action**
+ * (View); the order number and View open the order's page, the customer's name the customer's and the
+ * invoice number the invoice's, each in this same page as a tab. The headings of the columns
  * the API can sort by are sort buttons. Handles the loading skeleton, the error and the empty states itself.
  */
 export function SageOrdersList({
@@ -257,7 +287,7 @@ export function SageOrdersList({
               >
                 <span className="flex items-start justify-between gap-3">
                   <span className="min-w-0 truncate text-[0.88rem] font-semibold">
-                    {item.order_number || '—'}
+                    <NumberLink order={item} />
                   </span>
                   <span className="text-[0.88rem] font-semibold">
                     {money(item.gross, item.currency)}
@@ -316,6 +346,12 @@ export function SageOrdersList({
                 </th>
               )
             })}
+            <th
+              className={TH_ALIGN.center}
+              style={{ width: `${SAGE_ORDER_ACTION_COLUMN_REM}rem` }}
+            >
+              Action
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -327,7 +363,7 @@ export function SageOrdersList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: columns.length }, (_, cell) => (
+                  {Array.from({ length: columns.length + 1 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -347,6 +383,9 @@ export function SageOrdersList({
                       <ColumnCell column={column} order={item} />
                     </td>
                   ))}
+                  <td className={`${TD} text-center`}>
+                    <ViewButton order={item} />
+                  </td>
                 </tr>
               ))}
         </tbody>

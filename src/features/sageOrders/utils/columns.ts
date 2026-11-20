@@ -3,9 +3,8 @@ import type { SageOrderSort } from '../../../lib/api/sageOrders.ts'
 
 /**
  * The Sage orders table's columns. Every column can be shown, hidden and put in order from the Columns
- * menu (`components/ui/ColumnsMenu.tsx`); only what the list answer carries is a column. There is no
- * Action column: the API has no call for one order, so a row has nothing to open — the customer's name
- * and the invoice number are links.
+ * menu (`components/ui/ColumnsMenu.tsx`); only what the list answer carries is a column. **Action**
+ * (View, which opens the order's own page) is always last and is not part of the choice.
  */
 export const SAGE_ORDER_COLUMN_IDS = [
   'number',
@@ -95,6 +94,9 @@ export const SAGE_ORDER_COLUMNS: Record<SageOrderColumnId, SageOrderColumnDef> =
     column('currency', 'Currency', 6.5, 'center'),
   ]) as Record<SageOrderColumnId, SageOrderColumnDef>
 
+/** Width of the Action column (the View button), in rem. */
+export const SAGE_ORDER_ACTION_COLUMN_REM = 5
+
 /** The columns to draw, in order. */
 export function shownSageOrderColumns(
   config: SageOrderColumnConfig,
@@ -108,5 +110,8 @@ export function shownSageOrderColumns(
 export function sageOrderTableMinWidthRem(
   columns: readonly SageOrderColumnDef[],
 ): number {
-  return columns.reduce((total, shown) => total + shown.width, 0)
+  return columns.reduce(
+    (total, shown) => total + shown.width,
+    SAGE_ORDER_ACTION_COLUMN_REM,
+  )
 }

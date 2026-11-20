@@ -158,3 +158,191 @@ export function readSageOrderList(data: unknown): SageOrderListResponse {
     issue && issue.path.length > 0 ? ` (${issue.path.join('.')}: ${issue.message})` : ''
   throw new ApiError(`The Sage orders answer was not in the expected form${where}.`)
 }
+
+// ------------------------------------------------------------------------------ one order
+
+/**
+ * A note or a comment as text: a plain string, or the text of an object (`text`, `note`, `message`…,
+ * else its plain values joined). The API's notes are a list whose entries are not described, so a
+ * shape that is not recognised still shows what it holds.
+ */
+function noteText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    for (const key of ['text', 'note', 'message', 'comment', 'body', 'content']) {
+      const found = record[key]
+      if (typeof found === 'string' && found.trim()) return found.trim()
+    }
+    return Object.values(record)
+      .filter((item) => typeof item === 'string' || typeof item === 'number')
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return ''
+}
+
+const noteList = z
+  .array(z.unknown())
+  .nullish()
+  .transform((list) => (list ?? []).map(noteText).filter(Boolean))
+
+const addressSchema = z
+  .object({
+    name: text,
+    address_1: text,
+    address_2: text,
+    address_3: text,
+    address_4: text,
+    address_5: text,
+    lines: z.array(text).nullish(),
+  })
+  .nullish()
+  .transform((value) => {
+    if (!value) return { lines: [] as string[] }
+    // The API's own formatting when it sends one, else the name and the address lines in order.
+    const own = (value.lines ?? []).filter(Boolean)
+    const built = [
+      value.name,
+      value.address_1,
+      value.address_2,
+      value.address_3,
+      value.address_4,
+      value.address_5,
+    ].filter(Boolean)
+    return { lines: own.length > 0 ? own : built }
+  })
+
+const lineSchema = z.object({
+  position: text,
+  stock_code: text,
+  /** A line of text only (a heading or a note): no product, no amounts. */
+  is_text_line: z.boolean().nullish(),
+  description: text,
+  extra_text: text,
+  comments: noteList,
+  unit_of_sale: text,
+  qty_ordered: amount,
+  qty_allocated: amount,
+  qty_despatched: amount,
+  qty_outstanding: amount,
+  qty_to_despatch: amount,
+  unit_price: amount,
+  discount_rate: amount,
+  discount_amount: amount,
+  net: amount,
+  tax_code: text,
+  tax_rate: amount,
+  tax: amount,
+  gross: amount,
+  nominal_code: text,
+  delivery_date: date,
+  due_date: date,
+  stock: z
+    .object({ in_stock: amount, allocated: amount, free: amount, on_order: amount })
+    .nullish(),
+  product: z
+    .object({
+      product_id: text,
+      handle: text,
+      title: text,
+      image_url: text,
+    })
+    .nullish(),
+})
+
+const amountsSchema = z
+  .object({
+    items_net: amount,
+    items_tax: amount,
+    items_gross: amount,
+    discount_net: amount,
+    discount_rate: amount,
+    discount_description: text,
+    carriage_net: amount,
+    carriage_tax: amount,
+    carriage_gross: amount,
+    net: amount,
+    tax: amount,
+    gross: amount,
+    amount_prepaid: amount,
+    settlement_discount_rate: amount,
+    settlement_due_days: amount,
+    vat_analysis: z
+      .array(z.object({ rate: amount, net: amount, tax: amount }))
+      .nullish()
+      .transform((rows) => rows ?? []),
+  })
+  .nullish()
+
+const orderDetailSchema = z.object({
+  order_number: text,
+  order_date: date,
+  created_at: date,
+  updated_at: date,
+  status: text,
+  allocation_status: text,
+  despatch_status: text,
+  despatch_date: date,
+  customer: z
+    .object({ account_ref: text, name: text })
+    .nullish()
+    .transform((value) => value ?? { account_ref: '', name: '' }),
+  crm_customer: z
+    .object({
+      id: text,
+      name: text,
+      email: text,
+      orders_count: z.number().nullish(),
+      total_spent: amount,
+    })
+    .nullish(),
+  customer_order_number: text,
+  taken_by: text,
+  contact_name: text,
+  telephone: text,
+  vat_reg_number: text,
+  currency: text,
+  courier: text,
+  consignment: text,
+  payment_reference: text,
+  notes: noteList,
+  invoice_address: addressSchema,
+  delivery_address: addressSchema,
+  lines: z
+    .array(lineSchema)
+    .nullish()
+    .transform((lines) => lines ?? []),
+  amounts: amountsSchema,
+  /** The invoices raised for the order. */
+  invoices: z
+    .array(
+      z.object({
+        invoice_number: text,
+        invoice_date: date,
+        gross: amount,
+        outstanding: amount,
+        payment_status: text,
+      }),
+    )
+    .nullish()
+    .transform((invoices) => invoices ?? []),
+})
+
+const detailResponseSchema = z.object({ order: orderDetailSchema })
+
+export type SageOrderDetail = z.output<typeof orderDetailSchema>
+export type SageOrderLine = SageOrderDetail['lines'][number]
+export type SageOrderInvoice = SageOrderDetail['invoices'][number]
+
+/** One order in full — the answer is `{ …, order: {…} }`; one that doesn't fit fails with a message naming the part. */
+export function readSageOrderDetail(data: unknown): SageOrderDetail {
+  const result = detailResponseSchema.safeParse(data)
+  if (result.success) return result.data.order
+  const issue = result.error.issues[0]
+  const where =
+    issue && issue.path.length > 0 ? ` (${issue.path.join('.')}: ${issue.message})` : ''
+  throw new ApiError(`The Sage order answer was not in the expected form${where}.`)
+}

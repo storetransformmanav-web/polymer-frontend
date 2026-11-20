@@ -3,11 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
-import { UsersIcon } from '../../../components/ui/icons.tsx'
+import { ShoppingCartIcon } from '../../../components/ui/icons.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
 import type { SageOrderSort } from '../../../lib/api/sageOrders.ts'
+import { InvoiceDetailsView } from '../../invoices/index.ts'
 import { SageCustomerDetailsView } from '../../sageCustomers/index.ts'
+import { SageOrderDetailsView } from '../components/SageOrderDetailsView.tsx'
 import { SageOrdersExport } from '../components/SageOrdersExport.tsx'
 import { SageOrdersKpis } from '../components/SageOrdersKpis.tsx'
 import { SageOrdersList } from '../components/SageOrdersList.tsx'
@@ -16,17 +18,18 @@ import { useSageOrderColumns } from '../hooks/useSageOrderColumns.ts'
 import { useSageOrders } from '../hooks/useSageOrders.ts'
 import { SAGE_ORDER_COLUMNS } from '../utils/columns.ts'
 import { listCurrency } from '../utils/format.ts'
-import { customerPath, LIST_PATH } from '../utils/paths.ts'
+import { customerPath, invoicePath, LIST_PATH, orderPath } from '../utils/paths.ts'
 
 const MAX_TABS = 10
 
 // From `lg` the page fills the window (`fillHeight` in navigation.ts): the table scrolls in its own
-// box, and a customer's page scrolls inside this one.
+// box, and an opened order's, customer's or invoice's page scrolls inside this one.
 const SCROLL_VIEW = 'relative flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
 
-/** An opened customer: a tab in the strip above the list. */
+/** An opened order, customer or invoice: a tab in the strip above the list. */
 interface DetailTab {
   key: string
+  kind: 'Order' | 'Customer' | 'Invoice'
   label: string
   /** Where its tab leads (pathname, as in the address bar). */
   path: string
@@ -46,10 +49,11 @@ const decode = (value: string) => {
  * row, the Columns menu and the filter grid, then the table in its own scrolling box with the
  * pagination under it. Everything — the status, search, filters, sorting, the page and its size — is
  * asked of the API (TanStack Query, see useSageOrders), so it covers all the orders, not just the
- * ones on screen. A customer's name opens that customer's Sage details page (`/sage/orders/customer/<ref>`)
- * **in this same page, as a tab of its own** — the list stays mounted behind, so Back finds it as it
- * was — and an invoice number the invoice's; the API has no call for one order, so a row has no page
- * of its own. The top bar has the page's Refresh and Export (a CSV).
+ * ones on screen. An order's number or View button opens the order's own page (`/sage/orders/<number>`,
+ * `GET /api/sage/orders/{order_number}`), a customer's name that customer's Sage details page
+ * (`/sage/orders/customer/<ref>`) and an invoice number the invoice's (`/sage/orders/invoice/<number>`) —
+ * each **in this same page, as a tab of its own**, like a product's page; the list stays mounted behind,
+ * so Back finds it as it was. The top bar has the page's Refresh and Export (a CSV).
  */
 export function SageOrdersPage() {
   const orders = useSageOrders()
@@ -61,33 +65,65 @@ export function SageOrdersPage() {
   // The API gives no currency for the totals: the first order's is used (pounds otherwise).
   const currency = listCurrency(orders.items)
 
-  // `/sage/orders` → the list; `/sage/orders/customer/<ref>` → one customer.
+  // `/sage/orders` → the list; `/sage/orders/<number>` → one order;
+  // `/sage/orders/customer/<ref>` → one customer; `/sage/orders/invoice/<number>` → one invoice.
   const segments = splat ? splat.split('/').filter(Boolean).map(decode) : []
-  const customerRef = segments[0] === 'customer' && segments[1] ? segments[1] : null
+  const first = segments[0] ?? ''
+  const customerRef = first === 'customer' && segments[1] ? segments[1] : null
+  const invoiceNumber = first === 'invoice' && segments[1] ? segments[1] : null
+  const orderNumber = first && first !== 'customer' && first !== 'invoice' ? first : null
   const rawName = (location.state as { linkedName?: unknown } | null)?.linkedName
   const linkedName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : null
 
-  const activeKey = customerRef ? `customer:${customerRef}` : null
+  const activeKey = orderNumber
+    ? `order:${orderNumber}`
+    : customerRef
+      ? `customer:${customerRef}`
+      : invoiceNumber
+        ? `invoice:${invoiceNumber}`
+        : null
 
   const [tabs, setTabs] = useState<DetailTab[]>([])
   // The address that was on screen before this render (null = the list). A tab is opened **when the
-  // address arrives at a customer**, not whenever its tab is missing: closing a tab removes it a moment
+  // address arrives at a record**, not whenever its tab is missing: closing a tab removes it a moment
   // before the address leaves it, and that gap must not open it again; going back to the list forgets
-  // the address, so a closed customer can be opened again. (React's "adjust state while rendering".)
+  // the address, so a closed record can be opened again. (React's "adjust state while rendering".)
   const [lastKey, setLastKey] = useState<string | null>(null)
   if (activeKey !== lastKey) {
     setLastKey(activeKey)
-    if (activeKey && customerRef && !tabs.some((tab) => tab.key === activeKey)) {
-      const tab: DetailTab = {
-        key: activeKey,
-        label: linkedName ?? customerRef,
-        path: customerPath(customerRef),
-      }
-      setTabs((current) =>
-        current.some((candidate) => candidate.key === activeKey)
-          ? current
-          : [...current, tab].slice(-MAX_TABS),
-      )
+    if (activeKey && !tabs.some((tab) => tab.key === activeKey)) {
+      const tab: DetailTab = orderNumber
+        ? {
+            key: activeKey,
+            kind: 'Order',
+            label: orderNumber,
+            path: orderPath(orderNumber),
+          }
+        : invoiceNumber
+          ? {
+              key: activeKey,
+              kind: 'Invoice',
+              label: invoiceNumber,
+              path: invoicePath(invoiceNumber),
+            }
+          : {
+              key: activeKey,
+              kind: 'Customer',
+              label: linkedName ?? customerRef ?? '',
+              path: customerPath(customerRef ?? ''),
+            }
+      // A new tab opens right after the one that was on screen (an invoice or customer opened from an
+      // order's page sits to the right of that order's tab); from the list it goes to the end.
+      const after = lastKey
+      setTabs((current) => {
+        if (current.some((candidate) => candidate.key === activeKey)) return current
+        const at = after ? current.findIndex((candidate) => candidate.key === after) : -1
+        const next =
+          at >= 0
+            ? [...current.slice(0, at + 1), tab, ...current.slice(at + 1)]
+            : [...current, tab]
+        return next.slice(-MAX_TABS)
+      })
     }
   }
 
@@ -106,6 +142,10 @@ export function SageOrdersPage() {
     if (key === activeKey) navigate(neighbour?.path ?? LIST_PATH)
   }
 
+  const preview = orderNumber
+    ? (orders.items.find((order) => order.order_number === orderNumber) ?? null)
+    : null
+
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       <HeaderRefresh
@@ -120,7 +160,7 @@ export function SageOrdersPage() {
         visible={!activeKey}
       />
 
-      {/* The figures belong to the list: a customer's page takes their place (the list stays mounted). */}
+      {/* The figures belong to the list: an opened record's page takes their place (the list stays mounted). */}
       <div className={activeKey ? 'hidden' : undefined}>
         <SageOrdersKpis
           totals={data?.totals ?? null}
@@ -136,15 +176,15 @@ export function SageOrdersPage() {
         tabs={tabs.map((tab) => ({
           id: tab.key,
           label: tab.label,
-          kind: 'Customer',
+          kind: tab.kind,
           title: tab.label,
         }))}
         activeId={activeKey}
-        navLabel="Open customers"
+        navLabel="Open orders, customers and invoices"
         listLabel="All Orders"
-        kind="Customer"
-        historyLabel="Opened customers"
-        icon={UsersIcon}
+        kind="Order"
+        historyLabel="Opened orders, customers and invoices"
+        icon={ShoppingCartIcon}
         onShowList={() => navigate(LIST_PATH)}
         onSelect={(key) => {
           const tab = tabs.find((candidate) => candidate.key === key)
@@ -156,6 +196,18 @@ export function SageOrdersPage() {
           if (activeKey) navigate(LIST_PATH)
         }}
       />
+
+      {orderNumber && (
+        <div className={SCROLL_VIEW}>
+          <SageOrderDetailsView
+            key={`order-${orderNumber}`}
+            orderNumber={orderNumber}
+            preview={preview}
+            onBack={() => navigate(LIST_PATH)}
+            onLoaded={(number) => rename(`order:${orderNumber}`, number)}
+          />
+        </div>
+      )}
 
       {customerRef && (
         <div className={SCROLL_VIEW}>
@@ -170,7 +222,21 @@ export function SageOrdersPage() {
         </div>
       )}
 
-      {/* Kept mounted but hidden while a customer is open (display: none also removes it from tab
+      {invoiceNumber && (
+        <div className={SCROLL_VIEW}>
+          <InvoiceDetailsView
+            key={`invoice-${invoiceNumber}`}
+            reference={invoiceNumber}
+            kind={null}
+            preview={null}
+            onBack={() => navigate(LIST_PATH)}
+            onLoaded={(number) => rename(`invoice:${invoiceNumber}`, number)}
+            customerPathOf={customerPath}
+          />
+        </div>
+      )}
+
+      {/* Kept mounted but hidden while a record is open (display: none also removes it from tab
           order and screen readers), so Back finds the search, filters and page as they were. */}
       <div className={activeKey ? 'hidden' : 'flex flex-col gap-4 lg:min-h-0 lg:flex-1'}>
         <SageOrdersToolbar
