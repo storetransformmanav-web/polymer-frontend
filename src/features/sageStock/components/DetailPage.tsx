@@ -99,7 +99,7 @@ export function DetailPage({
         id={`${idPrefix}-tabpanel`}
         role="tabpanel"
         aria-labelledby={`${idPrefix}-tab-${tab}`}
-        className="flex flex-col gap-4 p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+        className="flex flex-col gap-3 p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {children}
       </div>

@@ -76,7 +76,7 @@ function OpenOrderLines({ lines }: { lines: OpenOrderLine[] }) {
       }
     >
       {shown.length === 0 ? (
-        <p className="text-text-muted m-0 p-5 text-[0.85rem]">
+        <p className="text-text-muted m-0 p-4 text-[0.85rem]">
           No open order line matches “{query.trim()}”.
         </p>
       ) : (
@@ -157,7 +157,7 @@ export function OpenOrdersPanel({ detail }: { detail: SageStockDetail }) {
   const lines = readOpenOrderLines(detail.open_order_lines)
   if (lines.length === 0) {
     return (
-      <DetailSection title="Open Orders Summary" icon={ShoppingCartIcon}>
+      <DetailSection compact title="Open Orders Summary" icon={ShoppingCartIcon}>
         <p className="text-text-muted m-0 text-[0.85rem]">
           This item has no open order lines.
         </p>
@@ -165,8 +165,8 @@ export function OpenOrdersPanel({ detail }: { detail: SageStockDetail }) {
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1">
-      <DetailSection title="Open Orders Summary" icon={ShoppingCartIcon}>
+    <div className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
+      <DetailSection compact title="Open Orders Summary" icon={ShoppingCartIcon}>
         <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
           <MetricTile
             icon={ListChecksIcon}

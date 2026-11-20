@@ -64,6 +64,7 @@ function PriceLists({ lists }: { lists: SageStockPriceList[] }) {
 
   return (
     <DetailSection
+      compact
       flush
       title="Price Lists"
       icon={ListChecksIcon}
@@ -73,11 +74,11 @@ function PriceLists({ lists }: { lists: SageStockPriceList[] }) {
       }
     >
       {lists.length === 0 ? (
-        <p className="text-text-muted m-0 p-5 text-[0.85rem]">
+        <p className="text-text-muted m-0 p-4 text-[0.85rem]">
           This item is on no price list.
         </p>
       ) : shown.length === 0 ? (
-        <p className="text-text-muted m-0 p-5 text-[0.85rem]">
+        <p className="text-text-muted m-0 p-4 text-[0.85rem]">
           No price list matches “{query.trim()}”.
         </p>
       ) : (
@@ -255,8 +256,8 @@ function Band({
 export function PricingPanel({ detail }: { detail: SageStockDetail }) {
   const bands = groupDiscountBands(detail.discount_bands)
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <DetailSection title="Pricing Summary" icon={TagIcon}>
+    <div className="flex min-w-0 flex-col gap-3">
+      <DetailSection compact title="Pricing Summary" icon={TagIcon}>
         <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
           <MetricTile
             icon={TagIcon}
@@ -287,7 +288,7 @@ export function PricingPanel({ detail }: { detail: SageStockDetail }) {
 
       <PriceLists lists={detail.price_lists} />
 
-      <DetailSection title="Discount Bands" icon={TagIcon} count={bands.length}>
+      <DetailSection compact title="Discount Bands" icon={TagIcon} count={bands.length}>
         {bands.length === 0 ? (
           <p className="text-text-muted m-0 text-[0.85rem]">
             This item has no discount bands.

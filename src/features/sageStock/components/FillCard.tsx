@@ -27,7 +27,7 @@ export function FillCard({
     <section
       className={`${DETAIL_CARD} flex min-w-0 flex-col overflow-hidden lg:min-h-0 lg:flex-1`}
     >
-      <header className="border-border-strong flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b px-5 py-3">
+      <header className="border-border-strong flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b px-4 py-2.5">
         <Icon width={18} height={18} className="text-accent shrink-0" />
         <h3 className="text-[0.95rem] font-semibold">{title}</h3>
         {count !== undefined && (

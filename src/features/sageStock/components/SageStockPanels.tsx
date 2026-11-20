@@ -50,13 +50,13 @@ export function MetricTile({
   return (
     <div
       className={`border-border bg-surface/60 flex min-w-0 items-center rounded-xl border ${
-        small ? 'gap-2.5 px-3 py-2.5' : 'gap-3 px-3.5 py-3'
+        small ? 'gap-2.5 px-3 py-2' : 'gap-3 px-3 py-2.5'
       }`}
     >
       <span
         aria-hidden="true"
         className={`flex shrink-0 items-center justify-center rounded-lg ${TILE_TONES[tone]} ${
-          small ? 'size-8' : 'size-10'
+          small ? 'size-8' : 'size-9'
         }`}
       >
         <Icon width={small ? 16 : 20} height={small ? 16 : 20} />
@@ -101,7 +101,7 @@ function ItemRows({ rows, columns }: { rows: ReactNode[][]; columns: 2 | 3 }) {
       {rows.map((row, index) => (
         <div
           key={index}
-          className={`border-border grid grid-cols-1 gap-x-6 gap-y-3 border-b py-3 first:pt-0 last:border-b-0 last:pb-0 min-[520px]:grid-cols-2 ${
+          className={`border-border grid grid-cols-1 gap-x-6 gap-y-2.5 border-b py-2.5 first:pt-0 last:border-b-0 last:pb-0 min-[520px]:grid-cols-2 ${
             columns === 3 ? 'lg:grid-cols-3' : ''
           }`}
         >
@@ -159,8 +159,8 @@ export function DateCell({
 export function OverviewPanel({ detail }: { detail: SageStockDetail }) {
   const s = detail.stock
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <DetailSection title="Stock Summary" icon={LayersIcon}>
+    <div className="flex min-w-0 flex-col gap-3">
+      <DetailSection compact title="Stock Summary" icon={LayersIcon}>
         <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto_repeat(2,minmax(0,1fr))]">
           <MetricTile
             icon={BoxesIcon}
@@ -200,8 +200,8 @@ export function OverviewPanel({ detail }: { detail: SageStockDetail }) {
         </div>
       </DetailSection>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <DetailSection title="Item Information" icon={FileTextIcon}>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <DetailSection compact title="Item Information" icon={FileTextIcon}>
           <ItemRows
             columns={3}
             rows={[
@@ -255,7 +255,7 @@ export function OverviewPanel({ detail }: { detail: SageStockDetail }) {
           />
         </DetailSection>
 
-        <DetailSection title="Supplier & Account Details" icon={TruckIcon}>
+        <DetailSection compact title="Supplier & Account Details" icon={TruckIcon}>
           <ItemRows
             columns={2}
             rows={[
@@ -285,8 +285,8 @@ export function OverviewPanel({ detail }: { detail: SageStockDetail }) {
         </DetailSection>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <DetailSection title="Key Dates" icon={CalendarIcon}>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <DetailSection compact title="Key Dates" icon={CalendarIcon}>
           <dl className="m-0 grid grid-cols-2 gap-y-4 xl:grid-cols-4">
             <DateCell icon={CalendarIcon} label="Last Sold">
               {detail.last_sale_date ? dateText(detail.last_sale_date) : ''}
@@ -303,7 +303,7 @@ export function OverviewPanel({ detail }: { detail: SageStockDetail }) {
           </dl>
         </DetailSection>
 
-        <DetailSection title="Year to Date (YTD)" icon={PoundIcon}>
+        <DetailSection compact title="Year to Date (YTD)" icon={PoundIcon}>
           <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-3">
             <MetricTile
               small

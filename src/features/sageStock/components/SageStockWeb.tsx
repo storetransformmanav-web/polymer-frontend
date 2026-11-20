@@ -104,14 +104,14 @@ function VariantRow({ variant }: { variant: SageStockShopifyVariant }) {
 function ShopifyLinks({ variants }: { variants: SageStockVariant[] }) {
   return (
     <FillCard title="Shopify Links & Mapping" icon={ProductsIcon}>
-      <div className="border-border flex shrink-0 items-center gap-3 border-b px-5 py-3">
+      <div className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-2">
         <span className="text-text-muted text-[0.8rem] font-medium">Linked Products</span>
         <span className="bg-accent-tint text-accent rounded-full px-3 py-0.5 text-[0.85rem] font-bold">
           {count(variants.length)}
         </span>
       </div>
       {variants.length === 0 ? (
-        <p className="text-text-muted m-0 p-5 text-[0.85rem]">
+        <p className="text-text-muted m-0 p-4 text-[0.85rem]">
           No CRM product has this SKU: it is in Sage only.
         </p>
       ) : (
@@ -153,12 +153,12 @@ type SageStockVariant = SageStockDetail['shopify'][number]
 export function WebPanel({ detail }: { detail: SageStockDetail }) {
   const web = detail.web
   return (
-    <div className="grid min-w-0 gap-4 lg:min-h-0 lg:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-rows-[minmax(0,1fr)]">
+    <div className="grid min-w-0 gap-3 lg:min-h-0 lg:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-rows-[minmax(0,1fr)]">
       <div className="self-start">
-        <DetailSection title="Web Information" icon={GlobeIcon}>
+        <DetailSection compact title="Web Information" icon={GlobeIcon}>
           {web ? (
             <div className="@container flex flex-col">
-              <div className="grid grid-cols-1 gap-3 pb-4 @sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 pb-3 @sm:grid-cols-2">
                 <MetricTile
                   icon={GlobeIcon}
                   label="Published"
@@ -173,13 +173,13 @@ export function WebPanel({ detail }: { detail: SageStockDetail }) {
                 />
               </div>
               <dl className="m-0 flex flex-col">
-                <div className="border-border border-y py-3">
+                <div className="border-border border-y py-2.5">
                   <Item label="Web Description">{web.description}</Item>
                 </div>
-                <div className="border-border border-b py-3">
+                <div className="border-border border-b py-2.5">
                   <Item label="Details">{web.details}</Item>
                 </div>
-                <div className="grid grid-cols-1 gap-y-3 pt-3 @lg:grid-cols-3 @lg:divide-x">
+                <div className="grid grid-cols-1 gap-y-2.5 pt-2.5 @lg:grid-cols-3 @lg:divide-x">
                   <div className="border-border min-w-0 @lg:pr-4">
                     <Item label="Category 1">{web.category_1}</Item>
                   </div>

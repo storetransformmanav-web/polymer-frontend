@@ -20,7 +20,7 @@ function MonthlySales({ detail }: { detail: SageStockDetail }) {
   return (
     <FillCard title="Monthly Sales Performance" icon={ActivityIcon}>
       {detail.months.length === 0 ? (
-        <p className="text-text-muted m-0 p-5 text-[0.85rem]">No monthly figures.</p>
+        <p className="text-text-muted m-0 p-4 text-[0.85rem]">No monthly figures.</p>
       ) : (
         <>
           <div className={FILL_BOX}>
@@ -85,9 +85,9 @@ export function SalesPanel({ detail }: { detail: SageStockDetail }) {
     ? dateText(detail.last_stock_take_date)
     : ''
   return (
-    <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <DetailSection title="Sales Summary" icon={ActivityIcon}>
+    <div className="flex min-w-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <DetailSection compact title="Sales Summary" icon={ActivityIcon}>
           <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <MetricTile
               small
@@ -120,7 +120,7 @@ export function SalesPanel({ detail }: { detail: SageStockDetail }) {
           </div>
         </DetailSection>
 
-        <DetailSection title="Key Sales Dates" icon={CalendarIcon}>
+        <DetailSection compact title="Key Sales Dates" icon={CalendarIcon}>
           <dl className="m-0 grid grid-cols-2 gap-y-4">
             <DateCell icon={CalendarIcon} label="Last Sold">
               {lastSold}
