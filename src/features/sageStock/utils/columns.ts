@@ -3,8 +3,8 @@ import type { SageStockSort } from '../../../lib/api/sageStock.ts'
 
 /**
  * The Sage stock table's columns. Every column can be shown, hidden and put in order from the Columns
- * menu (`components/ui/ColumnsMenu.tsx`); only what the list answer carries is a column. The API has no
- * call for one stock item, so there is no Action column.
+ * menu (`components/ui/ColumnsMenu.tsx`); only what the list answer carries is a column. **Action**
+ * (View, which opens the item's own page) is always last and is not part of the choice.
  */
 export const SAGE_STOCK_COLUMN_IDS = [
   'code',
@@ -114,9 +114,15 @@ export function shownSageStockColumns(
     .map((id) => SAGE_STOCK_COLUMNS[id])
 }
 
-/** The table's least width in rem: the shown columns. */
+/** Width of the Action column (the View button), in rem. */
+export const SAGE_STOCK_ACTION_COLUMN_REM = 5
+
+/** The table's least width in rem: the shown columns, then Action. */
 export function sageStockTableMinWidthRem(
   columns: readonly SageStockColumnDef[],
 ): number {
-  return columns.reduce((total, shown) => total + shown.width, 0)
+  return columns.reduce(
+    (total, shown) => total + shown.width,
+    SAGE_STOCK_ACTION_COLUMN_REM,
+  )
 }

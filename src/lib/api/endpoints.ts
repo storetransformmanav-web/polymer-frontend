@@ -25,7 +25,10 @@ import {
   type SageOrderListResponse,
 } from './sageOrders.ts'
 import {
+  readSageStockDetail,
   readSageStockList,
+  type SageStockDetail,
+  type SageStockExportParams,
   type SageStockListParams,
   type SageStockListResponse,
 } from './sageStock.ts'
@@ -114,6 +117,10 @@ export const ENDPOINTS = {
   sageStock: {
     /** `GET` one page of the Sage 50 stock items (`/api/sage/stock`), with `totals` and `tab_counts`. */
     list: '/sage/stock',
+    /** `GET` the stock items matching the filters (or the chosen stock codes) as a CSV file. */
+    export: '/sage/stock/export',
+    /** `GET` one stock item in full, by its stock code (`/api/sage/stock/ABS01`): levels, prices, price lists, monthly sales, web and Shopify. */
+    detail: (stockCode: string) => `/sage/stock/${encodeURIComponent(stockCode)}`,
   },
   sageCustomers: {
     /** `GET` one page of the Sage 50 customers (`/api/sage/customers`), with `totals` and `tab_counts`. */
@@ -4495,6 +4502,17 @@ export const api = {
     async list(params: SageStockListParams): Promise<SageStockListResponse> {
       const data = await apiClient.get(ENDPOINTS.sageStock.list, { params })
       return readSageStockList(data)
+    },
+
+    /** The stock items as a CSV file (the backend builds it; one call returns every match). */
+    async export(params: SageStockExportParams, signal?: AbortSignal): Promise<string> {
+      return readCsvFile(ENDPOINTS.sageStock.export, params, signal)
+    },
+
+    /** One stock item in full, asked for when its page opens. */
+    async detail(stockCode: string): Promise<SageStockDetail> {
+      const data = await apiClient.get(ENDPOINTS.sageStock.detail(stockCode))
+      return readSageStockDetail(data)
     },
   },
 

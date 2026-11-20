@@ -42,6 +42,12 @@ export const SAGE_STOCK_MAX_PAGE_SIZE = 100
 /** The query of `GET /api/sage/stock` (empty ones are left out). */
 export type SageStockListParams = Partial<Record<string, string | number | boolean>>
 
+/**
+ * The query of `GET /api/sage/stock/export`: the list's own filters, without paging — or `stock_codes`
+ * (the chosen items, comma-separated, up to 2000).
+ */
+export type SageStockExportParams = Partial<Record<string, string | number | boolean>>
+
 const amount = z
   .union([z.string(), z.number()])
   .nullish()
@@ -174,4 +180,135 @@ export function readSageStockList(data: unknown): SageStockListResponse {
   const where =
     issue && issue.path.length > 0 ? ` (${issue.path.join('.')}: ${issue.message})` : ''
   throw new ApiError(`The Sage stock answer was not in the expected form${where}.`)
+}
+
+// ---------------------------------------------------------------------------- one stock item
+
+/** A free-form record the API describes no fields for (discount bands, open order lines): its plain values are shown as they come. */
+const looseRecords = z
+  .array(z.record(z.string(), z.unknown()))
+  .nullish()
+  .transform((rows) => rows ?? [])
+
+const detailItemSchema = z.object({
+  stock_code: text,
+  description: text,
+  category: text,
+  category_number: text,
+  unit_of_sale: text,
+  unit_weight: amount,
+  barcode: text,
+  location: text,
+  commodity_code: text,
+  country_of_origin: text,
+  nominal_code: text,
+  purchase_nominal_code: text,
+  tax_code: text,
+  department: text,
+  inactive: z
+    .boolean()
+    .nullish()
+    .transform((value) => value ?? null),
+  /** `in_stock`, `low_stock`, `out_of_stock`, `not_tracked`, `inactive`… */
+  stock_status: text,
+  supplier_ref: text,
+  supplier_part_number: text,
+  sales_price: amount,
+  average_cost: amount,
+  last_purchase_price: amount,
+  margin_percent: amount,
+  stock: z
+    .object({ in_stock: amount, allocated: amount, free: amount, on_order: amount })
+    .nullish(),
+  reorder_level: amount,
+  reorder_qty: amount,
+  stock_value: amount,
+  last_stock_take_date: date,
+  qty_last_stock_take: amount,
+  last_sale_date: date,
+  last_purchase_date: date,
+  qty_sold_ytd: amount,
+  sales_ytd: amount,
+  cost_ytd: amount,
+  financial_year_start: date,
+  /** This financial year's months, each with the same month a year earlier. */
+  months: z
+    .array(
+      z.object({
+        month: text,
+        period: z.number().nullish(),
+        qty_sold: amount,
+        sales: amount,
+        cost: amount,
+        prior_year_qty_sold: amount,
+        prior_year_sales: amount,
+        prior_year_cost: amount,
+      }),
+    )
+    .nullish()
+    .transform((rows) => rows ?? []),
+  discount_bands: looseRecords,
+  price_lists: z
+    .array(
+      z.object({
+        pricing_ref: text,
+        name: text,
+        currency: text,
+        calculation_method: text,
+        calculation_value: amount,
+        price: amount,
+        customers: z.number().nullish(),
+      }),
+    )
+    .nullish()
+    .transform((rows) => rows ?? []),
+  open_order_lines: looseRecords,
+  web: z
+    .object({
+      published: z.boolean().nullish(),
+      special_offer: z.boolean().nullish(),
+      description: text,
+      details: text,
+      category_1: text,
+      category_2: text,
+      category_3: text,
+    })
+    .nullish(),
+  /** Every CRM / Shopify variant that has this SKU. */
+  shopify: z
+    .array(
+      z.object({
+        product_id: text,
+        variant_id: text,
+        title: text,
+        variant_title: text,
+        handle: text,
+        sku: text,
+        price: amount,
+        inventory_quantity: amount,
+        image_url: text,
+      }),
+    )
+    .nullish()
+    .transform((rows) => rows ?? []),
+  created_at: date,
+  updated_at: date,
+  data_as_of: date,
+})
+
+const detailResponseSchema = z.object({ item: detailItemSchema })
+
+export type SageStockDetail = z.output<typeof detailItemSchema>
+export type SageStockMonth = SageStockDetail['months'][number]
+export type SageStockPriceList = SageStockDetail['price_lists'][number]
+export type SageStockShopifyVariant = SageStockDetail['shopify'][number]
+
+/** One stock item in full — the answer is `{ …, item: {…} }`; one that doesn't fit fails with a message naming the part. */
+export function readSageStockDetail(data: unknown): SageStockDetail {
+  const result = detailResponseSchema.safeParse(data)
+  if (result.success) return result.data.item
+  const issue = result.error.issues[0]
+  const where =
+    issue && issue.path.length > 0 ? ` (${issue.path.join('.')}: ${issue.message})` : ''
+  throw new ApiError(`The Sage stock item answer was not in the expected form${where}.`)
 }

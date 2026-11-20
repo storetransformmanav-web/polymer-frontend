@@ -4,14 +4,21 @@ import { Badge } from '../../../components/ui/Badge.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
 import {
   AlertTriangleIcon,
+  EyeIcon,
   ProductsIcon,
   SearchIcon,
 } from '../../../components/ui/icons.tsx'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import type { SageStockItem, SageStockSort } from '../../../lib/api/sageStock.ts'
-import { sageStockTableMinWidthRem, type SageStockColumnDef } from '../utils/columns.ts'
+import {
+  SAGE_STOCK_ACTION_COLUMN_REM,
+  sageStockTableMinWidthRem,
+  type SageStockColumnDef,
+} from '../utils/columns.ts'
+import { stockPath } from '../utils/paths.ts'
 import { count, dateText, money, percent, statusPill, yesNo } from '../utils/format.ts'
 
 // The same table text, header and cell sizes as the Products, Orders, Invoices and Sage lists. A heading
@@ -111,6 +118,36 @@ function ShopifyCell({ item }: { item: SageStockItem }) {
   )
 }
 
+/** The stock code: a link to the item's own page. */
+function CodeLink({ item }: { item: SageStockItem }) {
+  if (!item.stock_code) return DASH
+  return (
+    <Link
+      to={stockPath(item.stock_code)}
+      state={{ linkedName: item.stock_code }}
+      className="text-text hover:text-accent block max-w-full truncate font-semibold no-underline hover:underline"
+      title={`Open stock item ${item.stock_code}`}
+    >
+      <Highlight text={item.stock_code} />
+    </Link>
+  )
+}
+
+/** The Action column's View button: opens the item's own page. */
+function ViewButton({ item }: { item: SageStockItem }) {
+  return (
+    <Link
+      to={stockPath(item.stock_code)}
+      state={{ linkedName: item.stock_code }}
+      aria-label={`View stock item ${item.stock_code}`}
+      title="View"
+      className={ROW_ACTION}
+    >
+      <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+    </Link>
+  )
+}
+
 /** What one column shows for one stock item. */
 function ColumnCell({
   column,
@@ -121,13 +158,7 @@ function ColumnCell({
 }) {
   switch (column.id) {
     case 'code':
-      return item.stock_code ? (
-        <span className="block truncate font-semibold" title={item.stock_code}>
-          <Highlight text={item.stock_code} />
-        </span>
-      ) : (
-        DASH
-      )
+      return <CodeLink item={item} />
     case 'description':
       return <TextCell value={item.description} highlight />
     case 'category':
@@ -286,7 +317,7 @@ export function SageStockList({
               >
                 <span className="flex items-start justify-between gap-3">
                   <span className="min-w-0 truncate text-[0.88rem] font-semibold">
-                    {item.stock_code || '—'}
+                    <CodeLink item={item} />
                   </span>
                   <span className="text-[0.88rem] font-semibold">
                     {money(item.sales_price)}
@@ -342,6 +373,12 @@ export function SageStockList({
                 </th>
               )
             })}
+            <th
+              className={TH_ALIGN.center}
+              style={{ width: `${SAGE_STOCK_ACTION_COLUMN_REM}rem` }}
+            >
+              Action
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -353,7 +390,7 @@ export function SageStockList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: columns.length }, (_, cell) => (
+                  {Array.from({ length: columns.length + 1 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -373,6 +410,9 @@ export function SageStockList({
                       <ColumnCell column={column} item={item} />
                     </td>
                   ))}
+                  <td className={`${TD} text-center`}>
+                    <ViewButton item={item} />
+                  </td>
                 </tr>
               ))}
         </tbody>
