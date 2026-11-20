@@ -32,6 +32,11 @@
   --color-danger-bg: #fbe4e4;
   --color-warning: #b7791f;
   --color-warning-bg: #fdf1de;
+  /* Tinted tiles of the stock summary (allocated, on order). */
+  --color-info: #2563eb;
+  --color-info-bg: #e3ecfd;
+  --color-violet: #7c3aed;
+  --color-violet-bg: #ece5fb;
 
   /* 'Neue Haas Unica Pro' is a commercially licensed font and isn't
      bundled with this project — if you have a licensed webfont file,
@@ -81,6 +86,10 @@
     --color-danger-bg: #3a1c1c;
     --color-warning: #f0b849;
     --color-warning-bg: #3a2c14;
+    --color-info: #60a5fa;
+    --color-info-bg: #1c2a44;
+    --color-violet: #a78bfa;
+    --color-violet-bg: #2b2350;
   }
 }
 
@@ -105,6 +114,10 @@
   --color-danger-bg: #3a1c1c;
   --color-warning: #f0b849;
   --color-warning-bg: #3a2c14;
+  --color-info: #60a5fa;
+  --color-info-bg: #1c2a44;
+  --color-violet: #a78bfa;
+  --color-violet-bg: #2b2350;
 }
 
 /* One size for every page: text and spacing are in rem, so this scales them all together (15px, not 16px). */

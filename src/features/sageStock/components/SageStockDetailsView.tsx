@@ -10,8 +10,8 @@ import {
   BoxesIcon,
   CalendarIcon,
   ClockIcon,
+  DatabaseIcon,
   CreditCardIcon,
-  FileTextIcon,
   GlobeIcon,
   GridIcon,
   PoundIcon,
@@ -21,13 +21,11 @@ import type { SageStockItem } from '../../../lib/api/sageStock.ts'
 import { useSageStockDetail } from '../hooks/useSageStockDetail.ts'
 import { dateTimeText, statusPill } from '../utils/format.ts'
 import { DetailPage } from './DetailPage.tsx'
-import {
-  OpenOrdersPanel,
-  OverviewPanel,
-  PricingPanel,
-  SalesPanel,
-  WebPanel,
-} from './SageStockPanels.tsx'
+import { OpenOrdersPanel } from './SageStockOrders.tsx'
+import { PricingPanel } from './SageStockPricing.tsx'
+import { SalesPanel } from './SageStockSales.tsx'
+import { WebPanel } from './SageStockWeb.tsx'
+import { OverviewPanel } from './SageStockPanels.tsx'
 
 interface SageStockDetailsViewProps {
   /** The stock code, as in the address — what the details are asked for by. */
@@ -62,10 +60,10 @@ function LabelledChip({
 }
 
 /**
- * One Sage stock item's page, in place of the list and laid out like a product's (and an order's): the
- * shared header — a tile, **Stock <code>**, its stock status as a labelled pill ("Status: In stock"),
- * and the description, when it was created and last updated and when the data was last read as labelled
- * chips, **Back to list** — then a tab strip and clearly labelled cards. The item is **asked for by its
+ * One Sage stock item's page, in place of the list and laid out after the reference design: the shared
+ * header — a tile, the **stock code**, its stock status as a labelled pill ("Status: In stock"), the description under it, then when
+ * it was **Created**, **Updated** and the data was last read (**Data as of**) as labelled chips,
+ * **Back to list** — then a tab strip and clearly labelled cards. The item is **asked for by its
  * stock code when the page opens** (`GET /api/sage/stock/{stock_code}`) and the answer is the **only**
  * source of what the page shows; while it loads the header draws from the list row. Tabs: **Overview**
  * (stock levels, item information, supplier and accounts, key dates), **Pricing** (prices, price lists,
@@ -101,12 +99,11 @@ export function SageStockDetailsView({
         <BoxesIcon width={26} height={26} />
       </HeaderTile>
     ),
-    title: `Stock ${shownCode}`,
+    title: shownCode,
     titleHint: description || undefined,
     status: (
       <>
         {pill && <StatusPill label={`Status: ${pill.label}`} tone={pill.tone} />}
-        {source?.inactive && <StatusPill label="Inactive" tone="neutral" />}
         {state.isRefreshing && (
           <span className="text-text-muted text-[0.75rem]" role="status">
             Updating…
@@ -117,22 +114,22 @@ export function SageStockDetailsView({
     chips: (
       <>
         {description && (
-          <LabelledChip icon={FileTextIcon} label="Description">
+          <p className="text-text m-0 basis-full text-[0.95rem] font-medium break-words">
             {description}
-          </LabelledChip>
+          </p>
         )}
         {detail?.created_at && (
-          <LabelledChip icon={CalendarIcon} label="Created at">
+          <LabelledChip icon={CalendarIcon} label="Created">
             {dateTimeText(detail.created_at)}
           </LabelledChip>
         )}
         {detail?.updated_at && (
-          <LabelledChip icon={ClockIcon} label="Updated at">
+          <LabelledChip icon={ClockIcon} label="Updated">
             {dateTimeText(detail.updated_at)}
           </LabelledChip>
         )}
         {detail?.data_as_of && (
-          <LabelledChip icon={ClockIcon} label="Data as of">
+          <LabelledChip icon={DatabaseIcon} label="Data as of">
             {dateTimeText(detail.data_as_of)}
           </LabelledChip>
         )}

@@ -83,6 +83,60 @@ export function looseValue(key: string, value: unknown): string {
   return '—'
 }
 
+/** One discount band: its label and its rows (each row a free-form record, quantity and rate…). */
+export interface DiscountBand {
+  band: string
+  rows: Record<string, unknown>[]
+}
+
+const BAND_KEYS = ['band', 'band_number', 'band_name', 'name', 'number', 'id']
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** The band a record names ("1", "A"…), and the key it was named by; none when it names no band. */
+function bandNamed(
+  record: Record<string, unknown>,
+): { key: string; label: string } | null {
+  for (const key of BAND_KEYS) {
+    const value = record[key]
+    if ((typeof value === 'string' && value.trim()) || typeof value === 'number') {
+      return { key, label: String(value).trim() }
+    }
+  }
+  return null
+}
+
+/**
+ * The API's `discount_bands` (no fields are documented) as bands with their rows. Either each entry is a
+ * band that holds its rows in a list (`{ band, rows: [{ qty, rate }] }`) or the entries are the rows
+ * themselves and name their band (`{ band, qty, rate }`), which are then grouped by band. A row never
+ * repeats the band's name.
+ */
+export function groupDiscountBands(
+  records: readonly Record<string, unknown>[],
+): DiscountBand[] {
+  const bands: DiscountBand[] = []
+  for (const record of records) {
+    const nested = Object.values(record).find(
+      (value): value is Record<string, unknown>[] =>
+        Array.isArray(value) && value.length > 0 && value.every(isRecord),
+    )
+    const named = bandNamed(record)
+    if (nested) {
+      bands.push({ band: named?.label ?? '', rows: nested })
+      continue
+    }
+    const row = { ...record }
+    if (named) delete row[named.key]
+    const label = named?.label ?? ''
+    const existing = bands.find((band) => band.band === label)
+    if (existing) existing.rows.push(row)
+    else bands.push({ band: label, rows: [row] })
+  }
+  return bands
+}
+
 /** true / false as Yes / No; nothing as a dash. */
 export const yesNo = (value: boolean | null | undefined) =>
   value === null || value === undefined ? '—' : value ? 'Yes' : 'No'
