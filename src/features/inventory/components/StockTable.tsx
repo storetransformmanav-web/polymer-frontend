@@ -1,6 +1,5 @@
-import { MapPinIcon, PencilIcon } from '../../../components/ui/icons.tsx'
+import { MapPinIcon } from '../../../components/ui/icons.tsx'
 import type {
-  EditableStockQuantity,
   InventoryItem,
   StockLine,
   StockQuantities,
@@ -13,15 +12,13 @@ import {
   sumLines,
 } from '../../../lib/inventoryStock.ts'
 import { when } from '../utils/format.ts'
-import { StockValueCell } from './StockValueCell.tsx'
+import { StockQuickEdit } from './StockQuickEdit.tsx'
 
 const TH =
   'text-text border-border-strong bg-table-head border-b px-3 py-2 text-[0.68rem] font-bold tracking-wide whitespace-nowrap uppercase'
 const TD =
   'border-border border-b px-3 py-2 align-middle text-[0.85rem] whitespace-nowrap'
 const NUMBER = 'text-right tabular-nums'
-const ACTION =
-  'border-border bg-bg text-text hover:border-accent hover:text-accent inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2.5 text-[0.76rem] font-semibold transition-colors'
 
 const SUMMARY: StockQuantityName[] = [
   'available',
@@ -42,36 +39,39 @@ const FULL: StockQuantityName[] = [
   'unavailable',
 ]
 
-export interface StockEditRequest {
-  locationId: number
-  mode: 'set' | 'adjust'
-  quantity?: EditableStockQuantity
-}
-
 /**
- * A variant's stock at each location: one row per location with its quantities, and a **Set** and
- * an **Adjust** button on each (the edit window, starting on that location). `summary` shows the
- * five headline quantities (the list's expanded row), `full` all nine and a **totals** row (the
- * variant's page). **Available** and **On hand** change by double-clicking them. A variant that is
- * not tracked in Shopify has no buttons and no pencils.
+ * A variant's stock at each location: one row per location with its quantities. `summary` shows the
+ * five headline quantities, `full` all nine, when it was updated and a **totals** row (the variant's
+ * page and the list's dropdown row). **Available** and **On hand** of each location carry the same small
+ * pencil as the list (`StockQuickEdit`, starting on that location: Set to / Adjust by, the reason and
+ * note); there is no Set / Adjust button column. A variant that is not tracked in Shopify has no
+ * pencils. With `readOnly` (the list's dropdown row) it only shows the numbers.
  */
 export function StockTable({
   item,
   lines,
   totals,
   columns = 'full',
-  onEdit,
+  readOnly = false,
 }: {
   item: Pick<InventoryItem, 'variant_id' | 'title' | 'variant_title' | 'tracked'>
   lines: StockLine[]
   /** The variant's totals; worked out from the lines when not given. */
   totals?: StockQuantities
   columns?: 'summary' | 'full'
-  onEdit: (request: StockEditRequest) => void
+  /** Show the numbers only — not editable. */
+  readOnly?: boolean
 }) {
   const names = columns === 'full' ? FULL : SUMMARY
-  const editable = item.tracked !== false
+  const editable = item.tracked !== false && !readOnly
   const sums = totals ?? sumLines(lines)
+  // What the pencils need: the variant and the lines (so a box starts on a location with its stock).
+  const editItem = {
+    variant_id: item.variant_id,
+    title: item.title,
+    variant_title: item.variant_title,
+    locations: lines,
+  }
 
   return (
     <div className="border-border-strong overflow-x-auto border">
@@ -85,14 +85,13 @@ export function StockTable({
               </th>
             ))}
             {columns === 'full' && <th className={`${TH} text-left`}>Updated</th>}
-            {editable && <th className={`${TH} text-center`}>Change</th>}
           </tr>
         </thead>
         <tbody>
           {lines.length === 0 && (
             <tr>
               <td
-                colSpan={names.length + 3}
+                colSpan={names.length + 2}
                 className={`${TD} text-text-muted py-5 text-center`}
               >
                 No stock is recorded at any location yet.
@@ -122,7 +121,16 @@ export function StockTable({
               {names.map((name) => (
                 <td key={name} className={`${TD} ${NUMBER}`}>
                   {editable && (name === 'available' || name === 'on_hand') ? (
-                    <StockValueCell item={item} line={line} name={name} />
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <span className="font-semibold">
+                        {formatQuantity(quantityOf(line, name))}
+                      </span>
+                      <StockQuickEdit
+                        item={editItem}
+                        name={name}
+                        locationId={line.location_id}
+                      />
+                    </span>
                   ) : (
                     <span
                       className={
@@ -139,33 +147,6 @@ export function StockTable({
               {columns === 'full' && (
                 <td className={`${TD} text-text-muted`}>{when(line.updated_at)}</td>
               )}
-              {editable && (
-                <td className={`${TD} text-center`}>
-                  <span className="inline-flex gap-1.5">
-                    <button
-                      type="button"
-                      aria-label={`Set stock at ${line.location_name ?? line.location_id}`}
-                      onClick={() =>
-                        onEdit({ locationId: line.location_id, mode: 'set' })
-                      }
-                      className={ACTION}
-                    >
-                      <PencilIcon width={12} height={12} />
-                      Set
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Adjust stock at ${line.location_name ?? line.location_id}`}
-                      onClick={() =>
-                        onEdit({ locationId: line.location_id, mode: 'adjust' })
-                      }
-                      className={ACTION}
-                    >
-                      Adjust
-                    </button>
-                  </span>
-                </td>
-              )}
             </tr>
           ))}
         </tbody>
@@ -179,7 +160,6 @@ export function StockTable({
                 </td>
               ))}
               <td className={`${TD} border-b-0`} />
-              {editable && <td className={`${TD} border-b-0`} />}
             </tr>
           </tfoot>
         )}

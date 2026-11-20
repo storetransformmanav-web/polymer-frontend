@@ -16,6 +16,7 @@ import {
 import { formatPrice } from '../../../lib/format.ts'
 import { formatQuantity, quantityOf, quantityLabel } from '../../../lib/inventoryStock.ts'
 import type {
+  EditableStockQuantity,
   InventoryItem,
   InventoryVariant,
   StockQuantityName,
@@ -25,11 +26,18 @@ import { useVariantStock } from '../hooks/useVariantStock.ts'
 import { statusLabel, statusTone, variantName } from '../utils/format.ts'
 import { StockEditDialog } from './StockEditDialog.tsx'
 import { StockHistory } from './StockHistory.tsx'
-import { StockTable, type StockEditRequest } from './StockTable.tsx'
+import { StockTable } from './StockTable.tsx'
 import { StockQuickEdit } from './StockQuickEdit.tsx'
 import { VariantImage } from './VariantImage.tsx'
 
 type TabId = 'stock' | 'history'
+
+/** Where the Edit stock window opens (from "Stock at another location"). */
+interface EditRequest {
+  locationId: number
+  mode: 'set' | 'adjust'
+  quantity?: EditableStockQuantity
+}
 
 const FIGURES: StockQuantityName[] = [
   'available',
@@ -43,8 +51,9 @@ const FIGURES: StockQuantityName[] = [
  * One variant's stock, shown in place of the list (same page, no overlay), laid out like a
  * product's page: a header (picture, product, variant, SKU and barcode with copy, status, price,
  * what happens at 0, the store), a strip of the five figures, and two tabs — **Stock** (a row per
- * location with every quantity and **Set** / **Adjust** on each, a totals row, and **Stock at
- * another location** for a location the variant has none at yet) and **History** (this
+ * location with every quantity — the Available and On hand of each carry the same small pencil as the
+ * list, which opens the Set to / Adjust by box on that location; there are no Set / Adjust buttons —, a
+ * totals row, and **Stock at another location** for a location the variant has none at yet) and **History** (this
  * variant's changes). The header and the figures draw from the list row while the full record
  * loads; an edit changes them at once.
  */
@@ -55,7 +64,7 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
   const source: InventoryItem | InventoryVariant | null = variant ?? preview
   const choices = useLocationChoices(source)
   const [tab, setTab] = useState<TabId>('stock')
-  const [editing, setEditing] = useState<StockEditRequest | null>(null)
+  const [editing, setEditing] = useState<EditRequest | null>(null)
 
   if (details.error) {
     return (
@@ -232,7 +241,6 @@ export function VariantStockView({ id, onBack }: { id: string; onBack: () => voi
               lines={source.locations}
               totals={source.totals}
               columns="full"
-              onEdit={setEditing}
             />
             {editable && choices.length > source.locations.length && (
               <div>

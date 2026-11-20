@@ -60,8 +60,8 @@ const DEFAULT_MODES: ModeChoice[] = [
  * `useStockOptions`): both modes list every editable quantity (a quantity "Set to" cannot take directly is
  * set by adjusting it by the difference), and the button opens the **Add reason** dropdown — **every**
  * reason the backend has (Correction, Count, Received…), none chosen to begin with, so one is sent only
- * when picked — and a Note. A Location box shows only when the variant can be at more
- * than one location. Moving stock from one quantity to another needs a call the backend does not have
+ * when picked — and a Note. A **Location** box always shows — each location
+ * with the stock available there ("Unit 9 — 5 available") — so the change is for a chosen location. Moving stock from one quantity to another needs a call the backend does not have
  * yet, so that choice is explained and not sent. ✓ sends one `PUT /inventory/{variant}` (Set to) or
  * `POST /inventory/{variant}/adjust` (Adjust by): the numbers on the page change at once and the notice
  * follows the change to Shopify; a refusal is shown in the box, which stays open.
@@ -69,9 +69,12 @@ const DEFAULT_MODES: ModeChoice[] = [
 export function StockQuickEdit({
   item,
   name,
+  locationId,
 }: {
   item: Item
   name: 'available' | 'on_hand'
+  /** The location the box starts on (a location line's pencil); the variant's first one when not given. */
+  locationId?: number
 }) {
   const [open, setOpen] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
@@ -95,6 +98,7 @@ export function StockQuickEdit({
         <QuickEditPanel
           item={item}
           name={name}
+          locationId={locationId}
           anchor={button}
           onClose={() => {
             setOpen(false)
@@ -121,11 +125,13 @@ function placeOf(box: DOMRect, width: number) {
 function QuickEditPanel({
   item,
   name,
+  locationId,
   anchor,
   onClose,
 }: {
   item: Item
   name: 'available' | 'on_hand'
+  locationId?: number
   anchor: RefObject<HTMLButtonElement | null>
   onClose: () => void
 }) {
@@ -137,7 +143,7 @@ function QuickEditPanel({
   const [mode, setMode] = useState<Mode>('set')
   const [text, setText] = useState('')
   const [location, setLocation] = useState(
-    String(item.locations[0]?.location_id ?? choices[0]?.id ?? ''),
+    String(locationId ?? item.locations[0]?.location_id ?? choices[0]?.id ?? ''),
   )
   // "Set to": the quantity it sets. "Adjust by": the two ends of the change.
   const [setName, setSetName] = useState<EditableStockQuantity>(name)
@@ -218,6 +224,11 @@ function QuickEditPanel({
     (candidate) => String(candidate.location_id) === location,
   )
   const current = quantityOf(line, quantity)
+  const availableAt = (id: number) =>
+    quantityOf(
+      item.locations.find((candidate) => candidate.location_id === id),
+      'available',
+    )
 
   // A quantity "Set to" cannot take directly is set with an adjustment of the difference.
   const settableDirectly =
@@ -427,7 +438,9 @@ function QuickEditPanel({
         </button>
       </div>
 
-      {choices.length > 1 && (
+      {/* The location the change is for, each with the stock available there (0 where the variant has no
+          line yet). */}
+      {choices.length > 0 && (
         <select
           aria-label="Location"
           value={location}
@@ -436,7 +449,7 @@ function QuickEditPanel({
         >
           {choices.map((choice) => (
             <option key={choice.id} value={String(choice.id)}>
-              {choice.name}
+              {choice.name} — {formatQuantity(availableAt(choice.id))} available
             </option>
           ))}
         </select>

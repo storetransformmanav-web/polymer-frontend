@@ -1,8 +1,13 @@
-import type { ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { Highlight } from '../../../components/ui/Highlight.tsx'
-import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
+import {
+  AlertTriangleIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  SearchIcon,
+} from '../../../components/ui/icons.tsx'
 import {
   ROW_ACTION,
   ROW_ACTIONS,
@@ -14,6 +19,7 @@ import type { InventoryItem, InventorySort } from '../../../lib/api/endpoints.ts
 import { formatQuantity, stockLevel } from '../../../lib/inventoryStock.ts'
 import { statusLabel, statusTone, variantName } from '../utils/format.ts'
 import { StockQuickEdit } from './StockQuickEdit.tsx'
+import { StockTable } from './StockTable.tsx'
 import { VariantImage } from './VariantImage.tsx'
 
 const TH_BASE =
@@ -86,9 +92,11 @@ interface InventoryListProps {
  * The results area: a sticky-header table from `md` up (stacked cards below it). A row shows the
  * variant (picture, product with the variant under it, SKU, product status — no barcode column) and its
  * totals — Available, On hand, Committed, Incoming, Unavailable; a small pencil beside Available and On
- * hand opens the quick-edit box (Set to / Adjust by), and the only row action is **View**. There is no
- * row accordion and no Edit stock button (removed by choice; a variant's own page lists its locations
- * with Set and Adjust). A variant Shopify does not track says "Not tracked" and has no pencils. Handles the loading skeleton, error and empty states itself.
+ * hand opens the quick-edit box (Set to / Adjust by), and the only row action is **View** (there is no
+ * Edit stock button). A **chevron opens the row** to the variant's stock **location by location** —
+ * every quantity at each location and a total, **read-only** (nothing to edit there; the pencils and a
+ * variant's own page change stock). A variant Shopify does not track says "Not tracked" and has no
+ * pencils. Handles the loading skeleton, error and empty states itself.
  */
 export function InventoryList({
   items,
@@ -106,6 +114,14 @@ export function InventoryList({
   onClearFilters,
 }: InventoryListProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   if (error) {
     return (
@@ -228,6 +244,9 @@ export function InventoryList({
       >
         <thead>
           <tr>
+            <th scope="col" className={`${TH_BASE} w-10`}>
+              <span className="sr-only">Locations</span>
+            </th>
             {head('Product', 'title')}
             {head('SKU', 'sku')}
             <th scope="col" className={TH_CENTER}>
@@ -247,7 +266,7 @@ export function InventoryList({
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: 9 }, (_, cell) => (
+                  {Array.from({ length: 10 }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <span className="bg-surface block h-4 animate-pulse rounded" />
                     </td>
@@ -255,103 +274,138 @@ export function InventoryList({
                 </tr>
               ))
             : items.map((item) => {
+                const open = expanded.has(item.variant_id)
                 const name = variantName(item)
                 const editable = item.tracked !== false
                 return (
-                  <tr
-                    key={item.variant_id}
-                    className="border-border hover:bg-accent-tint/40 border-b transition-colors"
-                  >
-                    <td className={TD}>
-                      <button
-                        type="button"
-                        onClick={() => onOpen(item)}
-                        onPointerEnter={() => onPrefetch(item.variant_id)}
-                        onFocus={() => onPrefetch(item.variant_id)}
-                        className="flex max-w-96 cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-left"
-                      >
-                        <VariantImage src={item.image_url} />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="hover:text-accent truncate font-semibold transition-colors">
-                            <Highlight text={item.title} />
-                          </span>
-                          {name && (
-                            <span className="text-text-muted truncate text-[0.76rem]">
-                              <Highlight text={name} />
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    </td>
-                    <td className={TD}>
-                      {item.sku ? (
-                        <span className="flex items-center gap-1">
-                          <span className="font-mono text-[0.8rem]">
-                            <Highlight text={item.sku} />
-                          </span>
-                          <CopyButton value={item.sku} label={`Copy ${item.sku}`} />
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </td>
-                    <td className={`${TD} text-center`}>
-                      <Badge
-                        tone={statusTone(item.status)}
-                        className="w-24 justify-center"
-                      >
-                        {statusLabel(item.status)}
-                      </Badge>
-                    </td>
-                    {editable ? (
-                      <>
-                        <td className={`${TD} text-right`}>
-                          <span className="inline-flex items-center justify-end gap-1.5">
-                            <Figure
-                              value={item.totals.available}
-                              stock
-                              threshold={threshold}
-                            />
-                            <StockQuickEdit item={item} name="available" />
-                          </span>
-                        </td>
-                        <td className={`${TD} text-right`}>
-                          <span className="inline-flex items-center justify-end gap-1.5">
-                            <Figure value={item.totals.on_hand} threshold={threshold} />
-                            <StockQuickEdit item={item} name="on_hand" />
-                          </span>
-                        </td>
-                        <td className={`${TD} text-right`}>
-                          <Figure value={item.totals.committed} threshold={threshold} />
-                        </td>
-                        <td className={`${TD} text-right`}>
-                          <Figure value={item.totals.incoming} threshold={threshold} />
-                        </td>
-                        <td className={`${TD} text-right`}>
-                          <Figure value={item.totals.unavailable} threshold={threshold} />
-                        </td>
-                      </>
-                    ) : (
-                      <td colSpan={5} className={`${TD} text-center`}>
-                        <Badge tone="neutral">Not tracked</Badge>
-                      </td>
-                    )}
-                    <td className={`${TD} text-center`}>
-                      <span className={ROW_ACTIONS}>
+                  <Fragment key={item.variant_id}>
+                    <tr
+                      className={`border-border hover:bg-accent-tint/40 border-b transition-colors ${
+                        open ? 'bg-accent-tint/30' : ''
+                      }`}
+                    >
+                      <td className={`${TD} text-center`}>
                         <button
                           type="button"
-                          aria-label={`View ${item.title}${name ? ` ${name}` : ''}`}
-                          title="View"
+                          aria-expanded={open}
+                          aria-label={`${open ? 'Hide' : 'Show'} locations of ${item.title}${name ? ` ${name}` : ''}`}
+                          onClick={() => toggle(item.variant_id)}
+                          className="text-text-muted hover:text-text inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent transition-colors"
+                        >
+                          <ChevronRightIcon
+                            width={16}
+                            height={16}
+                            className={`transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+                          />
+                        </button>
+                      </td>
+                      <td className={TD}>
+                        <button
+                          type="button"
                           onClick={() => onOpen(item)}
                           onPointerEnter={() => onPrefetch(item.variant_id)}
                           onFocus={() => onPrefetch(item.variant_id)}
-                          className={ROW_ACTION}
+                          className="flex max-w-96 cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-left"
                         >
-                          <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+                          <VariantImage src={item.image_url} />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="hover:text-accent truncate font-semibold transition-colors">
+                              <Highlight text={item.title} />
+                            </span>
+                            {name && (
+                              <span className="text-text-muted truncate text-[0.76rem]">
+                                <Highlight text={name} />
+                              </span>
+                            )}
+                          </span>
                         </button>
-                      </span>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className={TD}>
+                        {item.sku ? (
+                          <span className="flex items-center gap-1">
+                            <span className="font-mono text-[0.8rem]">
+                              <Highlight text={item.sku} />
+                            </span>
+                            <CopyButton value={item.sku} label={`Copy ${item.sku}`} />
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className={`${TD} text-center`}>
+                        <Badge
+                          tone={statusTone(item.status)}
+                          className="w-24 justify-center"
+                        >
+                          {statusLabel(item.status)}
+                        </Badge>
+                      </td>
+                      {editable ? (
+                        <>
+                          <td className={`${TD} text-right`}>
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <Figure
+                                value={item.totals.available}
+                                stock
+                                threshold={threshold}
+                              />
+                              <StockQuickEdit item={item} name="available" />
+                            </span>
+                          </td>
+                          <td className={`${TD} text-right`}>
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <Figure value={item.totals.on_hand} threshold={threshold} />
+                              <StockQuickEdit item={item} name="on_hand" />
+                            </span>
+                          </td>
+                          <td className={`${TD} text-right`}>
+                            <Figure value={item.totals.committed} threshold={threshold} />
+                          </td>
+                          <td className={`${TD} text-right`}>
+                            <Figure value={item.totals.incoming} threshold={threshold} />
+                          </td>
+                          <td className={`${TD} text-right`}>
+                            <Figure
+                              value={item.totals.unavailable}
+                              threshold={threshold}
+                            />
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={5} className={`${TD} text-center`}>
+                          <Badge tone="neutral">Not tracked</Badge>
+                        </td>
+                      )}
+                      <td className={`${TD} text-center`}>
+                        <span className={ROW_ACTIONS}>
+                          <button
+                            type="button"
+                            aria-label={`View ${item.title}${name ? ` ${name}` : ''}`}
+                            title="View"
+                            onClick={() => onOpen(item)}
+                            onPointerEnter={() => onPrefetch(item.variant_id)}
+                            onFocus={() => onPrefetch(item.variant_id)}
+                            className={ROW_ACTION}
+                          >
+                            <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                    {open && (
+                      <tr className="border-border bg-surface/60 border-b">
+                        <td />
+                        <td colSpan={9} className="px-3 py-3">
+                          <StockTable
+                            item={item}
+                            lines={item.locations}
+                            columns="full"
+                            readOnly
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
         </tbody>
