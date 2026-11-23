@@ -38,6 +38,25 @@ function kindOf(type: string | null | undefined): Kind {
   return 'other'
 }
 
+/**
+ * A value with nothing in it: no text at all, or — for a JSON / list type — an empty object or list
+ * (`{}`, `[]`) or `null`. Such a field shows an empty Type and a dash instead of its type and a box.
+ */
+function isEmptyValue(value: string | null | undefined, kind: Kind): boolean {
+  const text = (value ?? '').trim()
+  if (text === '') return true
+  if (kind !== 'json') return false
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (parsed === null) return true
+    if (Array.isArray(parsed)) return parsed.length === 0
+    if (typeof parsed === 'object') return Object.keys(parsed).length === 0
+    return false
+  } catch {
+    return false
+  }
+}
+
 const KIND_ICON: Record<Kind, ComponentType<IconProps>> = {
   text: TagIcon,
   boolean: CheckCircleIcon,
@@ -163,7 +182,9 @@ function ValueCell({ field, kind }: { field: Metafield; kind: Kind }) {
 /**
  * The customer's metafields: a card with a heading, a search box and a type filter, then a table
  * of field (with a small icon for its type), type pill and value — booleans as True / False pills,
- * JSON on one line in a box that opens to the full value — each with a copy button.
+ * JSON on one line in a box that opens to the full value — each with a copy button. A field with
+ * **no value** (nothing, or an empty `{}` / `[]`) shows an empty Type cell and a dash: its type is not
+ * shown, and it only appears under "All Types".
  */
 export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail }) {
   const [search, setSearch] = useState('')
@@ -174,10 +195,13 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
   const rows = useMemo(() => {
     const text = search.trim().toLowerCase()
     return fields
-      .map((field) => ({ field, kind: kindOf(field.type) }))
+      .map((field) => {
+        const fieldKind = kindOf(field.type)
+        return { field, kind: fieldKind, empty: isEmptyValue(field.value, fieldKind) }
+      })
       .filter(
         (row) =>
-          (kind === 'all' || row.kind === kind) &&
+          (kind === 'all' || (!row.empty && row.kind === kind)) &&
           (!text ||
             `${row.field.namespace}.${row.field.key}`.toLowerCase().includes(text) ||
             (row.field.value ?? '').toLowerCase().includes(text)),
@@ -272,9 +296,10 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
                 </td>
               </tr>
             ) : (
-              rows.map(({ field, kind: rowKind }) => {
+              rows.map(({ field, kind: rowKind, empty }) => {
                 const name = `${field.namespace}.${field.key}`
-                const Icon = KIND_ICON[rowKind]
+                // An empty field has no type to show: the general icon, an empty Type cell and a dash.
+                const Icon = empty ? LayersIcon : KIND_ICON[rowKind]
                 return (
                   <tr
                     key={name}
@@ -282,7 +307,7 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
                   >
                     <td className="px-4 py-3 pl-5">
                       <span className="flex min-w-0 items-center gap-3">
-                        {rowKind === 'number' ? (
+                        {rowKind === 'number' && !empty ? (
                           <span
                             aria-hidden="true"
                             className="text-accent flex w-[18px] shrink-0 justify-center text-[1.05rem] font-bold"
@@ -298,10 +323,14 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <TypePill kind={rowKind} type={field.type} />
+                      {!empty && <TypePill kind={rowKind} type={field.type} />}
                     </td>
                     <td className="max-w-0 px-4 py-3">
-                      <ValueCell field={field} kind={rowKind} />
+                      {empty ? (
+                        <span className="text-text-muted">—</span>
+                      ) : (
+                        <ValueCell field={field} kind={rowKind} />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className="inline-flex h-5 items-center">
