@@ -127,9 +127,7 @@ export const ORDER_SUMMARY_CARDS: CardDef[] = [
     icon: RefreshIcon,
     kind: 'count',
     tone: 'danger',
-    // The Payment dropdown has no plain "Refunded" choice, so pressing the card selects
-    // "Partially refunded" there.
-    filter: { financial: 'PARTIALLY_REFUNDED', cancelled: '' },
+    filter: { financial: 'REFUNDED,PARTIALLY_REFUNDED', cancelled: '' },
     description: 'Orders that have been refunded, in full or in part.',
   },
 ]

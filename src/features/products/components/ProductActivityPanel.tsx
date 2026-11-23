@@ -32,6 +32,7 @@ import {
 import { formatDate } from '../../../lib/format.ts'
 import { formatStoreClockAmPm } from '../../../lib/storeTime.ts'
 import { useProductActivity } from '../hooks/useProductActivity.ts'
+import { productActivityValueText } from '../utils/productActivity.ts'
 
 const SKELETON_ROWS = 6
 
@@ -93,18 +94,6 @@ const GROUP_ICONS: Record<string, ComponentType<IconProps>> = {
   other: InfoIcon,
 }
 
-/** A before / after value as plain text: nothing as a dash, yes / no as True / False, a list or object as JSON. */
-function valueText(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'boolean') return value ? 'True' : 'False'
-  if (typeof value === 'string' || typeof value === 'number') return String(value)
-  try {
-    return JSON.stringify(value) ?? '—'
-  } catch {
-    return '—'
-  }
-}
-
 /**
  * The colour of a value's chip: true is green and false red, a product status its usual colour
  * (active green, draft amber, archived red), the value it was before grey and the one it became green.
@@ -135,15 +124,15 @@ function ValueChip({
   value: unknown
   isNew: boolean
 }) {
-  const text = valueText(value)
+  const text = productActivityValueText(value)
   return (
     <span
       title={text}
-      className={`inline-block max-w-[14rem] truncate rounded-lg px-3 py-1.5 text-[0.82rem] font-semibold ${
+      className={`inline-block max-w-[14rem] truncate rounded-lg px-2.5 py-1 text-[0.74rem] font-semibold ${
         BADGE_TONE_CLASSES[valueTone(item, value, isNew)]
       }`}
     >
-      {text}
+      {text === '—' ? <span className="text-text-muted">{text}</span> : text}
     </span>
   )
 }
@@ -206,10 +195,10 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
       />
 
       <div className="w-28 shrink-0 pt-2.5">
-        <p className="m-0 text-[0.85rem] leading-tight font-bold">
+        <p className="m-0 text-[0.78rem] leading-tight font-bold">
           {item.created_at ? formatDate(item.created_at) : '—'}
         </p>
-        <p className="text-text-muted m-0 text-[0.74rem]">
+        <p className="text-text-muted m-0 text-[0.68rem]">
           {formatStoreClockAmPm(item.created_at)}
         </p>
       </div>
@@ -219,20 +208,20 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
           <div className="flex min-w-0 items-center gap-3 lg:w-64 lg:shrink-0">
             <span
               aria-hidden="true"
-              className="bg-accent-tint text-accent flex size-10 shrink-0 items-center justify-center rounded-xl"
+              className="bg-accent-tint text-accent flex size-9 shrink-0 items-center justify-center rounded-xl"
             >
-              <Icon width={19} height={19} />
+              <Icon width={17} height={17} />
             </span>
             <div className="min-w-0">
               <p
-                className="m-0 truncate text-[0.9rem] leading-snug font-bold"
+                className="m-0 truncate text-[0.82rem] leading-snug font-bold"
                 title={title}
               >
                 {title || '—'}
               </p>
               {subtitle && (
                 <p
-                  className="text-text-muted m-0 truncate text-[0.76rem] leading-snug"
+                  className="text-text-muted m-0 truncate text-[0.7rem] leading-snug"
                   title={subtitle}
                 >
                   {subtitle}
@@ -241,7 +230,7 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
             </div>
           </div>
 
-          <div className="border-border flex min-w-0 flex-1 flex-wrap items-center gap-3 lg:border-l lg:pl-5">
+          <div className="border-border flex min-w-0 flex-1 flex-wrap items-center gap-2 lg:border-l lg:pl-4">
             <ValueChip item={item} value={item.old_value} isNew={false} />
             <ChevronRightIcon
               width={15}
@@ -252,7 +241,7 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
             <ValueChip item={item} value={item.new_value} isNew />
           </div>
 
-          <span className="bg-surface text-text border-border inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.8rem] font-semibold">
+          <span className="bg-surface text-text border-border inline-flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1 text-[0.72rem] font-semibold">
             <SourceIcon
               width={15}
               height={15}
@@ -262,7 +251,7 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
             {sourceLabel(item.source) || '—'}
           </span>
 
-          <span className="border-border flex min-w-0 items-center gap-2 text-[0.84rem] lg:w-36 lg:shrink-0 lg:border-l lg:pl-5">
+          <span className="border-border flex min-w-0 items-center gap-2 text-[0.76rem] lg:w-36 lg:shrink-0 lg:border-l lg:pl-4">
             <UsersIcon
               width={16}
               height={16}
@@ -290,7 +279,7 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
         </div>
 
         {open && (
-          <dl className="border-border m-0 grid grid-cols-2 gap-x-6 gap-y-3 border-t px-4 py-3 md:grid-cols-4">
+          <dl className="border-border m-0 grid grid-cols-2 gap-x-5 gap-y-2 border-t px-4 py-2.5 text-[0.74rem] md:grid-cols-4">
             <Fact label="Kind of change">{humanize(item.field_group)}</Fact>
             <Fact label="Field">{item.field}</Fact>
             <Fact label="Variant">{item.variant ? String(item.variant) : ''}</Fact>
@@ -301,16 +290,16 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
               <dt className="text-text-muted text-[0.66rem] font-bold tracking-wide uppercase">
                 Before
               </dt>
-              <dd className="m-0 mt-0.5 text-[0.82rem] break-words whitespace-pre-wrap">
-                {valueText(item.old_value)}
+              <dd className="text-text-muted m-0 mt-0.5 break-words whitespace-pre-wrap">
+                {productActivityValueText(item.old_value)}
               </dd>
             </div>
             <div className="col-span-2 min-w-0 md:col-span-2">
               <dt className="text-text-muted text-[0.66rem] font-bold tracking-wide uppercase">
                 After
               </dt>
-              <dd className="m-0 mt-0.5 text-[0.82rem] font-semibold break-words whitespace-pre-wrap">
-                {valueText(item.new_value)}
+              <dd className="m-0 mt-0.5 font-semibold break-words whitespace-pre-wrap">
+                {productActivityValueText(item.new_value)}
               </dd>
             </div>
           </dl>
@@ -322,7 +311,7 @@ function ActivityRow({ item }: { item: ProductActivityItem }) {
 
 function Message({ children }: { children: ReactNode }) {
   return (
-    <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.9rem]">
+    <div className="text-text-muted flex flex-col items-center gap-3 px-4 py-14 text-center text-[0.82rem]">
       {children}
     </div>
   )
@@ -429,7 +418,7 @@ export function ProductActivityPanel({
           }`}
         />
         <div className="border-border flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-2.5">
-          <h3 className="m-0 text-[0.95rem] font-semibold">
+          <h3 className="m-0 text-[0.86rem] font-semibold">
             {data ? data.total.toLocaleString('en-GB') : '—'} Activity{' '}
             {data?.total === 1 ? 'Record' : 'Records'}
           </h3>

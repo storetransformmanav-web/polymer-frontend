@@ -14,7 +14,12 @@ import { OrdersPage } from './OrdersPage.tsx'
 
 vi.mock('../../../lib/api/endpoints.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../lib/api/endpoints.ts')>()),
-  api: { orders: { list: vi.fn() }, products: {}, customers: {}, auth: {} },
+  api: {
+    orders: { list: vi.fn(), summary: vi.fn() },
+    products: {},
+    customers: {},
+    auth: {},
+  },
 }))
 
 const TOTAL = 60
@@ -114,6 +119,7 @@ function respond(params: OrderListParams): OrderListResponse {
 }
 
 const list = vi.mocked(api.orders.list)
+const summary = vi.mocked(api.orders.summary)
 // One-row requests are the fulfillment choices' counts, not pages of the list.
 const isCountQuery = (params: OrderListParams) => params.page_size === 1
 const pageCalls = () => list.mock.calls.filter(([params]) => !isCountQuery(params))
@@ -125,6 +131,13 @@ describe('OrdersPage', () => {
     // The Columns menu's choice is remembered in the browser: every test starts from the default.
     window.localStorage.clear()
     list.mockImplementation((params) => Promise.resolve(respond(params)))
+    summary.mockResolvedValue({
+      cards: {},
+      statuses: [],
+      channels: [],
+      currency: null,
+      mixedCurrencies: false,
+    })
   })
 
   afterEach(() => {
@@ -199,6 +212,45 @@ describe('OrdersPage', () => {
     expect(cell).toHaveTextContent(/^17002$/)
     expect(screen.queryByText(/Pizza Box White Plain/)).toBeNull()
     expect(screen.queryByText(/White Paper Carrier Bag/)).toBeNull()
+  })
+
+  it('sorts table columns from their headers and keeps the direction in sync', async () => {
+    const user = userEvent.setup()
+    const { store } = renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    const createdHeader = screen.getByRole('columnheader', { name: /Created date/ })
+    expect(createdHeader).toHaveAttribute('aria-sort', 'descending')
+
+    await user.click(within(createdHeader).getByRole('button', { name: 'Created date' }))
+    expect(createdHeader).toHaveAttribute('aria-sort', 'ascending')
+    expect(store.getState().orders.filters).toMatchObject({
+      sort: 'created_at',
+      order: 'asc',
+      page: 1,
+    })
+
+    const orderHeader = screen.getByRole('columnheader', { name: /Order/ })
+    await user.click(within(orderHeader).getByRole('button', { name: 'Order' }))
+    expect(orderHeader).toHaveAttribute('aria-sort', 'ascending')
+    expect(store.getState().orders.filters).toMatchObject({
+      sort: 'name',
+      order: 'asc',
+      page: 1,
+    })
+    await waitFor(() =>
+      expect(list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort: 'name', order: 'asc', page: 1 }),
+      ),
+    )
+
+    await user.click(within(orderHeader).getByRole('button', { name: 'Order' }))
+    expect(orderHeader).toHaveAttribute('aria-sort', 'descending')
+    expect(store.getState().orders.filters).toMatchObject({
+      sort: 'name',
+      order: 'desc',
+      page: 1,
+    })
   })
 
   it('opens the customer’s own page from their name — and a guest has no link', async () => {
@@ -304,6 +356,26 @@ describe('OrdersPage', () => {
         }),
       ),
     )
+  })
+
+  it('filters Refunded Orders to fully and partially refunded orders', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<OrdersPage />)
+    await screen.findByText('17002')
+
+    await user.click(screen.getByRole('button', { name: 'Refunded Orders: —' }))
+
+    await waitFor(() =>
+      expect(list).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          financial_status: 'REFUNDED,PARTIALLY_REFUNDED',
+          page: 1,
+        }),
+      ),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.getByLabelText('Payment')).toHaveValue('REFUNDED,PARTIALLY_REFUNDED')
   })
 
   it('asks for no status on "All Orders"', async () => {

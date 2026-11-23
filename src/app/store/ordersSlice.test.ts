@@ -72,6 +72,13 @@ describe('toOrderParams', () => {
     })
   })
 
+  it('sends both refunded financial statuses when the refunded card is selected', () => {
+    expect(
+      toOrderParams(filters({ financial: 'REFUNDED,PARTIALLY_REFUNDED' }))
+        .financial_status,
+    ).toBe('REFUNDED,PARTIALLY_REFUNDED')
+  })
+
   it('starts on the last 30 days, and "Clear all" goes back to them', () => {
     const params = toOrderParams(filters())
     expect(params.from).toBeDefined()

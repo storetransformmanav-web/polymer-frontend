@@ -9,7 +9,7 @@ import { toUserMessage } from '../../lib/api/ApiError.ts'
 import {
   api,
   type OrderDetail,
-  type OrderFinancialStatus,
+  type OrderFinancialStatusFilter,
   type OrderFulfillmentStatus,
   type OrderListParams,
   type OrderListResponse,
@@ -36,7 +36,7 @@ export interface OrderFilters {
   search: string
   /** The store picked in the top bar ('' = all). Set by `shopSelected`, not by this page's toolbar. */
   shop: string
-  financial: OrderFinancialStatus | ''
+  financial: OrderFinancialStatusFilter | ''
   /** The tab strip: '' = every order. */
   fulfillment: OrderFulfillmentStatus | ''
   source: OrderSource | ''

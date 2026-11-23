@@ -1,3 +1,4 @@
+import type { OrderSort } from '../../../lib/api/endpoints.ts'
 import type { ColumnConfig as BaseColumnConfig } from '../../../lib/columnConfig.ts'
 
 /**
@@ -47,6 +48,8 @@ export interface OrderColumnDef {
   /** Width in rem (the table is fixed-layout, so every column has one). */
   width: number
   align: 'left' | 'center' | 'right'
+  /** The API sort this column's header applies, when it has one. */
+  sort?: OrderSort
 }
 
 const column = (
@@ -54,17 +57,18 @@ const column = (
   label: string,
   width: number,
   align: OrderColumnDef['align'] = 'left',
-): [OrderColumnId, OrderColumnDef] => [id, { id, label, width, align }]
+  sort?: OrderSort,
+): [OrderColumnId, OrderColumnDef] => [id, { id, label, width, align, sort }]
 
 export const ORDER_COLUMNS: Record<OrderColumnId, OrderColumnDef> = Object.fromEntries([
-  column('created', 'Created date', 11),
-  column('customer', 'Customer name', 10),
+  column('created', 'Created date', 11, 'left', 'created_at'),
+  column('customer', 'Customer name', 10, 'left', 'customer'),
   column('email', 'Email', 12),
   // The pills are 9.5rem wide, so these two keep the room they always had.
   column('payment_status', 'Payment status', 10, 'center'),
   column('fulfillment_status', 'Fulfillment status', 10, 'center'),
   column('items', 'Items', 5, 'right'),
-  column('total', 'Total price', 7, 'right'),
+  column('total', 'Total price', 7, 'right', 'total'),
   column('store', 'Store', 11),
   column('channel', 'Channel', 9),
   column('payment_method', 'Payment method', 11),
@@ -83,7 +87,7 @@ export const ORDER_COLUMNS: Record<OrderColumnId, OrderColumnDef> = Object.fromE
   column('tax', 'Tax', 6, 'right'),
   column('refunded', 'Refunded', 7, 'right'),
   column('net_payment', 'Net payment', 8, 'right'),
-  column('updated', 'Updated date', 11),
+  column('updated', 'Updated date', 11, 'left', 'updated_at'),
   column('closed', 'Closed date', 11),
   column('cancelled', 'Cancelled date', 11),
 ]) as Record<OrderColumnId, OrderColumnDef>

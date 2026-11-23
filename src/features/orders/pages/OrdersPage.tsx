@@ -376,6 +376,15 @@ export function OrdersPage() {
               onRetry={orders.retry}
               onClearFilters={orders.resetFilters}
               columns={columnChoice.columns}
+              sort={filters.sort}
+              order={filters.order}
+              onSort={(sort) =>
+                orders.setFilters(
+                  sort === filters.sort
+                    ? { order: filters.order === 'asc' ? 'desc' : 'asc' }
+                    : { sort, order: 'asc' },
+                )
+              }
             />
           </HighlightQuery>
 

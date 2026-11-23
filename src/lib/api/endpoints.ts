@@ -698,6 +698,8 @@ export const ORDER_SORTS = [
 ] as const
 
 export type OrderFinancialStatus = (typeof ORDER_FINANCIAL_STATUSES)[number]
+export type OrderFinancialStatusFilter =
+  OrderFinancialStatus | 'REFUNDED,PARTIALLY_REFUNDED'
 export type OrderFulfillmentStatus = (typeof ORDER_FULFILLMENT_STATUSES)[number]
 export type OrderSource = (typeof ORDER_SOURCES)[number]
 export type OrderSort = (typeof ORDER_SORTS)[number]
@@ -1040,7 +1042,7 @@ export type OrderSummaryParams = Omit<
 export interface OrderListParams {
   /** Order number (#1001 or 1001), customer name, email, SKU or product title (≤ 200). */
   search?: string
-  financial_status?: OrderFinancialStatus
+  financial_status?: OrderFinancialStatusFilter
   fulfillment_status?: OrderFulfillmentStatus
   /** Orders of one customer / containing one product (UUIDs; the page has no filter for these). */
   customer_id?: string

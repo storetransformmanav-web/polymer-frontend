@@ -21,7 +21,7 @@ import { useShops } from '../../../hooks/useShops.ts'
 import {
   ORDER_FINANCIAL_STATUSES,
   ORDER_SORTS,
-  type OrderFinancialStatus,
+  type OrderFinancialStatusFilter,
   type OrderFulfillmentStatus,
   type OrderSort,
 } from '../../../lib/api/endpoints.ts'
@@ -55,7 +55,8 @@ const ORDER_OPTIONS: SelectOption[] = [
 ]
 const PAYMENT_OPTIONS: SelectOption[] = [
   { value: '', label: 'All Payments' },
-  // No "Refunded" or "Voided" choice (removed by choice); "Partially refunded" stays.
+  { value: 'REFUNDED,PARTIALLY_REFUNDED', label: 'Refunded or partially refunded' },
+  // No standalone "Refunded" or "Voided" choice; the combined option matches the summary card.
   ...ORDER_FINANCIAL_STATUSES.filter(
     (value) => value !== 'REFUNDED' && value !== 'VOIDED',
   ).map((value) => ({
@@ -234,7 +235,7 @@ export function OrdersToolbar({
                 value={filters.financial}
                 options={PAYMENT_OPTIONS}
                 onChange={(financial) =>
-                  onChange({ financial: financial as OrderFinancialStatus | '' })
+                  onChange({ financial: financial as OrderFinancialStatusFilter | '' })
                 }
               />
               <SelectField

@@ -6,8 +6,9 @@ import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { AlertTriangleIcon, EyeIcon, SearchIcon } from '../../../components/ui/icons.tsx'
 import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
+import { ariaSort, SortButton } from '../../../components/ui/SortButton.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
-import type { OrderListItem } from '../../../lib/api/endpoints.ts'
+import type { OrderListItem, OrderSort } from '../../../lib/api/endpoints.ts'
 import { formatDateTime, formatPrice } from '../../../lib/format.ts'
 import { formatRelativeDateTime } from '../../../lib/storeTime.ts'
 import {
@@ -52,6 +53,11 @@ interface OrdersListProps {
   onClearFilters: () => void
   /** The columns to draw between Order and Actions, in order (the Columns menu's choice). */
   columns: OrderColumnDef[]
+  /** The active server sort and direction, shown by sortable table headers. */
+  sort: OrderSort
+  order: 'asc' | 'desc'
+  /** A sortable header was clicked: sort by the column (or reverse its direction). */
+  onSort: (sort: OrderSort) => void
 }
 
 const dateOrDash = (value: string | null | undefined) =>
@@ -254,6 +260,9 @@ export function OrdersList({
   onRetry,
   onClearFilters,
   columns,
+  sort,
+  order,
+  onSort,
 }: OrdersListProps) {
   const linkedState = useLinkedState()
   const isTable = useMediaQuery('(min-width: 1024px)')
@@ -357,8 +366,17 @@ export function OrdersList({
       >
         <thead>
           <tr>
-            <th className={TH} style={{ width: `${ORDER_NUMBER_COLUMN_REM}rem` }}>
-              Order
+            <th
+              className={TH}
+              style={{ width: `${ORDER_NUMBER_COLUMN_REM}rem` }}
+              aria-sort={ariaSort(sort === 'name', order)}
+            >
+              <SortButton
+                label="Order"
+                active={sort === 'name'}
+                order={order}
+                onClick={() => onSort('name')}
+              />
             </th>
             {columns.map((column) => (
               <th
@@ -371,8 +389,22 @@ export function OrdersList({
                       ? TH_CENTER
                       : TH
                 }
+                aria-sort={
+                  column.sort ? ariaSort(sort === column.sort, order) : undefined
+                }
               >
-                {column.label}
+                {column.sort ? (
+                  <SortButton
+                    label={column.label}
+                    active={sort === column.sort}
+                    order={order}
+                    onClick={() => {
+                      if (column.sort) onSort(column.sort)
+                    }}
+                  />
+                ) : (
+                  column.label
+                )}
               </th>
             ))}
             <th className={TH_CENTER} style={{ width: `${ORDER_ACTIONS_COLUMN_REM}rem` }}>
