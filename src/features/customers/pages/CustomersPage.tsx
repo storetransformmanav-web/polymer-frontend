@@ -307,14 +307,9 @@ export function CustomersPage() {
       >
         <CustomersToolbar
           filters={filters}
-          // Clear All also puts the columns back to the default, so a changed choice counts
-          // as something to clear.
-          hasFilters={customers.hasFilters || !columnChoice.isDefault}
+          hasFilters={customers.hasFilters}
           onChange={customers.setFilters}
-          onReset={() => {
-            customers.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={customers.resetFilters}
           // Add customer and then the Columns menu sit in the search row, to the right of Filters
           // and Clear All. The cards of a narrow screen have no columns, so the menu is for the table.
           actions={

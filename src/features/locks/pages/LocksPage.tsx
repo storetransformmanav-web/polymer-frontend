@@ -328,14 +328,9 @@ export function LocksPage() {
       <LocksToolbar
         shop={shop}
         filters={filters}
-        // Clear All also puts the columns back to the default, so a changed choice counts as
-        // something to clear.
-        hasFilters={locks.hasFilters || !columnChoice.isDefault}
+        hasFilters={locks.hasFilters}
         onChange={locks.setFilters}
-        onReset={() => {
-          locks.resetFilters()
-          columnChoice.reset()
-        }}
+        onReset={locks.resetFilters}
         actions={
           <>
             <button

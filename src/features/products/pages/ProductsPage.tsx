@@ -173,12 +173,11 @@ export function ProductsPage() {
     })
   }
 
-  // Clear All: the filters back to their defaults, any ticked rows unticked and the columns
-  // back to the default ones.
+  // Clear All: the filters back to their defaults and any ticked rows unticked. The columns are not
+  // touched — they are managed only from the Columns menu.
   function clearAll() {
     products.resetFilters()
     setSelected(new Set())
-    columnChoice.reset()
   }
 
   function openBulk(items: ProductListItem[]) {
@@ -590,8 +589,7 @@ export function ProductsPage() {
           filters={filters}
           facets={products.facets}
           total={data?.total ?? null}
-          // A changed column choice counts as something to clear (Clear All puts it back).
-          hasFilters={products.hasFilters || !columnChoice.isDefault}
+          hasFilters={products.hasFilters}
           hasSelection={selected.size > 0}
           onChange={products.setFilters}
           onReset={clearAll}

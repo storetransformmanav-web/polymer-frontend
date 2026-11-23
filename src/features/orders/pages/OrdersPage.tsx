@@ -310,14 +310,9 @@ export function OrdersPage() {
           filters={filters}
           facets={orders.facets}
           total={data?.total ?? null}
-          // Clear All also puts the columns back to the default, so a changed choice counts as
-          // something to clear.
-          hasFilters={orders.hasFilters || !columnChoice.isDefault}
+          hasFilters={orders.hasFilters}
           onChange={orders.setFilters}
-          onReset={() => {
-            orders.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={orders.resetFilters}
         />
 
         {/* Refresh sits in the top bar, right of the clock: it asks for the list again, and the

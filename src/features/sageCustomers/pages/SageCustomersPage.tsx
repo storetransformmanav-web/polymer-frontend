@@ -218,14 +218,9 @@ export function SageCustomersPage() {
         <SageCustomersToolbar
           filters={filters}
           tabCounts={data?.tabCounts ?? {}}
-          // Clear All also puts the columns back to the default, so a changed choice counts as
-          // something to clear.
-          hasFilters={customers.hasFilters || !columnChoice.isDefault}
+          hasFilters={customers.hasFilters}
           onChange={customers.setFilters}
-          onReset={() => {
-            customers.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={customers.resetFilters}
           actions={
             // Only the table has columns; the cards of a narrow screen do not.
             <div className="hidden lg:block">

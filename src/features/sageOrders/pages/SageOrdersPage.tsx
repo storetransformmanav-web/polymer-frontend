@@ -242,14 +242,9 @@ export function SageOrdersPage() {
         <SageOrdersToolbar
           filters={filters}
           statusCounts={data?.statusCounts ?? {}}
-          // Clear All also puts the columns back to the default, so a changed choice counts as
-          // something to clear.
-          hasFilters={orders.hasFilters || !columnChoice.isDefault}
+          hasFilters={orders.hasFilters}
           onChange={orders.setFilters}
-          onReset={() => {
-            orders.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={orders.resetFilters}
           actions={
             // Only the table has columns; the cards of a narrow screen do not.
             <div className="hidden lg:block">

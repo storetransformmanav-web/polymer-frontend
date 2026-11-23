@@ -170,14 +170,9 @@ export function SageStockPage() {
         <SageStockToolbar
           filters={filters}
           tabCounts={data?.tabCounts ?? {}}
-          // Clear All also puts the columns back to the default, so a changed choice counts as
-          // something to clear.
-          hasFilters={stock.hasFilters || !columnChoice.isDefault}
+          hasFilters={stock.hasFilters}
           onChange={stock.setFilters}
-          onReset={() => {
-            stock.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={stock.resetFilters}
           actions={
             // Only the table has columns; the cards of a narrow screen do not.
             <div className="hidden lg:block">

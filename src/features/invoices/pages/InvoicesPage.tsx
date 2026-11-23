@@ -193,14 +193,9 @@ export function InvoicesPage() {
         <InvoicesToolbar
           filters={filters}
           kindCounts={data?.kindCounts ?? []}
-          // Clear All also puts the columns back to the default, so a changed choice counts as
-          // something to clear.
-          hasFilters={invoices.hasFilters || !columnChoice.isDefault}
+          hasFilters={invoices.hasFilters}
           onChange={invoices.setFilters}
-          onReset={() => {
-            invoices.resetFilters()
-            columnChoice.reset()
-          }}
+          onReset={invoices.resetFilters}
           actions={
             // Only the table has columns; the cards of a narrow screen do not.
             <div className="hidden lg:block">
