@@ -184,7 +184,8 @@ function ValueCell({ field, kind }: { field: Metafield; kind: Kind }) {
  * of field (with a small icon for its type), type pill and value — booleans as True / False pills,
  * JSON on one line in a box that opens to the full value — each with a copy button. A field with
  * **no value** (nothing, or an empty `{}` / `[]`) shows an empty Type cell and a dash: its type is not
- * shown, and it only appears under "All Types".
+ * shown, and it only appears under "All Types". From `lg` the card takes the height the tab has (the
+ * tab panel does not scroll for it) and the table scrolls in its own box under a sticky heading.
  */
 export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail }) {
   const [search, setSearch] = useState('')
@@ -213,7 +214,9 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
   }
 
   return (
-    <section className={`${DETAIL_CARD} flex flex-col gap-5 p-4 sm:p-5`}>
+    <section
+      className={`${DETAIL_CARD} flex flex-col gap-5 p-4 sm:p-5 lg:min-h-0 lg:flex-1`}
+    >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           <span
@@ -276,7 +279,7 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
         </div>
       </header>
 
-      <div className="border-border-strong overflow-x-auto rounded-xl border">
+      <div className="border-border-strong relative overflow-auto rounded-xl border lg:min-h-0 lg:flex-1">
         <table className="w-full min-w-[760px] border-collapse text-[0.85rem]">
           <thead>
             <tr>
@@ -349,4 +352,4 @@ export function CustomerMetafieldsPanel({ customer }: { customer: CustomerDetail
 }
 
 const TH =
-  'text-text border-border-strong bg-table-head border-b px-4 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'
+  'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-4 py-3 text-left text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase'

@@ -304,9 +304,9 @@ export function CustomerDetailsView({
         role="tabpanel"
         aria-labelledby={`customer-tab-${tab}`}
         // From `lg` the page does not scroll as a whole: the header and tabs stay put and the tab's
-        // content scrolls in this box (the Orders table and the Lock Access lists scroll in their own boxes instead).
+        // content scrolls in this box (the Orders table, the Lock Access lists and the Metafields table scroll in their own boxes instead).
         className={`bg-surface p-3 sm:p-5 lg:min-h-0 lg:flex-1 ${
-          tab === 'orders' || tab === 'lock'
+          tab === 'orders' || tab === 'lock' || tab === 'metafields'
             ? 'lg:flex lg:flex-col lg:overflow-hidden'
             : 'lg:overflow-y-auto'
         }`}
