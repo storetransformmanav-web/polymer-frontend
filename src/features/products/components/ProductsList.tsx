@@ -193,6 +193,8 @@ const MESSAGE_BUTTON =
  * the two line up. Nothing is drawn when the product has no handle (no guessed link).
  */
 function ShopifyLink({ product }: { product: ProductListItem }) {
+  // Only an active product is on the public store; draft and archived ones get no icon.
+  if (String(product.status).toLowerCase() !== 'active') return null
   const href = storefrontProductUrl(product.handle)
   if (!href) return null
   return (
