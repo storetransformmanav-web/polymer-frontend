@@ -114,9 +114,9 @@ describe('the Sync products button', () => {
     // A panel, not a window.
     expect(screen.queryByRole('dialog')).toBeNull()
     const panel = within(screen.getByRole('group', { name: 'Sync products' }))
-    expect(panel.getByLabelText(/Last Days/)).toHaveFocus()
-    expect(panel.getByLabelText(/Last Days/)).toHaveValue('5')
-    expect(panel.getByRole('button', { name: 'Execute' })).toBeInTheDocument()
+    expect(panel.getByLabelText(/Last days/i)).toHaveFocus()
+    expect(panel.getByLabelText(/Last days/i)).toHaveValue('5')
+    expect(panel.getByRole('button', { name: 'Sync' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Sync all products' })).toBeInTheDocument()
     expect(panel.queryByLabelText(/Shopify ID/)).toBeNull()
     expect(trigger).not.toHaveBeenCalled()
@@ -152,7 +152,7 @@ describe('the Sync products button', () => {
     it('Execute syncs the products changed in the last days (5 to begin with) and closes the panel', async () => {
       const { user, panel } = await open('polymer-uk')
 
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
 
       await waitFor(() =>
         expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-uk', days: 5 }),
@@ -162,7 +162,7 @@ describe('the Sync products button', () => {
 
     it('sends the number typed, and Enter sends it too', async () => {
       const { user, panel } = await open('polymer-uk')
-      const box = panel.getByLabelText(/Last Days/)
+      const box = panel.getByLabelText(/Last days/i)
 
       await user.clear(box)
       await user.type(box, '30{Enter}')
@@ -174,24 +174,24 @@ describe('the Sync products button', () => {
 
     it('takes whole days from 1 to 365 and says why before sending', async () => {
       const { user, panel } = await open('polymer-uk')
-      const box = panel.getByLabelText(/Last Days/)
+      const box = panel.getByLabelText(/Last days/i)
 
       await user.clear(box)
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
       expect(panel.getByRole('alert')).toHaveTextContent('Enter the number of days')
 
       await user.type(box, 'ab')
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
       expect(panel.getByRole('alert')).toHaveTextContent('Whole days only')
 
       await user.clear(box)
       await user.type(box, '366')
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
       expect(panel.getByRole('alert')).toHaveTextContent('Between 1 and 365 days')
 
       await user.clear(box)
       await user.type(box, '0')
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
       expect(panel.getByRole('alert')).toHaveTextContent('Between 1 and 365 days')
 
       // The box itself stops at 3 characters.
@@ -204,7 +204,7 @@ describe('the Sync products button', () => {
     it('syncs every active store when "All shops" is selected', async () => {
       const { user, panel } = await open()
 
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
 
       await waitFor(() => expect(trigger).toHaveBeenCalledTimes(2))
       expect(trigger).toHaveBeenNthCalledWith(1, { shop: 'polymer-uk', days: 5 })
@@ -217,7 +217,7 @@ describe('the Sync products button', () => {
       )
       const { user, panel } = await open('polymer-uk')
 
-      await user.click(panel.getByRole('button', { name: 'Execute' }))
+      await user.click(panel.getByRole('button', { name: 'Sync' }))
 
       expect(
         await screen.findByText('A product sync is already running.'),

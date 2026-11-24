@@ -84,7 +84,7 @@ describe('POST /sync/customers (api.sync.triggerCustomers)', () => {
   it('sends the store in the query and no body, and returns the backend’s message', async () => {
     post.mockResolvedValue({ message: 'Customer sync started.' })
 
-    await expect(api.sync.triggerCustomers('polymer-uk')).resolves.toEqual({
+    await expect(api.sync.triggerCustomers({ shop: 'polymer-uk' })).resolves.toEqual({
       message: 'Customer sync started.',
     })
     expect(post).toHaveBeenCalledWith('/sync/customers', undefined, {
@@ -95,7 +95,7 @@ describe('POST /sync/customers (api.sync.triggerCustomers)', () => {
   it('sends no shop when none is given, and copes with an answer without a message', async () => {
     post.mockResolvedValue(null)
     await expect(api.sync.triggerCustomers()).resolves.toEqual({ message: '' })
-    expect(post).toHaveBeenCalledWith('/sync/customers', undefined, { params: undefined })
+    expect(post).toHaveBeenCalledWith('/sync/customers', undefined, { params: {} })
   })
 })
 

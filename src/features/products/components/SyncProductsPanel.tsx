@@ -103,7 +103,7 @@ export function SyncProductsPanel({
             disabled={!canSync}
             className={`${SMALL_BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover`}
           >
-            Refresh
+            Sync
           </button>
         </div>
 

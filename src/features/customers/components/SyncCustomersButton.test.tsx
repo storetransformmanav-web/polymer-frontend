@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shopSelected } from '../../../app/store/shopSlice.ts'
@@ -56,6 +56,13 @@ const run = (overrides: Partial<SyncRun>): SyncRun => ({
   ...overrides,
 })
 
+/** Opens the dropdown and starts a full sync. */
+async function syncAll(user: ReturnType<typeof userEvent.setup>, button: HTMLElement) {
+  await user.click(button)
+  const panel = within(screen.getByRole('group', { name: 'Sync customers' }))
+  await user.click(panel.getByRole('button', { name: 'Sync all customers' }))
+}
+
 const never = () => new Promise<never>(() => undefined)
 
 const shopsList = vi.mocked(api.shops.list)
@@ -110,27 +117,54 @@ describe('the Sync customers button', () => {
 
   it('syncs the selected store through POST /sync/customers, with no confirmation', async () => {
     const { user, button } = await setup('polymer-eu')
-    await user.click(button)
+    await syncAll(user, button)
 
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
-    expect(trigger).toHaveBeenCalledWith('polymer-eu')
+    expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-eu', days: null })
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('syncs only the customers changed in the last days when a number of days is sent', async () => {
+    const { user, button } = await setup('polymer-uk')
+    await user.click(button)
+    const panel = within(screen.getByRole('group', { name: 'Sync customers' }))
+    const box = panel.getByLabelText('Changed customers · Last days')
+    expect(box).toHaveValue('5')
+    await user.clear(box)
+    await user.type(box, '12')
+    await user.click(panel.getByRole('button', { name: 'Sync' }))
+
+    await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1))
+    expect(trigger).toHaveBeenCalledWith({ shop: 'polymer-uk', days: 12 })
+  })
+
+  it('refuses a number of days outside 1 to 365 and sends nothing', async () => {
+    const { user, button } = await setup('polymer-uk')
+    await user.click(button)
+    const panel = within(screen.getByRole('group', { name: 'Sync customers' }))
+    const box = panel.getByLabelText('Changed customers · Last days')
+    await user.clear(box)
+    await user.type(box, '400')
+    await user.click(panel.getByRole('button', { name: 'Sync' }))
+
+    expect(await screen.findByText('Between 1 and 365 days.')).toBeInTheDocument()
+    expect(trigger).not.toHaveBeenCalled()
   })
 
   it('syncs every connected, active store when "All shops" is selected', async () => {
     const { user, button } = await setup()
     expect(button).toHaveAttribute('title', 'Sync customers from Polymer UK, Polymer EU')
-    await user.click(button)
+    await syncAll(user, button)
 
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(2))
-    expect(trigger).toHaveBeenNthCalledWith(1, 'polymer-uk')
-    expect(trigger).toHaveBeenNthCalledWith(2, 'polymer-eu')
+    expect(trigger).toHaveBeenNthCalledWith(1, { shop: 'polymer-uk', days: null })
+    expect(trigger).toHaveBeenNthCalledWith(2, { shop: 'polymer-eu', days: null })
   })
 
   it('shows it is syncing at once, with the progress read from the run, and cannot be started twice', async () => {
     status.mockResolvedValue([run({ status: 'running', records_read: 120 })])
     const { user, button } = await setup('polymer-uk')
-    await user.click(button)
+    await syncAll(user, button)
 
     const busy = await screen.findByRole('button', { name: 'Syncing customers' })
     expect(busy).toBeDisabled()
@@ -151,7 +185,7 @@ describe('the Sync customers button', () => {
     ])
     const { user, button } = await setup('polymer-uk')
     customersList.mockClear()
-    await user.click(button)
+    await syncAll(user, button)
 
     await waitFor(() => expect(customersList).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('button', { name: 'Syncing customers' })).toBeDisabled()
@@ -168,7 +202,7 @@ describe('the Sync customers button', () => {
     ])
     const { user, button } = await setup('polymer-uk')
     customersList.mockClear()
-    await user.click(button)
+    await syncAll(user, button)
 
     expect(await screen.findByText('Synced 9,760 customers')).toBeInTheDocument()
     await waitFor(() => expect(customersList).toHaveBeenCalled())
@@ -189,7 +223,7 @@ describe('the Sync customers button', () => {
       }),
     ])
     const { user, button } = await setup('polymer-uk')
-    await user.click(button)
+    await syncAll(user, button)
 
     expect(
       await screen.findByRole('button', { name: 'Syncing customers' }),
@@ -206,7 +240,7 @@ describe('the Sync customers button', () => {
       }),
     ])
     const { user, button } = await setup('polymer-uk')
-    await user.click(button)
+    await syncAll(user, button)
 
     expect(await screen.findByText('Shopify rate limit reached')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sync customers' })).toBeEnabled()
@@ -217,7 +251,7 @@ describe('the Sync customers button', () => {
       new ApiError('You are not allowed to sync customers.', { status: 403 }),
     )
     const { user, button } = await setup('polymer-uk')
-    await user.click(button)
+    await syncAll(user, button)
 
     expect(
       await screen.findByText('You are not allowed to sync customers.'),
@@ -225,7 +259,7 @@ describe('the Sync customers button', () => {
     expect(status).not.toHaveBeenCalled()
     // Never retried by itself; another click starts it again.
     expect(trigger).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Sync customers' }))
+    await syncAll(user, screen.getByRole('button', { name: 'Sync customers' }))
     await waitFor(() => expect(trigger).toHaveBeenCalledTimes(2))
   })
 
@@ -236,7 +270,7 @@ describe('the Sync customers button', () => {
     )
     status.mockResolvedValue([run({ status: 'running', records_read: 5 })])
     const { user, button } = await setup()
-    await user.click(button)
+    await syncAll(user, button)
 
     await waitFor(() =>
       expect(status).toHaveBeenCalledWith(

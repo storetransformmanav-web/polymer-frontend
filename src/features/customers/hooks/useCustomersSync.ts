@@ -58,14 +58,14 @@ export function useCustomersSync() {
   }, [shops, selected])
 
   const start = useMutation({
-    mutationFn: async (keys: string[]) => {
+    mutationFn: async ({ keys, days }: { keys: string[]; days: number | null }) => {
       const startedAt = Date.now()
       const started: string[] = []
       let failure: string | null = null
       // One store after another: a failure stops there but keeps the ones already started.
       for (const key of keys) {
         try {
-          await api.sync.triggerCustomers(key)
+          await api.sync.triggerCustomers({ shop: key, days })
           started.push(key)
         } catch (error) {
           failure = toUserMessage(error)
@@ -175,6 +175,8 @@ export function useCustomersSync() {
       startError ??
       (phase === 'failed' ? (failedRun?.error ?? 'The sync failed.') : null),
     isStarting: start.isPending,
-    start: () => start.mutate(targets.map((shop) => shopValue(shop))),
+    /** `days` = the last days to bring in, or `null` for every customer. */
+    start: (days: number | null) =>
+      start.mutate({ keys: targets.map((shop) => shopValue(shop)), days }),
   }
 }

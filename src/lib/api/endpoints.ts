@@ -2168,6 +2168,22 @@ export const PRODUCT_SYNC_DAYS_MIN = 1
 export const PRODUCT_SYNC_DAYS_MAX = 365
 export const PRODUCT_SYNC_DAYS_DEFAULT = 5
 
+/** `days` of a customers sync: whole days, 1 to 365 (the API's limits; its own default is 5). */
+export const CUSTOMER_SYNC_DAYS_MIN = 1
+export const CUSTOMER_SYNC_DAYS_MAX = 365
+export const CUSTOMER_SYNC_DAYS_DEFAULT = 5
+
+export interface CustomerSyncOptions {
+  /** The store key or domain; empty means the backend's default store. */
+  shop?: string | null
+  /**
+   * Only the customers changed in Shopify (updated date, not created date) in the last `days`
+   * days (1–365); new ones are added and existing ones updated. Left out (`null`), every
+   * customer of the store is imported.
+   */
+  days?: number | null
+}
+
 export interface ProductSyncOptions {
   /** The store key or domain; empty means the backend's default store. */
   shop?: string | null
@@ -4238,14 +4254,23 @@ export const api = {
     },
 
     /**
-     * Starts a sync of every customer of a store from Shopify (`POST /sync/customers?shop=`;
-     * `shop` = its key, empty means the backend's default store). It runs in the background —
-     * follow it with `status` (`entity: 'customers'`). Only success matters, so the answer is
-     * read leniently: the backend's message when it sent one. Never retried automatically.
+     * Starts a customers sync from Shopify (`POST /sync/customers?shop=&days=`; `shop` = its key,
+     * empty means the backend's default store). `days` (1–365) brings in every customer whose
+     * updated date in Shopify is within that time (added when new, updated otherwise); without it
+     * every customer of the store is imported. It runs in the background — follow it with
+     * `status` (`entity: 'customers'`); only one runs at a time (409, the backend's message is
+     * shown). Only success matters, so the answer is read leniently: the backend's message when it
+     * sent one. Never retried automatically.
      */
-    async triggerCustomers(shop?: string | null): Promise<{ message: string }> {
+    async triggerCustomers(
+      options: CustomerSyncOptions = {},
+    ): Promise<{ message: string }> {
+      const { shop, days } = options
       const data = await apiClient.post<unknown>(ENDPOINTS.sync.customers, undefined, {
-        params: shop ? { shop } : undefined,
+        params: {
+          ...(shop ? { shop } : {}),
+          ...(days ? { days } : {}),
+        },
       })
       const message =
         typeof data === 'object' && data !== null && 'message' in data
