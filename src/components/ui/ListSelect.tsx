@@ -31,6 +31,8 @@ export function ListSelect({
   options,
   onChange,
   disabled = false,
+  large = false,
+  invalid = false,
 }: {
   id: string
   /** The accessible name (the box shows only the chosen choice). */
@@ -39,6 +41,10 @@ export function ListSelect({
   options: SelectOption[]
   onChange: (value: string) => void
   disabled?: boolean
+  /** Form-field size (40px, 0.85rem) instead of the compact filter size. */
+  large?: boolean
+  /** Red border, for a field with a problem. */
+  invalid?: boolean
 }) {
   const listId = useId()
   const [open, setOpen] = useState(false)
@@ -135,13 +141,16 @@ export function ListSelect({
         type="button"
         role="combobox"
         aria-label={label}
+        aria-invalid={invalid ? true : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleKeyDown}
-        className="border-border bg-surface text-text hover:border-accent focus:border-accent focus:outline-accent-tint flex h-8 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-[0.76rem] font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60"
+        className={`border-border bg-surface text-text hover:border-accent focus:border-accent focus:outline-accent-tint flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg border text-left font-medium transition-colors outline-none focus:outline-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+          large ? 'bg-bg h-10 px-3 text-[0.85rem]' : 'h-8 px-2.5 text-[0.76rem]'
+        } ${invalid ? 'border-danger' : ''}`}
       >
         <span className="min-w-0 truncate">{current?.label ?? ''}</span>
         <ChevronDownIcon
@@ -179,7 +188,7 @@ export function ListSelect({
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(option.value)}
-                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.76rem] ${
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 ${large ? 'text-[0.85rem]' : 'text-[0.76rem]'} ${
                     selected ? 'font-semibold' : ''
                   } ${
                     index === active

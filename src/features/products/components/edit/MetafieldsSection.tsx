@@ -1,4 +1,5 @@
 import { Badge } from '../../../../components/ui/Badge.tsx'
+import { ListSelect } from '../../../../components/ui/ListSelect.tsx'
 import { PlusIcon, TrashIcon, XIcon } from '../../../../components/ui/icons.tsx'
 import { METAFIELD_TYPES } from '../../utils/createDraft.ts'
 import {
@@ -38,17 +39,19 @@ function ValueControl({
 }) {
   if (field.type === 'boolean') {
     return (
-      <select
+      <ListSelect
         id={id}
+        label="Value"
+        large
+        invalid={invalid}
         value={field.value}
-        aria-invalid={invalid ? true : undefined}
-        onChange={(event) => onChange(event.target.value)}
-        className={FIELD_INPUT}
-      >
-        <option value="">Choose…</option>
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
+        options={[
+          { value: '', label: 'Choose…' },
+          { value: 'true', label: 'Yes' },
+          { value: 'false', label: 'No' },
+        ]}
+        onChange={onChange}
+      />
     )
   }
   if (isLongType(field.type)) {
@@ -189,35 +192,28 @@ export function MetafieldsSection({ product, draft, errors, onChange }: SectionP
               {field.isNew && (
                 <div className="mb-3 grid grid-cols-1 gap-3 min-[560px]:grid-cols-2">
                   <EditField id={`${prefix}-applies`} label="Applies to">
-                    <select
+                    <ListSelect
                       id={`${prefix}-applies`}
+                      label="Applies to"
+                      large
                       value={field.variantId ?? ''}
-                      onChange={(event) =>
-                        update(index, { variantId: event.target.value || null })
-                      }
-                      className={FIELD_INPUT}
-                    >
-                      {appliesTo.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={appliesTo}
+                      onChange={(value) => update(index, { variantId: value || null })}
+                    />
                   </EditField>
                   <EditField id={`${prefix}-type`} label="Kind" error={at('type')}>
-                    <select
+                    <ListSelect
                       id={`${prefix}-type`}
+                      label="Kind"
+                      large
+                      invalid={Boolean(at('type'))}
                       value={field.type}
-                      aria-invalid={at('type') ? true : undefined}
-                      onChange={(event) => update(index, { type: event.target.value })}
-                      className={FIELD_INPUT}
-                    >
-                      {METAFIELD_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {metafieldTypeLabel(type)}
-                        </option>
-                      ))}
-                    </select>
+                      options={METAFIELD_TYPES.map((type) => ({
+                        value: type,
+                        label: metafieldTypeLabel(type),
+                      }))}
+                      onChange={(type) => update(index, { type })}
+                    />
                   </EditField>
                   <EditField
                     id={`${prefix}-namespace`}

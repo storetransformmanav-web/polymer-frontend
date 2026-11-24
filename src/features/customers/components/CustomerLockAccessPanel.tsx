@@ -1,9 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
+  CheckIcon,
   ChevronRightIcon,
   LockIcon,
   PlusIcon,
@@ -286,16 +287,28 @@ function TagsCard({
   const [asked, setAsked] = useState<{ added: string[]; removed: string[] } | null>(null)
   const store = useStoreTags(shop ? [shop] : [], { enabled: open })
   const { update, isUpdating, error, clearError } = useUpdateCustomer()
+  const box = useRef<HTMLDivElement>(null)
+
+  // A click (or touch) anywhere outside the search box and its list puts the list away.
+  useEffect(() => {
+    if (!open) return undefined
+    function onPointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && box.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [open])
 
   const mine = lowerSet(customer.tags)
   const pickedSet = lowerSet(picked)
   const query = text.trim().toLowerCase()
+  // Chosen tags stay in the list (ticked) so one click un-picks them; several can be chosen.
   const suggestions = store.tags
     .filter(
       (tag) =>
         !isOwnTag(tag) &&
         !mine.has(tag.toLowerCase()) &&
-        !pickedSet.has(tag.toLowerCase()) &&
         (!query || tag.toLowerCase().includes(query)),
     )
     // The tags that open locked products first.
@@ -325,6 +338,22 @@ function TagsCard({
 
   function pick(...next: string[]) {
     setPicked([...picked, ...next.filter((tag) => !pickedSet.has(tag.toLowerCase()))])
+  }
+
+  /** Ticks a tag, or un-ticks it when it is already chosen. */
+  function toggle(tag: string) {
+    if (pickedSet.has(tag.toLowerCase())) {
+      setPicked(picked.filter((item) => item.toLowerCase() !== tag.toLowerCase()))
+    } else {
+      pick(tag)
+    }
+  }
+
+  function askToAdd() {
+    if (picked.length === 0) return
+    clearError()
+    setOpen(false)
+    setAsked({ added: picked, removed: [] })
   }
 
   function addTyped() {
@@ -373,9 +402,15 @@ function TagsCard({
       {canEdit && (
         <div className="flex flex-col items-start gap-3">
           <div
+            ref={box}
             className="relative w-full"
             onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+              // Tabbing away closes the list; a click elsewhere is handled by the document listener.
+              if (
+                event.relatedTarget &&
+                !event.currentTarget.contains(event.relatedTarget)
+              )
+                setOpen(false)
             }}
             onKeyDown={(event) => {
               if (event.key === 'Escape' && open) {
@@ -397,6 +432,7 @@ function TagsCard({
                 maxLength={255}
                 placeholder="Search tags or add a new one…"
                 onFocus={() => setOpen(true)}
+                onClick={() => setOpen(true)}
                 onChange={(event) => {
                   setText(event.target.value)
                   setOpen(true)
@@ -463,35 +499,76 @@ function TagsCard({
                       </li>
                     )
                   ) : (
-                    suggestions.map((tag) => (
-                      <li key={tag} className="border-border border-b last:border-b-0">
-                        <button
-                          type="button"
-                          onClick={() => pick(tag)}
-                          className="hover:bg-accent-tint/60 flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-3 py-2 text-left text-[0.82rem] font-semibold transition-colors"
-                        >
-                          <span className="min-w-0 flex-1 truncate">{tag}</span>
-                          {use.has(tag.toLowerCase()) && (
-                            <span className="bg-accent-tint text-accent shrink-0 rounded-full px-2 py-0.5 text-[0.66rem] font-bold">
-                              Opens {use.get(tag.toLowerCase())} product
-                              {use.get(tag.toLowerCase()) === 1 ? '' : 's'}
+                    suggestions.map((tag) => {
+                      const on = pickedSet.has(tag.toLowerCase())
+                      return (
+                        <li key={tag} className="border-border border-b last:border-b-0">
+                          <button
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggle(tag)}
+                            className={`hover:bg-accent-tint/60 flex w-full cursor-pointer items-center gap-2 border-none px-3 py-2 text-left text-[0.82rem] font-semibold transition-colors ${
+                              on ? 'bg-accent-tint/40' : 'bg-transparent'
+                            }`}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                on
+                                  ? 'border-accent bg-accent text-accent-contrast'
+                                  : 'border-border bg-bg'
+                              }`}
+                            >
+                              {on && <CheckIcon width={11} height={11} />}
                             </span>
-                          )}
-                        </button>
-                      </li>
-                    ))
+                            <span className="min-w-0 flex-1 truncate">{tag}</span>
+                            {use.has(tag.toLowerCase()) && (
+                              <span className="bg-accent-tint text-accent shrink-0 rounded-full px-2 py-0.5 text-[0.66rem] font-bold">
+                                Opens {use.get(tag.toLowerCase())} product
+                                {use.get(tag.toLowerCase()) === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      )
+                    })
                   )}
                 </ul>
+                <div className="border-border bg-surface flex items-center gap-2 border-t px-3 py-2">
+                  <span
+                    role="status"
+                    className="text-text-muted min-w-0 flex-1 text-[0.78rem] font-semibold"
+                  >
+                    {picked.length === 0
+                      ? 'Tick one or more tags'
+                      : `${picked.length} selected`}
+                  </span>
+                  {picked.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPicked([])}
+                      className="text-text-muted hover:text-text cursor-pointer border-none bg-transparent px-1 text-[0.78rem] font-semibold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={picked.length === 0}
+                    onClick={askToAdd}
+                    className={`${PRIMARY} h-8 px-3 text-[0.78rem]`}
+                  >
+                    <PlusIcon width={13} height={13} />
+                    {picked.length > 1 ? `Add ${picked.length} tags` : 'Add tag'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
           <button
             type="button"
             disabled={picked.length === 0}
-            onClick={() => {
-              clearError()
-              setAsked({ added: picked, removed: [] })
-            }}
+            onClick={askToAdd}
             className={`${PRIMARY} h-10 px-4 text-[0.88rem]`}
           >
             <PlusIcon width={14} height={14} />
