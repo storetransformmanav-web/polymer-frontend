@@ -150,6 +150,8 @@ export const ENDPOINTS = {
     list: '/customers',
     /** `ref` is the customer's UUID, Shopify ID or email. */
     detail: (ref: string) => `/customers/${encodeURIComponent(ref)}`,
+    /** `PUT` sets or resets the customer's website login password (`ref`: UUID, Shopify ID or email). */
+    password: (ref: string) => `/customers/${encodeURIComponent(ref)}/password`,
     /**
      * `GET` the customers as a CSV file. Plural, like `/products/export` and the rest of this group:
      * the singular `/customer/export` the request first named answers 404 "Not Found".
@@ -1356,6 +1358,47 @@ const customerUpdateAnswerSchema = z
     result: z.unknown().nullish(),
   })
   .loose()
+
+/**
+ * `PUT /customers/{customer_ref}/password?shop=` — sets or resets the customer's website login
+ * password (classic customer accounts). Shopify hashes and stores it; the CRM never saves it.
+ * The backend checks every rule (strength, the two matching, once per customer per minute).
+ */
+export interface CustomerPasswordBody {
+  password: string
+  password_confirmation: string
+}
+
+/**
+ * What setting a password answers:
+ * `{ code, status, message, result: { customer_id, email, account_state, message } }`.
+ * Read leniently — only the messages and the account state are shown.
+ */
+const customerPasswordAnswerSchema = z
+  .object({
+    message: z.string().nullish(),
+    result: z
+      .object({
+        customer_id: z.string().nullish(),
+        email: z.string().nullish(),
+        account_state: z.string().nullish(),
+        message: z.string().nullish(),
+      })
+      .loose()
+      .nullish(),
+  })
+  .loose()
+
+/** The backend's answer to a password change, as shown on screen. */
+export interface CustomerPasswordResult {
+  /** The answer's own `message` ("Website password set"). */
+  message: string
+  /** `result.message` ("Password set. … can now log in on the website with it."). */
+  detail: string
+  /** `result.account_state` (e.g. `ENABLED`), null when not sent. */
+  accountState: string | null
+  email: string | null
+}
 
 /** The address of a new customer (`POST /customers` → `address`); every part is optional. */
 export interface CustomerCreateAddress {
@@ -3745,6 +3788,32 @@ export const api = {
         }
       }
       return { message: parsed.data.message ?? '', customer: null }
+    },
+
+    /**
+     * Sets or resets the customer's website password (`PUT /customers/{ref}/password?shop=`) —
+     * see `CustomerPasswordBody`. The password goes only in the body, never in the address.
+     * Never retried automatically.
+     */
+    async setPassword(
+      ref: string,
+      body: CustomerPasswordBody,
+      shop?: string | null,
+    ): Promise<CustomerPasswordResult> {
+      const query = shop ? { shop } : undefined
+      const data = await apiClient.put(ENDPOINTS.customers.password(ref), body, {
+        params: query,
+      })
+      const parsed = customerPasswordAnswerSchema.safeParse(data)
+      if (!parsed.success) {
+        return { message: '', detail: '', accountState: null, email: null }
+      }
+      return {
+        message: parsed.data.message?.trim() ?? '',
+        detail: parsed.data.result?.message?.trim() ?? '',
+        accountState: parsed.data.result?.account_state ?? null,
+        email: parsed.data.result?.email ?? null,
+      }
     },
 
     async details(ref: string, includeRaw = false): Promise<CustomerDetail> {

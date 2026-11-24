@@ -10,7 +10,10 @@ import {
   CustomerDeleteDialog,
   type CustomerToDelete,
 } from '../components/CustomerDeleteDialog.tsx'
-import { CustomerCreateView } from '../components/CustomerCreateView.tsx'
+import {
+  CustomerCreateView,
+  type PasswordOutcome,
+} from '../components/CustomerCreateView.tsx'
 import { CustomerTabsBar, type CustomerOrderTab } from '../components/CustomerTabsBar.tsx'
 import type { OpenOrderRequest } from '../components/CustomerOrderHistory.tsx'
 import { OrderDetailsView } from '../../orders/index.ts'
@@ -85,6 +88,8 @@ export function CustomersPage() {
     orderTabs.find((tab) => tab.id === activeOrderId && tab.customerId === activeId) ??
     null
   const [notice, setNotice] = useState<string | null>(null)
+  // The website password could not be set after a create: stays until the next form or create.
+  const [passwordProblem, setPasswordProblem] = useState<string | null>(null)
   const closeDelete = useCallback(() => setDeleting(null), [])
 
   useEffect(() => {
@@ -105,6 +110,7 @@ export function CustomersPage() {
 
   const openForm = useCallback(() => {
     setNotice(null)
+    setPasswordProblem(null)
     setAdding(true)
     navigate(NEW_PATH)
   }, [navigate])
@@ -124,13 +130,19 @@ export function CustomersPage() {
   }, [dirty, closeForm])
 
   /** The store made the customer: close the form, say so, and open the new customer in a tab. */
-  function handleCreated(result: CustomerCreateResult) {
+  function handleCreated(result: CustomerCreateResult, password?: PasswordOutcome) {
     setConfirmingClose(false)
     setAdding(false)
     setDirty(false)
     const warnings = result.warnings.length > 0 ? ` ${result.warnings.join(' ')}` : ''
+    const passwordSet = password?.message ? ` ${password.message}` : ''
     setNotice(
-      `${result.message || 'Customer created in Shopify and the CRM.'}${warnings}`,
+      `${result.message || 'Customer created in Shopify and the CRM.'}${warnings}${passwordSet}`,
+    )
+    setPasswordProblem(
+      password?.error
+        ? `The customer was created, but the website password was not set: ${password.error}`
+        : null,
     )
     if (result.id) {
       tabs.openTab({
@@ -280,6 +292,7 @@ export function CustomersPage() {
       )}
 
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
+      {passwordProblem && <FormMessage tone="error">{passwordProblem}</FormMessage>}
 
       {/* The form stays mounted (hidden) while the list or a customer is shown. */}
       {formOpen && (

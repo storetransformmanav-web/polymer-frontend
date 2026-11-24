@@ -1,4 +1,7 @@
-import type { CustomerCreateBody } from '../../../lib/api/endpoints.ts'
+import type {
+  CustomerCreateBody,
+  CustomerPasswordBody,
+} from '../../../lib/api/endpoints.ts'
 
 /** A metafield row of the form; `id` only keys the row. */
 export interface MetafieldDraft {
@@ -28,6 +31,12 @@ export interface CustomerDraft {
   phone: string
   tags: string[]
   metafields: MetafieldDraft[]
+  /**
+   * The website login password, set right after the customer is made
+   * (`PUT /customers/{id}/password`). Optional; never part of `POST /customers`.
+   */
+  password: string
+  passwordConfirmation: string
 }
 
 export const EMPTY_DRAFT: CustomerDraft = {
@@ -47,6 +56,8 @@ export const EMPTY_DRAFT: CustomerDraft = {
   phone: '',
   tags: [],
   metafields: [],
+  password: '',
+  passwordConfirmation: '',
 }
 
 /** The id of the New customer tab in the open-customers strip (not a customer id). */
@@ -76,6 +87,36 @@ const hasAddress = (draft: CustomerDraft) =>
 const metafieldTouched = (row: MetafieldDraft) =>
   row.namespace.trim() !== '' || row.key.trim() !== '' || row.value.trim() !== ''
 
+const hasPassword = (draft: CustomerDraft) =>
+  draft.password !== '' || draft.passwordConfirmation !== ''
+
+/**
+ * The body of `PUT /customers/{id}/password`, or null when no password was typed. Sent exactly
+ * as typed (never trimmed) — the backend decides what a valid password is.
+ */
+export function buildPasswordBody(draft: CustomerDraft): CustomerPasswordBody | null {
+  if (!hasPassword(draft)) return null
+  return { password: draft.password, password_confirmation: draft.passwordConfirmation }
+}
+
+/**
+ * The only password checks made here: both boxes are needed once one is typed, and they must be
+ * the same — otherwise the customer would be made and the password refused afterwards. How
+ * strong it must be is the backend's rule, and its own message is shown when it refuses.
+ */
+export function validatePasswordPair(
+  password: string,
+  confirmation: string,
+): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (password === '' && confirmation === '') return errors
+  if (password === '') errors.password = 'Enter the password'
+  if (confirmation === '') errors.passwordConfirmation = 'Enter the password again'
+  else if (password !== '' && password !== confirmation)
+    errors.passwordConfirmation = 'The passwords do not match'
+  return errors
+}
+
 /** True when the form holds anything the person typed or chose (the store alone doesn't count). */
 export function isDraftDirty(draft: CustomerDraft): boolean {
   return (
@@ -86,7 +127,8 @@ export function isDraftDirty(draft: CustomerDraft): boolean {
     draft.taxExempt ||
     hasAddress(draft) ||
     draft.tags.length > 0 ||
-    draft.metafields.some(metafieldTouched)
+    draft.metafields.some(metafieldTouched) ||
+    hasPassword(draft)
   )
 }
 
@@ -130,6 +172,8 @@ export function validateCustomerDraft(draft: CustomerDraft): Record<string, stri
     }
     seen.add(name)
   }
+
+  Object.assign(errors, validatePasswordPair(draft.password, draft.passwordConfirmation))
 
   return errors
 }

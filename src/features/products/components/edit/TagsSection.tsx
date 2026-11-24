@@ -7,7 +7,8 @@ import { XIcon } from '../../../../components/ui/icons.tsx'
 import type { SectionProps } from './fields.tsx'
 
 /** Room the suggestion list wants below the box before it opens above it instead (px). */
-const LIST_ROOM = 280
+const LIST_ROOM = 256
+const LIST_MIN_ROOM = 160
 
 /** A tag chip: the same pill whether the tags are shown or being edited. */
 export const TAG_CHIP =
@@ -91,6 +92,7 @@ export function TagsInput({
   const [place, setPlace] = useState<{
     left: number
     width: number
+    maxHeight: number
     top?: number
     bottom?: number
     visible: boolean
@@ -116,10 +118,14 @@ export function TagsInput({
       const rect = card.current?.getBoundingClientRect()
       if (!rect) return
       const below = window.innerHeight - rect.bottom
-      const upward = below < LIST_ROOM && rect.top > below
+      // Under the card whenever a usable list fits there (the list shrinks to the room left);
+      // above it only when the space below is really small.
+      const upward = below < LIST_MIN_ROOM && rect.top > below
+      const room = (upward ? rect.top : below) - 16
       setPlace({
         left: rect.left,
         width: rect.width,
+        maxHeight: Math.max(120, Math.min(LIST_ROOM, room)),
         // A box that isn't laid out (no size) can't be off screen; otherwise it must be in view.
         visible:
           (rect.width === 0 && rect.height === 0) ||
@@ -257,8 +263,9 @@ export function TagsInput({
               top: place.top,
               bottom: place.bottom,
               width: place.width,
+              maxHeight: place.maxHeight,
             }}
-            className="border-border bg-bg fixed z-50 max-h-64 overflow-y-auto rounded-xl border p-1.5 shadow-lg"
+            className="border-accent bg-bg fixed z-50 overflow-y-auto rounded-xl border p-1.5 shadow-lg"
           >
             {matches.map((value, index) => (
               <li

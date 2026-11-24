@@ -14,6 +14,7 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   ArrowLeftIcon,
   LayersIcon,
+  LockIcon,
   MailIcon,
   MapPinIcon,
   PlusIcon,
@@ -30,8 +31,10 @@ import type { CustomerCreateResult } from '../../../lib/api/endpoints.ts'
 import { countryName, countryOptions } from '../../../lib/countries.ts'
 import { mergeTags, TagsInput, useStoreTags } from '../../products/index.ts'
 import { useCreateCustomer } from '../hooks/useCreateCustomer.ts'
+import { useSetCustomerPassword } from '../hooks/useSetCustomerPassword.ts'
 import {
   buildCustomerBody,
+  buildPasswordBody,
   EMPTY_DRAFT,
   isDraftDirty,
   MAX_METAFIELDS,
@@ -39,6 +42,7 @@ import {
   type CustomerDraft,
 } from '../utils/customerDraft.ts'
 import { CustomerCreateDialog } from './CustomerCreateDialog.tsx'
+import { PasswordInput } from './PasswordInput.tsx'
 
 const CARD = 'border-border bg-bg min-w-0 rounded-2xl border'
 const FIELD_LABEL = 'text-text text-[0.82rem] font-semibold'
@@ -49,9 +53,17 @@ const BUTTON =
 const PRIMARY_BUTTON = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent shadow-sm`
 const SECONDARY_BUTTON = `${BUTTON} border-border bg-bg text-text hover:border-accent`
 
+/** How setting the website password went, right after the customer was made (when one was typed). */
+export interface PasswordOutcome {
+  /** The backend's own words on success. */
+  message?: string
+  /** The backend's refusal (the customer exists; the password can be set from its page). */
+  error?: string
+}
+
 interface CustomerCreateViewProps {
   /** The store made the customer: open it (the page does). */
-  onCreated: (result: CustomerCreateResult) => void
+  onCreated: (result: CustomerCreateResult, password?: PasswordOutcome) => void
   /** Leave the form (the page asks first when something was entered). */
   onBack: () => void
   /** Told whenever the form gains or loses anything the person typed or chose. */
@@ -166,7 +178,10 @@ export function CustomerCreateView({
   const formId = useId()
   const fid = (name: string) => `${formId}-${name}`
   const { shops, selected } = useShops()
-  const { create, isCreating, error, clearError } = useCreateCustomer()
+  const { create, isCreating: isPosting, error, clearError } = useCreateCustomer()
+  const { setPassword, isSaving: isSettingPassword } = useSetCustomerPassword()
+  // Busy from "Yes, create" until the password (if any) has been answered too.
+  const isCreating = isPosting || isSettingPassword
   const [draft, setDraft] = useState<CustomerDraft>(EMPTY_DRAFT)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [confirming, setConfirming] = useState(false)
@@ -271,8 +286,32 @@ export function CustomerCreateView({
   async function confirm() {
     const result = await create(buildCustomerBody(effective))
     if (!result) return
+    // The customer exists now; the password is its own call. Whatever it answers, the customer
+    // is opened (re-creating would make it twice) and the password's outcome is shown there.
+    const passwordBody = buildPasswordBody(effective)
+    let passwordOutcome: PasswordOutcome | undefined
+    if (passwordBody) {
+      if (!result.id) {
+        passwordOutcome = {
+          error:
+            'The password was not set: the store did not say which customer it made. Set it from the customer’s page.',
+        }
+      } else {
+        const answer = await setPassword({
+          id: result.id,
+          shop: effective.shop,
+          body: passwordBody,
+        })
+        passwordOutcome =
+          'result' in answer
+            ? { message: answer.result.detail || answer.result.message }
+            : { error: answer.error }
+      }
+    }
+    // Never keep a password in memory longer than needed.
+    setDraft((current) => ({ ...current, password: '', passwordConfirmation: '' }))
     setConfirming(false)
-    onCreated(result)
+    onCreated(result, passwordOutcome)
   }
 
   const name = [effective.firstName, effective.lastName]
@@ -298,6 +337,14 @@ export function CustomerCreateView({
       label: 'Marketing emails',
       value: effective.acceptsMarketing ? 'Subscribed' : 'Not subscribed',
     },
+    ...(buildPasswordBody(effective)
+      ? [
+          {
+            label: 'Website password',
+            value: 'Will be set right after the customer is made',
+          },
+        ]
+      : []),
   ]
 
   const problems = Object.keys(errors).length > 0
@@ -400,6 +447,48 @@ export function CustomerCreateView({
                 />
               </div>
             </Field>
+          </Section>
+
+          <Section
+            icon={LockIcon}
+            title="Website password"
+            subtitle="Optional. Lets the customer log in on the website straight away."
+          >
+            <div className="grid grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+              <Field
+                id={fid('password')}
+                label="Password"
+                error={errors.password}
+                optional
+              >
+                <PasswordInput
+                  id={fid('password')}
+                  value={draft.password}
+                  error={errors.password}
+                  onChange={(password) =>
+                    update({ password }, 'password', 'passwordConfirmation')
+                  }
+                />
+              </Field>
+              <Field
+                id={fid('passwordConfirmation')}
+                label="Confirm password"
+                error={errors.passwordConfirmation}
+                optional
+              >
+                <PasswordInput
+                  id={fid('passwordConfirmation')}
+                  value={draft.passwordConfirmation}
+                  error={errors.passwordConfirmation}
+                  onChange={(passwordConfirmation) =>
+                    update({ passwordConfirmation }, 'password', 'passwordConfirmation')
+                  }
+                />
+              </Field>
+            </div>
+            <p className="text-text-muted m-0 text-[0.78rem]">
+              Sent to Shopify, which stores it; the CRM never saves it.
+            </p>
           </Section>
 
           <Section
