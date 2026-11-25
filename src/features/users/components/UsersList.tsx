@@ -15,9 +15,10 @@ import {
   ROW_ACTION_ICON,
 } from '../../../components/ui/rowActions.ts'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
-import type { UserItem } from '../../../lib/api/endpoints.ts'
+import type { Role, UserItem } from '../../../lib/api/endpoints.ts'
 import { formatDate, formatDateTime, initials } from '../../../lib/format.ts'
 import { isAdminRole, roleLabel, roleTone, userName } from '../utils/format.ts'
+import { UserRoleCell, UserStatusCell, type AskUserUpdate } from './UserEditCells.tsx'
 import { UserReminderToggle } from './UserReminderToggle.tsx'
 
 const TH_BASE =
@@ -45,6 +46,12 @@ interface UsersListProps {
   onPrefetch: (id: string) => void
   /** The trash button of a row / card: ask to delete this user. */
   onDelete: (user: UserItem) => void
+  /** Every role (the role dropdown of a row). */
+  roles: Role[]
+  /** Whoever may change a user's role and status; others see plain badges. */
+  canEdit: boolean
+  /** A role or status was chosen in a row: ask "Are you sure?" (the page holds the question). */
+  onAsk: (user: UserItem, request: Parameters<AskUserUpdate>[0]) => void
   onRetry: () => void
   onClearFilters: () => void
 }
@@ -158,6 +165,9 @@ export function UsersList({
   onOpen,
   onPrefetch,
   onDelete,
+  roles,
+  canEdit,
+  onAsk,
   onRetry,
   onClearFilters,
 }: UsersListProps) {
@@ -329,10 +339,25 @@ export function UsersList({
                       </span>
                     </td>
                     <td className={TD}>
-                      <Badge tone={roleTone(user.role)}>{roleLabel(user)}</Badge>
+                      {canEdit ? (
+                        <UserRoleCell
+                          user={user}
+                          roles={roles}
+                          onAsk={(request) => onAsk(user, request)}
+                        />
+                      ) : (
+                        <Badge tone={roleTone(user.role)}>{roleLabel(user)}</Badge>
+                      )}
                     </td>
                     <td className={TD}>
-                      <StatusBadge active={user.is_active} />
+                      {canEdit ? (
+                        <UserStatusCell
+                          user={user}
+                          onAsk={(request) => onAsk(user, request)}
+                        />
+                      ) : (
+                        <StatusBadge active={user.is_active} />
+                      )}
                     </td>
                     <td className={TD}>
                       <UserReminderToggle user={user} name={name} />

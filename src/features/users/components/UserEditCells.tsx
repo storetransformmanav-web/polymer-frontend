@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { ChoiceEdit } from '../../../components/ui/ChoiceEdit.tsx'
+import { PillSelect, type PillOption } from '../../../components/ui/PillSelect.tsx'
 import { DoubleClickEdit } from '../../../components/ui/DoubleClickEdit.tsx'
-import type { Role, UserDetail } from '../../../lib/api/endpoints.ts'
+import {
+  USER_STATUSES,
+  type Role,
+  type UserDetail,
+  type UserItem,
+} from '../../../lib/api/endpoints.ts'
 import { isAdminRole, roleLabel, roleTone } from '../utils/format.ts'
 import {
   USER_LIMITS,
@@ -94,15 +99,16 @@ export function UserTextCell({
 }
 
 /**
- * A user's role, changed by double-clicking it (or its small pencil): it turns into a dropdown of
- * the roles; choosing another asks "Are you sure?" and only "Yes, update" sends it.
+ * A user's role as a coloured pill with a dropdown — the same control as a product's status in the
+ * Products list (`PillSelect`). **The choices are the roles the backend lists** (`GET /roles`: each
+ * role's own name and label); choosing another asks "Are you sure?" and only "Yes, update" sends it.
  */
 export function UserRoleCell({
   user,
   roles,
   onAsk,
 }: {
-  user: UserDetail
+  user: UserItem
   roles: Role[]
   onAsk: AskUserUpdate
 }) {
@@ -110,14 +116,25 @@ export function UserRoleCell({
   // The role list hasn't arrived (or failed): show the role, nothing to choose from.
   if (roles.length === 0) return badge
 
+  const options: PillOption[] = roles.map((role) => ({
+    value: role.name,
+    label: role.label || role.name,
+    tone: roleTone(role.name),
+  }))
+  // The user's own role is always listed, even if the backend's list no longer has it.
+  if (!options.some((option) => option.value === user.role)) {
+    options.push({ value: user.role, label: roleLabel(user), tone: roleTone(user.role) })
+  }
+
   return (
-    <ChoiceEdit
+    <PillSelect
+      label={`Role: ${roleLabel(user)}`}
+      menuLabel="Role"
+      options={options}
       value={user.role}
-      label="Role"
-      display={badge}
-      options={roles.map((role) => ({ value: role.name, label: role.label }))}
-      onCommit={(next) => {
-        const target = roles.find((role) => role.name === next)
+      widthClass="w-auto min-w-24 px-2.5"
+      onChange={(next) => {
+        const target = options.find((option) => option.value === next)
         let note: string | undefined
         if (isAdminRole(next)) note = 'Administrators can see every store.'
         else if (isAdminRole(user.role) && user.shop_keys.length === 0) {
@@ -133,40 +150,42 @@ export function UserRoleCell({
   )
 }
 
-const ACTIVE = 'active'
-const INACTIVE = 'inactive'
+/** "inactive" → "Inactive": the API's own status word, capitalised (no label is written here). */
+const statusLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1)
 
 /**
- * Whether the account is active, changed the same way (a dropdown: Active / Inactive). An inactive
- * account can no longer sign in; its history is kept.
+ * Whether the account is active, as the same coloured pill with a dropdown. **The choices are the
+ * API's own statuses** (`USER_STATUSES`); an inactive account can no longer sign in, its history is
+ * kept. Choosing another asks "Are you sure?" first.
  */
 export function UserStatusCell({
   user,
   onAsk,
 }: {
-  user: UserDetail
+  user: UserItem
   onAsk: AskUserUpdate
 }) {
+  const options: PillOption[] = USER_STATUSES.map((status) => ({
+    value: status,
+    label: statusLabel(status),
+    tone: status === 'active' ? 'success' : 'neutral',
+  }))
+  const current = user.is_active ? 'active' : 'inactive'
+
   return (
-    <ChoiceEdit
-      value={user.is_active ? ACTIVE : INACTIVE}
-      label="Status"
-      display={
-        <Badge tone={user.is_active ? 'success' : 'neutral'}>
-          {user.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      }
-      options={[
-        { value: ACTIVE, label: 'Active' },
-        { value: INACTIVE, label: 'Inactive' },
-      ]}
-      onCommit={(next) => {
-        const active = next === ACTIVE
+    <PillSelect
+      label={`Status: ${statusLabel(current)}`}
+      menuLabel="Status"
+      options={options}
+      value={current}
+      widthClass="w-auto min-w-24 px-2.5"
+      onChange={(next) => {
+        const active = next === 'active'
         onAsk({
           change: {
             label: 'Status',
-            from: user.is_active ? 'Active' : 'Inactive',
-            to: active ? 'Active' : 'Inactive',
+            from: statusLabel(current),
+            to: statusLabel(next),
           },
           body: buildUserUpdateBody(user, { isActive: active }),
           note: active ? undefined : 'They will no longer be able to sign in.',

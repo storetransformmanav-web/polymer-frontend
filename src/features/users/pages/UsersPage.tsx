@@ -7,11 +7,16 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import { OpenTabsBar } from '../../../components/ui/OpenTabsBar.tsx'
 import { PlusIcon, UsersIcon } from '../../../components/ui/icons.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
+import { useAccess } from '../../../hooks/useAccess.ts'
 import { useShops } from '../../../hooks/useShops.ts'
 import type { UserCreateBody, UserItem } from '../../../lib/api/endpoints.ts'
 import { ConfirmCancelDialog } from '../../../components/ui/ConfirmCancelDialog.tsx'
 import { UserCreateView } from '../components/UserCreateView.tsx'
 import { UserDetailsView } from '../components/UserDetailsView.tsx'
+import {
+  UserUpdateDialog,
+  type UserUpdateRequest,
+} from '../components/UserUpdateDialog.tsx'
 import { UserDeleteDialog, type UserToDelete } from '../components/UserDeleteDialog.tsx'
 import { UsersKpis } from '../components/UsersKpis.tsx'
 import { UsersList } from '../components/UsersList.tsx'
@@ -78,6 +83,12 @@ export function UsersPage() {
   // The user a trash button asked to delete (the dialog confirms).
   const [deleting, setDeleting] = useState<UserToDelete | null>(null)
   const closeDelete = useCallback(() => setDeleting(null), [])
+  // A role or status chosen in a row, waiting for "Yes, update".
+  const [changing, setChanging] = useState<{
+    user: UserItem
+    request: UserUpdateRequest
+  } | null>(null)
+  const { canManage } = useAccess('users')
 
   // The form is on screen (at /users/new); anywhere else it is only kept.
   const creatingRoute = splat === 'new'
@@ -277,6 +288,12 @@ export function UsersPage() {
               shopNames={shopNames}
               onOpen={openUser}
               onPrefetch={prefetchDetails}
+              roles={roles.roles}
+              canEdit={canManage}
+              onAsk={(user, request) => {
+                setNotice(null)
+                setChanging({ user, request })
+              }}
               onDelete={(user) => {
                 setNotice(null)
                 setDeleting({ id: user.id, name: userName(user), email: user.email })
@@ -298,6 +315,21 @@ export function UsersPage() {
           )}
         </section>
       </div>
+
+      {changing && (
+        <UserUpdateDialog
+          key={`update-${changing.user.id}`}
+          userId={changing.user.id}
+          name={userName(changing.user)}
+          request={changing.request}
+          roles={roles.roles}
+          onClose={() => setChanging(null)}
+          onDone={(message) => {
+            setNotice(message || `Updated ${userName(changing.user)}.`)
+            setChanging(null)
+          }}
+        />
+      )}
 
       {deleting && (
         <UserDeleteDialog

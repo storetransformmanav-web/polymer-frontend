@@ -17,6 +17,7 @@ import type { Role, Shop } from '../../../lib/api/endpoints.ts'
 import { formatDateTimeAmPm, initials } from '../../../lib/format.ts'
 import type { useUserDetails } from '../hooks/useUserDetails.ts'
 import { roleLabel, userName } from '../utils/format.ts'
+import { UserRoleCell, UserStatusCell } from './UserEditCells.tsx'
 import { UserOverviewPanel, UserSecurityAccessPanel } from './UserDetailPanels.tsx'
 import { UserUpdateDialog, type UserUpdateRequest } from './UserUpdateDialog.tsx'
 
@@ -127,11 +128,19 @@ export function UserDetailsView({
         title={name}
         status={
           <>
-            {known && (
-              <StatusPill
-                label={`Status: ${known.is_active ? 'Active' : 'Inactive'}`}
-                tone={known.is_active ? 'success' : 'neutral'}
-              />
+            {user ? (
+              // Double-click the status (or its pencil) to change it.
+              <span className="flex items-center gap-1.5 text-[0.8rem]">
+                <span className="text-text-muted">Status:</span>
+                <UserStatusCell user={user} onAsk={ask} />
+              </span>
+            ) : (
+              known && (
+                <StatusPill
+                  label={`Status: ${known.is_active ? 'Active' : 'Inactive'}`}
+                  tone={known.is_active ? 'success' : 'neutral'}
+                />
+              )
             )}
             {details.isRefreshing && (
               <span className="text-text-muted text-[0.75rem]" role="status">
@@ -144,7 +153,14 @@ export function UserDetailsView({
           known && (
             <>
               <HeaderChip icon={UserCogIcon} label="Role">
-                {labelled('Role', roleLabel(known))}
+                {labelled(
+                  'Role',
+                  user ? (
+                    <UserRoleCell user={user} roles={roles} onAsk={ask} />
+                  ) : (
+                    roleLabel(known)
+                  ),
+                )}
               </HeaderChip>
               {(user?.employee_code ?? user?.employee?.employee_code) && (
                 <HeaderChip icon={TagIcon} label="Employee code">
