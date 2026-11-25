@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   CalendarIcon,
   ChevronDownIcon,
@@ -42,6 +42,8 @@ interface AttendanceToolbarProps {
   onReset: () => void
   /** The Filters grid was opened: load the dropdown choices now. */
   onWantOptions?: () => void
+  /** Extra controls at the end of the search row (the Columns menu). */
+  actions?: ReactNode
 }
 
 /**
@@ -59,6 +61,7 @@ export function AttendanceToolbar({
   onChange,
   onReset,
   onWantOptions,
+  actions,
 }: AttendanceToolbarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useDebouncedField(filters.search, (value) =>
@@ -170,6 +173,7 @@ export function AttendanceToolbar({
             <XIcon width={14} height={14} />
             Clear All
           </button>
+          {actions}
         </div>
       </div>
 

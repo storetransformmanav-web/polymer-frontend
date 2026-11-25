@@ -9,6 +9,9 @@ import { AttendanceList } from '../components/AttendanceList.tsx'
 import { AttendanceToolbar } from '../components/AttendanceToolbar.tsx'
 import { useAttendance } from '../hooks/useAttendance.ts'
 import { useAttendanceFilterOptions } from '../hooks/useAttendanceFilterOptions.ts'
+import { useAttendanceColumns } from '../hooks/useAttendanceColumns.ts'
+import { ATTENDANCE_COLUMNS } from '../utils/columns.ts'
+import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
 import { formatClock, humanize, isAdministrator } from '../utils/format.ts'
 
 /**
@@ -25,6 +28,7 @@ export function AttendancePage() {
   const attendance = useAttendance(isAdmin)
   const [wantOptions, setWantOptions] = useState(false)
   const options = useAttendanceFilterOptions(wantOptions && isAdmin)
+  const columnChoice = useAttendanceColumns(isAdmin)
   const { filters, paging, current, employee } = attendance
 
   return (
@@ -87,6 +91,17 @@ export function AttendancePage() {
         onChange={attendance.setFilters}
         onReset={attendance.resetFilters}
         onWantOptions={() => setWantOptions(true)}
+        actions={
+          <div className="hidden md:block">
+            <ColumnsMenu
+              config={columnChoice.menuConfig}
+              labelOf={(id) => ATTENDANCE_COLUMNS[id].label}
+              onToggle={columnChoice.toggle}
+              onMove={columnChoice.move}
+              onReset={columnChoice.reset}
+            />
+          </div>
+        }
       />
 
       <section
@@ -107,6 +122,7 @@ export function AttendancePage() {
           <AttendanceList
             items={attendance.items}
             isAdmin={isAdmin}
+            columns={columnChoice.columns}
             isPending={attendance.isPending}
             error={attendance.error}
             hasFilters={attendance.hasFilters}

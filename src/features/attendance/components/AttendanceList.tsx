@@ -13,10 +13,18 @@ import {
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AttendanceItem } from '../../../lib/api/endpoints.ts'
 import { initials } from '../../../lib/format.ts'
+import { formatRelativeDateTime } from '../../../lib/storeTime.ts'
+import {
+  ATTENDANCE_CHEVRON_COLUMN_REM,
+  attendanceTableMinWidthRem,
+  type AttendanceColumnDef,
+} from '../utils/columns.ts'
 import {
   formatClock,
   formatDay,
+  formatDayLongName,
   formatMinutes,
+  formatWorkDate,
   humanize,
   statusTone,
 } from '../utils/format.ts'
@@ -25,7 +33,8 @@ const TH_BASE =
   'text-text border-border-strong bg-table-head sticky top-0 z-[1] border-b px-3.5 py-3 text-[0.7rem] font-bold tracking-wide whitespace-nowrap uppercase backdrop-blur'
 const TH = `${TH_BASE} text-left`
 const TH_CENTER = `${TH_BASE} text-center`
-const TD = 'px-3.5 py-2.5 whitespace-nowrap'
+const TH_RIGHT = `${TH_BASE} text-right`
+const TD = 'px-3.5 py-2.5 whitespace-nowrap overflow-hidden text-ellipsis'
 const SKELETON_ROWS = 8
 const MESSAGE_BUTTON =
   'border-border bg-bg text-text hover:border-accent cursor-pointer rounded-lg border px-4 py-2 text-[0.82rem] font-semibold transition-colors'
@@ -40,6 +49,8 @@ interface AttendanceListProps {
   items: AttendanceItem[]
   /** An administrator's list has an Employee column. */
   isAdmin: boolean
+  /** The columns to draw (the Columns menu's choice), in order, after the opening chevron. */
+  columns: AttendanceColumnDef[]
   isPending: boolean
   error: string | null
   hasFilters: boolean
@@ -65,7 +76,14 @@ function StatusPill({ item }: { item: AttendanceItem }) {
   )
 }
 
-function Employee({ item }: { item: AttendanceItem }) {
+function Employee({
+  item,
+  withCode = true,
+}: {
+  item: AttendanceItem
+  /** Show the employee ID under the name (when the table has no Employee ID column). */
+  withCode?: boolean
+}) {
   const name = nameOf(item)
   return (
     <span className="flex items-center gap-3">
@@ -80,10 +98,12 @@ function Employee({ item }: { item: AttendanceItem }) {
           <Highlight text={name} />
         </span>
         <span className="text-text-muted text-[0.74rem]">
-          {item.employee?.employee_code ? (
+          {withCode && item.employee?.employee_code ? (
             <Highlight text={item.employee.employee_code} />
           ) : null}
-          {item.employee?.employee_code && item.employee?.role_label ? ' · ' : ''}
+          {withCode && item.employee?.employee_code && item.employee?.role_label
+            ? ' · '
+            : ''}
           {item.employee?.role_label ?? ''}
         </span>
       </span>
@@ -110,6 +130,98 @@ function DayCell({ item }: { item: AttendanceItem }) {
 
 const lateText = (item: AttendanceItem) =>
   item.is_late ? (item.late_minutes ? `Late by ${item.late_minutes} min` : 'Late') : '—'
+
+/** The date as the Orders list shows its created date (Today, Yesterday, a weekday, "4 Nov"), the full date on hover. */
+function DateCell({ item }: { item: AttendanceItem }) {
+  const special =
+    item.holiday_name || (item.day_type && item.day_type !== 'working')
+      ? item.holiday_name || humanize(item.day_type)
+      : null
+  // With a check-in it reads like the Orders created date ("Today at 10:10 am"); a day with none
+  // shows just the day.
+  const label = item.check_in_at
+    ? formatRelativeDateTime(item.check_in_at) || formatWorkDate(item.work_date)
+    : formatWorkDate(item.work_date)
+  return (
+    <span title={formatDayLongName(item.work_date)}>
+      {label}
+      {special && <span className="text-text-muted"> · {special}</span>}
+    </span>
+  )
+}
+
+/** A row opens only when the backend recorded punches for the day. */
+const hasLog = (item: AttendanceItem) => (item.log?.length ?? 0) > 0
+
+const DASH = <span className="text-text-muted">—</span>
+const text = (value: string | null | undefined) =>
+  value && value.trim() ? (
+    <span className="block truncate" title={value}>
+      {value}
+    </span>
+  ) : (
+    DASH
+  )
+
+/** What one chosen column shows for one attendance row. */
+function ColumnCell({
+  column,
+  item,
+  hasCode,
+}: {
+  column: AttendanceColumnDef
+  item: AttendanceItem
+  hasCode: boolean
+}) {
+  switch (column.id) {
+    case 'date':
+      return <DateCell item={item} />
+    case 'employee':
+      return <Employee item={item} withCode={!hasCode} />
+    case 'code':
+      return item.employee?.employee_code ? (
+        <span className="block truncate font-medium">
+          <Highlight text={item.employee.employee_code} />
+        </span>
+      ) : (
+        DASH
+      )
+    case 'status':
+      return <StatusPill item={item} />
+    case 'check_in':
+      return <>{formatClock(item.check_in_at, item.check_in_time)}</>
+    case 'check_out':
+      return <>{formatClock(item.check_out_at, item.check_out_time)}</>
+    case 'breaks':
+      return (item.breaks?.length ?? 0) > 0 || (item.break_minutes ?? 0) > 0 ? (
+        <>{`${item.breaks?.length ?? 0} · ${formatMinutes(item.break_minutes)}`}</>
+      ) : (
+        DASH
+      )
+    case 'worked':
+      return (
+        <span className="font-semibold">
+          {item.worked ?? formatMinutes(item.worked_minutes)}
+        </span>
+      )
+    case 'late':
+      return (
+        <span className={item.is_late ? 'text-warning font-semibold' : 'text-text-muted'}>
+          {lateText(item)}
+        </span>
+      )
+    case 'punches':
+      return <>{item.punch_count ?? 0}</>
+    case 'role':
+      return text(item.employee?.role_label ?? item.employee?.role)
+    case 'position':
+      return text(item.employee?.position)
+    case 'department':
+      return text(item.employee?.department)
+    case 'day_type':
+      return text(item.day_type ? humanize(item.day_type) : null)
+  }
+}
 
 /** The step name shown under a dot on the timeline. */
 function stepLabel(entry: NonNullable<AttendanceItem['log']>[number]): string {
@@ -292,6 +404,7 @@ function Details({ item, stacked = false }: { item: AttendanceItem; stacked?: bo
 export function AttendanceList({
   items,
   isAdmin,
+  columns,
   isPending,
   error,
   hasFilters,
@@ -345,7 +458,8 @@ export function AttendanceList({
   }
 
   const dim = isStale ? 'opacity-60' : ''
-  const columns = isAdmin ? 10 : 9
+  const hasCode = columns.some((column) => column.id === 'code')
+  const span = columns.length + 1
 
   if (!isDesktop) {
     return (
@@ -363,14 +477,16 @@ export function AttendanceList({
             ))
           : items.map((item) => {
               const key = rowKey(item)
-              const isOpen = open.has(key)
+              const expandable = hasLog(item)
+              const isOpen = expandable && open.has(key)
               return (
                 <li key={key} className="border-border bg-bg rounded-xl border p-3">
                   <button
                     type="button"
-                    aria-expanded={isOpen}
+                    aria-expanded={expandable ? isOpen : undefined}
+                    disabled={!expandable}
                     onClick={() => toggle(key)}
-                    className="flex w-full cursor-pointer items-start justify-between gap-3 border-none bg-transparent p-0 text-left"
+                    className="flex w-full cursor-pointer items-start justify-between gap-3 border-none bg-transparent p-0 text-left disabled:cursor-default"
                   >
                     <span className="flex min-w-0 flex-col gap-1">
                       {isAdmin && <Employee item={item} />}
@@ -403,29 +519,36 @@ export function AttendanceList({
       className="relative max-h-[min(68svh,760px)] overflow-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     >
       <table
-        className={`w-full min-w-[960px] border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
+        style={{ minWidth: `${attendanceTableMinWidthRem(columns)}rem` }}
+        className={`w-full table-fixed border-collapse text-[0.85rem] transition-opacity duration-150 ${dim}`}
       >
         <thead>
           <tr>
-            <th className={`${TH} w-10`}>
+            <th className={TH} style={{ width: `${ATTENDANCE_CHEVRON_COLUMN_REM}rem` }}>
               <span className="sr-only">Details</span>
             </th>
-            <th className={TH}>Date</th>
-            {isAdmin && <th className={TH}>Employee</th>}
-            <th className={TH_CENTER}>Status</th>
-            <th className={TH}>Check In</th>
-            <th className={TH}>Check Out</th>
-            <th className={TH}>Breaks</th>
-            <th className={TH}>Worked</th>
-            <th className={TH}>Late</th>
-            <th className={TH_CENTER}>Punches</th>
+            {columns.map((column) => (
+              <th
+                key={column.id}
+                style={{ width: `${column.width}rem` }}
+                className={
+                  column.align === 'right'
+                    ? TH_RIGHT
+                    : column.align === 'center'
+                      ? TH_CENTER
+                      : TH
+                }
+              >
+                {column.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {isPending
             ? Array.from({ length: SKELETON_ROWS }, (_, row) => (
                 <tr key={row} aria-hidden="true" className="border-border border-b">
-                  {Array.from({ length: columns }, (_, cell) => (
+                  {Array.from({ length: span }, (_, cell) => (
                     <td key={cell} className={TD}>
                       <div className="bg-border/70 h-4 w-full max-w-24 animate-pulse rounded" />
                     </td>
@@ -434,57 +557,43 @@ export function AttendanceList({
               ))
             : items.map((item) => {
                 const key = rowKey(item)
-                const isOpen = open.has(key)
+                const expandable = hasLog(item)
+                const isOpen = expandable && open.has(key)
                 const Chevron = isOpen ? ChevronDownIcon : ChevronRightIcon
                 return (
                   <Fragment key={key}>
                     <tr className="border-border even:bg-surface hover:bg-accent-tint/60 border-b transition-colors">
                       <td className={TD}>
-                        <button
-                          type="button"
-                          aria-expanded={isOpen}
-                          aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${formatDay(item.work_date)}${isAdmin ? ` — ${nameOf(item)}` : ''}`}
-                          onClick={() => toggle(key)}
-                          className="text-text-muted hover:text-accent cursor-pointer border-none bg-transparent p-0.5"
+                        {expandable && (
+                          <button
+                            type="button"
+                            aria-expanded={isOpen}
+                            aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${formatDay(item.work_date)}${isAdmin ? ` — ${nameOf(item)}` : ''}`}
+                            onClick={() => toggle(key)}
+                            className="text-text-muted hover:text-accent cursor-pointer border-none bg-transparent p-0.5"
+                          >
+                            <Chevron width={16} height={16} />
+                          </button>
+                        )}
+                      </td>
+                      {columns.map((column) => (
+                        <td
+                          key={column.id}
+                          className={`${TD} ${
+                            column.align === 'right'
+                              ? 'text-right'
+                              : column.align === 'center'
+                                ? 'text-center'
+                                : ''
+                          }`}
                         >
-                          <Chevron width={16} height={16} />
-                        </button>
-                      </td>
-                      <td className={TD}>
-                        <DayCell item={item} />
-                      </td>
-                      {isAdmin && (
-                        <td className={TD}>
-                          <Employee item={item} />
+                          <ColumnCell column={column} item={item} hasCode={hasCode} />
                         </td>
-                      )}
-                      <td className={`${TD} text-center`}>
-                        <StatusPill item={item} />
-                      </td>
-                      <td className={TD}>
-                        {formatClock(item.check_in_at, item.check_in_time)}
-                      </td>
-                      <td className={TD}>
-                        {formatClock(item.check_out_at, item.check_out_time)}
-                      </td>
-                      <td className={TD}>
-                        {(item.breaks?.length ?? 0) > 0 || (item.break_minutes ?? 0) > 0
-                          ? `${item.breaks?.length ?? 0} · ${formatMinutes(item.break_minutes)}`
-                          : '—'}
-                      </td>
-                      <td className={`${TD} font-semibold`}>
-                        {item.worked ?? formatMinutes(item.worked_minutes)}
-                      </td>
-                      <td
-                        className={`${TD} ${item.is_late ? 'text-warning font-semibold' : 'text-text-muted'}`}
-                      >
-                        {lateText(item)}
-                      </td>
-                      <td className={`${TD} text-center`}>{item.punch_count ?? 0}</td>
+                      ))}
                     </tr>
                     {isOpen && (
                       <tr className="border-border bg-accent-tint/30 border-accent border-b border-l-2">
-                        <td colSpan={columns} className="px-3 py-2.5">
+                        <td colSpan={span} className="px-3 py-2.5">
                           <Details item={item} />
                         </td>
                       </tr>

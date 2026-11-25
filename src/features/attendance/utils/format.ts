@@ -125,3 +125,45 @@ export const STATUS_OPTION_LABELS: Record<string, string> = {
   week_off: 'Week off',
   holiday: 'Holiday',
 }
+
+/**
+ * A work day the way the Orders list shows its created date, without the time: "Today", "Yesterday",
+ * the weekday for the days before that up to a week ("Monday"), then "4 Nov" ("4 Nov 2025" when it is
+ * not this year). Days are the store's calendar days. `today` is only for tests.
+ */
+export function formatWorkDate(
+  value: string | null | undefined,
+  today: Date = storeToday(),
+): string {
+  const time = value ? parseDay(value.slice(0, 10)) : null
+  if (time === null) return '—'
+  const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const daysAgo = Math.round((now - time) / DAY_MS)
+  if (daysAgo === 0) return 'Today'
+  if (daysAgo === 1) return 'Yesterday'
+  const date = new Date(time)
+  if (daysAgo > 1 && daysAgo < 7) {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long' }).format(
+      date,
+    )
+  }
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'short',
+    ...(date.getUTCFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  }).format(date)
+}
+
+/** "Wednesday, 25 Nov 2026" — the full date, for a hover. */
+export function formatDayLongName(value: string | null | undefined): string {
+  const time = value ? parseDay(value.slice(0, 10)) : null
+  if (time === null) return ''
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(time))
+}
