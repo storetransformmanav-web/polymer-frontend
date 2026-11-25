@@ -74,7 +74,6 @@ export const DEFAULT_VISIBLE_ATTENDANCE_COLUMNS: AttendanceColumnId[] = [
   'check_out',
   'breaks',
   'worked',
-  'late',
   'punches',
 ]
 

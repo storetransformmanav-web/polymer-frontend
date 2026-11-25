@@ -7,7 +7,7 @@ import {
   shownAttendanceColumns,
 } from '../utils/columns.ts'
 
-const STORAGE_KEY = 'polymer-crm:attendance-columns'
+const STORAGE_KEY = 'polymer-crm:attendance-columns:v2'
 
 /**
  * Which columns the attendance table shows, and in what order — chosen in the Columns menu and

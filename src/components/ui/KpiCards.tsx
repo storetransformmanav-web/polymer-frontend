@@ -46,11 +46,19 @@ export function KpiCards({
       className={
         compact
           ? `grid grid-cols-2 gap-3 md:grid-cols-4 ${
-              items.length === 6
-                ? 'xl:grid-cols-6'
-                : items.length === 7
-                  ? 'xl:grid-cols-7'
-                  : 'xl:grid-cols-8'
+              items.length === 4
+                ? 'xl:grid-cols-4'
+                : items.length === 5
+                  ? 'xl:grid-cols-5'
+                  : items.length === 6
+                    ? 'xl:grid-cols-6'
+                    : items.length === 7
+                      ? 'xl:grid-cols-7'
+                      : items.length === 9
+                        ? 'xl:grid-cols-5 2xl:grid-cols-9'
+                        : items.length === 10
+                          ? 'xl:grid-cols-5 2xl:grid-cols-10'
+                          : 'xl:grid-cols-8'
             }`
           : `grid grid-cols-1 gap-4 min-[520px]:grid-cols-2 ${
               items.length === 6
@@ -62,7 +70,7 @@ export function KpiCards({
       }
     >
       {items.map((kpi) => {
-        if (kpi.info) {
+        if (kpi.info || compact) {
           return <InfoCard key={kpi.label} kpi={kpi} info={kpi.info} compact={compact} />
         }
         const card = `border-border bg-bg flex items-center justify-between gap-3 rounded-2xl border px-5 py-4 ${
@@ -144,7 +152,7 @@ export function KpiCards({
  * clicks through); only the (i) takes the pointer, so pointing at or focusing it never presses the
  * card.
  */
-function InfoCard({ kpi, info, compact }: { kpi: Kpi; info: string; compact: boolean }) {
+function InfoCard({ kpi, info, compact }: { kpi: Kpi; info?: string; compact: boolean }) {
   const clickable = !!kpi.onClick
   return (
     <div
@@ -186,9 +194,11 @@ function InfoCard({ kpi, info, compact }: { kpi: Kpi; info: string; compact: boo
           >
             {kpi.label}
           </span>
-          <span className="pointer-events-auto flex">
-            <InfoTip label={kpi.label} text={info} />
-          </span>
+          {info && (
+            <span className="pointer-events-auto flex">
+              <InfoTip label={kpi.label} text={info} />
+            </span>
+          )}
         </span>
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
           <span

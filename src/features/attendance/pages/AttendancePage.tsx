@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useAppSelector } from '../../../app/store/hooks.ts'
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
@@ -8,7 +7,6 @@ import { AttendanceKpis } from '../components/AttendanceKpis.tsx'
 import { AttendanceList } from '../components/AttendanceList.tsx'
 import { AttendanceToolbar } from '../components/AttendanceToolbar.tsx'
 import { useAttendance } from '../hooks/useAttendance.ts'
-import { useAttendanceFilterOptions } from '../hooks/useAttendanceFilterOptions.ts'
 import { useAttendanceColumns } from '../hooks/useAttendanceColumns.ts'
 import { ATTENDANCE_COLUMNS } from '../utils/columns.ts'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
@@ -26,8 +24,6 @@ export function AttendancePage() {
   const isAdmin = isAdministrator(role)
 
   const attendance = useAttendance(isAdmin)
-  const [wantOptions, setWantOptions] = useState(false)
-  const options = useAttendanceFilterOptions(wantOptions && isAdmin)
   const columnChoice = useAttendanceColumns(isAdmin)
   const { filters, paging, current, employee } = attendance
 
@@ -84,13 +80,10 @@ export function AttendancePage() {
       <AttendanceToolbar
         filters={filters}
         isAdmin={isAdmin}
-        users={options.users}
-        roles={options.roles}
         hasFilters={attendance.hasFilters}
         rangeProblem={attendance.rangeProblem}
         onChange={attendance.setFilters}
         onReset={attendance.resetFilters}
-        onWantOptions={() => setWantOptions(true)}
         actions={
           <div className="hidden md:block">
             <ColumnsMenu
