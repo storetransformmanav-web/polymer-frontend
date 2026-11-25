@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useCanOpen, useIsOffice } from '../../hooks/useAccess.ts'
 import { setStoreTimeZone } from '../../lib/storeTime.ts'
 import { useAppSelector } from '../store/hooks.ts'
@@ -24,7 +24,13 @@ export function DashboardLayout() {
   // Idle timeout, token expiry and cross-tab logout for the signed-in session.
   useSessionGuard()
   const activeItem = useActiveNavItem()
-  const fill = activeItem?.fillHeight === true
+  // The Add user form and the profile page fill the window too (from `lg`): the page does not scroll,
+  // their cards do, inside their own box under a fixed header — like Add lock.
+  const { pathname } = useLocation()
+  const fill =
+    activeItem?.fillHeight === true ||
+    pathname === '/users/new' ||
+    pathname === '/profile'
   // Opened from an old link or a bookmark: the sidebar hides the page, this stops the address.
   const canView = useCanOpen(activeItem)
   const isOffice = useIsOffice()

@@ -157,7 +157,7 @@ export function UsersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       <HeaderRefresh
         visible={!creatingRoute && !activeId}
         refreshing={users.isFetching}
@@ -210,7 +210,11 @@ export function UsersPage() {
       {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
       {formOpen && (
-        <div className={creatingRoute ? undefined : 'hidden'}>
+        <div
+          className={
+            creatingRoute ? 'relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto' : 'hidden'
+          }
+        >
           <UserCreateView
             roles={roles.roles}
             rolesError={roles.error}

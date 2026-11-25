@@ -68,6 +68,7 @@ export function UserTextCell({
     <span className="flex min-w-0 flex-wrap items-center gap-1.5">
       <DoubleClickEdit
         value={saved}
+        showActions
         label={spec.label}
         showIcon
         maxLength={spec.max}

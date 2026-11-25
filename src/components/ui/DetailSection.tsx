@@ -49,7 +49,7 @@ export function DetailSection({
   const bodyId = useId()
 
   return (
-    <section className={DETAIL_CARD}>
+    <section className={DETAIL_CARD} data-state={open ? 'open' : 'closed'}>
       {/* Only the title row takes the hover tint, not the whole card. */}
       <div
         className={`${tinted ? 'bg-accent-tint/60' : ''} hover:bg-accent-tint/60 flex shrink-0 items-center gap-2 rounded-t-[0.7rem] transition-colors ${compact ? 'pr-3 pl-4' : 'pr-4 pl-5'} ${open ? '' : 'rounded-b-[0.7rem]'}`}

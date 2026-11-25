@@ -95,6 +95,10 @@ export const ENDPOINTS = {
   roles: {
     list: '/roles',
   },
+  hr: {
+    /** `GET` the signed-in person's own profile (account, employment, tax, emergency contact, PIN status). */
+    profile: '/hr/profile',
+  },
   activity: {
     list: '/activity',
     /** Distinct action names with counts — feeds the action dropdown. */
@@ -403,12 +407,67 @@ const userListResponseSchema = z.object({
 const userCreateResponseSchema = z.object({ user: userItemSchema })
 
 /**
+ * The `employee` block of a user and of `GET /hr/profile`: read leniently — every value is
+ * `nullish` and each nested block is dropped (not fatal) if its shape ever differs, so one
+ * missing value can't take the page down. The security PIN's own `pin` value is deliberately not
+ * kept (unknown keys are stripped): only whether it is set, when, and its lock state are read.
+ */
+const profileText = z.string().nullish()
+const userEmployeeSchema = z.object({
+  employee_code: profileText,
+  employment_status: profileText,
+  position: profileText,
+  department: profileText,
+  manager: z
+    .object({ user_id: profileText, full_name: profileText, employee_code: profileText })
+    .nullish()
+    .catch(undefined),
+  joining_date: profileText,
+  leaving_date: profileText,
+  date_of_birth: profileText,
+  address: z
+    .object({
+      line1: profileText,
+      line2: profileText,
+      city: profileText,
+      postcode: profileText,
+    })
+    .nullish()
+    .catch(undefined),
+  tax_code: profileText,
+  ni_number: profileText,
+  ni_number_masked: z.boolean().nullish().catch(undefined),
+  ni_category: profileText,
+  emergency_contact: z
+    .object({ name: profileText, phone: profileText })
+    .nullish()
+    .catch(undefined),
+  shift_start: profileText,
+  late_grace_minutes: z.number().nullish().catch(undefined),
+  security_pin: z
+    .object({
+      is_set: z.boolean().nullish().catch(undefined),
+      set_at: profileText,
+      set_by: profileText,
+      failed_attempts: z.number().nullish().catch(undefined),
+      locked_until: profileText,
+    })
+    .nullish()
+    .catch(undefined),
+  updated_at: profileText,
+})
+
+/**
  * `GET /users/{user_id}`: the list's fields plus what only the full record carries. Read
  * leniently — the optional parts are `nullish` (and `permissions` is dropped, not fatal, if
  * its shape ever differs) so one missing value can't take the page down.
  */
 const userDetailSchema = userItemSchema.extend({
   updated_at: z.string().nullish(),
+  reminder_emails: z.boolean().nullish().catch(undefined),
+  employee_code: z.string().nullish(),
+  /** Employment, personal, tax, emergency-contact and PIN-status details (the PIN itself is never kept). */
+  employee: userEmployeeSchema.nullish().catch(undefined),
   /** The user's access by area (`products`, `users`…), as at sign-in. */
   permissions: z.record(z.string(), featureAccessSchema).nullish().catch(undefined),
 })
@@ -441,6 +500,56 @@ const roleSchema = z.object({
 })
 
 const roleListResponseSchema = z.object({ items: z.array(roleSchema) })
+
+const profileSchema = z.object({
+  user_id: profileText,
+  employee_code: profileText,
+  first_name: profileText,
+  last_name: profileText,
+  full_name: profileText,
+  initials: profileText,
+  email: profileText,
+  phone: profileText,
+  role: profileText,
+  role_label: profileText,
+  is_active: z.boolean().nullish().catch(undefined),
+  last_login_at: profileText,
+  created_at: profileText,
+  employee: userEmployeeSchema.nullish().catch(undefined),
+  editable_fields: z.array(z.string()).nullish().catch(undefined),
+})
+
+const profileResponseSchema = z.object({
+  message: profileText,
+  profile: profileSchema,
+})
+
+export type Profile = z.infer<typeof profileSchema>
+
+/**
+ * The fields `PUT /hr/profile` takes — the API's own names, the same ones the profile's
+ * `editable_fields` lists. Any subset may be sent; only what changed is.
+ */
+export const PROFILE_UPDATE_FIELDS = [
+  'first_name',
+  'last_name',
+  'phone',
+  'address_line1',
+  'address_line2',
+  'city',
+  'postcode',
+  'emergency_name',
+  'emergency_phone',
+  'security_pin',
+] as const
+export type ProfileUpdateField = (typeof PROFILE_UPDATE_FIELDS)[number]
+export type ProfileUpdateBody = Partial<Record<ProfileUpdateField, string>>
+
+/** What `PUT /hr/profile` answers: a message and the updated profile (read leniently). */
+const profileUpdateAnswerSchema = z.object({
+  message: profileText,
+  profile: profileSchema.nullish().catch(undefined),
+})
 
 export type UserStatus = (typeof USER_STATUSES)[number]
 export type UserItem = z.infer<typeof userItemSchema>
@@ -477,6 +586,9 @@ export interface UserUpdateBody {
   is_active?: boolean
   /** Keys of the stores a non-admin user may see. */
   shop_keys?: string[]
+  reminder_emails?: boolean
+  /** Only the employee details that change (the same fields as Add user). */
+  employee?: UserCreateEmployee
 }
 
 /** Body of `POST /users`. */
@@ -489,6 +601,36 @@ export interface UserCreateBody {
   phone?: string | null
   /** Stores a non-admin user may see. */
   shop_keys?: string[]
+  /** Whether the new user gets the regular reminder emails. */
+  reminder_emails?: boolean
+  /** Employment, personal, tax, emergency-contact and PIN details — every one optional. */
+  employee?: UserCreateEmployee
+}
+
+/** The `employee` block of `POST /users`: only what was filled in is sent. */
+export interface UserCreateEmployee {
+  position?: string
+  department?: string
+  /** The manager's user id (a UUID from `GET /users`). */
+  manager_user_id?: string
+  /** `yyyy-mm-dd`. */
+  joining_date?: string
+  leaving_date?: string
+  date_of_birth?: string
+  address_line1?: string
+  address_line2?: string
+  city?: string
+  postcode?: string
+  tax_code?: string
+  ni_number?: string
+  ni_category?: string
+  emergency_name?: string
+  emergency_phone?: string
+  /** `HH:mm`. */
+  shift_start?: string
+  late_grace_minutes?: number
+  security_pin?: string
+  unlock_security_pin?: boolean
 }
 
 // --- Activity log (GET /activity, GET /activity/actions) -----------------------
@@ -4507,6 +4649,30 @@ export const api = {
     ): Promise<ProductActivityResponse> {
       const data = await apiClient.get(ENDPOINTS.products.activity(id), { params })
       return productActivityResponseSchema.parse(data)
+    },
+  },
+
+  hr: {
+    /** The signed-in person's own profile (`GET /hr/profile`, answer `{ profile }`). */
+    async profile(): Promise<Profile> {
+      const data = await apiClient.get(ENDPOINTS.hr.profile)
+      return profileResponseSchema.parse(data).profile
+    },
+
+    /**
+     * Updates the signed-in person's own profile (`PUT /hr/profile`, any subset of
+     * `ProfileUpdateBody`). Returns the backend's message and the updated profile when the answer
+     * carries one. Never retried automatically.
+     */
+    async updateProfile(
+      body: ProfileUpdateBody,
+    ): Promise<{ profile: Profile | null; message: string }> {
+      const data = await apiClient.put(ENDPOINTS.hr.profile, body)
+      const answer = profileUpdateAnswerSchema.safeParse(data)
+      return {
+        profile: answer.success ? (answer.data.profile ?? null) : null,
+        message: answer.success ? (answer.data.message ?? '') : '',
+      }
     },
   },
 

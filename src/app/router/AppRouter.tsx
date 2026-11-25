@@ -14,6 +14,7 @@ import { LoginPage } from '../../features/auth/index.ts'
 import { LocksPage } from '../../features/locks/index.ts'
 import { OrdersPage } from '../../features/orders/index.ts'
 import { ProductsPage } from '../../features/products/index.ts'
+import { ProfilePage } from '../../features/profile/index.ts'
 import { UsersPage } from '../../features/users/index.ts'
 import { NotFoundPage } from './NotFoundPage.tsx'
 import { RouteErrorPage } from './RouteErrorPage.tsx'
@@ -64,6 +65,8 @@ const router = createBrowserRouter([
           { path: 'sage/orders/*', element: <SageOrdersPage /> },
           // Sage 50 → Stock. `*` lets SageStockPage also serve /sage/stock/<code>, an item opened as a tab.
           { path: 'sage/stock/*', element: <SageStockPage /> },
+          // The signed-in person's own profile (opened from "Update profile" in the account menu).
+          { path: 'profile', element: <ProfilePage /> },
         ],
       },
     ],

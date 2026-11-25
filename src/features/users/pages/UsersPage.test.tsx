@@ -621,7 +621,7 @@ describe('UsersPage', () => {
       const form = await openForm(user)
 
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect(within(form).getByRole('heading', { name: 'Add user' })).toBeInTheDocument()
+      expect(within(form).getByRole('heading', { name: 'Add User' })).toBeInTheDocument()
       // The list stays mounted but hidden; the figures give way to the form too.
       expect(
         screen.getByRole('table', { hidden: true }).closest('.hidden'),
@@ -772,20 +772,20 @@ describe('UsersPage', () => {
       const form = await openForm(user)
 
       // Nothing entered: Back just goes back to the list.
-      await user.click(within(form).getByRole('button', { name: 'Back' }))
+      await user.click(within(form).getByRole('button', { name: 'Back to list' }))
       expect(screen.queryByRole('region', { name: 'Add user' })).not.toBeInTheDocument()
 
       // Something typed: asked first; Keep editing keeps it all.
       await user.click(screen.getByRole('button', { name: 'Add user' }))
       const again = await formOf()
       await user.type(within(again).getByLabelText('First name'), 'Jane')
-      await user.click(within(again).getByRole('button', { name: 'Back' }))
+      await user.click(within(again).getByRole('button', { name: 'Back to list' }))
       const dialog = await screen.findByRole('alertdialog', { name: 'Cancel editing?' })
       await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
       expect(within(await formOf()).getByLabelText('First name')).toHaveValue('Jane')
 
       // Yes, cancel: gone, and a new form starts clean.
-      await user.click(within(again).getByRole('button', { name: 'Cancel' }))
+      await user.click(within(again).getByRole('button', { name: 'Back to list' }))
       await user.click(
         within(await screen.findByRole('alertdialog')).getByRole('button', {
           name: 'Yes, cancel',
@@ -887,10 +887,13 @@ describe('UsersPage', () => {
       expect(view.getAllByText('user2@polymer.co').length).toBeGreaterThan(0)
       expect(view.getByText('+44 20 7946 0000')).toBeInTheDocument()
       expect(view.getAllByText('Office').length).toBeGreaterThan(0)
-      expect(view.getAllByText('Active').length).toBeGreaterThan(0)
+      expect(view.getAllByText('Status: Active').length).toBeGreaterThan(0)
       expect(view.getByText('Email code')).toBeInTheDocument()
       expect(view.getByText('user-2')).toBeInTheDocument()
-      expect(view.getByText(/20 Oct 2026/)).toBeInTheDocument()
+      // The dates are in the header, each with its name.
+      expect(view.getAllByText('User since:').length).toBeGreaterThan(0)
+      expect(view.getByText(/8 Oct 2026/)).toBeInTheDocument()
+      expect(view.getByText(/14 Oct 2026/)).toBeInTheDocument()
     })
 
     it('draws the header from the list row while the details load', async () => {
@@ -903,8 +906,7 @@ describe('UsersPage', () => {
 
       const view = await screen.findByRole('article', { name: 'User First2 Last2' })
       expect(within(view).getByRole('heading', { name: 'First2 Last2' })).toBeVisible()
-      expect(within(view).getByText('user2@polymer.co')).toBeVisible()
-      expect(within(view).getByText('Last login')).toBeVisible()
+      expect(within(view).getAllByText('Last login:').length).toBeGreaterThan(0)
     })
 
     it('lists stores by name and the permissions on the Access tab', async () => {
@@ -912,7 +914,7 @@ describe('UsersPage', () => {
       const view = within(await openUser(user))
       await view.findByText('Profile & Account')
 
-      await user.click(view.getByRole('tab', { name: 'Access' }))
+      await user.click(view.getByRole('tab', { name: 'Security & Access' }))
 
       expect(await view.findByText('Polymer UK')).toBeInTheDocument()
       expect(view.getByText('Polymer EU')).toBeInTheDocument()
@@ -935,7 +937,7 @@ describe('UsersPage', () => {
       )
       await view.findByText('Profile & Account')
 
-      await user.click(view.getByRole('tab', { name: 'Access' }))
+      await user.click(view.getByRole('tab', { name: 'Security & Access' }))
 
       expect(view.getByText('Administrators can see every store.')).toBeInTheDocument()
     })

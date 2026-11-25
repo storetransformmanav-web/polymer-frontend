@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { PencilIcon } from './icons.tsx'
+import { IconAction } from './IconAction.tsx'
+import { CheckIcon, EyeIcon, EyeOffIcon, PencilIcon, XIcon } from './icons.tsx'
 
 /**
  * A value you change where it is shown: **double-click it** (or focus it and press Enter) and it
@@ -23,6 +24,9 @@ export function DoubleClickEdit({
   busy = false,
   autoWidth = false,
   multiline = false,
+  secret = false,
+  inputType,
+  showActions = false,
   className = '',
 }: {
   /** The value as saved. */
@@ -56,11 +60,19 @@ export function DoubleClickEdit({
    * Escape puts the old text back, and a counter shows how much of `maxLength` is used.
    */
   multiline?: boolean
+  /** What is typed is hidden (dots), for a PIN or a password. */
+  secret?: boolean
+  /** A date, time or number box instead of a plain text one (date and time open their picker on a click). */
+  inputType?: 'date' | 'time' | 'number'
+  /** ✓ Save and ✕ Discard buttons beside the box while it is open (as on the product page's edits). */
+  showActions?: boolean
   className?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const [problem, setProblem] = useState<string | null>(null)
+  // A secret (a PIN) is hidden while it is typed, until the view icon is pressed.
+  const [reveal, setReveal] = useState(false)
   // Escape and Enter take the box away, and some browsers then report a blur: only settle once.
   const settled = useRef(false)
 
@@ -69,6 +81,7 @@ export function DoubleClickEdit({
     settled.current = false
     setDraft(value)
     setProblem(null)
+    setReveal(false)
     setEditing(true)
   }
 
@@ -158,35 +171,89 @@ export function DoubleClickEdit({
             </span>
           </>
         ) : (
-          <input
-            autoFocus
-            aria-label={label}
-            aria-invalid={problem ? true : undefined}
-            autoComplete="off"
-            spellCheck={false}
-            value={draft}
-            inputMode={inputMode}
-            maxLength={maxLength}
-            placeholder={placeholder}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => {
-              setDraft(event.target.value)
-              setProblem(null)
-            }}
-            onKeyDown={handleKeyDown}
-            onBlur={() => finish(true)}
-            // One `ch` per character typed, plus one spare and the padding and border.
-            style={
-              autoWidth
-                ? { width: `calc(${Math.max(draft.length, 1) + 1}ch + 1.25rem)` }
-                : undefined
-            }
-            className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 ${
-              autoWidth ? 'max-w-none min-w-16' : 'w-full min-w-0'
-            } rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
-              highlighted ? 'bg-accent-tint/40' : 'bg-bg'
-            } ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : ''}`}
-          />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <input
+              autoFocus
+              aria-label={label}
+              aria-invalid={problem ? true : undefined}
+              type={
+                secret && !reveal ? 'password' : secret ? 'text' : (inputType ?? 'text')
+              }
+              onClick={
+                inputType === 'date' || inputType === 'time'
+                  ? (event) => {
+                      try {
+                        event.currentTarget.showPicker()
+                      } catch {
+                        // No picker here: the box still works by typing.
+                      }
+                    }
+                  : undefined
+              }
+              autoComplete={secret ? 'new-password' : 'off'}
+              spellCheck={false}
+              value={draft}
+              inputMode={inputMode}
+              maxLength={maxLength}
+              placeholder={placeholder}
+              onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => {
+                setDraft(event.target.value)
+                setProblem(null)
+              }}
+              onKeyDown={handleKeyDown}
+              onBlur={() => finish(true)}
+              // One `ch` per character typed, plus one spare and the padding and border.
+              style={
+                autoWidth
+                  ? { width: `calc(${Math.max(draft.length, 1) + 1}ch + 1.25rem)` }
+                  : undefined
+              }
+              className={`border-accent text-text focus:outline-accent-tint aria-[invalid=true]:border-danger h-8 ${
+                autoWidth ? 'max-w-none min-w-16' : 'w-full min-w-0'
+              } rounded-lg border px-2 text-[0.8rem] font-medium outline-none focus:outline-2 ${
+                highlighted ? 'bg-accent-tint/40' : 'bg-bg'
+              } ${align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : ''}`}
+            />
+            {secret && (
+              <button
+                type="button"
+                aria-label={`${reveal ? 'Hide' : 'Show'} ${label}`}
+                aria-pressed={reveal}
+                // Pressing it must not blur the box first (a blur would keep the change).
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setReveal((value) => !value)}
+                className="text-text-muted hover:text-accent inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors"
+              >
+                {reveal ? (
+                  <EyeOffIcon width={16} height={16} />
+                ) : (
+                  <EyeIcon width={16} height={16} />
+                )}
+              </button>
+            )}
+            {showActions && (
+              // Pressing a button must not blur the box first (a blur would keep the change).
+              <span
+                className="flex shrink-0 items-center gap-1"
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                <IconAction
+                  label="Save"
+                  accessibleLabel={`Save ${label}`}
+                  icon={CheckIcon}
+                  tone="primary"
+                  onClick={() => finish(true)}
+                />
+                <IconAction
+                  label="Discard"
+                  accessibleLabel={`Discard ${label}`}
+                  icon={XIcon}
+                  onClick={() => finish(false)}
+                />
+              </span>
+            )}
+          </span>
         )}
         {problem && (
           <span role="alert" className="text-danger text-[0.72rem] font-normal">

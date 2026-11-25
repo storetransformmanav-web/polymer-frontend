@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import { AppBarSlot, RefreshSlot } from '../../components/ui/AppBarSlot.tsx'
 import { InfoIcon } from '../../components/ui/icons.tsx'
 import { SyncCollectionsButton } from '../../features/collections/index.ts'
@@ -59,6 +60,7 @@ function OrdersDataNote() {
  */
 export function AppBar() {
   const activeItem = useActiveNavItem()
+  const { pathname } = useLocation()
   // The Sync buttons start a re-import from Shopify: they are for those who may use `sync` (the
   // permission the server checks for it), whatever they may do on the page itself.
   const syncAccess = useAccess('sync')
@@ -68,7 +70,7 @@ export function AppBar() {
     <header className="border-border bg-bg sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         <span className="text-text-muted shrink-0 text-xs font-bold tracking-wider uppercase">
-          {activeItem?.label ?? ''}
+          {activeItem?.label ?? (pathname === '/profile' ? 'Profile' : '')}
         </span>
         {activeItem?.shopScoped && (
           <>

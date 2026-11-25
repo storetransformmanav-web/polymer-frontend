@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react'
-import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   DetailsHeader,
   HeaderChip,
@@ -10,22 +8,34 @@ import {
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
-  MailIcon,
+  CalendarIcon,
+  ClockIcon,
+  TagIcon,
   UserCogIcon,
 } from '../../../components/ui/icons.tsx'
 import type { Role, Shop } from '../../../lib/api/endpoints.ts'
-import { initials } from '../../../lib/format.ts'
+import { formatDate, initials } from '../../../lib/format.ts'
 import type { useUserDetails } from '../hooks/useUserDetails.ts'
 import { roleLabel, userName } from '../utils/format.ts'
-import { UserAccessPanel, UserOverviewPanel } from './UserDetailPanels.tsx'
+import { UserOverviewPanel, UserSecurityAccessPanel } from './UserDetailPanels.tsx'
 import { UserUpdateDialog, type UserUpdateRequest } from './UserUpdateDialog.tsx'
 
-type TabId = 'overview' | 'access'
+type TabId = 'overview' | 'security'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'access', label: 'Access' },
+  { id: 'security', label: 'Security & Access' },
 ]
+
+/** A header chip's fact with its name in front of it ("Role: Administrator"). */
+const labelled = (label: string, value: ReactNode) => (
+  <span className="flex min-w-0 items-center gap-1.5">
+    <span aria-hidden="true" className="text-text-muted font-normal">
+      {label}:
+    </span>
+    <span className="min-w-0 font-semibold">{value}</span>
+  </span>
+)
 
 interface UserDetailsViewProps {
   details: ReturnType<typeof useUserDetails>
@@ -119,7 +129,7 @@ export function UserDetailsView({
           <>
             {known && (
               <StatusPill
-                label={known.is_active ? 'Active' : 'Inactive'}
+                label={`Status: ${known.is_active ? 'Active' : 'Inactive'}`}
                 tone={known.is_active ? 'success' : 'neutral'}
               />
             )}
@@ -134,18 +144,32 @@ export function UserDetailsView({
           known && (
             <>
               <HeaderChip icon={UserCogIcon} label="Role">
-                {roleLabel(known)}
+                {labelled('Role', roleLabel(known))}
               </HeaderChip>
-              <HeaderChip icon={MailIcon} label="Email">
-                <span className="flex items-center gap-1.5">
-                  <span className="break-all">{known.email}</span>
-                  <CopyButton value={known.email} label="Copy email" />
-                </span>
+              {(user?.employee_code ?? user?.employee?.employee_code) && (
+                <HeaderChip icon={TagIcon} label="Employee code">
+                  {labelled(
+                    'Employee code',
+                    user?.employee_code ?? user?.employee?.employee_code,
+                  )}
+                </HeaderChip>
+              )}
+              {known.created_at && (
+                <HeaderChip icon={CalendarIcon} label="User since">
+                  {labelled('User since', formatDate(known.created_at))}
+                </HeaderChip>
+              )}
+              <HeaderChip icon={ClockIcon} label="Last login">
+                {labelled(
+                  'Last login',
+                  known.last_login_at ? formatDate(known.last_login_at) : 'Never',
+                )}
               </HeaderChip>
             </>
           )
         }
         onBack={onBack}
+        className="shrink-0 px-4 py-3 sm:px-5"
       />
 
       <div
@@ -164,7 +188,7 @@ export function UserDetailsView({
               aria-selected={selected}
               aria-controls="user-tabpanel"
               onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-3 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3 py-2.5 text-[0.85rem] font-semibold whitespace-nowrap transition-colors ${
                 selected
                   ? 'border-accent text-text'
                   : 'text-text-muted hover:text-text border-transparent'
@@ -180,19 +204,21 @@ export function UserDetailsView({
         id="user-tabpanel"
         role="tabpanel"
         aria-labelledby={`user-tab-${tab}`}
-        className="bg-surface p-3 sm:p-5"
+        className="bg-surface p-3 sm:p-4"
       >
         {notice && (
           <div className="mb-3">
             <FormMessage tone="success">{notice}</FormMessage>
           </div>
         )}
-        {tab === 'overview' && (
-          <UserOverviewPanel user={user} preview={preview} roles={roles} onAsk={ask} />
-        )}
-        {tab === 'access' && !user && <DetailSkeleton />}
-        {tab === 'access' && user && (
-          <UserAccessPanel user={user} shops={shops} shopNames={shopNames} onAsk={ask} />
+        {tab === 'overview' && <UserOverviewPanel user={user} onAsk={ask} />}
+        {tab === 'security' && (
+          <UserSecurityAccessPanel
+            user={user}
+            shops={shops}
+            shopNames={shopNames}
+            onAsk={ask}
+          />
         )}
       </div>
 

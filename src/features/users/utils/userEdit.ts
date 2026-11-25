@@ -1,4 +1,9 @@
-import type { UserDetail, UserItem, UserUpdateBody } from '../../../lib/api/endpoints.ts'
+import type {
+  UserCreateEmployee,
+  UserDetail,
+  UserItem,
+  UserUpdateBody,
+} from '../../../lib/api/endpoints.ts'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -14,6 +19,7 @@ export type UserChange = Partial<{
   role: string
   isActive: boolean
   shopKeys: string[]
+  reminderEmails: boolean
 }>
 
 /**
@@ -37,8 +43,30 @@ export function buildUserUpdateBody(
     phone: (change.phone ?? user.phone ?? '').trim(),
     is_active: change.isActive ?? user.is_active,
     shop_keys: change.shopKeys ?? user.shop_keys,
+    // Only sent when it is what changes: the details answer's own value is not echoed back.
+    ...(change.reminderEmails !== undefined
+      ? { reminder_emails: change.reminderEmails }
+      : {}),
   }
 }
+
+/**
+ * The body for a change to the employee details (position, address, tax, PIN…): the user as they
+ * are now, plus an `employee` block holding only what changes — the PIN is never echoed back.
+ */
+export function buildUserEmployeeBody(
+  user: Pick<
+    UserItem,
+    'first_name' | 'last_name' | 'email' | 'role' | 'phone' | 'is_active' | 'shop_keys'
+  >,
+  employee: UserCreateEmployee,
+): UserUpdateBody {
+  return { ...buildUserUpdateBody(user, {}), employee }
+}
+
+/** A reason a whole number of minutes can't be saved, or null (empty is fine). */
+export const validateMinutes = (value: string): string | null =>
+  value.trim() === '' || /^d+$/.test(value.trim()) ? null : 'Enter whole minutes, e.g. 5'
 
 /** A reason a first name can't be saved, or null. */
 export const validateFirstName = (value: string): string | null =>
@@ -74,5 +102,51 @@ export function applyUserBody<T extends UserItem | UserDetail>(
     role_label: roleChanged ? (roleLabel ?? null) : user.role_label,
     is_active: body.is_active ?? user.is_active,
     shop_keys: body.shop_keys ?? user.shop_keys,
+    ...('employee' in user || body.reminder_emails !== undefined || body.employee
+      ? {
+          reminder_emails: body.reminder_emails ?? (user as UserDetail).reminder_emails,
+          employee: body.employee
+            ? mergeEmployee((user as UserDetail).employee, body.employee)
+            : (user as UserDetail).employee,
+        }
+      : {}),
+  }
+}
+
+const blankToNull = (value: string | undefined) =>
+  value === undefined ? undefined : value || null
+
+/** The employee details as shown, with a saved change put in (the PIN's status is left to the re-read). */
+function mergeEmployee(
+  current: UserDetail['employee'],
+  change: UserCreateEmployee,
+): UserDetail['employee'] {
+  const base = current ?? {}
+  const pick = <T>(next: T | undefined, now: T | null | undefined) =>
+    next === undefined ? now : next
+  return {
+    ...base,
+    position: pick(blankToNull(change.position), base.position),
+    department: pick(blankToNull(change.department), base.department),
+    joining_date: pick(blankToNull(change.joining_date), base.joining_date),
+    leaving_date: pick(blankToNull(change.leaving_date), base.leaving_date),
+    date_of_birth: pick(blankToNull(change.date_of_birth), base.date_of_birth),
+    tax_code: pick(blankToNull(change.tax_code), base.tax_code),
+    ni_number: pick(blankToNull(change.ni_number), base.ni_number),
+    ni_category: pick(blankToNull(change.ni_category), base.ni_category),
+    shift_start: pick(blankToNull(change.shift_start), base.shift_start),
+    late_grace_minutes: pick(change.late_grace_minutes, base.late_grace_minutes),
+    address: {
+      ...base.address,
+      line1: pick(blankToNull(change.address_line1), base.address?.line1),
+      line2: pick(blankToNull(change.address_line2), base.address?.line2),
+      city: pick(blankToNull(change.city), base.address?.city),
+      postcode: pick(blankToNull(change.postcode), base.address?.postcode),
+    },
+    emergency_contact: {
+      ...base.emergency_contact,
+      name: pick(blankToNull(change.emergency_name), base.emergency_contact?.name),
+      phone: pick(blankToNull(change.emergency_phone), base.emergency_contact?.phone),
+    },
   }
 }
