@@ -185,7 +185,9 @@ export const NAV_ENTRIES: NavEntry[] = [
       {
         to: '/hrms/attendance',
         label: 'Attendance',
-        area: 'attendance',
+        // No `area`: the backend says attendance is available to every signed-in user (an
+        // administrator reads everyone, anyone else only their own days), so a role's permission
+        // list can never hide the page. The "office" role may open it too (OFFICE_PATHS).
         icon: CalendarIcon,
         fillHeight: true,
       },

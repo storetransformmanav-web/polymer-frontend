@@ -1,5 +1,4 @@
 import { useAppSelector } from '../../../app/store/hooks.ts'
-import { Badge } from '../../../components/ui/Badge.tsx'
 import { HeaderRefresh } from '../../../components/ui/HeaderRefresh.tsx'
 import { HighlightQuery } from '../../../components/ui/Highlight.tsx'
 import { PaginationFooter } from '../../../components/ui/PaginationFooter.tsx'
@@ -10,7 +9,7 @@ import { useAttendance } from '../hooks/useAttendance.ts'
 import { useAttendanceColumns } from '../hooks/useAttendanceColumns.ts'
 import { ATTENDANCE_COLUMNS } from '../utils/columns.ts'
 import { ColumnsMenu } from '../../../components/ui/ColumnsMenu.tsx'
-import { formatClock, humanize, isAdministrator } from '../utils/format.ts'
+import { isAdministrator } from '../utils/format.ts'
 
 /**
  * Attendance (HRMS): an administrator sees the calendar of every employee (`GET /hr/attendance`, with
@@ -25,7 +24,7 @@ export function AttendancePage() {
 
   const attendance = useAttendance(isAdmin)
   const columnChoice = useAttendanceColumns(isAdmin)
-  const { filters, paging, current, employee } = attendance
+  const { filters, paging } = attendance
 
   return (
     <div className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
@@ -37,45 +36,6 @@ export function AttendancePage() {
         status={filters.status}
         onStatus={(status) => attendance.setFilters({ status })}
       />
-
-      {!isAdmin && (employee || current) && (
-        <section
-          aria-label="Your attendance today"
-          className="border-border bg-bg flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border px-5 py-3 text-[0.85rem]"
-        >
-          {employee && (
-            <span className="flex min-w-0 flex-col">
-              <span className="font-semibold">{employee.full_name}</span>
-              <span className="text-text-muted text-[0.76rem]">
-                {[employee.employee_code, employee.role_label, employee.position]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            </span>
-          )}
-          {current && (
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="text-text-muted text-[0.76rem] font-semibold">
-                Right now
-              </span>
-              <Badge tone={current.state === 'off' ? 'neutral' : 'default'}>
-                {current.state_label || humanize(current.state)}
-              </Badge>
-              {current.since_at && (
-                <span className="text-text-muted text-[0.78rem]">
-                  since {formatClock(current.since_at, current.since)}
-                </span>
-              )}
-              {(current.breaks_today ?? 0) > 0 && (
-                <span className="text-text-muted text-[0.78rem]">
-                  · {current.breaks_today} break{current.breaks_today === 1 ? '' : 's'}{' '}
-                  today
-                </span>
-              )}
-            </span>
-          )}
-        </section>
-      )}
 
       <AttendanceToolbar
         filters={filters}
