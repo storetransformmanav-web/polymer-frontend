@@ -14,7 +14,7 @@ import {
   UserCogIcon,
 } from '../../../components/ui/icons.tsx'
 import type { Role, Shop } from '../../../lib/api/endpoints.ts'
-import { formatDate, initials } from '../../../lib/format.ts'
+import { formatDateTimeAmPm, initials } from '../../../lib/format.ts'
 import type { useUserDetails } from '../hooks/useUserDetails.ts'
 import { roleLabel, userName } from '../utils/format.ts'
 import { UserOverviewPanel, UserSecurityAccessPanel } from './UserDetailPanels.tsx'
@@ -156,13 +156,13 @@ export function UserDetailsView({
               )}
               {known.created_at && (
                 <HeaderChip icon={CalendarIcon} label="User since">
-                  {labelled('User since', formatDate(known.created_at))}
+                  {labelled('User since', formatDateTimeAmPm(known.created_at))}
                 </HeaderChip>
               )}
               <HeaderChip icon={ClockIcon} label="Last login">
                 {labelled(
                   'Last login',
-                  known.last_login_at ? formatDate(known.last_login_at) : 'Never',
+                  known.last_login_at ? formatDateTimeAmPm(known.last_login_at) : 'Never',
                 )}
               </HeaderChip>
             </>

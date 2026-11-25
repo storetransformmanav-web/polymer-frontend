@@ -214,7 +214,7 @@ export function ProfilePage() {
             )}
             {profile.created_at && (
               <HeaderChip icon={CalendarIcon} label="Account created">
-                {labelled('Account created', date(profile.created_at))}
+                {labelled('Account created', dateTime(profile.created_at))}
               </HeaderChip>
             )}
             {profile.last_login_at && (
