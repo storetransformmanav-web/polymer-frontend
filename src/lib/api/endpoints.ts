@@ -98,6 +98,10 @@ export const ENDPOINTS = {
   hr: {
     /** `GET` the signed-in person's own profile (account, employment, tax, emergency contact, PIN status). */
     profile: '/hr/profile',
+    /** `GET` the attendance calendar — an administrator sees every employee, anyone else only their own days. */
+    attendance: '/hr/attendance',
+    /** `GET` the signed-in person's own attendance for a date range, with their current punch state. */
+    attendanceMe: '/hr/attendance/me',
   },
   activity: {
     list: '/activity',
@@ -675,6 +679,159 @@ const activityListResponseSchema = z.object({
   total_pages: z.number(),
   has_next: z.boolean(),
 })
+
+// --- HR attendance -----------------------------------------------------------------------------
+// `GET /hr/attendance` (an administrator: every employee, one row per employee per date, paged) and
+// `GET /hr/attendance/me` (anyone: their own days, no paging, `employee` and `current` at the top).
+// Read leniently — a missing figure is empty/0 — so a field the backend leaves out never fails the page.
+
+/** The attendance statuses the list's `status` filter takes. */
+export const ATTENDANCE_STATUSES = [
+  'present',
+  'late',
+  'working',
+  'on_break',
+  'incomplete',
+  'absent',
+  'not_checked_in',
+  'week_off',
+  'holiday',
+] as const
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
+
+const attendanceEmployeeSchema = z.object({
+  user_id: z.string().nullish(),
+  employee_code: z.string().nullish(),
+  full_name: z.string().nullish(),
+  first_name: z.string().nullish(),
+  initials: z.string().nullish(),
+  role: z.string().nullish(),
+  role_label: z.string().nullish(),
+  position: z.string().nullish(),
+  department: z.string().nullish(),
+})
+
+const attendanceBreakSchema = z.object({
+  break_in_time: z.string().nullish(),
+  break_out_time: z.string().nullish(),
+  minutes: z.number().nullish(),
+})
+
+const attendanceLogSchema = z.object({
+  id: z.number().nullish(),
+  action: z.string().nullish(),
+  label: z.string().nullish(),
+  time: z.string().nullish(),
+  at: z.string().nullish(),
+  source: z.string().nullish(),
+  recorded_by: z.string().nullish(),
+  reason: z.string().nullish(),
+  voided: z.boolean().nullish(),
+  voided_at: z.string().nullish(),
+  voided_by: z.string().nullish(),
+  void_reason: z.string().nullish(),
+})
+
+const attendanceItemSchema = z.object({
+  work_date: z.string(),
+  weekday: z.string().nullish(),
+  day_type: z.string().nullish(),
+  holiday_name: z.string().nullish(),
+  status: z.string().nullish(),
+  status_label: z.string().nullish(),
+  state: z.string().nullish(),
+  state_label: z.string().nullish(),
+  check_in_time: z.string().nullish(),
+  check_out_time: z.string().nullish(),
+  check_in_at: z.string().nullish(),
+  check_out_at: z.string().nullish(),
+  breaks: z.array(attendanceBreakSchema).nullish(),
+  break_minutes: z.number().nullish(),
+  worked_minutes: z.number().nullish(),
+  worked: z.string().nullish(),
+  punch_count: z.number().nullish(),
+  is_late: z.boolean().nullish(),
+  late_minutes: z.number().nullish(),
+  log: z.array(attendanceLogSchema).nullish(),
+  problems: z.array(z.string()).nullish(),
+  employee: attendanceEmployeeSchema.nullish(),
+})
+
+const attendanceTotalsSchema = z.object({
+  days: z.number().nullish(),
+  employees: z.number().nullish(),
+  working_days: z.number().nullish(),
+  week_off_days: z.number().nullish(),
+  holiday_days: z.number().nullish(),
+  present_days: z.number().nullish(),
+  absent_days: z.number().nullish(),
+  late_days: z.number().nullish(),
+  incomplete_days: z.number().nullish(),
+  worked_minutes: z.number().nullish(),
+  worked: z.string().nullish(),
+  break_minutes: z.number().nullish(),
+  working_days_note: z.string().nullish(),
+})
+
+const attendanceCurrentSchema = z.object({
+  state: z.string().nullish(),
+  state_label: z.string().nullish(),
+  since: z.string().nullish(),
+  since_at: z.string().nullish(),
+  breaks_today: z.number().nullish(),
+})
+
+const attendanceListResponseSchema = z.object({
+  message: z.string().nullish(),
+  scope: z.string().nullish(),
+  date_from: z.string().nullish(),
+  date_to: z.string().nullish(),
+  items: z.array(attendanceItemSchema),
+  totals: attendanceTotalsSchema.nullish(),
+  page: z.number().nullish(),
+  page_size: z.number().nullish(),
+  total: z.number().nullish(),
+  total_pages: z.number().nullish(),
+  has_next: z.boolean().nullish(),
+})
+
+const myAttendanceResponseSchema = z.object({
+  message: z.string().nullish(),
+  employee: attendanceEmployeeSchema.nullish(),
+  current: attendanceCurrentSchema.nullish(),
+  date_from: z.string().nullish(),
+  date_to: z.string().nullish(),
+  items: z.array(attendanceItemSchema),
+  totals: attendanceTotalsSchema.nullish(),
+})
+
+export type AttendanceItem = z.infer<typeof attendanceItemSchema>
+export type AttendanceEmployee = z.infer<typeof attendanceEmployeeSchema>
+export type AttendanceTotals = z.infer<typeof attendanceTotalsSchema>
+export type AttendanceCurrent = z.infer<typeof attendanceCurrentSchema>
+export type AttendanceListResponse = z.infer<typeof attendanceListResponseSchema>
+export type MyAttendanceResponse = z.infer<typeof myAttendanceResponseSchema>
+
+/** Query parameters of `GET /hr/attendance` (the dates are `YYYY-MM-DD`; at most 93 days). */
+export interface AttendanceListParams {
+  date_from?: string
+  date_to?: string
+  /** Employee ID (PBP-1001) or CRM user ID. */
+  employee?: string
+  /** Employee name or ID. */
+  search?: string
+  role?: string
+  status?: AttendanceStatus
+  page?: number
+  /** 1–200 (the API's default is 50). */
+  page_size?: number
+}
+
+/** Query parameters of `GET /hr/attendance/me`. */
+export interface MyAttendanceParams {
+  date_from?: string
+  date_to?: string
+}
 
 const activityActionSchema = z.object({ action: z.string(), count: z.number() })
 const activityActionsResponseSchema = z.object({ items: z.array(activityActionSchema) })
@@ -4653,6 +4810,18 @@ export const api = {
   },
 
   hr: {
+    /** The attendance calendar (`GET /hr/attendance`): one row per employee per date, newest first, paged. */
+    async attendance(params: AttendanceListParams): Promise<AttendanceListResponse> {
+      const data = await apiClient.get(ENDPOINTS.hr.attendance, { params })
+      return attendanceListResponseSchema.parse(data)
+    },
+
+    /** The signed-in person's own days (`GET /hr/attendance/me`). */
+    async myAttendance(params: MyAttendanceParams): Promise<MyAttendanceResponse> {
+      const data = await apiClient.get(ENDPOINTS.hr.attendanceMe, { params })
+      return myAttendanceResponseSchema.parse(data)
+    },
+
     /** The signed-in person's own profile (`GET /hr/profile`, answer `{ profile }`). */
     async profile(): Promise<Profile> {
       const data = await apiClient.get(ENDPOINTS.hr.profile)

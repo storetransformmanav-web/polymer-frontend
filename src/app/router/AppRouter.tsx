@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthLayout } from '../layouts/AuthLayout.tsx'
 import { DashboardLayout } from '../layouts/DashboardLayout.tsx'
 import { ActivityPage } from '../../features/activity/index.ts'
+import { AttendancePage } from '../../features/attendance/index.ts'
 import { CollectionsPage } from '../../features/collections/index.ts'
 import { CustomersPage } from '../../features/customers/index.ts'
 import { DashboardPage } from '../../features/dashboard/index.ts'
@@ -55,6 +56,8 @@ const router = createBrowserRouter([
           { path: 'locks/*', element: <LocksPage /> },
           // `*` lets ActivityPage also serve /activity/:id (one entry's details).
           { path: 'activity/*', element: <ActivityPage /> },
+          // HRMS → Attendance (an administrator's calendar of everyone, or a user's own days).
+          { path: 'hrms/attendance', element: <AttendancePage /> },
           // Sage 50 → Invoices (a group in the sidebar; more Sage pages can sit beside it). `*` lets
           // InvoicesPage also serve /sage/invoices/<number> and /sage/invoices/customer/<ref>.
           { path: 'sage/invoices/*', element: <InvoicesPage /> },

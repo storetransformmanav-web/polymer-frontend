@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import {
   ActivityIcon,
   BoxesIcon,
+  CalendarIcon,
   DashboardIcon,
   FileTextIcon,
   InventoryIcon,
@@ -175,9 +176,24 @@ export const NAV_ENTRIES: NavEntry[] = [
     // The page fills the window from `lg`: the table scrolls in its own box, not the page.
     fillHeight: true,
   },
+  {
+    // HRMS: people-management pages. Attendance is available to every signed-in user (an
+    // administrator sees everyone, anyone else only their own days — the backend decides).
+    label: 'HRMS',
+    icon: UsersIcon,
+    items: [
+      {
+        to: '/hrms/attendance',
+        label: 'Attendance',
+        area: 'attendance',
+        icon: CalendarIcon,
+        fillHeight: true,
+      },
+    ],
+  },
 ]
 
-/** The paths inside the Shopify Management group — the only pages the "office" role may open. */
+/** The paths inside the Shopify Management group — the pages the "office" role may open. */
 export const SHOPIFY_PATHS: ReadonlySet<string> = new Set(
   NAV_ENTRIES.flatMap((entry) =>
     isNavGroup(entry) && entry.label === 'Shopify Management'
@@ -185,6 +201,15 @@ export const SHOPIFY_PATHS: ReadonlySet<string> = new Set(
       : [],
   ),
 )
+
+/**
+ * What the "office" role may open: the Shopify Management pages, plus the user's own attendance
+ * (every signed-in user has one).
+ */
+export const OFFICE_PATHS: ReadonlySet<string> = new Set([
+  ...SHOPIFY_PATHS,
+  '/hrms/attendance',
+])
 
 /** The first Shopify Management page — where an "office" user lands. */
 export const SHOPIFY_HOME = '/orders'

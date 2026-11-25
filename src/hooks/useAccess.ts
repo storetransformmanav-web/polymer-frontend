@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useAppSelector } from '../app/store/hooks.ts'
 import {
   NAV_ENTRIES,
-  SHOPIFY_PATHS,
+  OFFICE_PATHS,
   isNavGroup,
   type NavEntry,
   type NavItem,
@@ -23,7 +23,7 @@ export const isOfficeRole = (role?: string | null) =>
 
 /** The "office" role may open only the Shopify Management pages; any other role is not limited by role. */
 const roleAllows = (role: string | null | undefined, item: NavItem) =>
-  !isOfficeRole(role) || SHOPIFY_PATHS.has(item.to)
+  !isOfficeRole(role) || OFFICE_PATHS.has(item.to)
 
 /**
  * The sidebar for these permissions: a page the user may not view is left out, and so is a group
