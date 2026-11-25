@@ -219,6 +219,8 @@ export function UserSecurityAccessPanel({
   if (!user) return <DetailSkeleton />
 
   const pin = user.employee?.security_pin
+  // Only a PIN the backend reports as locked (failed attempts, or a "locked until" time) can be unlocked.
+  const isLocked = Boolean(pin?.locked_until) || (pin?.failed_attempts ?? 0) > 0
   const areas = Object.entries(user.permissions ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   )
@@ -263,7 +265,7 @@ export function UserSecurityAccessPanel({
             </Row>
           </div>
         </dl>
-        {pin?.is_set && (
+        {pin?.is_set && isLocked && (
           <div className="border-border mt-2 flex items-center gap-3 border-t pt-2">
             <p className="text-text-muted m-0 min-w-0 flex-1 text-[0.8rem]">
               Make sure a locked PIN can be used straight away.
