@@ -11,6 +11,7 @@ import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
   StoreIcon,
+  TagIcon,
   ClockIcon,
   FileTextIcon,
   GlobeIcon,
@@ -398,7 +399,7 @@ function Overview({
   )
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+    <div className="grid gap-3 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
       <aside className="flex min-w-0 flex-col gap-3">
         <div className={`${DETAIL_CARD} overflow-hidden p-0`}>
           {pictureSrc ? (
@@ -515,6 +516,34 @@ function Overview({
             )}
           />
         )}
+        <EditableCard<CollectionDraft>
+          title="Description"
+          icon={FileTextIcon}
+          canEdit={canManage}
+          collectionTitle={title}
+          onSave={onSave}
+          start={before}
+          build={(draft) => buildUpdateBody(before(), draft, columns)}
+          view={
+            collection.description_html?.trim() ? (
+              // A long description scrolls inside the narrow column.
+              <SafeHtml
+                html={collection.description_html}
+                className="max-h-80 overflow-y-auto text-[0.82rem] leading-relaxed break-words [&_h1]:text-[0.92rem] [&_h2]:text-[0.88rem] [&_h3]:text-[0.84rem] [&_p]:my-1.5"
+              />
+            ) : (
+              <p className="text-text-muted m-0 text-[0.85rem]">No description.</p>
+            )
+          }
+          editor={(draft, change) => (
+            <RichTextEditor
+              id="collection-description"
+              label="Description"
+              value={draft.descriptionHtml}
+              onChange={(descriptionHtml) => change({ ...draft, descriptionHtml })}
+            />
+          )}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-col gap-3">
@@ -583,12 +612,17 @@ function Overview({
                     </strong>
                     :
                   </p>
-                  <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                  <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
                     {conditions.map((condition, index) => (
                       <li
                         key={`${condition.column}-${index}`}
-                        className="border-border bg-surface rounded-lg border px-3 py-2 text-[0.85rem]"
+                        className="border-border bg-surface flex max-w-full items-center gap-2 rounded-lg border px-3 py-1.5 text-[0.82rem] font-semibold break-words"
                       >
+                        <TagIcon
+                          width={14}
+                          height={14}
+                          className="text-accent shrink-0"
+                        />
                         {condition.label ??
                           `${condition.column} ${condition.relation} ${condition.condition ?? ''}`}
                       </li>
@@ -616,34 +650,6 @@ function Overview({
             }
           />
         )}
-
-        <EditableCard<CollectionDraft>
-          title="Description"
-          icon={FileTextIcon}
-          canEdit={canManage}
-          collectionTitle={title}
-          onSave={onSave}
-          start={before}
-          build={(draft) => buildUpdateBody(before(), draft, columns)}
-          view={
-            collection.description_html?.trim() ? (
-              <SafeHtml
-                html={collection.description_html}
-                className="text-[0.88rem] leading-relaxed [&_p]:my-2"
-              />
-            ) : (
-              <p className="text-text-muted m-0 text-[0.85rem]">No description.</p>
-            )
-          }
-          editor={(draft, change) => (
-            <RichTextEditor
-              id="collection-description"
-              label="Description"
-              value={draft.descriptionHtml}
-              onChange={(descriptionHtml) => change({ ...draft, descriptionHtml })}
-            />
-          )}
-        />
 
         {/* Metafields, then the search engine listing, each the full width (a long saved value would otherwise stretch one card beside a short one). */}
         <div className="flex flex-col gap-3">

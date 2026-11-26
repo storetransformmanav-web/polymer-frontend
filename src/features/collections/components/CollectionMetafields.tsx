@@ -6,6 +6,9 @@ import {
   SpinnerIcon,
   TagIcon,
   XIcon,
+  FileTextIcon,
+  InfoIcon,
+  LayersIcon,
 } from '../../../components/ui/icons.tsx'
 import { RichTextEditor } from '../../../components/ui/RichTextEditor.tsx'
 import { SafeHtml } from '../../../components/ui/SafeHtml.tsx'
@@ -502,20 +505,33 @@ function SavedEntries({
   }
   return (
     <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-      {ids.map((id) => (
-        <li
-          key={id}
-          className="bg-accent-tint text-accent rounded-full px-2.5 py-0.5 text-[0.72rem] font-semibold"
-        >
-          {names.items.find((item) => item.id === id)?.name ??
-            (names.isLoading ? '…' : id)}
-        </li>
-      ))}
+      {ids.map((id, index) => {
+        const name =
+          names.items.find((item) => item.id === id)?.name ?? (names.isLoading ? '…' : id)
+        return (
+          <li
+            key={id}
+            className="bg-accent-tint text-accent rounded-full px-3 py-1 text-[0.76rem] font-semibold"
+          >
+            {/* A name that already starts with its number is not numbered twice. */}
+            {/^\d+[.)]/.test(name) ? name : `${index + 1}. ${name}`}
+          </li>
+        )
+      })}
     </ul>
   )
 }
 
-/** One metafield's saved value: its name over the value (entries by name, rich text in a small scrolling box, text as it is). */
+/** The backend's name as a heading: "Collection_shortdescription" → "Collection shortdescription". */
+const headingOf = (name: string) => name.replace(/_+/g, ' ').trim()
+
+const isShortText = (definition: MetafieldDefinition) =>
+  `${definition.key} ${definition.name}`.toLowerCase().includes('short')
+
+/**
+ * One metafield's saved value under an icon and its name: entries (the FAQ) as numbered chips,
+ * rich text in a rounded panel that scrolls inside itself, anything else as text.
+ */
 function MetafieldValue({
   shop,
   definition,
@@ -527,37 +543,40 @@ function MetafieldValue({
     ? V | undefined
     : never
 }) {
-  const filled = isReferenceInput(definition)
-    ? (value?.ids.length ?? 0) > 0
-    : Boolean(value?.text.trim())
+  const reference = isReferenceInput(definition)
+  const filled = reference ? (value?.ids.length ?? 0) > 0 : Boolean(value?.text.trim())
+  const Icon = reference ? InfoIcon : isShortText(definition) ? FileTextIcon : LayersIcon
+  const panel =
+    'border-border bg-surface max-h-32 overflow-y-auto rounded-xl border px-3 py-2 text-[0.82rem] leading-relaxed break-words'
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
-        {definition.name}
+    <dl className="m-0 flex min-w-0 flex-col gap-1.5">
+      <dt className="text-text flex items-center gap-2 text-[0.82rem] font-bold">
+        <Icon width={16} height={16} className="text-accent shrink-0" />
+        {headingOf(definition.name)}
       </dt>
       <dd className="m-0 min-w-0 text-[0.82rem] break-words">
         {!filled || !value ? (
           <span className="text-text-muted">—</span>
-        ) : isReferenceInput(definition) ? (
+        ) : reference ? (
           <SavedEntries shop={shop} definition={definition} ids={value.ids} />
         ) : isHtmlInput(definition) ? (
           // A long saved value scrolls inside its own short box, with small headings, so it never stretches the card.
           <SafeHtml
             html={value.text}
-            className="border-border bg-surface max-h-28 overflow-y-auto rounded-lg border px-3 py-2 text-[0.82rem] leading-relaxed [&_h1]:text-[0.92rem] [&_h2]:text-[0.88rem] [&_h3]:text-[0.84rem] [&_p]:my-1.5"
+            className={`${panel} [&_h1]:text-[0.9rem] [&_h2]:text-[0.86rem] [&_h3]:text-[0.84rem] [&_p]:my-1`}
           />
         ) : (
-          value.text
+          <div className={panel}>{value.text}</div>
         )}
       </dd>
-    </div>
+    </dl>
   )
 }
 
 /**
- * The saved values of a collection's metafields in two columns with a thin rule between them (one
- * column when the card is narrow): the 1st, 3rd… metafield on the left, the 2nd, 4th… on the right,
- * each left one divided from the next by a line.
+ * The saved values of a collection's metafields: the entry lists (the FAQ) across the top, and the
+ * texts under them side by side with a thin rule between — the short description first. One column
+ * when the card is narrow.
  */
 function MetafieldValues({
   shop,
@@ -568,32 +587,39 @@ function MetafieldValues({
   definitions: MetafieldDefinition[]
   values: ReturnType<typeof readCollectionMetafieldValues>
 }) {
-  const left = definitions.filter((_, index) => index % 2 === 0)
-  const right = definitions.filter((_, index) => index % 2 === 1)
-  const column = (items: MetafieldDefinition[]) => (
-    <dl className="m-0 flex min-w-0 flex-col gap-3">
-      {items.map((definition, index) => (
-        <div
-          key={definition.id}
-          className={index > 0 ? 'border-border border-t pt-3' : undefined}
-        >
-          <MetafieldValue
-            shop={shop}
-            definition={definition}
-            value={values.get(definition.id)}
-          />
-        </div>
-      ))}
-    </dl>
+  const lists = definitions.filter((definition) => isReferenceInput(definition))
+  const texts = definitions
+    .filter((definition) => !isReferenceInput(definition))
+    .sort((a, b) => Number(isShortText(b)) - Number(isShortText(a)))
+  const one = (definition: MetafieldDefinition) => (
+    <MetafieldValue
+      key={definition.id}
+      shop={shop}
+      definition={definition}
+      value={values.get(definition.id)}
+    />
   )
   return (
-    <div className="@container min-w-0">
-      <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-2 @3xl:gap-0">
-        <div className="@3xl:pr-6">{column(left)}</div>
-        {right.length > 0 && (
-          <div className="border-border @3xl:border-l @3xl:pl-6">{column(right)}</div>
-        )}
-      </div>
+    <div className="@container flex min-w-0 flex-col gap-3">
+      {lists.map(one)}
+      {texts.length > 0 && (
+        <div
+          className={`grid grid-cols-1 gap-3 @2xl:grid-cols-2 @2xl:gap-0 ${
+            lists.length > 0 ? 'border-border border-t pt-3' : ''
+          }`}
+        >
+          {texts.map((definition, index) => (
+            <div
+              key={definition.id}
+              className={`min-w-0 ${
+                index % 2 === 0 ? '@2xl:pr-4' : 'border-border @2xl:border-l @2xl:pl-4'
+              }`}
+            >
+              {one(definition)}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
