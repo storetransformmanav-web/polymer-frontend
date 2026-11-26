@@ -163,7 +163,7 @@ function getSpecs(product: ProductDetail): [string, ReactNode][] {
   return [
     ['Vendor / Brand', product.vendor],
     ['Product type', product.product_type],
-    ['Category', product.category?.full_path ?? product.category?.name],
+    ['Category', product.category?.name ?? product.category?.full_path],
     [
       'Handle',
       <span key="handle" className="flex items-center gap-1.5 font-mono text-[0.85rem]">
