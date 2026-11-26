@@ -1,12 +1,12 @@
 import { Badge } from '../../../components/ui/Badge.tsx'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
-import { BoxesIcon, InfoIcon, ListChecksIcon } from '../../../components/ui/icons.tsx'
-import type { OrderDetail } from '../../../lib/api/endpoints.ts'
+import { BoxesIcon, InfoIcon } from '../../../components/ui/icons.tsx'
 import { formatDateTime } from '../../../lib/format.ts'
 import { safeUrl } from '../../../lib/safeUrl.ts'
 import { humanize } from '../utils/format.ts'
 import { orderTracking, type TrackingEntry } from '../utils/tracking.ts'
 import { EmptyNote, FoldCard, Row, Rows } from './OrderCompact.tsx'
+import { OrderNoteCard, type OrderNoteCardProps } from './OrderNoteCard.tsx'
 
 /** One parcel: what it belongs to, then carrier, number, link, delivery status and date. */
 function TrackingCard({ entry }: { entry: TrackingEntry }) {
@@ -54,22 +54,15 @@ function TrackingCard({ entry }: { entry: TrackingEntry }) {
  * **Notes & Tracking**, three small sections you can fold: the **Order note**, the **Tracking** of
  * its parcels (from the fulfillments and any tracking detail saved with the order) and the
  * **Additional details** saved with it as name / value rows — a copy button beside each value, long
- * ids wrapping inside their row. Only http(s) values are made links.
+ * ids wrapping inside their row. Only http(s) values are made links. The note is the one thing that
+ * can be edited (its pencil).
  */
-export function OrderNotesPanel({ order }: { order: OrderDetail }) {
+export function OrderNotesPanel({ order, reference, shop }: OrderNoteCardProps) {
   const { tracking, details } = orderTracking(order)
 
   return (
     <div className="flex flex-col gap-2.5">
-      <FoldCard title="Order note" icon={ListChecksIcon}>
-        {order.note?.trim() ? (
-          <p className="m-0 py-1 text-[0.82rem] leading-relaxed whitespace-pre-line">
-            {order.note}
-          </p>
-        ) : (
-          <EmptyNote>No note on this order.</EmptyNote>
-        )}
-      </FoldCard>
+      <OrderNoteCard order={order} reference={reference} shop={shop} />
 
       <FoldCard title="Tracking" count={tracking.length} icon={BoxesIcon}>
         {tracking.length === 0 ? (

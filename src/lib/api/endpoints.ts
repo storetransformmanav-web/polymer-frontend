@@ -1265,6 +1265,15 @@ export interface OrderUpdateBody {
   staff_note?: string
 }
 
+/** What the app keeps of an update answer: what to say, and whether it was applied. */
+export interface OrderUpdateAnswer {
+  message: string
+  /** Only when the answer says so: `false` means nothing was changed. */
+  applied?: boolean
+  /** The backend's warnings, when it sends any. */
+  warnings?: string[]
+}
+
 /** What the app keeps of a create answer: enough to open the new order and say so. */
 export interface OrderCreateResult {
   id: string | null
@@ -1279,6 +1288,26 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+
+/**
+ * Reads the update answer (`{ code, status, message, result: { applied, warnings, … } }`). The
+ * order in it is not used: the page reads the order again.
+ */
+export function readOrderUpdate(data: unknown): OrderUpdateAnswer {
+  const root = asRecord(data) ?? {}
+  const result = asRecord(root.result)
+  const message = typeof root.message === 'string' ? root.message.trim() : ''
+  const warnings = Array.isArray(result?.warnings)
+    ? result.warnings.filter(
+        (warning): warning is string => typeof warning === 'string' && warning !== '',
+      )
+    : []
+  return {
+    message,
+    ...(typeof result?.applied === 'boolean' ? { applied: result.applied } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }
+}
 
 /**
  * Reads the create answer leniently — its shape is not documented: the order may be under
@@ -4016,12 +4045,11 @@ export const api = {
       ref: string,
       body: OrderUpdateBody,
       shop: string | null,
-    ): Promise<{ message: string }> {
+    ): Promise<OrderUpdateAnswer> {
       const data = await apiClient.patch<unknown>(ENDPOINTS.orders.detail(ref), body, {
         params: { preview: false, ...(shop ? { shop } : {}) },
       })
-      const message = asRecord(data)?.message
-      return { message: typeof message === 'string' ? message.trim() : '' }
+      return readOrderUpdate(data)
     },
   },
   customers: {

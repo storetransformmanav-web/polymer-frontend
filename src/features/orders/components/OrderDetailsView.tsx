@@ -261,7 +261,15 @@ export function OrderDetailsView({
             outstanding={order.total_outstanding}
           />
         )}
-        {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
+        {order && tab === 'attributes' && (
+          // Keyed by the order, so an edit or a message never carries over to another one.
+          <OrderNotesPanel
+            key={order.id}
+            order={order}
+            reference={reference}
+            shop={shop}
+          />
+        )}
         {order && tab === 'events' && <OrderTimelinePanel order={order} />}
       </div>
     </article>
