@@ -1,3 +1,4 @@
+import { validateMetafieldValue } from './metafieldValues.ts'
 import { sanitizeHtml } from '../../../lib/sanitizeHtml.ts'
 import type {
   InventoryPolicy,
@@ -54,26 +55,18 @@ export const CREATE_LIMITS = {
   taxCode: 50,
 } as const
 
-/** Metafield types the form offers (Shopify's common ones). */
+/** The metafield types the forms offer; each has its own input and check (`metafieldValues.ts`). */
 export const METAFIELD_TYPES = [
-  'single_line_text_field',
-  'multi_line_text_field',
-  'number_integer',
-  'number_decimal',
-  'boolean',
-  'url',
-  'json',
-  'date',
-  'date_time',
-  'color',
-  'rich_text_field',
-  // A list holds a JSON array in the value, e.g. ["Plastic", "Paper"].
-  'list.single_line_text_field',
-  'list.number_integer',
-  'list.number_decimal',
   'list.url',
   'list.date',
   'list.color',
+  'date_time',
+  'color',
+  'boolean',
+  'url',
+  'json',
+  'single_line_text_field',
+  'multi_line_text_field',
 ] as const
 
 export interface CreateOptionDraft {
@@ -317,14 +310,6 @@ export function isCreateDirty(draft: CreateDraft): boolean {
 const tooLong = (label: string, value: string, max: number) =>
   value.trim().length > max ? `${label} can be at most ${max} characters` : null
 
-const isJsonArray = (value: string): boolean => {
-  try {
-    return Array.isArray(JSON.parse(value))
-  } catch {
-    return false
-  }
-}
-
 /** Checks the draft against the API's limits. An empty result means it can be sent. */
 export function validateCreateDraft(draft: CreateDraft): DraftErrors {
   const errors: DraftErrors = {}
@@ -527,9 +512,7 @@ export function validateCreateDraft(draft: CreateDraft): DraftErrors {
       at('value'),
       field.value.trim()
         ? (tooLong('The value', field.value, CREATE_LIMITS.metafieldValue) ??
-            (field.type.startsWith('list.') && !isJsonArray(field.value)
-              ? 'A list needs a JSON array: values in square brackets, e.g. ["Plastic", "Paper"]'
-              : null))
+            validateMetafieldValue(field.type, field.value))
         : 'Enter a value',
     )
   })

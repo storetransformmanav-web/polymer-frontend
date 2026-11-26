@@ -1,3 +1,4 @@
+import { MetafieldValueField } from '../edit/MetafieldValueField.tsx'
 import { PlusIcon, TrashIcon } from '../../../../components/ui/icons.tsx'
 import { SelectField } from '../../../../components/ui/SelectField.tsx'
 import {
@@ -33,20 +34,6 @@ const METAFIELD_TYPE_LABELS: Record<string, string> = {
   'list.url': 'List of web links',
   'list.date': 'List of dates',
   'list.color': 'List of colours',
-}
-
-/** What to type as the value, for the kinds that need a specific format. */
-function valueHint(type: string): string | undefined {
-  if (type.startsWith('list.'))
-    return 'A list: write the values in square brackets, e.g. ["Plastic", "Paper"].'
-  if (type === 'boolean') return 'Type true or false.'
-  if (type === 'date') return 'Use the format YYYY-MM-DD, e.g. 2026-12-31.'
-  if (type === 'date_time')
-    return 'Use the format YYYY-MM-DDTHH:MM:SS, e.g. 2026-12-31T09:30:00.'
-  if (type === 'color') return 'A hex colour, e.g. #1a73e8.'
-  if (type === 'url') return 'A full web address, e.g. https://example.com.'
-  if (type === 'json') return 'Valid JSON, e.g. {"care": "Hand wash"}.'
-  return undefined
 }
 
 /** **Search engine listing**: the SEO title and description, and the product's web address (handle). */
@@ -191,23 +178,18 @@ export function CreateMetafieldsCard({ draft, errors, update }: CreateSectionPro
                   value: type,
                   label: METAFIELD_TYPE_LABELS[type] ?? type,
                 }))}
-                onChange={(type) => setField(index, { type })}
+                onChange={(type) => {
+                  if (type !== field.type) setField(index, { type, value: '' })
+                }}
               />
-              <EditField
+              <MetafieldValueField
                 id={`create-mf-value-${field.key}`}
-                label="Value"
+                type={field.type}
+                value={field.value}
                 error={at('value')}
-                hint={valueHint(field.type)}
-              >
-                <input
-                  id={`create-mf-value-${field.key}`}
-                  autoComplete="off"
-                  value={field.value}
-                  aria-invalid={at('value') ? true : undefined}
-                  onChange={(event) => setField(index, { value: event.target.value })}
-                  className={FIELD_INPUT}
-                />
-              </EditField>
+                maxLength={CREATE_LIMITS.metafieldValue}
+                onChange={(value) => setField(index, { value })}
+              />
             </div>
             <button
               type="button"

@@ -1,3 +1,4 @@
+import { validateMetafieldValue } from './metafieldValues.ts'
 import { sanitizeHtml } from '../../../lib/sanitizeHtml.ts'
 import {
   INVENTORY_POLICIES,
@@ -848,15 +849,6 @@ const WHOLE = /^\d+$/
 /** Messages keyed by field path, e.g. `title`, `variants.2.price`, `newMedia.0.url`. */
 export type DraftErrors = Record<string, string>
 
-/** A list metafield holds a JSON array in its value, e.g. ["Plastic", "Paper"]. */
-const isJsonArray = (value: string): boolean => {
-  try {
-    return Array.isArray(JSON.parse(value))
-  } catch {
-    return false
-  }
-}
-
 const tooLong = (label: string, value: string, max: number) =>
   value.trim().length > max ? `${label} can be at most ${max} characters` : null
 
@@ -1240,9 +1232,7 @@ export function validateDraft(product: ProductDetail, draft: ProductDraft): Draf
       at('value'),
       field.value.trim()
         ? (tooLong('The value', field.value, LIMITS.metafieldValue) ??
-            (field.type.startsWith('list.') && !isJsonArray(field.value)
-              ? 'A list needs a JSON array: values in square brackets, e.g. ["Plastic", "Paper"]'
-              : null))
+            validateMetafieldValue(field.type, field.value))
         : 'Enter a value, or remove this detail',
     )
   })

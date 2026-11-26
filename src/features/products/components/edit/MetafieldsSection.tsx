@@ -11,74 +11,11 @@ import { metafieldName, metafieldTypeLabel } from '../../utils/metafields.ts'
 import {
   EditField,
   FIELD_INPUT,
-  FIELD_TEXTAREA,
   ICON_BUTTON,
   TEXT_BUTTON,
   type SectionProps,
 } from './fields.tsx'
-
-/** Types whose value is long, structured or several lines: a text area rather than one line. */
-const isLongType = (type: string) =>
-  type === 'multi_line_text_field' ||
-  type === 'rich_text_field' ||
-  type === 'json' ||
-  type === 'json_string' ||
-  type.startsWith('list.')
-
-/** The value box for a metafield, by its kind. */
-function ValueControl({
-  id,
-  field,
-  invalid,
-  onChange,
-}: {
-  id: string
-  field: MetafieldEditDraft
-  invalid: boolean
-  onChange: (value: string) => void
-}) {
-  if (field.type === 'boolean') {
-    return (
-      <ListSelect
-        id={id}
-        label="Value"
-        large
-        invalid={invalid}
-        value={field.value}
-        options={[
-          { value: '', label: 'Choose…' },
-          { value: 'true', label: 'Yes' },
-          { value: 'false', label: 'No' },
-        ]}
-        onChange={onChange}
-      />
-    )
-  }
-  if (isLongType(field.type)) {
-    const structured = field.type.startsWith('list.') || field.type.startsWith('json')
-    return (
-      <textarea
-        id={id}
-        rows={structured ? 4 : 3}
-        value={field.value}
-        spellCheck={!structured}
-        aria-invalid={invalid ? true : undefined}
-        onChange={(event) => onChange(event.target.value)}
-        className={`${FIELD_TEXTAREA} ${structured ? 'font-mono text-[0.8rem]' : ''}`}
-      />
-    )
-  }
-  return (
-    <input
-      id={id}
-      autoComplete="off"
-      value={field.value}
-      aria-invalid={invalid ? true : undefined}
-      onChange={(event) => onChange(event.target.value)}
-      className={FIELD_INPUT}
-    />
-  )
-}
+import { MetafieldValueField } from './MetafieldValueField.tsx'
 
 /**
  * The product's metafields, being edited: every existing detail (the product's and each
@@ -212,7 +149,10 @@ export function MetafieldsSection({ product, draft, errors, onChange }: SectionP
                         value: type,
                         label: metafieldTypeLabel(type),
                       }))}
-                      onChange={(type) => update(index, { type })}
+                      // A value typed for the old type rarely fits the new one: start clean.
+                      onChange={(type) => {
+                        if (type !== field.type) update(index, { type, value: '' })
+                      }}
                     />
                   </EditField>
                   <EditField
@@ -259,23 +199,14 @@ export function MetafieldsSection({ product, draft, errors, onChange }: SectionP
               )}
 
               {!field.removed && (
-                <EditField
+                <MetafieldValueField
                   id={`${prefix}-value`}
-                  label="Value"
+                  type={field.type}
+                  value={field.value}
                   error={at('value')}
-                  hint={
-                    field.type.startsWith('list.')
-                      ? 'A JSON array, e.g. ["Plastic", "Paper"].'
-                      : undefined
-                  }
-                >
-                  <ValueControl
-                    id={`${prefix}-value`}
-                    field={field}
-                    invalid={Boolean(at('value'))}
-                    onChange={(value) => update(index, { value })}
-                  />
-                </EditField>
+                  maxLength={LIMITS.metafieldValue}
+                  onChange={(value) => update(index, { value })}
+                />
               )}
             </li>
           )

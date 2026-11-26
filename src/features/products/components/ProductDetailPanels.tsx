@@ -1234,10 +1234,8 @@ function MetafieldValue({ display }: { display: MetafieldDisplay }) {
 }
 
 /**
- * Metafields, in plain words: what the detail is called, what kind of detail it is, what
- * it holds, and whether it belongs to the whole product or to one variant. The technical
- * name (`namespace.key`) stays underneath for anyone who needs it, and the full value of
- * structured data opens in a window, read out for people (never as JSON).
+ * Metafields: each one's **key** and **value**, nothing else (the product's and each variant's).
+ * The full value of structured data opens in a window, read out for people (never as JSON).
  */
 function MetafieldsView({ product }: { product: ProductDetail }) {
   const rows = getMetafieldRows(product)
@@ -1252,16 +1250,19 @@ function MetafieldsView({ product }: { product: ProductDetail }) {
       <TableWrap>
         <thead>
           <tr>
-            <th className={TH}>Detail</th>
-            <th className={TH}>Applies to</th>
-            <th className={TH}>Kind</th>
+            <th className={TH}>Key</th>
             <th className={TH}>Value</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
             const isSections = row.namespace === APD_NAMESPACE && row.key === APD_KEY
-            const display = formatMetafieldValue(row.type, row.value)
+            const formatted = formatMetafieldValue(row.type, row.value)
+            // A number is shown exactly as it is saved (12345, not 12,345).
+            const display: MetafieldDisplay =
+              formatted.kind === 'text' && row.type?.startsWith('number_')
+                ? { kind: 'text', text: row.value ?? formatted.text }
+                : formatted
             const raw = rawMetafieldValue(row.type, row.value)
             return (
               <tr
@@ -1269,11 +1270,7 @@ function MetafieldsView({ product }: { product: ProductDetail }) {
                 className="border-border even:bg-surface border-b align-top last:border-b-0"
               >
                 <td className={`${TD} whitespace-normal`}>
-                  <p className="font-semibold">{metafieldName(row.namespace, row.key)}</p>
-                </td>
-                <td className={`${TD} whitespace-normal`}>{row.appliesTo}</td>
-                <td className={`${TD} whitespace-normal`}>
-                  {metafieldTypeLabel(row.type)}
+                  <span className="font-semibold break-all">{row.key}</span>
                 </td>
                 <td className={`${TD} max-w-md min-w-56 whitespace-normal`}>
                   {isSections && sections ? (
