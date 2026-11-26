@@ -743,11 +743,11 @@ describe('OrdersPage', () => {
     // (The columns are: order, created date, customer, email, then the two statuses.)
     const payment = table.getByRole('columnheader', { name: 'Payment status' })
     expect(payment.className).toContain('text-center')
-    expect(payment).toHaveStyle({ width: '10rem' })
+    expect(payment.style.width).toBe('10rem')
 
     const fulfillment = table.getByRole('columnheader', { name: 'Fulfillment status' })
     expect(fulfillment.className).toContain('text-center')
-    expect(fulfillment).toHaveStyle({ width: '10rem' })
+    expect(fulfillment.style.width).toBe('10rem')
 
     // Every pill in the two columns has the same width and is centred in its cell.
     const widths = new Set<string>()
