@@ -10,7 +10,7 @@ import { DetailsHeader, HeaderChip } from '../../../components/ui/DetailsHeader.
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
-  ArrowUpDownIcon,
+  StoreIcon,
   ClockIcon,
   FileTextIcon,
   GlobeIcon,
@@ -44,7 +44,6 @@ import {
   buildUpdateBody,
   draftFromCollection,
   isSmart,
-  sortOrderLabel,
   validateCollectionDraft,
   type CollectionDraft,
   type DraftErrors,
@@ -154,28 +153,31 @@ export function CollectionDetailsView({
     setNotice(result.message)
   }
 
+  // The visible words are for the eye; `HeaderChip` already gives a screen reader its label.
   const facts = (
     <>
       <HeaderChip icon={ProductsIcon} label="Products">
-        <span className="font-semibold">{count(collection.products_count)}</span>{' '}
-        <span className="text-text-muted">
-          {collection.products_count === 1 ? 'product' : 'products'}
-        </span>
-      </HeaderChip>
-
-      {/* The visible words are for the eye; `HeaderChip` already gives a screen reader its label. */}
-      <HeaderChip icon={ArrowUpDownIcon} label="Product order">
         <span aria-hidden="true" className="text-text-muted">
-          Product order:
+          Products:
         </span>{' '}
-        {sortOrderLabel(collection.sort_order)}
+        <span className="font-semibold">{count(collection.products_count)}</span>
       </HeaderChip>
+      {collection.shop?.name && (
+        <HeaderChip icon={StoreIcon} label="Store">
+          <span aria-hidden="true" className="text-text-muted">
+            Store:
+          </span>{' '}
+          <span className="font-semibold">{collection.shop.name}</span>
+        </HeaderChip>
+      )}
       {collection.shopify_updated_at && (
         <HeaderChip icon={ClockIcon} label="Last updated in Shopify">
           <span aria-hidden="true" className="text-text-muted">
-            Shopify updated at:
+            Last updated in Shopify:
           </span>{' '}
-          {formatDateTimeAmPm(collection.shopify_updated_at)}
+          <span className="font-semibold">
+            {formatDateTimeAmPm(collection.shopify_updated_at)}
+          </span>
         </HeaderChip>
       )}
     </>
@@ -184,7 +186,7 @@ export function CollectionDetailsView({
   return (
     <article className="border-border bg-bg overflow-hidden rounded-2xl border lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <DetailsHeader
-        className="border-border mx-4 mt-4 shrink-0 border-b pb-3 sm:mx-5"
+        className="border-border mx-4 mt-3 shrink-0 border-b pb-2.5 sm:mx-5"
         visual={<CollectionImage src={collection.image_url} size="lg" />}
         title={collection.title}
         titleHint={collection.title}
@@ -241,7 +243,7 @@ export function CollectionDetailsView({
               aria-selected={selected}
               aria-controls="collection-tabpanel"
               onClick={() => setTab(item.id)}
-              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-4 py-3 text-[0.88rem] font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`-mb-px flex shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-4 py-2.5 text-[0.88rem] font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 selected
                   ? 'border-accent text-accent'
                   : 'text-text-muted hover:text-text border-transparent'
@@ -263,7 +265,7 @@ export function CollectionDetailsView({
         id="collection-tabpanel"
         role="tabpanel"
         aria-labelledby={`collection-tab-${tab}`}
-        className="flex flex-col gap-4 p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+        className="flex flex-col gap-3 px-4 py-3 sm:px-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {notice && <FormMessage tone="success">{notice}</FormMessage>}
 
@@ -275,12 +277,29 @@ export function CollectionDetailsView({
             onSave={send}
           />
         ) : (
-          <CollectionProducts
-            collection={collection}
-            details={details}
-            canManage={canManage}
-            onSave={send}
-          />
+          <>
+            {/* The order the collection's products are listed in belongs with the products. */}
+            <dl className="border-border bg-bg m-0 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5">
+              <dt className="text-text-muted text-[0.68rem] font-bold tracking-wide uppercase">
+                Product order
+              </dt>
+              <dd className="m-0 text-[0.85rem] font-medium">
+                <SortOrderValue
+                  value={collection.sort_order ?? ''}
+                  sortOrders={rules.options?.sort_orders ?? []}
+                  canEdit={canManage}
+                  onSave={send}
+                  collectionTitle={collection.title}
+                />
+              </dd>
+            </dl>
+            <CollectionProducts
+              collection={collection}
+              details={details}
+              canManage={canManage}
+              onSave={send}
+            />
+          </>
         )}
       </div>
 
@@ -379,8 +398,8 @@ function Overview({
   )
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
-      <aside className="flex min-w-0 flex-col gap-4">
+    <div className="grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+      <aside className="flex min-w-0 flex-col gap-3">
         <div className={`${DETAIL_CARD} overflow-hidden p-0`}>
           {pictureSrc ? (
             <button
@@ -498,10 +517,10 @@ function Overview({
         )}
       </aside>
 
-      <div className="flex min-w-0 flex-col gap-4">
-        <DetailSection tinted title="Collection details" icon={LayersIcon}>
-          {/* One row of facts with a thin rule between them, like the reference (two or four to a row on a smaller screen). */}
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 xl:flex xl:items-start xl:gap-0">
+      <div className="flex min-w-0 flex-col gap-3">
+        <DetailSection tinted compact title="Collection details" icon={LayersIcon}>
+          {/* One row of three facts with a thin rule between them (stacked on a phone). */}
+          <div className="grid gap-3 sm:grid-cols-3 sm:gap-0">
             {[
               <Field key="title" label="Title">
                 {textValue('title', collection.title)}
@@ -524,33 +543,10 @@ function Overview({
                   </span>
                 ) : null}
               </Field>,
-              <Field key="type" label="Type">
-                <TypeBadge type={collection.collection_type} />
-              </Field>,
-              <Field key="order" label="Product order">
-                <SortOrderValue
-                  value={collection.sort_order ?? ''}
-                  sortOrders={ruleOptions?.sort_orders ?? []}
-                  canEdit={canManage}
-                  onSave={onSave}
-                  collectionTitle={title}
-                />
-              </Field>,
-              <Field key="updated" label="Last updated in Shopify">
-                {collection.shopify_updated_at
-                  ? formatDateTimeAmPm(collection.shopify_updated_at)
-                  : null}
-              </Field>,
-              <Field key="products" label="Products">
-                {count(collection.products_count)}
-              </Field>,
-              <Field key="store" label="Store">
-                {collection.shop?.name}
-              </Field>,
             ].map((field) => (
               <dl
                 key={field.key}
-                className="border-border m-0 min-w-0 xl:flex-auto xl:border-l xl:px-4 xl:first:border-l-0 xl:first:pl-0 xl:last:pr-0"
+                className="border-border m-0 min-w-0 sm:border-l sm:px-4 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0"
               >
                 {field}
               </dl>
@@ -650,14 +646,14 @@ function Overview({
         />
 
         {/* Metafields, then the search engine listing, each the full width (a long saved value would otherwise stretch one card beside a short one). */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <CollectionMetafieldsPanel
             collection={collection}
             canManage={canManage}
             onSave={onSave}
           />
 
-          <DetailSection tinted title="Search engine listing" icon={GlobeIcon}>
+          <DetailSection tinted compact title="Search engine listing" icon={GlobeIcon}>
             <div className="grid gap-5 sm:grid-cols-2 sm:gap-0">
               <dl className="m-0 flex min-w-0 flex-col sm:pr-6">
                 <Field label="Page title">

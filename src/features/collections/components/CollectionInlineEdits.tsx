@@ -181,8 +181,9 @@ export function CollectionTextValue({
 }
 
 /**
- * The product order with a small pencil: it turns into a dropdown of Shopify's orders (from the
- * rule options); choosing one asks first, then sends `sort_order`.
+ * The product order as a dropdown of Shopify's orders (from the rule options); choosing another
+ * asks "Are you sure?" first and only "Yes, update" sends `sort_order`. It keeps showing the saved
+ * order until then, so cancelling leaves it as it was. Without the manage permission it is text.
  */
 export function SortOrderValue({
   value,
@@ -197,60 +198,33 @@ export function SortOrderValue({
   onSave: SaveCollection
   collectionTitle: string
 }) {
-  const [editing, setEditing] = useState(false)
   const [asking, setAsking] = useState<string | null>(null)
   if (!canEdit) return <>{sortOrderLabel(value)}</>
 
-  if (editing && sortOrders.length > 0) {
-    const options: SelectOption[] = sortOrders.map((code) => ({
-      value: code,
-      label: sortOrderLabel(code),
-    }))
-    if (value && !sortOrders.includes(value)) {
-      options.unshift({ value, label: sortOrderLabel(value) })
-    }
-    return (
-      <span className="flex items-center gap-1.5">
-        <span className="min-w-0 flex-1">
-          <SelectField
-            compact
-            hideLabel
-            id="collection-sort-order-inline"
-            label="Product order"
-            value={value}
-            options={options}
-            onChange={(next) => {
-              setEditing(false)
-              if (next !== value) setAsking(next)
-            }}
-          />
-        </span>
-        <button
-          type="button"
-          aria-label="Stop changing the product order"
-          onClick={() => setEditing(false)}
-          className="text-text-muted hover:text-text inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent"
-        >
-          <XIcon width={14} height={14} />
-        </button>
-      </span>
-    )
+  const options: SelectOption[] = sortOrders.map((code) => ({
+    value: code,
+    label: sortOrderLabel(code),
+  }))
+  // The saved order is always listed, even before the choices have arrived.
+  if (!sortOrders.includes(value)) {
+    options.unshift({ value, label: sortOrderLabel(value) })
   }
 
   return (
     <>
-      <span className="inline-flex items-center gap-1.5">
-        {sortOrderLabel(value)}
-        <button
-          type="button"
-          aria-label="Change product order"
-          title="Change"
+      <span className="block w-56 max-w-full">
+        <SelectField
+          compact
+          hideLabel
+          id="collection-sort-order-inline"
+          label="Product order"
+          value={value}
+          options={options}
           disabled={sortOrders.length === 0}
-          onClick={() => setEditing(true)}
-          className="text-text-muted hover:text-accent inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded border-none bg-transparent p-0 disabled:opacity-40"
-        >
-          <PencilIcon width={12} height={12} />
-        </button>
+          onChange={(next) => {
+            if (next !== value) setAsking(next)
+          }}
+        />
       </span>
       {asking !== null && (
         <ChangeQuestion
@@ -368,6 +342,7 @@ export function EditableCard<T>({
     <>
       <DetailSection
         tinted
+        compact
         title={title}
         icon={icon}
         count={count}

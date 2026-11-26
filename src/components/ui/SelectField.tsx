@@ -85,7 +85,10 @@ export function SelectField({
         {label}
         {inline && ':'}
       </label>
-      <div className="relative min-w-0 flex-1">
+      {/* Exactly as tall as the select: the drawn label and chevron are centred on this box, so it
+          must not grow when a grid row is taller than the field (a neighbour with more under it).
+          Only the inline layout lets it take the spare width. */}
+      <div className={`relative min-w-0 ${inline ? 'flex-1' : ''}`}>
         <select
           id={id}
           value={value}
