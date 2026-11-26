@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
-import type { ReactNode } from 'react'
 import { DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { BoxesIcon } from '../../../components/ui/icons.tsx'
 import type { OrderDetail, OrderListItem } from '../../../lib/api/endpoints.ts'
@@ -116,10 +115,9 @@ function OrderTotals({
 }
 
 /**
- * The Overview's **Items** card, closed to begin with: a table — product (picture, name, variant and SKU), price,
- * quantity and the line's total — with the order's totals under it. The totals draw from the list
- * row while the lines load (`items` is null then). Editing fills in `above`, `quantityOf` and
- * `extraRows`; the table itself stays.
+ * The **Items** tab's card: a table — product (picture, name, variant and SKU), price, quantity and
+ * the line's total — with the order's totals under it. The totals draw from the list row while the
+ * lines load (`items` is null then). Read-only.
  */
 export function OrderItemsSummary({
   items,
@@ -127,47 +125,22 @@ export function OrderItemsSummary({
   taxesIncluded,
   tip,
   outstanding,
-  actions,
-  forceOpen = false,
-  above,
-  quantityOf,
-  extraRows,
 }: {
   items: OrderDetail['line_items'] | null
   totals: OrderListItem
   taxesIncluded?: boolean | null
   tip?: string | null
   outstanding?: string | null
-  /** ✓ and ✕, while something is waiting to be saved. */
-  actions?: ReactNode
-  /** Stays open while something is waiting to be saved. */
-  forceOpen?: boolean
-  /** Above the table (the search for a product to add). */
-  above?: ReactNode
-  /** What the Quantity column shows for a line, in place of the plain number. */
-  quantityOf?: (item: LineItem) => ReactNode
-  /** More rows under the lines (products being added). */
-  extraRows?: ReactNode
 }) {
   const money = (value: string | null | undefined) =>
     value === null || value === undefined ? '—' : formatPrice(value, totals.currency)
 
   return (
-    <FoldCard
-      title="Order Items"
-      icon={BoxesIcon}
-      count={items?.length}
-      defaultOpen
-      actions={actions}
-      forceOpen={forceOpen}
-    >
+    <FoldCard title="Order Items" icon={BoxesIcon} count={items?.length} defaultOpen>
       <div className="flex flex-col gap-3 py-1.5">
-        {above}
         {items === null && <DetailSkeleton />}
-        {items?.length === 0 && !extraRows && (
-          <EmptyNote>No items on this order.</EmptyNote>
-        )}
-        {items && (items.length > 0 || extraRows) && (
+        {items?.length === 0 && <EmptyNote>No items on this order.</EmptyNote>}
+        {items && items.length > 0 && (
           <MiniTable>
             <thead>
               <tr>
@@ -196,14 +169,13 @@ export function OrderItemsSummary({
                     {money(item.price)}
                   </td>
                   <td className={`${MINI_TD} text-center tabular-nums`}>
-                    {quantityOf ? quantityOf(item) : (item.quantity ?? '—')}
+                    {item.quantity ?? '—'}
                   </td>
                   <td className={`${MINI_TD} text-right font-semibold tabular-nums`}>
                     {money(lineTotal(item))}
                   </td>
                 </tr>
               ))}
-              {extraRows}
             </tbody>
           </MiniTable>
         )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLinkedState } from '../../../hooks/useLinkedState.ts'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
@@ -9,7 +9,6 @@ import {
   HeaderTile,
   StatusPill,
 } from '../../../components/ui/DetailsHeader.tsx'
-import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
   AlertTriangleIcon,
   BarcodeIcon,
@@ -30,11 +29,7 @@ import {
 } from '../utils/format.ts'
 import { notesCount } from '../utils/tracking.ts'
 import { OrderDetailsPanel } from './OrderDetailsPanel.tsx'
-import {
-  EditableOrderItems,
-  OrderEmailCell,
-  type OrderEditContext,
-} from './OrderInlineEdits.tsx'
+import { OrderItemsSummary } from './OrderItemsPanel.tsx'
 import { OrderNotesPanel } from './OrderNotesPanel.tsx'
 import { OrderTimelinePanel } from './OrderTimelinePanel.tsx'
 
@@ -67,15 +62,6 @@ export function OrderDetailsView({
   const details = useOrderDetails(reference, shop)
   const { order, preview } = details
   const [tab, setTab] = useState<TabId>('details')
-  // What the backend said about the latest change; the order itself is re-read from the API.
-  const [notice, setNotice] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!notice) return undefined
-    const timer = window.setTimeout(() => setNotice(null), 8000)
-    return () => window.clearTimeout(timer)
-  }, [notice])
-
   const known = order ?? preview
   const title = known ? orderLabel(known) : reference
   const created = known?.shopify_created_at
@@ -93,18 +79,9 @@ export function OrderDetailsView({
     ? order.line_items.reduce((sum, line) => sum + (line.quantity ?? 0), 0)
     : 0
   const totalItems = lineQuantity > 0 ? lineQuantity : (known?.items_count ?? 0)
-  // The order's email (editable in place, like it was in the Customer card) and Shopify ID.
+  // The order's email and Shopify ID.
   const email = known?.email?.trim() || known?.customer?.email?.trim() || ''
   const shopifyId = known?.shopify_id != null ? String(known.shopify_id) : ''
-  const context: OrderEditContext | null = order
-    ? {
-        order,
-        reference,
-        shop,
-        onSaved: (message) => setNotice(message || 'Order updated.'),
-      }
-    : null
-
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'details', label: 'Overview' },
     ...(order ? [{ id: 'items' as const, label: 'Items', count: totalItems }] : []),
@@ -214,11 +191,7 @@ export function OrderDetailsView({
               {email && (
                 <HeaderChip icon={MailIcon} label="Email">
                   <span className="flex items-center gap-1.5 break-all">
-                    {context ? (
-                      <OrderEmailCell context={context} display={email} />
-                    ) : (
-                      email
-                    )}
+                    {email}
                     <CopyButton value={email} label="Copy email" />
                   </span>
                 </HeaderChip>
@@ -237,12 +210,6 @@ export function OrderDetailsView({
         onBack={onBack}
         backLabel={backLabel}
       />
-
-      {notice && (
-        <div className="shrink-0 px-4 pb-3 sm:px-6">
-          <FormMessage tone="success">{notice}</FormMessage>
-        </div>
-      )}
 
       <div
         role="tablist"
@@ -283,17 +250,17 @@ export function OrderDetailsView({
         aria-labelledby={`order-tab-${tab}`}
         className="bg-surface p-3 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
-        {tab === 'details' && (
-          <OrderDetailsPanel
-            order={order}
-            preview={preview}
-            reference={reference}
-            shop={shop}
-            onSaved={(message) => setNotice(message || 'Order updated.')}
+        {tab === 'details' && <OrderDetailsPanel order={order} preview={preview} />}
+        {tab !== 'details' && !order && <DetailSkeleton />}
+        {order && tab === 'items' && (
+          <OrderItemsSummary
+            items={order.line_items}
+            totals={order}
+            taxesIncluded={order.taxes_included}
+            tip={order.total_tip}
+            outstanding={order.total_outstanding}
           />
         )}
-        {tab !== 'details' && !order && <DetailSkeleton />}
-        {context && tab === 'items' && <EditableOrderItems context={context} />}
         {order && tab === 'attributes' && <OrderNotesPanel order={order} />}
         {order && tab === 'events' && <OrderTimelinePanel order={order} />}
       </div>

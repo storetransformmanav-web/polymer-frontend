@@ -12,11 +12,6 @@ import {
   itemsToShip,
 } from '../utils/tracking.ts'
 import { EmptyNote, MiniCard, Row, Rows } from './OrderCompact.tsx'
-import {
-  OrderDeliveryCostCell,
-  OrderDeliveryMethodCell,
-  type OrderEditContext,
-} from './OrderInlineEdits.tsx'
 
 /** Fields of a fulfillment that are ids or internals, or already shown as their own row. */
 const HIDDEN_KEY =
@@ -64,12 +59,11 @@ function otherFields(record: Record<string, unknown>): [string, string][] {
 }
 
 /**
- * **Shipping method**: the delivery method and what it cost (both edited in place — double-click
- * them or use their small pencil), the store's ID for the method (its source and code) and how
- * many items are still to ship. A discounted price shows the original struck out under it.
+ * **Shipping method**: the delivery method and what it cost, the store's ID for the method (its
+ * source and code) and how many items are still to ship. A discounted price shows the original
+ * struck out under it.
  */
-export function ShippingMethodCard({ context }: { context: OrderEditContext }) {
-  const { order } = context
+export function ShippingMethodCard({ order }: { order: OrderDetail }) {
   const methods = order.shipping_lines.map((line) => line.title).filter(Boolean)
   const methodIds = order.shipping_lines
     .map((line) => [line.source, line.code].filter(Boolean).join(' · '))
@@ -93,12 +87,7 @@ export function ShippingMethodCard({ context }: { context: OrderEditContext }) {
   return (
     <MiniCard title="Shipping method" icon={TruckIcon}>
       <Rows>
-        <Row label="Delivery method">
-          <OrderDeliveryMethodCell
-            context={context}
-            display={methods.length > 0 ? methods.join(', ') : '—'}
-          />
-        </Row>
+        <Row label="Delivery method">{methods.length > 0 ? methods.join(', ') : '—'}</Row>
         <Row label="Shipping method ID">
           {methodIds.length > 0 ? (
             <span className="flex items-center justify-end gap-1.5 text-[0.72rem] break-all">
@@ -109,7 +98,7 @@ export function ShippingMethodCard({ context }: { context: OrderEditContext }) {
         </Row>
         <Row label="Shipping charged">
           <span className="flex flex-col items-end">
-            <OrderDeliveryCostCell context={context} display={charged} />
+            <span>{charged}</span>
             {original && (
               <span className="text-text-muted text-[0.7rem] line-through">
                 {original}
