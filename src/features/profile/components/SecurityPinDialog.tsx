@@ -1,61 +1,100 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Dialog } from '../../../components/ui/Dialog.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
 import {
+  ArrowLeftIcon,
+  ClockIcon,
   EyeIcon,
   EyeOffIcon,
+  LockIcon,
+  MailIcon,
   ShieldCheckIcon,
   SpinnerIcon,
 } from '../../../components/ui/icons.tsx'
-import type { PinAction, PinCodeSent, PinVerified } from '../../../lib/api/endpoints.ts'
+import { OtpInput } from '../../../components/ui/OtpInput.tsx'
+import type { PinAction, PinCodeSent } from '../../../lib/api/endpoints.ts'
+import { useNow } from '../hooks/useNow.ts'
 import { useSecurityPin } from '../hooks/useSecurityPin.ts'
+import { clock, deadline, secondsUntil } from '../utils/clock.ts'
+import { PinSteps } from './PinSteps.tsx'
+import type { ViewedPin } from './RevealedPin.tsx'
 
 const BUTTON =
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-[0.88rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50'
 const PRIMARY = `${BUTTON} bg-accent text-accent-contrast hover:bg-accent-hover border-transparent`
 const SECONDARY = `${BUTTON} border-border bg-bg text-text hover:border-accent`
 const INPUT =
-  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint h-10 w-full min-w-0 rounded-lg border px-3 text-[0.95rem] font-semibold tracking-widest outline-none focus:outline-2'
+  'border-border bg-bg text-text focus:border-accent focus:outline-accent-tint aria-[invalid=true]:border-danger h-11 w-full min-w-0 rounded-lg border px-3 text-[0.95rem] font-semibold tracking-widest outline-none focus:outline-2'
+const LABEL = 'text-text flex flex-col gap-1.5 text-[0.82rem] font-semibold'
 const LINK =
-  'text-accent hover:text-accent-hover cursor-pointer border-none bg-transparent p-0 text-[0.82rem] font-semibold disabled:cursor-default disabled:opacity-60'
+  'text-accent hover:text-accent-hover disabled:text-text-muted cursor-pointer border-none bg-transparent p-0 text-[0.82rem] font-semibold disabled:cursor-default'
 
-/** Request the code → enter it → (change only) the new PIN → (view only) the PIN. */
-type Step = 'request' | 'code' | 'pin' | 'shown'
+/** How many boxes the emailed code has (the API's answers don't say). */
+const CODE_LENGTH = 6
 
-/** Whole seconds as `m:ss`. */
-const clock = (seconds: number) =>
-  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+/** Send the code → verify it → (change only) set the new PIN. */
+type Step = 'request' | 'code' | 'pin'
+const STEP_INDEX: Record<Step, number> = { request: 0, code: 1, pin: 2 }
+const VIEW_STEPS = ['Send Code', 'Verify Code']
+const CHANGE_STEPS = ['Send Code', 'Verify Code', 'Set PIN']
 
-/** The time now, updated every second. */
-function useNow() {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-  return now
+/** The top of a step: an icon, its heading and a line under it, centred. */
+function StepIntro({
+  icon,
+  title,
+  children,
+}: {
+  icon: ReactNode
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 text-center">
+      <span
+        aria-hidden="true"
+        className="bg-accent-tint text-accent flex h-14 w-14 items-center justify-center rounded-full"
+      >
+        {icon}
+      </span>
+      <h3 className="text-text m-0 text-[1.1rem] font-bold">{title}</h3>
+      <p className="m-0 text-[0.86rem]">{children}</p>
+    </div>
+  )
 }
 
-const deadline = (seconds: number | null) =>
-  seconds === null ? null : Date.now() + seconds * 1000
+/** The address the code goes to, as a pill. */
+function EmailPill({ email }: { email: string }) {
+  return (
+    <p className="bg-accent-tint/60 text-text m-0 flex max-w-full items-center gap-2 self-center rounded-full px-4 py-1.5 text-[0.86rem] font-semibold">
+      <MailIcon width={16} height={16} className="text-accent shrink-0" />
+      <span className="min-w-0 break-all">{email}</span>
+    </p>
+  )
+}
 
 /**
- * The security PIN window. Both **View** and **Edit** start by emailing a one-time code. View:
- * the code is checked and the PIN shows for as long as the backend allows, then the window
- * closes. Edit: after the code comes the new PIN, and both are sent together — the API has one
- * call that checks the code and sets the PIN. A wrong code or a refused PIN shows the backend's
- * own message, and nothing typed is lost. The code lengths, timers, address and messages are all
- * the backend's.
+ * The security PIN window, in steps. **View** and **Edit** both start by emailing a one-time code
+ * (Send Code) and entering it in six boxes (Verify Code). View: the code is checked, the window
+ * closes and the PIN shows on the profile page. Edit: a third step takes the new PIN twice, and
+ * the code and PIN are sent together — the API has one call that checks the code and sets the PIN.
+ * A wrong code or a refused PIN shows the backend's own message, and nothing typed is lost. The
+ * timers and the error messages are the backend's.
  */
 export function SecurityPinDialog({
   action,
   userId,
+  email,
   onClose,
+  onViewed,
   onChanged,
 }: {
   action: PinAction
   userId: string
+  /** The profile's email address, shown before the code is sent. */
+  email: string
   onClose: () => void
+  /** The code was right (view): the page shows the PIN. */
+  onViewed: (viewed: ViewedPin) => void
   /** The new PIN was set; `message` is the backend's own words (may be empty). */
   onChanged: (message: string) => void
 }) {
@@ -68,22 +107,17 @@ export function SecurityPinDialog({
   const [resendAt, setResendAt] = useState<number | null>(null)
   const [code, setCode] = useState('')
   const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
   const [reveal, setReveal] = useState(false)
-  const [shown, setShown] = useState<PinVerified | null>(null)
-  const [hideAt, setHideAt] = useState<number | null>(null)
+  const [mismatch, setMismatch] = useState(false)
+  /** A verified answer that carried no PIN: said in the window instead of closing it. */
+  const [noPin, setNoPin] = useState<string | null>(null)
 
-  const secondsTo = (time: number | null) =>
-    time === null ? null : Math.max(0, Math.ceil((time - now) / 1000))
-  const expiresIn = secondsTo(expiresAt)
-  const resendIn = secondsTo(resendAt) ?? 0
-  const hideIn = secondsTo(hideAt)
+  const expiresIn = secondsUntil(expiresAt, now)
+  const resendIn = secondsUntil(resendAt, now) ?? 0
   const busy = pin.isRequesting || pin.isVerifying
-
-  // The PIN may only stay on screen as long as the backend says.
-  const timeUp = hideAt !== null && now >= hideAt
-  useEffect(() => {
-    if (timeUp) onClose()
-  }, [timeUp, onClose])
+  const codeReady = code.length === CODE_LENGTH
+  const pinsReady = newPin.trim() !== '' && confirmPin.trim() !== ''
 
   async function sendCode() {
     if (pin.isRequesting) return
@@ -113,10 +147,16 @@ export function SecurityPinDialog({
         onChanged(result.message)
         return
       }
-      setShown(result)
-      setHideAt(deadline(result.showSeconds))
       setCode('')
-      setStep('shown')
+      if (!result.pin) {
+        setNoPin(`The server did not send a PIN. ${result.message}`.trim())
+        return
+      }
+      onViewed({
+        pin: result.pin,
+        hideAt: deadline(result.showSeconds),
+        changeRequired: result.changeRequired,
+      })
     } catch {
       // The backend's message is shown in the window.
     }
@@ -124,14 +164,28 @@ export function SecurityPinDialog({
 
   function submit(event: FormEvent) {
     event.preventDefault()
+    if (busy) return
     if (step === 'request') void sendCode()
     else if (step === 'code') {
-      if (!code.trim()) return
+      if (!codeReady) return
+      setNoPin(null)
       if (action === 'change') {
         pin.clearVerifyError()
         setStep('pin')
       } else void verify()
-    } else if (step === 'pin' && newPin.trim()) void verify()
+    } else if (pinsReady) {
+      if (newPin.trim() !== confirmPin.trim()) {
+        setMismatch(true)
+        return
+      }
+      void verify()
+    }
+  }
+
+  function back() {
+    pin.clearVerifyError()
+    setMismatch(false)
+    setStep(step === 'pin' ? 'code' : 'request')
   }
 
   const title = action === 'view' ? 'View security PIN' : 'Change security PIN'
@@ -139,19 +193,27 @@ export function SecurityPinDialog({
     step === 'request'
       ? {
           label: pin.isRequesting ? 'Sending…' : 'Send code',
-          disabled: pin.isRequesting,
+          icon: <MailIcon width={16} height={16} />,
+          disabled: busy,
         }
-      : step === 'code' && action === 'change'
-        ? { label: 'Continue', disabled: !code.trim() || busy }
-        : step === 'code'
-          ? {
-              label: pin.isVerifying ? 'Verifying…' : 'Verify',
-              disabled: !code.trim() || busy,
-            }
-          : {
-              label: pin.isVerifying ? 'Verifying…' : 'Verify and set PIN',
-              disabled: !newPin.trim() || busy,
-            }
+      : step === 'code'
+        ? {
+            label:
+              action === 'change'
+                ? 'Continue'
+                : pin.isVerifying
+                  ? 'Verifying…'
+                  : 'Verify code',
+            icon: <ShieldCheckIcon width={16} height={16} />,
+            disabled: !codeReady || busy,
+          }
+        : {
+            label: pin.isVerifying ? 'Saving…' : 'Verify and set PIN',
+            icon: <LockIcon width={16} height={16} />,
+            disabled: !pinsReady || busy,
+          }
+
+  const secretType = reveal ? 'text' : 'password'
 
   return (
     <Dialog
@@ -160,58 +222,64 @@ export function SecurityPinDialog({
       onClose={onClose}
       closeDisabled={busy}
       closeButton
-      icon={
-        <span
-          aria-hidden="true"
-          className="bg-accent-tint text-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-        >
-          <ShieldCheckIcon width={20} height={20} />
-        </span>
-      }
       footer={
-        step === 'shown' ? (
-          <button type="button" onClick={onClose} className={PRIMARY}>
-            Done
+        <div className="flex w-full flex-col items-center gap-3">
+          <button
+            type="submit"
+            form={formId}
+            data-autofocus
+            disabled={primary.disabled}
+            className={`${PRIMARY} w-full`}
+          >
+            {busy ? (
+              <SpinnerIcon width={16} height={16} className="animate-spin" />
+            ) : (
+              primary.icon
+            )}
+            {primary.label}
           </button>
-        ) : (
-          <>
+          {step === 'request' ? (
             <button
               type="button"
               disabled={busy}
-              onClick={
-                step === 'pin'
-                  ? () => {
-                      pin.clearVerifyError()
-                      setStep('code')
-                    }
-                  : onClose
-              }
-              className={SECONDARY}
+              onClick={onClose}
+              className={`${SECONDARY} w-full`}
             >
-              {step === 'pin' ? 'Back to code' : 'Cancel'}
+              Cancel
             </button>
+          ) : (
             <button
-              type="submit"
-              form={formId}
-              data-autofocus
-              disabled={primary.disabled}
-              className={PRIMARY}
+              type="button"
+              disabled={busy}
+              onClick={back}
+              className={`${LINK} inline-flex items-center gap-1.5`}
             >
-              {busy && <SpinnerIcon width={14} height={14} className="animate-spin" />}
-              {primary.label}
+              <ArrowLeftIcon width={15} height={15} />
+              Back
             </button>
-          </>
-        )
+          )}
+        </div>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-3">
+      <div className="border-border border-b pb-4">
+        <PinSteps
+          steps={action === 'view' ? VIEW_STEPS : CHANGE_STEPS}
+          current={STEP_INDEX[step]}
+        />
+      </div>
+
+      <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-3.5">
         {step === 'request' && (
           <>
-            <p className="text-text m-0">
+            <StepIntro
+              icon={<MailIcon width={26} height={26} />}
+              title="Send a verification code"
+            >
               {action === 'view'
-                ? 'To see your PIN, first request a code by email.'
-                : 'To change your PIN, first request a code by email.'}
-            </p>
+                ? 'To see your PIN, we first email you a code.'
+                : 'To change your PIN, we first email you a code.'}
+            </StepIntro>
+            {email && <EmailPill email={email} />}
             {pin.requestError && (
               <FormMessage tone="error">{pin.requestError}</FormMessage>
             )}
@@ -219,7 +287,7 @@ export function SecurityPinDialog({
               <button
                 type="button"
                 onClick={() => setStep('code')}
-                className={`${LINK} self-start`}
+                className={`${LINK} self-center`}
               >
                 I already have a code
               </button>
@@ -229,119 +297,124 @@ export function SecurityPinDialog({
 
         {step === 'code' && (
           <>
-            {sent && (sent.message || sent.sentTo) && (
-              <p className="text-text m-0" role="status">
-                {sent.message}
-                {sent.sentTo && (
+            <StepIntro
+              icon={<ShieldCheckIcon width={26} height={26} />}
+              title="Verify your email"
+            >
+              {sent
+                ? "We've sent a verification code to"
+                : 'Enter the code from the email.'}
+            </StepIntro>
+            {/* The address appears once: the person's own, in full (the backend's message and
+                `sent_to` would only repeat it, partly hidden). */}
+            {sent && (email || sent.sentTo) && <EmailPill email={email || sent.sentTo} />}
+            <div className="mx-auto w-full max-w-sm">
+              <OtpInput
+                label="Verification code"
+                length={CODE_LENGTH}
+                value={code}
+                disabled={busy}
+                invalid={Boolean(pin.verifyError)}
+                onChange={(value) => {
+                  setCode(value)
+                  setNoPin(null)
+                  pin.clearVerifyError()
+                }}
+              />
+            </div>
+            {expiresIn !== null && (
+              <p className="m-0 flex items-center justify-center gap-1.5 text-[0.82rem]">
+                <ClockIcon width={15} height={15} />
+                {expiresIn > 0 ? (
                   <>
-                    {sent.message ? ' — ' : 'Sent to '}
-                    <strong className="break-all">{sent.sentTo}</strong>
+                    Code expires in
+                    <strong className="text-accent tabular-nums">
+                      {clock(expiresIn)}
+                    </strong>
                   </>
+                ) : (
+                  'This code has expired. Send a new one.'
                 )}
               </p>
             )}
-            <label className="text-text flex flex-col gap-1.5 text-[0.82rem] font-semibold">
-              Code
-              <input
-                autoFocus
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                spellCheck={false}
-                maxLength={20}
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value)
-                  pin.clearVerifyError()
-                }}
-                className={INPUT}
-              />
-            </label>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[0.8rem]">
-              <span>
-                {expiresIn === null
-                  ? ''
-                  : expiresIn > 0
-                    ? `Code expires in ${clock(expiresIn)}`
-                    : 'This code has expired. Send a new one.'}
-              </span>
+            <p className="m-0 flex flex-wrap items-center justify-center gap-x-2 text-[0.82rem]">
+              Didn&apos;t get the code?
               <button
                 type="button"
                 disabled={resendIn > 0 || busy}
                 onClick={() => void sendCode()}
-                className={LINK}
+                className={`${LINK} tabular-nums`}
               >
-                {resendIn > 0 ? `Resend code in ${clock(resendIn)}` : 'Resend code'}
+                {resendIn > 0 ? `Resend in ${clock(resendIn)}` : 'Resend code'}
               </button>
-            </div>
+            </p>
             {pin.requestError && (
               <FormMessage tone="error">{pin.requestError}</FormMessage>
             )}
             {pin.verifyError && <FormMessage tone="error">{pin.verifyError}</FormMessage>}
+            {noPin && <FormMessage tone="error">{noPin}</FormMessage>}
           </>
         )}
 
         {step === 'pin' && (
           <>
-            <label className="text-text flex flex-col gap-1.5 text-[0.82rem] font-semibold">
+            <StepIntro
+              icon={<LockIcon width={26} height={26} />}
+              title="Set your new PIN"
+            >
+              Enter it twice. Your code is checked when you save.
+            </StepIntro>
+            <label className={LABEL}>
               New PIN
-              <span className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  type={reveal ? 'text' : 'password'}
-                  inputMode="numeric"
-                  autoComplete="new-password"
-                  maxLength={20}
-                  value={newPin}
-                  onChange={(event) => {
-                    setNewPin(event.target.value)
-                    pin.clearVerifyError()
-                  }}
-                  className={INPUT}
-                />
-                <button
-                  type="button"
-                  aria-label={reveal ? 'Hide new PIN' : 'Show new PIN'}
-                  aria-pressed={reveal}
-                  onClick={() => setReveal((value) => !value)}
-                  className={`${SECONDARY} w-10 shrink-0 px-0`}
-                >
-                  {reveal ? (
-                    <EyeOffIcon width={16} height={16} />
-                  ) : (
-                    <EyeIcon width={16} height={16} />
-                  )}
-                </button>
-              </span>
+              <input
+                autoFocus
+                type={secretType}
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={20}
+                value={newPin}
+                onChange={(event) => {
+                  setNewPin(event.target.value)
+                  setMismatch(false)
+                  pin.clearVerifyError()
+                }}
+                className={INPUT}
+              />
             </label>
-            <p className="m-0 text-[0.8rem]">
-              Your code is checked when you save the new PIN.
-            </p>
+            <label className={LABEL}>
+              Confirm new PIN
+              <input
+                type={secretType}
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength={20}
+                value={confirmPin}
+                aria-invalid={mismatch ? true : undefined}
+                onChange={(event) => {
+                  setConfirmPin(event.target.value)
+                  setMismatch(false)
+                  pin.clearVerifyError()
+                }}
+                className={INPUT}
+              />
+            </label>
+            <button
+              type="button"
+              aria-pressed={reveal}
+              onClick={() => setReveal((value) => !value)}
+              className={`${LINK} inline-flex items-center gap-1.5 self-start`}
+            >
+              {reveal ? (
+                <EyeOffIcon width={15} height={15} />
+              ) : (
+                <EyeIcon width={15} height={15} />
+              )}
+              {reveal ? 'Hide PINs' : 'Show PINs'}
+            </button>
+            {mismatch && (
+              <FormMessage tone="error">The two PINs don&apos;t match.</FormMessage>
+            )}
             {pin.verifyError && <FormMessage tone="error">{pin.verifyError}</FormMessage>}
-          </>
-        )}
-
-        {step === 'shown' && shown && (
-          <>
-            {shown.pin ? (
-              <p
-                aria-label="Your security PIN"
-                className="border-border-strong bg-accent-tint/40 text-text m-0 border p-3 text-center text-2xl font-bold tracking-[0.35em] break-all"
-              >
-                {shown.pin}
-              </p>
-            ) : (
-              <FormMessage tone="error">
-                {`The server did not send a PIN. ${shown.message}`}
-              </FormMessage>
-            )}
-            {hideIn !== null && (
-              <p className="m-0 text-center text-[0.8rem]">Closes in {clock(hideIn)}</p>
-            )}
-            {shown.changeRequired && (
-              <p className="text-text m-0 text-[0.82rem] font-semibold">
-                This PIN needs to be changed. Close this window and use the Edit button.
-              </p>
-            )}
           </>
         )}
       </form>

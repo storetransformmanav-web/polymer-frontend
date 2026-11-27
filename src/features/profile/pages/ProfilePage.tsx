@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CopyButton } from '../../../components/ui/CopyButton.tsx'
 import { DetailSection, DetailSkeleton } from '../../../components/ui/DetailSection.tsx'
 import { DoubleClickEdit } from '../../../components/ui/DoubleClickEdit.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { ROW_ACTION, ROW_ACTION_ICON } from '../../../components/ui/rowActions.ts'
 import {
   DetailsHeader,
   HeaderChip,
@@ -15,6 +16,7 @@ import {
   CalendarIcon,
   ClockIcon,
   EyeIcon,
+  EyeOffIcon,
   TagIcon,
   FileTextIcon,
   MailIcon,
@@ -35,6 +37,7 @@ import {
   ProfileUpdateDialog,
   type ProfileUpdateRequest,
 } from '../components/ProfileUpdateDialog.tsx'
+import { RevealedPin, type ViewedPin } from '../components/RevealedPin.tsx'
 import { SecurityPinDialog } from '../components/SecurityPinDialog.tsx'
 import { useProfile } from '../hooks/useProfile.ts'
 
@@ -82,15 +85,16 @@ function Row({
 
 /** What a set PIN looks like: always the same, so it doesn't give away the PIN's length. */
 const PIN_MASK = '******'
-const PIN_BUTTON =
-  'text-text-muted hover:text-accent hover:bg-accent-tint -my-1 inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors disabled:pointer-events-none disabled:opacity-50'
+/** The PIN's View and Edit buttons: a list's row action (the product list's size and hover). */
+const PIN_BUTTON = `${ROW_ACTION} -my-1 shrink-0 disabled:pointer-events-none disabled:opacity-50`
 
 /**
  * **Update profile** (the account menu): the signed-in person's own profile from
  * `GET /hr/profile` — a header with their name, role, status, email, phone and employee code,
  * then cards for personal details, address, emergency contact, employment, tax and National
  * Insurance, and the security PIN (shown as asterisks; its View and Edit buttons open a window
- * that emails a code first). Every value is the
+ * that emails a code first; a viewed PIN shows here, on the page, for as long as the backend
+ * allows). Every value is the
  * backend's; an empty one is a dash. A value the profile's `editable_fields` names has a small
  * pencil: one click turns it into a box as wide as the value's own place (Enter or leaving the box
  * keeps it, Escape puts the old one back), and "Yes, update" then sends just that field with
@@ -104,6 +108,9 @@ export function ProfilePage() {
   const [notice, setNotice] = useState<string | null>(null)
   /** Which PIN window is open, if any. */
   const [pinAction, setPinAction] = useState<PinAction | null>(null)
+  /** The PIN while it is on screen, after its code was verified. Gone when the page is left. */
+  const [viewed, setViewed] = useState<ViewedPin | null>(null)
+  const hidePin = useCallback(() => setViewed(null), [])
 
   useEffect(() => {
     if (!notice) return undefined
@@ -165,6 +172,7 @@ export function ProfilePage() {
         value={value ?? ''}
         label={label}
         showIcon
+        rowActionIcon
         busy={asking !== null && field in asking.body}
         display={
           value ? (
@@ -368,24 +376,38 @@ export function ProfilePage() {
                 <div className="min-w-0 md:pr-4">
                   <Row label="PIN" wrap>
                     <span className="flex min-w-0 items-center gap-1.5">
-                      {pin?.is_set == null ? (
+                      {viewed ? (
+                        <RevealedPin viewed={viewed} onExpire={hidePin} />
+                      ) : pin?.is_set == null ? (
                         <span className="text-text-muted font-normal">—</span>
                       ) : pin.is_set ? (
                         <span className="tracking-widest">{PIN_MASK}</span>
                       ) : (
                         'Not set'
                       )}
-                      {pin?.is_set !== false && (
+                      {viewed ? (
                         <button
                           type="button"
-                          aria-label="View security PIN"
-                          title="View PIN"
-                          disabled={!userId}
-                          onClick={() => setPinAction('view')}
+                          aria-label="Hide security PIN"
+                          title="Hide PIN"
+                          onClick={hidePin}
                           className={PIN_BUTTON}
                         >
-                          <EyeIcon width={16} height={16} />
+                          <EyeOffIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                         </button>
+                      ) : (
+                        pin?.is_set !== false && (
+                          <button
+                            type="button"
+                            aria-label="View security PIN"
+                            title="View PIN"
+                            disabled={!userId}
+                            onClick={() => setPinAction('view')}
+                            className={PIN_BUTTON}
+                          >
+                            <EyeIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
+                          </button>
+                        )
                       )}
                       <button
                         type="button"
@@ -394,14 +416,20 @@ export function ProfilePage() {
                         disabled={!userId}
                         onClick={() => {
                           setNotice(null)
+                          hidePin()
                           setPinAction('change')
                         }}
                         className={PIN_BUTTON}
                       >
-                        <PencilIcon width={14} height={14} />
+                        <PencilIcon width={ROW_ACTION_ICON} height={ROW_ACTION_ICON} />
                       </button>
                     </span>
                   </Row>
+                  {viewed?.changeRequired && (
+                    <p className="text-text m-0 py-1.5 text-[0.8rem] font-semibold">
+                      This PIN needs to be changed. Use the pencil to set a new one.
+                    </p>
+                  )}
                   <Row label="Last set">{dateTime(pin?.set_at)}</Row>
                   <Row label="Set by">{pin?.set_by}</Row>
                 </div>
@@ -432,7 +460,12 @@ export function ProfilePage() {
         <SecurityPinDialog
           action={pinAction}
           userId={userId}
+          email={profile.email ?? ''}
           onClose={() => setPinAction(null)}
+          onViewed={(result) => {
+            setPinAction(null)
+            setViewed(result)
+          }}
           onChanged={(message) => {
             setPinAction(null)
             setNotice(message || 'Your security PIN was updated.')

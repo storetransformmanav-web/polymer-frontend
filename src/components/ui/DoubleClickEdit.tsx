@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { IconAction } from './IconAction.tsx'
 import { CheckIcon, EyeIcon, EyeOffIcon, PencilIcon, XIcon } from './icons.tsx'
+import { ROW_ACTION, ROW_ACTION_ICON } from './rowActions.ts'
 
 /**
  * A value you change where it is shown: **double-click it** (or focus it and press Enter) and it
@@ -21,6 +22,7 @@ export function DoubleClickEdit({
   align = 'left',
   highlighted = false,
   showIcon = false,
+  rowActionIcon = false,
   busy = false,
   autoWidth = false,
   multiline = false,
@@ -47,6 +49,8 @@ export function DoubleClickEdit({
   highlighted?: boolean
   /** A small pencil beside the value: one click on it starts the edit, like the double-click. */
   showIcon?: boolean
+  /** With `showIcon`: the pencil is drawn as a list's row action (the same size and hover). */
+  rowActionIcon?: boolean
   /** Something is happening to the value (waiting for the question, saving): shown dimmed. */
   busy?: boolean
   /**
@@ -295,9 +299,17 @@ export function DoubleClickEdit({
         <span
           data-edit-icon
           aria-hidden="true"
-          className="text-text-muted hover:text-accent inline-flex shrink-0 cursor-pointer opacity-70 transition-colors hover:opacity-100"
+          className={
+            rowActionIcon
+              ? // `-my-1`: the 28px square doesn't make its line any taller.
+                `${ROW_ACTION} -my-1 shrink-0`
+              : 'text-text-muted hover:text-accent inline-flex shrink-0 cursor-pointer opacity-70 transition-colors hover:opacity-100'
+          }
         >
-          <PencilIcon width={12} height={12} />
+          <PencilIcon
+            width={rowActionIcon ? ROW_ACTION_ICON : 12}
+            height={rowActionIcon ? ROW_ACTION_ICON : 12}
+          />
         </span>
       )}
     </button>
