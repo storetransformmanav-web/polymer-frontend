@@ -1,5 +1,5 @@
 import { useAppDispatch, useAppSelector } from '../app/store/hooks.ts'
-import { logout } from '../app/store/authSlice.ts'
+import { logout, pinChangeCompleted } from '../app/store/authSlice.ts'
 
 /**
  * The signed-in session, backed by the `auth` Redux slice (persisted to
@@ -15,5 +15,8 @@ export function useAuth() {
     user: session?.user ?? null,
     isAuthenticated: session !== null,
     logout: () => dispatch(logout()),
+    /** The backend says a security PIN must be set before the app can be used. */
+    pinChangeRequired: session?.user.pin_change_required === true,
+    pinChangeDone: () => dispatch(pinChangeCompleted()),
   }
 }

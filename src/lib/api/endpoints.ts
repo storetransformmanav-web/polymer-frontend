@@ -317,7 +317,21 @@ const authUserSchema = z.object({
   last_login_at: z.string().nullable(),
   /** The user's access by area (`products`, `users`…). Not used to hide anything yet. */
   permissions: z.record(z.string(), featureAccessSchema).optional(),
+  /** `true`: this person must set their security PIN before using the app. */
+  pin_change_required: z.boolean().optional().catch(undefined),
 })
+
+/**
+ * `pin_change_required` is accepted on the user or beside it at the top of the answer; either one
+ * being `true` is kept on the user, which is what the session holds.
+ */
+function withPinFlag<T extends { user: z.infer<typeof authUserSchema> }>(
+  answer: T & { pin_change_required?: unknown },
+): T {
+  return answer.pin_change_required === true
+    ? { ...answer, user: { ...answer.user, pin_change_required: true } }
+    : answer
+}
 
 /*
  * Both sign-in calls send `remember_me`, from the login page's "Remember me" checkbox:
@@ -948,6 +962,7 @@ const loginResponseSchema = z.object({
    * with `readIdleTimeoutMinutes`; `unknown` so an odd value can never fail a sign-in.
    */
   idle_timeout_minutes: z.unknown().optional(),
+  pin_change_required: z.unknown().optional(),
   user: authUserSchema,
 })
 
@@ -967,6 +982,7 @@ const meResponseSchema = z.preprocess(
     user: authUserSchema,
     expires_at: z.string().nullish(),
     idle_timeout_minutes: z.unknown().optional(),
+    pin_change_required: z.unknown().optional(),
   }),
 )
 
@@ -5200,7 +5216,7 @@ export const api = {
         code,
         remember_me: rememberMe,
       })
-      return keepCsrfToken(loginResponseSchema.parse(data))
+      return keepCsrfToken(withPinFlag(loginResponseSchema.parse(data)))
     },
 
     /**
@@ -5219,7 +5235,7 @@ export const api = {
         nonce,
         remember_me: rememberMe,
       })
-      return keepCsrfToken(loginResponseSchema.parse(data))
+      return keepCsrfToken(withPinFlag(loginResponseSchema.parse(data)))
     },
 
     /**
@@ -5228,7 +5244,7 @@ export const api = {
      */
     async me(): Promise<MeResponse> {
       const data = await apiClient.get(ENDPOINTS.auth.me)
-      return meResponseSchema.parse(data)
+      return withPinFlag(meResponseSchema.parse(data))
     },
 
     /**

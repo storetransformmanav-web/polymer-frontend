@@ -396,6 +396,12 @@ const authSlice = createSlice({
       state.signedOutReason = 'expired'
       state.signedOutMessage = action.payload ?? null
     },
+    /** The security PIN the backend asked for has been set (`pin_change_required`). */
+    pinChangeCompleted(state) {
+      if (state.session) {
+        state.session.user = { ...state.session.user, pin_change_required: false }
+      }
+    },
     /** The server's idle limit (in minutes) changed — `GET /auth/csrf` said so while signed in. */
     idleTimeoutUpdated(state, action: PayloadAction<number>) {
       if (state.session && state.session.idleTimeoutMinutes !== action.payload) {
@@ -466,6 +472,7 @@ export const {
   emailEditRequested,
   errorCleared,
   idleTimeoutUpdated,
+  pinChangeCompleted,
   rememberMeChanged,
   sessionCleared,
   sessionEnded,

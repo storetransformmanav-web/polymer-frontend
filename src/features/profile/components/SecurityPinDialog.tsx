@@ -87,7 +87,13 @@ export function SecurityPinDialog({
   onClose,
   onViewed,
   onChanged,
+  required = false,
+  onSignOut,
 }: {
+  /** It must be completed: no ✕ or Cancel, Escape and the backdrop do nothing. */
+  required?: boolean
+  /** With `required`: the way out for someone who can't finish now. */
+  onSignOut?: () => void
   action: PinAction
   userId: string
   /** The profile's email address, shown before the code is sent. */
@@ -188,7 +194,11 @@ export function SecurityPinDialog({
     setStep(step === 'pin' ? 'code' : 'request')
   }
 
-  const title = action === 'view' ? 'View security PIN' : 'Change security PIN'
+  const title = required
+    ? 'Set your security PIN'
+    : action === 'view'
+      ? 'View security PIN'
+      : 'Change security PIN'
   const primary =
     step === 'request'
       ? {
@@ -220,8 +230,8 @@ export function SecurityPinDialog({
       title={title}
       role="dialog"
       onClose={onClose}
-      closeDisabled={busy}
-      closeButton
+      closeDisabled={busy || required}
+      closeButton={!required}
       footer={
         <div className="flex w-full flex-col items-center gap-3">
           <button
@@ -239,14 +249,16 @@ export function SecurityPinDialog({
             {primary.label}
           </button>
           {step === 'request' ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onClose}
-              className={`${SECONDARY} w-full`}
-            >
-              Cancel
-            </button>
+            !required && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onClose}
+                className={`${SECONDARY} w-full`}
+              >
+                Cancel
+              </button>
+            )
           ) : (
             <button
               type="button"
@@ -258,9 +270,20 @@ export function SecurityPinDialog({
               Back
             </button>
           )}
+          {required && onSignOut && (
+            <button type="button" disabled={busy} onClick={onSignOut} className={LINK}>
+              Sign out
+            </button>
+          )}
         </div>
       }
     >
+      {required && (
+        <p className="border-accent bg-accent-tint/50 text-text m-0 border border-l-4 p-3 text-[0.85rem] font-semibold">
+          You need to set your security PIN before you can continue.
+        </p>
+      )}
+
       <div className="border-border border-b pb-4">
         <PinSteps
           steps={action === 'view' ? VIEW_STEPS : CHANGE_STEPS}
@@ -275,9 +298,11 @@ export function SecurityPinDialog({
               icon={<MailIcon width={26} height={26} />}
               title="Send a verification code"
             >
-              {action === 'view'
-                ? 'To see your PIN, we first email you a code.'
-                : 'To change your PIN, we first email you a code.'}
+              {required
+                ? 'To set your security PIN, please verify the code sent to your registered email address first.'
+                : action === 'view'
+                  ? 'To view your security PIN, please verify the code sent to your registered email address first.'
+                  : 'To change your PIN, please verify the code sent to your registered email address first.'}
             </StepIntro>
             {email && <EmailPill email={email} />}
             {pin.requestError && (
