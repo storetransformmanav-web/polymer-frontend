@@ -178,7 +178,7 @@ function defaultRole(roles: Role[]): string {
 }
 
 /** The `employee` block: only what was filled in (null when nothing was). */
-function buildEmployee(extra: Extra, unlockPin: boolean): UserCreateEmployee | null {
+function buildEmployee(extra: Extra): UserCreateEmployee | null {
   const employee: UserCreateEmployee = {}
   const set = (key: keyof UserCreateEmployee, value: string) => {
     const text = value.trim()
@@ -202,7 +202,6 @@ function buildEmployee(extra: Extra, unlockPin: boolean): UserCreateEmployee | n
   set('shift_start', extra.shiftStart)
   set('security_pin', extra.pin)
   if (extra.lateGrace.trim()) employee.late_grace_minutes = Number(extra.lateGrace.trim())
-  if (unlockPin) employee.unlock_security_pin = true
   return Object.keys(employee).length > 0 ? employee : null
 }
 
@@ -236,7 +235,6 @@ export function UserCreateView({
   const [shopKeys, setShopKeys] = useState<string[]>([])
   const [reminders, setReminders] = useState(false)
   const [extra, setExtra] = useState<Extra>(BLANK_EXTRA)
-  const [unlockPin, setUnlockPin] = useState(false)
   /** How many digits the PIN will have; 0 until one is chosen. */
   const [pinLength, setPinLength] = useState(0)
   const [errors, setErrors] = useState<{
@@ -267,7 +265,6 @@ export function UserCreateView({
     chosenRole !== '' ||
     shopKeys.length > 0 ||
     reminders ||
-    unlockPin ||
     pinLength > 0 ||
     Object.values(extra).some((value) => value.trim() !== '')
   useEffect(() => {
@@ -361,7 +358,7 @@ export function UserCreateView({
     }
     if (phone.trim()) body.phone = phone.trim()
     if (reminders) body.reminder_emails = true
-    const employee = buildEmployee(extra, unlockPin)
+    const employee = buildEmployee(extra)
     if (employee) body.employee = employee
 
     // A failure is shown from `error`; success closes the form (the page does that).
@@ -593,15 +590,6 @@ export function UserCreateView({
                   error={errors.pin}
                 />
               </div>
-              <Toggle
-                title="Unlock security PIN"
-                description="Make sure a locked PIN can be used straight away."
-                checked={unlockPin}
-                onChange={(value) => {
-                  setUnlockPin(value)
-                  edited()
-                }}
-              />
             </div>
           </DetailSection>
 
