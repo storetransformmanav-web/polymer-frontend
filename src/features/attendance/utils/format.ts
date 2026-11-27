@@ -19,11 +19,11 @@ export const MAX_RANGE_DAYS = 93
 const DAY_MS = 86_400_000
 
 /**
- * The date filter's quick choices. There is no "All Time": the API reads at most
- * `MAX_RANGE_DAYS` days, so the longest choice is exactly that many, ending today.
+ * The date filter's quick choices: the usual ones ("All Time" is both dates empty, see
+ * `api/allAttendance.ts`) and the longest single range the API reads, ending today.
  */
 export const ATTENDANCE_RANGE_PRESETS: RangePreset[] = [
-  ...RANGE_PRESETS.filter((preset) => preset.label !== 'All Time'),
+  ...RANGE_PRESETS,
   {
     label: `Last ${MAX_RANGE_DAYS} Days`,
     range: (today) => ({
@@ -55,6 +55,8 @@ export function rangeLength(from: string, to: string): number {
 
 /** A reason the range can't be asked for, or null when it is fine. */
 export function rangeProblem(from: string, to: string): string | null {
+  // "All Time": read a period at a time, so there is no limit to break.
+  if (!from && !to) return null
   const days = rangeLength(from, to)
   if (days <= 0)
     return 'The end of the date range is before its start — nothing can match.'

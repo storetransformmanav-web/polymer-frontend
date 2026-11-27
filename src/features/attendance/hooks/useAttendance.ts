@@ -10,6 +10,7 @@ import {
   type AttendanceStatus,
   type AttendanceTotals,
 } from '../../../lib/api/endpoints.ts'
+import { readAllAttendance, type AllAttendanceFilters } from '../api/allAttendance.ts'
 import { rangeProblem, todayRange } from '../utils/format.ts'
 
 export const ATTENDANCE_STALE_MS = 30_000
@@ -20,7 +21,7 @@ export interface AttendanceFilters {
   employee: string
   role: string
   status: '' | AttendanceStatus
-  /** Whole days, `YYYY-MM-DD`. */
+  /** Whole days, `YYYY-MM-DD`; both empty is "All Time". */
   from: string
   to: string
   page: number
@@ -71,25 +72,42 @@ const myOptions = (from: string, to: string) =>
  * The Attendance page's data. An administrator reads the calendar of every employee
  * (`GET /hr/attendance`: search, role, employee, status and dates are the server's work, and so is
  * the paging); anyone else reads only their own days (`GET /hr/attendance/me`, no paging — the status
- * choice narrows what that answer holds). Dates start on today and never go
- * past 93 days. Nothing is asked until the page opens.
+ * choice narrows what that answer holds). Dates start on today and one range never goes
+ * past 93 days. "All Time" reads period after period (`readAllAttendance`); its status choice
+ * and paging are done here. Nothing is asked until the page opens.
  */
 export function useAttendance(isAdmin: boolean) {
   const [filters, setFilters] = useState(defaultAttendanceFilters)
   const problem = rangeProblem(filters.from, filters.to)
   const enabled = problem === null
+  const allTime = !filters.from && !filters.to
+
+  const allFilters: AllAttendanceFilters = {}
+  if (filters.search.trim()) allFilters.search = filters.search.trim()
+  if (filters.employee) allFilters.employee = filters.employee
+  if (filters.role) allFilters.role = filters.role
+  const all = useQuery({
+    queryKey: ['attendance', 'all', isAdmin, allFilters],
+    queryFn: () => readAllAttendance(isAdmin, allFilters),
+    staleTime: ATTENDANCE_STALE_MS,
+    enabled: allTime,
+  })
+  const allRows = useMemo(() => {
+    const rows = all.data?.items ?? []
+    return filters.status ? rows.filter((row) => row.status === filters.status) : rows
+  }, [all.data, filters.status])
 
   const list = useQuery({
     ...listOptions(toAttendanceParams(filters)),
     placeholderData: keepPreviousData,
-    enabled: isAdmin && enabled,
+    enabled: isAdmin && enabled && !allTime,
   })
   const mine = useQuery({
     ...myOptions(filters.from, filters.to),
     placeholderData: keepPreviousData,
-    enabled: !isAdmin && enabled,
+    enabled: !isAdmin && enabled && !allTime,
   })
-  const query = isAdmin ? list : mine
+  const query = allTime ? all : isAdmin ? list : mine
 
   const mineItems: AttendanceItem[] = useMemo(() => {
     const data = mine.data
@@ -101,12 +119,33 @@ export function useAttendance(isAdmin: boolean) {
     return filters.status ? rows.filter((row) => row.status === filters.status) : rows
   }, [mine.data, filters.status])
 
-  const items: AttendanceItem[] = isAdmin ? (list.data?.items ?? []) : mineItems
+  const allPages = Math.max(1, Math.ceil(allRows.length / filters.pageSize))
+  const allPage = Math.min(filters.page, allPages)
+  const items: AttendanceItem[] = allTime
+    ? isAdmin
+      ? allRows.slice((allPage - 1) * filters.pageSize, allPage * filters.pageSize)
+      : allRows
+    : isAdmin
+      ? (list.data?.items ?? [])
+      : mineItems
   const totals: AttendanceTotals | null = query.data?.totals ?? null
   const employee: AttendanceEmployee | null = isAdmin
     ? null
-    : (mine.data?.employee ?? null)
-  const current: AttendanceCurrent | null = isAdmin ? null : (mine.data?.current ?? null)
+    : ((allTime ? all.data : mine.data)?.employee ?? null)
+  const current: AttendanceCurrent | null = isAdmin
+    ? null
+    : ((allTime ? all.data : mine.data)?.current ?? null)
+
+  const listPaging = list.data
+    ? {
+        page: list.data.page ?? filters.page,
+        total: list.data.total ?? items.length,
+        totalPages: list.data.total_pages ?? 1,
+      }
+    : null
+  const allPaging = all.data
+    ? { page: allPage, total: allRows.length, totalPages: allPages }
+    : null
 
   const defaults = defaultAttendanceFilters()
   const hasFilters =
@@ -123,14 +162,7 @@ export function useAttendance(isAdmin: boolean) {
     totals,
     employee,
     current,
-    paging:
-      isAdmin && list.data
-        ? {
-            page: list.data.page ?? filters.page,
-            total: list.data.total ?? items.length,
-            totalPages: list.data.total_pages ?? 1,
-          }
-        : null,
+    paging: isAdmin ? (allTime ? allPaging : listPaging) : null,
     isPending: query.isPending && enabled,
     isFetching: query.isFetching,
     isShowingPrevious: query.isPlaceholderData,

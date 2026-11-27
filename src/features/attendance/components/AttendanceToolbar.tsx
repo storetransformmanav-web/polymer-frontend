@@ -65,8 +65,8 @@ export function AttendanceToolbar({
               from={filters.from}
               to={filters.to}
               onChange={(range) =>
-                // Clearing the dates (or one of them) goes back to today: the API needs both.
-                onChange(range.from && range.to ? range : todayRange())
+                // Both empty is "All Time"; one date on its own goes back to today.
+                onChange(Boolean(range.from) === Boolean(range.to) ? range : todayRange())
               }
             />
           </div>
