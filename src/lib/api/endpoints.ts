@@ -98,6 +98,10 @@ export const ENDPOINTS = {
   hr: {
     /** `GET` the signed-in person's own profile (account, employment, tax, emergency contact, PIN status). */
     profile: '/hr/profile',
+    /** `POST` — email a one-time code, to view or change a security PIN. */
+    pinRequest: '/hr/pin/request',
+    /** `POST` — check that code, then show the PIN or set the new one. */
+    pinVerify: '/hr/pin/verify',
     /** `GET` the attendance calendar — an administrator sees every employee, anyone else only their own days. */
     attendance: '/hr/attendance',
     /** `GET` the signed-in person's own attendance for a date range, with their current punch state. */
@@ -414,7 +418,8 @@ const userCreateResponseSchema = z.object({ user: userItemSchema })
  * The `employee` block of a user and of `GET /hr/profile`: read leniently — every value is
  * `nullish` and each nested block is dropped (not fatal) if its shape ever differs, so one
  * missing value can't take the page down. The security PIN's own `pin` value is deliberately not
- * kept (unknown keys are stripped): only whether it is set, when, and its lock state are read.
+ * kept (unknown keys are stripped): only whether it is set, when, and its lock state are read. A
+ * person sees their own PIN only after an emailed code (`api.hr.verifyPin`).
  */
 const profileText = z.string().nullish()
 const userEmployeeSchema = z.object({
@@ -529,6 +534,71 @@ const profileResponseSchema = z.object({
 })
 
 export type Profile = z.infer<typeof profileSchema>
+
+// --- The security PIN, behind an emailed code ---------------------------------------------------
+
+/** What the code is for: `view` shows the PIN, `change` sets a new one. */
+export type PinAction = 'view' | 'change'
+
+/** Body of `POST /hr/pin/request`. */
+export interface PinRequestBody {
+  action: PinAction
+  user_id: string
+}
+
+/** Body of `POST /hr/pin/verify`; `new_pin` goes only with `change`. */
+export interface PinVerifyBody extends PinRequestBody {
+  code: string
+  new_pin?: string
+}
+
+const optionalNumber = z.number().nullish().catch(undefined)
+
+/**
+ * The answer to a code request. Unknown keys are stripped on purpose — a `dev_code` (the code
+ * itself) is never read, so it can't be shown or kept.
+ */
+const pinCodeSchema = z.object({
+  sent_to: profileText,
+  expires_in_seconds: optionalNumber,
+  resend_after_seconds: optionalNumber,
+})
+const pinRequestAnswerSchema = z.object({
+  message: profileText,
+  code: pinCodeSchema.nullish().catch(undefined),
+  result: pinCodeSchema.nullish().catch(undefined),
+})
+
+const pinVerifyAnswerSchema = z.object({
+  message: profileText,
+  result: z
+    .object({
+      pin: z
+        .union([z.string(), z.number().transform(String)])
+        .nullish()
+        .catch(undefined),
+      show_seconds: optionalNumber,
+      change_required: z.boolean().nullish().catch(undefined),
+    })
+    .nullish()
+    .catch(undefined),
+})
+
+export interface PinCodeSent {
+  message: string
+  sentTo: string
+  expiresInSeconds: number | null
+  resendAfterSeconds: number | null
+}
+
+export interface PinVerified {
+  message: string
+  /** The PIN, when the answer carries it. */
+  pin: string
+  /** How long the PIN may stay on screen. */
+  showSeconds: number | null
+  changeRequired: boolean
+}
 
 /**
  * The fields `PUT /hr/profile` takes — the API's own names, the same ones the profile's
@@ -4850,6 +4920,34 @@ export const api = {
       return myAttendanceResponseSchema.parse(data)
     },
 
+    /** Emails a one-time code (`POST /hr/pin/request`). Never retried. */
+    async requestPinCode(body: PinRequestBody): Promise<PinCodeSent> {
+      const answer = pinRequestAnswerSchema.parse(
+        await apiClient.post<unknown>(ENDPOINTS.hr.pinRequest, body),
+      )
+      const code = answer.code ?? answer.result
+      return {
+        message: answer.message?.trim() ?? '',
+        sentTo: code?.sent_to?.trim() ?? '',
+        expiresInSeconds: code?.expires_in_seconds ?? null,
+        resendAfterSeconds: code?.resend_after_seconds ?? null,
+      }
+    },
+    /**
+     * Checks the code (`POST /hr/pin/verify`): for `view` the answer carries the PIN, for
+     * `change` the new PIN is set. The code and PINs travel only in the body. Never retried.
+     */
+    async verifyPin(body: PinVerifyBody): Promise<PinVerified> {
+      const answer = pinVerifyAnswerSchema.parse(
+        await apiClient.post<unknown>(ENDPOINTS.hr.pinVerify, body),
+      )
+      return {
+        message: answer.message?.trim() ?? '',
+        pin: answer.result?.pin?.trim() ?? '',
+        showSeconds: answer.result?.show_seconds ?? null,
+        changeRequired: answer.result?.change_required === true,
+      }
+    },
     /** The signed-in person's own profile (`GET /hr/profile`, answer `{ profile }`). */
     async profile(): Promise<Profile> {
       const data = await apiClient.get(ENDPOINTS.hr.profile)

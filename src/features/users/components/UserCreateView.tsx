@@ -208,9 +208,9 @@ function buildEmployee(extra: Extra, unlockPin: boolean): UserCreateEmployee | n
 /**
  * "Add user", opened in place of the list (like "Add product"): a header bar that stays in view
  * (Back, the title and Create user), then — on the left — the basics and the optional sections
- * (employment, personal and address, tax and National Insurance, emergency contact, security PIN),
+ * (employment, personal and address, tax and National Insurance, emergency contact) and the required security PIN,
  * and — on the right — the role and access card. Staff sign in by emailed code or Google, so
- * there is no password. Only first name and email are required; whatever is left empty is simply
+ * there is no password. First name, email and the security PIN are required; whatever is left empty is simply
  * not sent. Backend errors (a duplicate email, a refused PIN…) show above the cards in the
  * backend's own words.
  */
@@ -241,6 +241,7 @@ export function UserCreateView({
     firstName?: string
     email?: string
     lateGrace?: string
+    pin?: string
   }>({})
 
   const role = chosenRole || defaultRole(roles)
@@ -288,7 +289,7 @@ export function UserCreateView({
 
   function setField(key: keyof Extra, value: string) {
     setExtra((current) => ({ ...current, [key]: value }))
-    edited(key === 'lateGrace' ? 'lateGrace' : undefined)
+    edited(key === 'lateGrace' || key === 'pin' ? key : undefined)
   }
 
   /** A click anywhere in a date or time box opens the browser's picker (not just its small icon). */
@@ -340,8 +341,9 @@ export function UserCreateView({
     if (!EMAIL_PATTERN.test(email.trim())) next.email = 'Enter a valid email address'
     const grace = extra.lateGrace.trim()
     if (grace && !/^\d+$/.test(grace)) next.lateGrace = 'Enter whole minutes, e.g. 5'
+    if (!extra.pin.trim()) next.pin = 'Enter a security PIN'
     setErrors(next)
-    if (next.firstName || next.email || next.lateGrace || !role) return
+    if (next.firstName || next.email || next.lateGrace || next.pin || !role) return
 
     const body: UserCreateBody = {
       first_name: firstName.trim(),
@@ -392,8 +394,8 @@ export function UserCreateView({
         <div className="min-w-0 flex-1">
           <h2 className="m-0 text-lg leading-tight font-bold">Add User</h2>
           <p className="text-text-muted m-0 text-[0.76rem]">
-            They sign in with an emailed code or Google. Only first name and email are
-            required.
+            They sign in with an emailed code or Google. First name, email and security
+            PIN are required.
           </p>
         </div>
         <HeaderBackButton onClick={onBack} disabled={isCreating} />
@@ -568,13 +570,12 @@ export function UserCreateView({
           <DetailSection
             title="Security PIN"
             icon={ShieldCheckIcon}
-            titleExtra={OPTIONAL}
-            defaultOpen={false}
+            forceOpen={Boolean(errors.pin)}
           >
             <div className="flex flex-col gap-4">
               <div className="flex max-w-sm flex-col gap-1.5">
                 <label htmlFor={`${formId}-pin`} className={FIELD_LABEL}>
-                  PIN<span className="text-text-muted font-normal"> (optional)</span>
+                  PIN
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -585,6 +586,9 @@ export function UserCreateView({
                     maxLength={20}
                     value={extra.pin}
                     onChange={(event) => setField('pin', event.target.value)}
+                    aria-required="true"
+                    aria-invalid={errors.pin ? true : undefined}
+                    aria-describedby={errors.pin ? `${formId}-pin-error` : undefined}
                     className={FIELD_INPUT}
                   />
                   <button
@@ -595,6 +599,15 @@ export function UserCreateView({
                     {showPin ? 'Hide' : 'Show'}
                   </button>
                 </div>
+                {errors.pin && (
+                  <p
+                    id={`${formId}-pin-error`}
+                    role="alert"
+                    className="text-danger text-[0.78rem]"
+                  >
+                    {errors.pin}
+                  </p>
+                )}
                 {/* <p className="text-text-muted m-0 text-[0.78rem]">
                   The PIN is checked by the server. If it is refused, the reason shows
                   above the form.

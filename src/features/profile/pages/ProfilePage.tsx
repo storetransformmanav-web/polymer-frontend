@@ -14,10 +14,12 @@ import {
   AlertTriangleIcon,
   CalendarIcon,
   ClockIcon,
+  EyeIcon,
   TagIcon,
   FileTextIcon,
   MailIcon,
   MapPinIcon,
+  PencilIcon,
   PhoneIcon,
   ShieldCheckIcon,
   UserCogIcon,
@@ -28,11 +30,12 @@ import {
   formatDateTimeAmPm,
   initials as initialsOf,
 } from '../../../lib/format.ts'
-import type { ProfileUpdateField } from '../../../lib/api/endpoints.ts'
+import type { PinAction, ProfileUpdateField } from '../../../lib/api/endpoints.ts'
 import {
   ProfileUpdateDialog,
   type ProfileUpdateRequest,
 } from '../components/ProfileUpdateDialog.tsx'
+import { SecurityPinDialog } from '../components/SecurityPinDialog.tsx'
 import { useProfile } from '../hooks/useProfile.ts'
 
 /** How long the "saved" line stays. */
@@ -77,11 +80,17 @@ function Row({
   )
 }
 
+/** What a set PIN looks like: always the same, so it doesn't give away the PIN's length. */
+const PIN_MASK = '******'
+const PIN_BUTTON =
+  'text-text-muted hover:text-accent hover:bg-accent-tint -my-1 inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent transition-colors disabled:pointer-events-none disabled:opacity-50'
+
 /**
  * **Update profile** (the account menu): the signed-in person's own profile from
  * `GET /hr/profile` — a header with their name, role, status, email, phone and employee code,
  * then cards for personal details, address, emergency contact, employment, tax and National
- * Insurance, and the security PIN's status (the PIN itself is never shown). Every value is the
+ * Insurance, and the security PIN (shown as asterisks; its View and Edit buttons open a window
+ * that emails a code first). Every value is the
  * backend's; an empty one is a dash. A value the profile's `editable_fields` names has a small
  * pencil: one click turns it into a box as wide as the value's own place (Enter or leaving the box
  * keeps it, Escape puts the old one back), and "Yes, update" then sends just that field with
@@ -93,6 +102,8 @@ export function ProfilePage() {
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/'))
   const [asking, setAsking] = useState<ProfileUpdateRequest | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Which PIN window is open, if any. */
+  const [pinAction, setPinAction] = useState<PinAction | null>(null)
 
   useEffect(() => {
     if (!notice) return undefined
@@ -138,6 +149,7 @@ export function ProfilePage() {
   const code = profile.employee_code || employee?.employee_code || ''
   const address = employee?.address
   const pin = employee?.security_pin
+  const userId = profile.user_id?.trim() ?? ''
   const manager = employee?.manager
 
   // A value the backend lists as editable gets the pencil; the rest are plain text.
@@ -146,20 +158,17 @@ export function ProfilePage() {
     field: ProfileUpdateField,
     label: string,
     value: string | null | undefined,
-    secret?: { status: string | null },
   ): ReactNode => {
-    if (!editable.has(field)) return secret ? secret.status : value
-    const shown = secret ? secret.status : value
+    if (!editable.has(field)) return value
     return (
       <DoubleClickEdit
-        value={secret ? '' : (value ?? '')}
+        value={value ?? ''}
         label={label}
         showIcon
-        secret={Boolean(secret)}
         busy={asking !== null && field in asking.body}
         display={
-          shown ? (
-            <span className="break-words">{shown}</span>
+          value ? (
+            <span className="break-words">{value}</span>
           ) : (
             <span className="text-text-muted font-normal">—</span>
           )
@@ -168,8 +177,8 @@ export function ProfilePage() {
           setNotice(null)
           setAsking({
             label,
-            from: secret ? (secret.status ?? 'Not set') : value || 'Empty',
-            to: secret ? '••••' : next || 'Empty',
+            from: value || 'Empty',
+            to: next || 'Empty',
             body: { [field]: next },
           })
         }}
@@ -358,9 +367,40 @@ export function ProfilePage() {
               <dl className="m-0 grid md:grid-cols-2">
                 <div className="min-w-0 md:pr-4">
                   <Row label="PIN" wrap>
-                    {edit('security_pin', 'Security PIN', null, {
-                      status: pin?.is_set == null ? null : pin.is_set ? 'Set' : 'Not set',
-                    })}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {pin?.is_set == null ? (
+                        <span className="text-text-muted font-normal">—</span>
+                      ) : pin.is_set ? (
+                        <span className="tracking-widest">{PIN_MASK}</span>
+                      ) : (
+                        'Not set'
+                      )}
+                      {pin?.is_set !== false && (
+                        <button
+                          type="button"
+                          aria-label="View security PIN"
+                          title="View PIN"
+                          disabled={!userId}
+                          onClick={() => setPinAction('view')}
+                          className={PIN_BUTTON}
+                        >
+                          <EyeIcon width={16} height={16} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="Edit security PIN"
+                        title="Change PIN"
+                        disabled={!userId}
+                        onClick={() => {
+                          setNotice(null)
+                          setPinAction('change')
+                        }}
+                        className={PIN_BUTTON}
+                      >
+                        <PencilIcon width={14} height={14} />
+                      </button>
+                    </span>
                   </Row>
                   <Row label="Last set">{dateTime(pin?.set_at)}</Row>
                   <Row label="Set by">{pin?.set_by}</Row>
@@ -385,6 +425,17 @@ export function ProfilePage() {
           onDone={(message) => {
             setAsking(null)
             setNotice(message || 'Your profile was updated.')
+          }}
+        />
+      )}
+      {pinAction && (
+        <SecurityPinDialog
+          action={pinAction}
+          userId={userId}
+          onClose={() => setPinAction(null)}
+          onChanged={(message) => {
+            setPinAction(null)
+            setNotice(message || 'Your security PIN was updated.')
           }}
         />
       )}
