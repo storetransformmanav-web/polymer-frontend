@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import {
   ActivityIcon,
+  BarChartIcon,
   BoxesIcon,
   CalendarIcon,
   DashboardIcon,
@@ -72,6 +73,15 @@ export const NAV_ENTRIES: NavEntry[] = [
     label: 'Shopify Management',
     icon: StoreIcon,
     items: [
+      {
+        // Product sales: it reads the products' sales, so it belongs to the products area.
+        to: '/analytics',
+        label: 'Analytics',
+        area: 'products',
+        icon: BarChartIcon,
+        shopScoped: true,
+        fillHeight: true,
+      },
       {
         to: '/orders',
         label: 'Orders',

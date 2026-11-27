@@ -942,3 +942,11 @@ export function BoltIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function BarChartIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 16.5v-5M10 16.5v-13M16 16.5v-8" />
+    </svg>
+  )
+}

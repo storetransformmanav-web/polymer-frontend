@@ -53,6 +53,11 @@ import {
   type ProductImportPlan,
   type ProductImportProgress,
 } from './productImport.ts'
+import {
+  readSalesOverview,
+  type SalesOverview,
+  type SalesOverviewParams,
+} from './salesOverview.ts'
 
 /**
  * Every backend endpoint the app calls lives in this one file: the path,
@@ -260,6 +265,8 @@ export const ENDPOINTS = {
   },
   products: {
     list: '/products',
+    /** `GET` how the products sold in a period (the Analytics page). */
+    salesOverview: '/products/sales/overview',
     /** `GET` the products as a Shopify-format CSV file (not JSON). */
     export: '/products/export',
     /** `POST` a Shopify-format CSV (multipart): checks it (`dry_run`) or starts the import. */
@@ -4731,6 +4738,12 @@ export const api = {
   },
 
   products: {
+    /** Sales totals, trend and the best / lowest / unsold products for a period. */
+    async salesOverview(params: SalesOverviewParams): Promise<SalesOverview> {
+      const data = await apiClient.get(ENDPOINTS.products.salesOverview, { params })
+      return readSalesOverview(data)
+    },
+
     /** One page of products, filtered/sorted server-side. Needs a signed-in session. */
     async list(params: ProductListParams): Promise<ProductListResponse> {
       const data = await apiClient.get(ENDPOINTS.products.list, { params })

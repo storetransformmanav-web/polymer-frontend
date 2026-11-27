@@ -6,7 +6,7 @@ export interface Kpi {
   label: string
   value: ReactNode
   /** Small text beside the value. */
-  note?: string
+  note?: ReactNode
   /** One short line under the figure saying what it counts. */
   hint?: string
   icon: ComponentType<IconProps>

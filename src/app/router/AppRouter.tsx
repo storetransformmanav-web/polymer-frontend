@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { AuthLayout } from '../layouts/AuthLayout.tsx'
 import { DashboardLayout } from '../layouts/DashboardLayout.tsx'
 import { ActivityPage } from '../../features/activity/index.ts'
+import { AnalyticsPage } from '../../features/analytics/index.ts'
 import { AttendancePage } from '../../features/attendance/index.ts'
 import { CollectionsPage } from '../../features/collections/index.ts'
 import { CustomersPage } from '../../features/customers/index.ts'
@@ -41,6 +42,8 @@ const router = createBrowserRouter([
         element: <DashboardLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
+          // Product sales performance.
+          { path: 'analytics', element: <AnalyticsPage /> },
           // `*` lets OrdersPage also serve /orders/:number (the details page).
           { path: 'orders/*', element: <OrdersPage /> },
           // `*` lets ProductsPage also serve /products/:id (the details page).

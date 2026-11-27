@@ -100,18 +100,21 @@ export function RefreshButton({
   )
 }
 
-/** The **Export** button that opens the export dialog. */
+/** The **Export** button of a listing page; it usually opens an export dialog. */
 export function ExportButton({
   disabled,
   onClick,
+  opensDialog = true,
 }: {
   disabled: boolean
   onClick: () => void
+  /** False for a button that saves the file at once. */
+  opensDialog?: boolean
 }) {
   return (
     <button
       type="button"
-      aria-haspopup="dialog"
+      aria-haspopup={opensDialog ? 'dialog' : undefined}
       disabled={disabled}
       onClick={onClick}
       className="border-border bg-bg text-text hover:border-accent hover:text-accent hover:bg-accent-tint inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[0.85rem] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
