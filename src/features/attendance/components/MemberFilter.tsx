@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { PopoverButton } from '../../../components/ui/PopoverButton.tsx'
-import { SearchIcon, UsersIcon, XIcon, CheckIcon } from '../../../components/ui/icons.tsx'
+import { SearchIcon, UsersIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { useDebouncedField } from '../../../hooks/useDebouncedField.ts'
 import { api, type UserItem } from '../../../lib/api/endpoints.ts'
+import { MAX_MEMBERS, type ChosenMember } from '../hooks/useMonthlyAttendance.ts'
 
 const PAGE_SIZE = 50
 
@@ -14,13 +15,16 @@ const nameOf = (
   [user.first_name, user.last_name].filter(Boolean).join(' ').trim() ||
   user.email
 
+const ROW =
+  'hover:bg-accent-tint/60 text-text flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[0.82rem]'
+
 /** The list inside the open dropdown: its own search box, and the people the backend finds. */
 function MemberList({
-  value,
-  onPick,
+  members,
+  onChange,
 }: {
-  value: string
-  onPick: (id: string, name: string) => void
+  members: ChosenMember[]
+  onChange: (members: ChosenMember[]) => void
 }) {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useDebouncedField('', (next) => setSearch(next))
@@ -37,6 +41,8 @@ function MemberList({
   })
   const users = query.data?.items ?? []
   const total = query.data?.total ?? users.length
+  const chosen = new Set(members.map((member) => member.id))
+  const full = members.length >= MAX_MEMBERS
 
   return (
     <div className="w-72 max-w-[calc(100vw-2rem)]">
@@ -53,17 +59,16 @@ function MemberList({
           className="text-text placeholder:text-text-muted min-w-0 flex-1 border-none bg-transparent text-[0.82rem] outline-none [&::-webkit-search-cancel-button]:hidden"
         />
       </div>
-      <ul role="listbox" aria-label="Members" className="max-h-64 overflow-y-auto">
-        <li role="option" aria-selected={value === ''}>
-          <button
-            type="button"
-            onClick={() => onPick('', '')}
-            className="hover:bg-accent-tint/60 text-text flex w-full cursor-pointer items-center justify-between rounded-md border-none bg-transparent px-2.5 py-2 text-left text-[0.82rem] font-semibold"
-          >
-            All members
-            {value === '' && <CheckIcon width={14} height={14} className="text-accent" />}
-          </button>
-        </li>
+      {members.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className={`${ROW} text-accent border-none bg-transparent font-semibold`}
+        >
+          Show all members ({members.length} chosen)
+        </button>
+      )}
+      <ul aria-label="Members" className="max-h-64 overflow-y-auto">
         {query.isPending && (
           <li className="text-text-muted px-2.5 py-2 text-[0.8rem]">Loading members…</li>
         )}
@@ -73,28 +78,39 @@ function MemberList({
           </li>
         )}
         {users.map((user) => (
-          <li key={user.id} role="option" aria-selected={value === user.id}>
-            <button
-              type="button"
-              onClick={() => onPick(user.id, nameOf(user))}
-              className="hover:bg-accent-tint/60 text-text flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border-none bg-transparent px-2.5 py-2 text-left text-[0.82rem]"
-            >
+          <li key={user.id}>
+            <label className={ROW}>
+              <input
+                type="checkbox"
+                checked={chosen.has(user.id)}
+                disabled={full && !chosen.has(user.id)}
+                onChange={() =>
+                  onChange(
+                    chosen.has(user.id)
+                      ? members.filter((member) => member.id !== user.id)
+                      : [...members, { id: user.id, name: nameOf(user) }],
+                  )
+                }
+                className="accent-accent h-4 w-4 shrink-0 cursor-pointer"
+              />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-semibold">{nameOf(user)}</span>
                 <span className="text-text-muted truncate text-[0.74rem]">
                   {user.email}
                 </span>
               </span>
-              {value === user.id && (
-                <CheckIcon width={14} height={14} className="text-accent shrink-0" />
-              )}
-            </button>
+            </label>
           </li>
         ))}
         {!query.isPending && !query.isError && users.length === 0 && (
           <li className="text-text-muted px-2.5 py-2 text-[0.8rem]">No members found.</li>
         )}
       </ul>
+      {full && (
+        <p className="text-warning px-2.5 pt-1.5 text-[0.72rem]">
+          At most {MAX_MEMBERS} members can be chosen.
+        </p>
+      )}
       {total > users.length && (
         <p className="text-text-muted px-2.5 pt-1.5 text-[0.72rem]">
           Showing {users.length} of {total} — type to narrow the list.
@@ -105,44 +121,34 @@ function MemberList({
 }
 
 /**
- * The **Member** filter: a dropdown button holding its own search box and the people the backend
- * lists (`GET /users?search=`, asked only while it is open). Choosing one narrows the attendance to
- * that employee (`employee` = their CRM user id); "All members" clears it. A chosen member's name is
- * shown on the button with a ✕ beside it.
+ * The **Member** filter: a dropdown with its own search box and the people the backend lists
+ * (`GET /users?search=`, asked only while it is open). Several can be ticked; they become the
+ * grid's `employees` filter. None ticked means everyone.
  */
 export function MemberFilter({
-  value,
+  members,
   onChange,
 }: {
-  /** The chosen member's CRM user id ('' = everyone). */
-  value: string
-  onChange: (id: string) => void
+  members: ChosenMember[]
+  onChange: (members: ChosenMember[]) => void
 }) {
-  // The chosen person's name, kept from the moment they were picked.
-  const [name, setName] = useState('')
+  const label =
+    members.length === 0
+      ? 'Member'
+      : members.length === 1
+        ? members[0].name
+        : `${members.length} members`
 
   return (
     <div className="flex items-center gap-2">
-      <PopoverButton label={value ? name || 'Member' : 'Member'} icon={UsersIcon}>
-        {(close) => (
-          <MemberList
-            value={value}
-            onPick={(id, picked) => {
-              setName(picked)
-              onChange(id)
-              close()
-            }}
-          />
-        )}
+      <PopoverButton label={label} icon={UsersIcon}>
+        {() => <MemberList members={members} onChange={onChange} />}
       </PopoverButton>
-      {value && (
+      {members.length > 0 && (
         <button
           type="button"
-          aria-label="Clear member"
-          onClick={() => {
-            setName('')
-            onChange('')
-          }}
+          aria-label="Clear members"
+          onClick={() => onChange([])}
           className="text-text-muted hover:text-danger cursor-pointer border-none bg-transparent p-0.5"
         >
           <XIcon width={14} height={14} />

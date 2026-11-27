@@ -1,8 +1,6 @@
 import { addDays, toYmd } from '../../../components/ui/dateRange.ts'
 import {
   api,
-  type AttendanceCurrent,
-  type AttendanceEmployee,
   type AttendanceItem,
   type AttendanceListParams,
   type AttendanceTotals,
@@ -25,44 +23,23 @@ export interface AllAttendance {
   /** Every day found, newest first. */
   items: AttendanceItem[]
   totals: AttendanceTotals | null
-  employee: AttendanceEmployee | null
-  current: AttendanceCurrent | null
 }
 
-interface Period {
-  items: AttendanceItem[]
-  totals: AttendanceTotals | null
-  employee: AttendanceEmployee | null
-  current: AttendanceCurrent | null
-}
+type Period = AllAttendance
 
 /** One period of at most `MAX_RANGE_DAYS` days: every page of it. */
 async function readPeriod(
-  isAdmin: boolean,
   filters: AllAttendanceFilters,
   from: string,
   to: string,
 ): Promise<Period> {
-  const dates = { date_from: from, date_to: to }
-  if (!isAdmin) {
-    const answer = await api.hr.myAttendance(dates)
-    const employee = answer.employee ?? null
-    return {
-      items: answer.items.map((item) => ({
-        ...item,
-        employee: item.employee ?? employee,
-      })),
-      totals: answer.totals ?? null,
-      employee,
-      current: answer.current ?? null,
-    }
-  }
   const items: AttendanceItem[] = []
   let totals: AttendanceTotals | null = null
   for (let page = 1; ; page += 1) {
     const answer = await api.hr.attendance({
       ...filters,
-      ...dates,
+      date_from: from,
+      date_to: to,
       page,
       page_size: PAGE_SIZE,
     })
@@ -71,7 +48,7 @@ async function readPeriod(
     const more = answer.has_next ?? page < (answer.total_pages ?? 1)
     if (!more || answer.items.length === 0) break
   }
-  return { items, totals, employee: null, current: null }
+  return { items, totals }
 }
 
 const hasPunches = (items: AttendanceItem[]) =>
@@ -121,7 +98,6 @@ function addTotals(periods: Period[]): AttendanceTotals | null {
  * is left out). The newest period is always kept.
  */
 export async function readAllAttendance(
-  isAdmin: boolean,
   filters: AllAttendanceFilters,
 ): Promise<AllAttendance> {
   const today = storeToday()
@@ -129,7 +105,6 @@ export async function readAllAttendance(
   for (let index = 0; index < MAX_PERIODS; index += 1) {
     const end = addDays(today, -MAX_RANGE_DAYS * index)
     const period = await readPeriod(
-      isAdmin,
       filters,
       toYmd(addDays(end, 1 - MAX_RANGE_DAYS)),
       toYmd(end),
@@ -142,7 +117,5 @@ export async function readAllAttendance(
   return {
     items: periods.flatMap((period) => period.items),
     totals: addTotals(periods),
-    employee: periods[0]?.employee ?? null,
-    current: periods[0]?.current ?? null,
   }
 }

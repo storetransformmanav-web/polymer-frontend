@@ -59,8 +59,9 @@ const router = createBrowserRouter([
           { path: 'locks/*', element: <LocksPage /> },
           // `*` lets ActivityPage also serve /activity/:id (one entry's details).
           { path: 'activity/*', element: <ActivityPage /> },
-          // HRMS → Attendance (an administrator's calendar of everyone, or a user's own days).
-          { path: 'hrms/attendance', element: <AttendancePage /> },
+          // HRMS → Attendance (the month's grid); `*` lets AttendancePage also serve
+          // /hrms/attendance/<user id> (one employee's days).
+          { path: 'hrms/attendance/*', element: <AttendancePage /> },
           // Sage 50 → Invoices (a group in the sidebar; more Sage pages can sit beside it). `*` lets
           // InvoicesPage also serve /sage/invoices/<number> and /sage/invoices/customer/<ref>.
           { path: 'sage/invoices/*', element: <InvoicesPage /> },

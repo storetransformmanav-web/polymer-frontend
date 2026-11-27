@@ -1,6 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge.tsx'
-import { Highlight } from '../../../components/ui/Highlight.tsx'
 import {
   ActivityIcon,
   AlertTriangleIcon,
@@ -12,7 +11,6 @@ import {
 } from '../../../components/ui/icons.tsx'
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AttendanceItem } from '../../../lib/api/endpoints.ts'
-import { initials } from '../../../lib/format.ts'
 import {
   ATTENDANCE_CHEVRON_COLUMN_REM,
   attendanceTableMinWidthRem,
@@ -40,13 +38,8 @@ const MESSAGE_BUTTON =
 const rowKey = (item: AttendanceItem) =>
   `${item.employee?.user_id ?? 'me'}|${item.work_date}`
 
-const nameOf = (item: AttendanceItem) =>
-  item.employee?.full_name?.trim() || item.employee?.employee_code || '—'
-
 interface AttendanceListProps {
   items: AttendanceItem[]
-  /** An administrator's list has an Employee column. */
-  isAdmin: boolean
   /** The columns to draw (the Columns menu's choice), in order, after the opening chevron. */
   columns: AttendanceColumnDef[]
   isPending: boolean
@@ -71,41 +64,6 @@ function StatusPill({ item }: { item: AttendanceItem }) {
     <Badge tone={statusTone(item.status)} className="min-w-32 px-2.5">
       {item.status_label || humanize(item.status)}
     </Badge>
-  )
-}
-
-function Employee({
-  item,
-  withCode = true,
-}: {
-  item: AttendanceItem
-  /** Show the employee ID under the name (when the table has no Employee ID column). */
-  withCode?: boolean
-}) {
-  const name = nameOf(item)
-  return (
-    <span className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="bg-accent-tint text-accent inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-bold"
-      >
-        {item.employee?.initials || initials(name) || '?'}
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="max-w-44 truncate font-semibold" title={name}>
-          <Highlight text={name} />
-        </span>
-        <span className="text-text-muted text-[0.74rem]">
-          {withCode && item.employee?.employee_code ? (
-            <Highlight text={item.employee.employee_code} />
-          ) : null}
-          {withCode && item.employee?.employee_code && item.employee?.role_label
-            ? ' · '
-            : ''}
-          {item.employee?.role_label ?? ''}
-        </span>
-      </span>
-    </span>
   )
 }
 
@@ -154,38 +112,17 @@ function DateCell({ item }: { item: AttendanceItem }) {
 const hasLog = (item: AttendanceItem) => (item.log?.length ?? 0) > 0
 
 const DASH = <span className="text-text-muted">—</span>
-const text = (value: string | null | undefined) =>
-  value && value.trim() ? (
-    <span className="block truncate" title={value}>
-      {value}
-    </span>
-  ) : (
-    DASH
-  )
-
 /** What one chosen column shows for one attendance row. */
 function ColumnCell({
   column,
   item,
-  hasCode,
 }: {
   column: AttendanceColumnDef
   item: AttendanceItem
-  hasCode: boolean
 }) {
   switch (column.id) {
     case 'date':
       return <DateCell item={item} />
-    case 'employee':
-      return <Employee item={item} withCode={!hasCode} />
-    case 'code':
-      return item.employee?.employee_code ? (
-        <span className="block truncate font-medium">
-          <Highlight text={item.employee.employee_code} />
-        </span>
-      ) : (
-        DASH
-      )
     case 'status':
       return <StatusPill item={item} />
     case 'check_in':
@@ -212,14 +149,8 @@ function ColumnCell({
       )
     case 'punches':
       return <>{item.punch_count ?? 0}</>
-    case 'role':
-      return text(item.employee?.role_label ?? item.employee?.role)
-    case 'position':
-      return text(item.employee?.position)
-    case 'department':
-      return text(item.employee?.department)
     case 'day_type':
-      return text(item.day_type ? humanize(item.day_type) : null)
+      return item.day_type ? <>{humanize(item.day_type)}</> : DASH
   }
 }
 
@@ -403,7 +334,6 @@ function Details({ item, stacked = false }: { item: AttendanceItem; stacked?: bo
  */
 export function AttendanceList({
   items,
-  isAdmin,
   columns,
   isPending,
   error,
@@ -458,7 +388,6 @@ export function AttendanceList({
   }
 
   const dim = isStale ? 'opacity-60' : ''
-  const hasCode = columns.some((column) => column.id === 'code')
   const span = columns.length + 1
 
   if (!isDesktop) {
@@ -489,7 +418,6 @@ export function AttendanceList({
                     className="flex w-full cursor-pointer items-start justify-between gap-3 border-none bg-transparent p-0 text-left disabled:cursor-default"
                   >
                     <span className="flex min-w-0 flex-col gap-1">
-                      {isAdmin && <Employee item={item} />}
                       <DayCell item={item} />
                     </span>
                     <StatusPill item={item} />
@@ -568,7 +496,7 @@ export function AttendanceList({
                           <button
                             type="button"
                             aria-expanded={isOpen}
-                            aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${formatDay(item.work_date)}${isAdmin ? ` — ${nameOf(item)}` : ''}`}
+                            aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${formatDay(item.work_date)}`}
                             onClick={() => toggle(key)}
                             className="text-text-muted hover:text-accent cursor-pointer border-none bg-transparent p-0.5"
                           >
@@ -587,7 +515,7 @@ export function AttendanceList({
                                 : ''
                           }`}
                         >
-                          <ColumnCell column={column} item={item} hasCode={hasCode} />
+                          <ColumnCell column={column} item={item} />
                         </td>
                       ))}
                     </tr>

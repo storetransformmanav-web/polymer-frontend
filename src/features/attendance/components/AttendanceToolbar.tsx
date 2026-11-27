@@ -2,15 +2,14 @@ import type { ReactNode } from 'react'
 import { CalendarIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import type { AttendanceFilters } from '../hooks/useAttendance.ts'
-import { ATTENDANCE_RANGE_PRESETS, todayRange } from '../utils/format.ts'
-import { MemberFilter } from './MemberFilter.tsx'
+import { ATTENDANCE_RANGE_PRESETS } from '../utils/format.ts'
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
 
 interface AttendanceToolbarProps {
   filters: AttendanceFilters
-  /** An administrator can pick a member; anyone else sees only their own days. */
-  isAdmin: boolean
+  /** What one date on its own goes back to. */
+  defaultRange: { from: string; to: string }
   hasFilters: boolean
   rangeProblem: string | null
   onChange: (changes: Partial<AttendanceFilters>) => void
@@ -19,14 +18,10 @@ interface AttendanceToolbarProps {
   actions?: ReactNode
 }
 
-/**
- * One row: the **Member** filter (administrators — a dropdown with its own search box), the date
- * range, Clear All and the Columns menu. Dates apply at once; the member choice is the backend's
- * `employee` filter.
- */
+/** One employee's toolbar: the date range, Clear All and the Columns menu. Dates apply at once. */
 export function AttendanceToolbar({
   filters,
-  isAdmin,
+  defaultRange,
   hasFilters,
   rangeProblem,
   onChange,
@@ -36,22 +31,9 @@ export function AttendanceToolbar({
   return (
     <section
       aria-label="Attendance filters"
-      className="border-border bg-bg flex flex-col gap-3 rounded-2xl border p-4 sm:p-5"
+      className="border-border bg-bg flex flex-col gap-3 rounded-2xl border p-3 sm:px-4"
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="lg:flex-1">
-          {isAdmin ? (
-            <MemberFilter
-              value={filters.employee}
-              onChange={(employee) => onChange({ employee })}
-            />
-          ) : (
-            <p className="text-text-muted text-[0.85rem]">
-              Your own attendance for the chosen dates.
-            </p>
-          )}
-        </div>
-
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
         <div className="flex flex-wrap items-center gap-3">
           <span className={`${FIELD_LABEL} whitespace-nowrap`}>
             <CalendarIcon width={16} height={16} className="text-text-muted" />
@@ -65,8 +47,8 @@ export function AttendanceToolbar({
               from={filters.from}
               to={filters.to}
               onChange={(range) =>
-                // Both empty is "All Time"; one date on its own goes back to today.
-                onChange(Boolean(range.from) === Boolean(range.to) ? range : todayRange())
+                // Both empty is "All Time"; one date on its own goes back to the opened month.
+                onChange(Boolean(range.from) === Boolean(range.to) ? range : defaultRange)
               }
             />
           </div>

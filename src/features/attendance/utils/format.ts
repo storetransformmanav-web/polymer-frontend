@@ -5,14 +5,7 @@ import {
   type RangePreset,
 } from '../../../components/ui/dateRange.ts'
 import type { BadgeTone } from '../../../components/ui/Badge.tsx'
-import { getStoreTimeZone, storeToday } from '../../../lib/storeTime.ts'
-
-/**
- * True for the administrator role (the backend's `admin`, any letter case): they read everyone's
- * attendance, everyone else only their own. The backend enforces this too.
- */
-export const isAdministrator = (role: string | null | undefined) =>
-  role?.trim().toLowerCase() === 'admin'
+import { getStoreTimeZone } from '../../../lib/storeTime.ts'
 
 /** The API refuses a range longer than this many days. */
 export const MAX_RANGE_DAYS = 93
@@ -32,12 +25,6 @@ export const ATTENDANCE_RANGE_PRESETS: RangePreset[] = [
     }),
   },
 ]
-
-/** Today on the store's calendar, as a one-day range: what the page opens on. */
-export function todayRange(): { from: string; to: string } {
-  const today = toYmd(storeToday())
-  return { from: today, to: today }
-}
 
 const parseDay = (value: string): number | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -130,19 +117,6 @@ export function statusTone(status: string | null | undefined): BadgeTone {
 export function humanize(value: string | null | undefined): string {
   const text = (value ?? '').replace(/_/g, ' ').trim()
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—'
-}
-
-/** The label the choice list shows for a status filter. */
-export const STATUS_OPTION_LABELS: Record<string, string> = {
-  present: 'Present',
-  late: 'Late',
-  working: 'In progress (checked in)',
-  on_break: 'On break',
-  incomplete: 'Incomplete',
-  absent: 'Absent',
-  not_checked_in: 'Not checked in yet',
-  week_off: 'Week off',
-  holiday: 'Holiday',
 }
 
 /** "Wednesday, 25 Nov 2026" — the full date, for a hover. */

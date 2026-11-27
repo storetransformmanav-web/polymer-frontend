@@ -7,8 +7,6 @@ import type { ColumnConfig as BaseColumnConfig } from '../../../lib/columnConfig
  */
 export const ATTENDANCE_COLUMN_IDS = [
   'date',
-  'employee',
-  'code',
   'status',
   'check_in',
   'check_out',
@@ -16,9 +14,6 @@ export const ATTENDANCE_COLUMN_IDS = [
   'worked',
   'late',
   'punches',
-  'role',
-  'position',
-  'department',
   'day_type',
 ] as const
 
@@ -31,8 +26,6 @@ export interface AttendanceColumnDef {
   /** Width in rem (the table is fixed-layout, so every column has one). */
   width: number
   align: 'left' | 'center' | 'right'
-  /** Only an administrator's list has these (they describe the employee). */
-  adminOnly?: boolean
 }
 
 const column = (
@@ -40,17 +33,11 @@ const column = (
   label: string,
   width: number,
   align: AttendanceColumnDef['align'] = 'left',
-  adminOnly = false,
-): [AttendanceColumnId, AttendanceColumnDef] => [
-  id,
-  { id, label, width, align, adminOnly },
-]
+): [AttendanceColumnId, AttendanceColumnDef] => [id, { id, label, width, align }]
 
 export const ATTENDANCE_COLUMNS: Record<AttendanceColumnId, AttendanceColumnDef> =
   Object.fromEntries([
     column('date', 'Date', 13),
-    column('employee', 'Employee', 14, 'left', true),
-    column('code', 'Employee ID', 8, 'left', true),
     column('status', 'Status', 12.5, 'center'),
     column('check_in', 'Check In', 7),
     column('check_out', 'Check Out', 7),
@@ -58,17 +45,12 @@ export const ATTENDANCE_COLUMNS: Record<AttendanceColumnId, AttendanceColumnDef>
     column('worked', 'Worked', 6),
     column('late', 'Late', 9),
     column('punches', 'Punches', 5.5, 'center'),
-    column('role', 'Role', 10, 'left', true),
-    column('position', 'Position', 10, 'left', true),
-    column('department', 'Department', 10, 'left', true),
     column('day_type', 'Day type', 9),
   ]) as Record<AttendanceColumnId, AttendanceColumnDef>
 
 /** Shown to begin with, in this order. */
 export const DEFAULT_VISIBLE_ATTENDANCE_COLUMNS: AttendanceColumnId[] = [
   'date',
-  'employee',
-  'code',
   'status',
   'check_in',
   'check_out',
@@ -80,28 +62,12 @@ export const DEFAULT_VISIBLE_ATTENDANCE_COLUMNS: AttendanceColumnId[] = [
 /** Width of the fixed opening column (the details chevron), in rem. */
 export const ATTENDANCE_CHEVRON_COLUMN_REM = 2.75
 
-/** Is this column part of the person's list (an employee-describing one is not for non-admins)? */
-export const columnAllowed = (id: AttendanceColumnId, isAdmin: boolean) =>
-  isAdmin || !ATTENDANCE_COLUMNS[id].adminOnly
-
-/** The menu's choice limited to the columns this person's list can have. */
-export function allowedConfig(
-  config: AttendanceColumnConfig,
-  isAdmin: boolean,
-): AttendanceColumnConfig {
-  return {
-    order: config.order.filter((id) => columnAllowed(id, isAdmin)),
-    visible: config.visible.filter((id) => columnAllowed(id, isAdmin)),
-  }
-}
-
 /** The columns to draw, in order. */
 export function shownAttendanceColumns(
   config: AttendanceColumnConfig,
-  isAdmin: boolean,
 ): AttendanceColumnDef[] {
-  return allowedConfig(config, isAdmin)
-    .order.filter((id) => config.visible.includes(id))
+  return config.order
+    .filter((id) => config.visible.includes(id))
     .map((id) => ATTENDANCE_COLUMNS[id])
 }
 

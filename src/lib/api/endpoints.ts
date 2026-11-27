@@ -109,6 +109,8 @@ export const ENDPOINTS = {
     pinVerify: '/hr/pin/verify',
     /** `GET` the attendance calendar — an administrator sees every employee, anyone else only their own days. */
     attendance: '/hr/attendance',
+    /** `GET` the monthly grid: one row per employee, one column per day, with each row's total hours. */
+    attendanceMonthly: '/hr/attendance/monthly',
     /** `GET` the signed-in person's own attendance for a date range, with their current punch state. */
     attendanceMe: '/hr/attendance/me',
   },
@@ -915,6 +917,102 @@ export interface AttendanceListParams {
   status?: AttendanceStatus
   page?: number
   /** 1–200 (the API's default is 50). */
+  page_size?: number
+}
+
+// `GET /hr/attendance/monthly` (the Hours Overview grid): one row per employee with every day of the
+// month. Someone without Attendance:view gets only their own row (`scope: 'own'`).
+
+const monthDaySchema = z.object({
+  date: z.string(),
+  day: z.number().nullish(),
+  weekday: z.string().nullish(),
+  is_weekend: z.boolean().nullish(),
+  holiday_name: z.string().nullish(),
+  is_today: z.boolean().nullish(),
+  is_future: z.boolean().nullish(),
+})
+
+const monthCellSchema = z.object({
+  date: z.string(),
+  day_type: z.string().nullish(),
+  status: z.string().nullish(),
+  /** How the backend wants the cell coloured: off, absent, short, incomplete, live, none… */
+  tone: z.string().nullish(),
+  worked_minutes: z.number().nullish(),
+  worked: z.string().nullish(),
+  expected_minutes: z.number().nullish(),
+  check_in_time: z.string().nullish(),
+  check_out_time: z.string().nullish(),
+  is_late: z.boolean().nullish(),
+  tags: z.array(z.string()).nullish(),
+})
+
+const monthRowSchema = z.object({
+  employee: attendanceEmployeeSchema,
+  is_active: z.boolean().nullish(),
+  total_minutes: z.number().nullish(),
+  total: z.string().nullish(),
+  expected_minutes: z.number().nullish(),
+  overtime_minutes: z.number().nullish(),
+  present_days: z.number().nullish(),
+  absent_days: z.number().nullish(),
+  late_days: z.number().nullish(),
+  days: z.array(monthCellSchema),
+})
+
+const monthTotalsSchema = z.object({
+  total_minutes: z.number().nullish(),
+  total: z.string().nullish(),
+  members: z.number().nullish(),
+  average_minutes: z.number().nullish(),
+  average: z.string().nullish(),
+  days_counted: z.number().nullish(),
+  present_days: z.number().nullish(),
+  absent_days: z.number().nullish(),
+  late_days: z.number().nullish(),
+  overtime_minutes: z.number().nullish(),
+  overtime: z.string().nullish(),
+})
+
+const monthlyAttendanceResponseSchema = z.object({
+  message: z.string().nullish(),
+  scope: z.string().nullish(),
+  month: z.string().nullish(),
+  date_from: z.string().nullish(),
+  date_to: z.string().nullish(),
+  days: z.array(monthDaySchema),
+  items: z.array(monthRowSchema),
+  totals: monthTotalsSchema.nullish(),
+  page: z.number().nullish(),
+  page_size: z.number().nullish(),
+  total: z.number().nullish(),
+  total_pages: z.number().nullish(),
+  has_next: z.boolean().nullish(),
+})
+
+export type MonthDay = z.infer<typeof monthDaySchema>
+export type MonthCell = z.infer<typeof monthCellSchema>
+export type MonthRow = z.infer<typeof monthRowSchema>
+export type MonthTotals = z.infer<typeof monthTotalsSchema>
+export type MonthlyAttendanceResponse = z.infer<typeof monthlyAttendanceResponseSchema>
+
+export const MONTHLY_ATTENDANCE_SORTS = ['name', 'employee_code', 'total'] as const
+export type MonthlyAttendanceSort = (typeof MONTHLY_ATTENDANCE_SORTS)[number]
+
+/** Query parameters of `GET /hr/attendance/monthly` (all optional). */
+export interface MonthlyAttendanceParams {
+  /** `YYYY-MM` (the API's default is the current UK month). */
+  month?: string
+  /** Comma-separated employee IDs or CRM user IDs, at most 50. */
+  employees?: string
+  /** Employee name or ID, at most 80 characters. */
+  search?: string
+  role?: string
+  sort?: MonthlyAttendanceSort
+  order?: 'asc' | 'desc'
+  page?: number
+  /** 1–100 (the API's default is 20). */
   page_size?: number
 }
 
@@ -4941,6 +5039,14 @@ export const api = {
     async attendance(params: AttendanceListParams): Promise<AttendanceListResponse> {
       const data = await apiClient.get(ENDPOINTS.hr.attendance, { params })
       return attendanceListResponseSchema.parse(data)
+    },
+
+    /** The month's grid (`GET /hr/attendance/monthly`): one row per employee, paged. */
+    async monthlyAttendance(
+      params: MonthlyAttendanceParams,
+    ): Promise<MonthlyAttendanceResponse> {
+      const data = await apiClient.get(ENDPOINTS.hr.attendanceMonthly, { params })
+      return monthlyAttendanceResponseSchema.parse(data)
     },
 
     /** The signed-in person's own days (`GET /hr/attendance/me`). */

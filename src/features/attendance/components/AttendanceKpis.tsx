@@ -1,10 +1,5 @@
 import { KpiCards, type Kpi } from '../../../components/ui/KpiCards.tsx'
-import {
-  CalendarIcon,
-  ClockIcon,
-  UsersIcon,
-  XIcon,
-} from '../../../components/ui/icons.tsx'
+import { CalendarIcon, ClockIcon, XIcon } from '../../../components/ui/icons.tsx'
 import type { AttendanceTotals } from '../../../lib/api/endpoints.ts'
 import type { AttendanceFilters } from '../hooks/useAttendance.ts'
 
@@ -13,19 +8,18 @@ const figure = (value: number | null | undefined) =>
   value === null || value === undefined ? '—' : value.toLocaleString('en-GB')
 
 /**
- * The figure cards. **Every figure is the backend's** — read from the answer's `totals` (they cover
- * the whole date range and the filters, not just the page, and make no request of their own); nothing
- * is counted from the rows on screen. The Working Days card carries the backend's own
- * `working_days_note` as its (i). Absent is a filter button (pressing it shows only the absent days; pressing it again, or Clear All, clears it).
+ * One employee's figure cards. **Every figure is the backend's** — read from the answer's `totals`
+ * (they cover the whole date range and the filters, not just the page, and make no request of their
+ * own); nothing is counted from the rows on screen. The Working Days card carries the backend's own
+ * `working_days_note` as its (i). Absent is a filter button (pressing it shows only the absent days;
+ * pressing it again, or Clear All, clears it).
  */
 export function AttendanceKpis({
   totals,
-  isAdmin,
   status,
   onStatus,
 }: {
   totals: AttendanceTotals | null
-  isAdmin: boolean
   status: AttendanceFilters['status']
   onStatus: (status: AttendanceFilters['status']) => void
 }) {
@@ -35,9 +29,6 @@ export function AttendanceKpis({
   })
 
   const cards: Kpi[] = [
-    ...(isAdmin
-      ? [{ label: 'Employees', value: figure(totals?.employees), icon: UsersIcon }]
-      : []),
     {
       label: 'Working Days',
       value: figure(totals?.working_days),
