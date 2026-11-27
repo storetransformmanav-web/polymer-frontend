@@ -48,7 +48,7 @@ const column = (
 
 export const ATTENDANCE_COLUMNS: Record<AttendanceColumnId, AttendanceColumnDef> =
   Object.fromEntries([
-    column('date', 'Date', 9),
+    column('date', 'Date', 13),
     column('employee', 'Employee', 14, 'left', true),
     column('code', 'Employee ID', 8, 'left', true),
     column('status', 'Status', 12.5, 'center'),

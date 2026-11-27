@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { CalendarIcon, XIcon } from '../../../components/ui/icons.tsx'
 import { DateRangePicker } from '../../../components/ui/DateRangePicker.tsx'
 import type { AttendanceFilters } from '../hooks/useAttendance.ts'
-import { currentMonthRange } from '../utils/format.ts'
+import { ATTENDANCE_RANGE_PRESETS, todayRange } from '../utils/format.ts'
 import { MemberFilter } from './MemberFilter.tsx'
 
 const FIELD_LABEL = 'text-text flex items-center gap-1.5 text-[0.82rem] font-semibold'
@@ -61,11 +61,12 @@ export function AttendanceToolbar({
             <DateRangePicker
               id="attendance-dates"
               label="Date range"
+              presets={ATTENDANCE_RANGE_PRESETS}
               from={filters.from}
               to={filters.to}
               onChange={(range) =>
-                // "All Time" has no meaning here (the API reads at most 93 days): back to this month.
-                onChange(range.from && range.to ? range : currentMonthRange())
+                // Clearing the dates (or one of them) goes back to today: the API needs both.
+                onChange(range.from && range.to ? range : todayRange())
               }
             />
           </div>

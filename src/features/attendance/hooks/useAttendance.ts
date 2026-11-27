@@ -10,7 +10,7 @@ import {
   type AttendanceStatus,
   type AttendanceTotals,
 } from '../../../lib/api/endpoints.ts'
-import { currentMonthRange, rangeProblem } from '../utils/format.ts'
+import { rangeProblem, todayRange } from '../utils/format.ts'
 
 export const ATTENDANCE_STALE_MS = 30_000
 
@@ -32,7 +32,7 @@ export const defaultAttendanceFilters = (): AttendanceFilters => ({
   employee: '',
   role: '',
   status: '',
-  ...currentMonthRange(),
+  ...todayRange(),
   page: 1,
   pageSize: 50,
 })
@@ -71,8 +71,8 @@ const myOptions = (from: string, to: string) =>
  * The Attendance page's data. An administrator reads the calendar of every employee
  * (`GET /hr/attendance`: search, role, employee, status and dates are the server's work, and so is
  * the paging); anyone else reads only their own days (`GET /hr/attendance/me`, no paging — the status
- * choice narrows what that answer holds). Dates start on the current month, the API's own default,
- * and never go past 93 days. Nothing is asked until the page opens.
+ * choice narrows what that answer holds). Dates start on today and never go
+ * past 93 days. Nothing is asked until the page opens.
  */
 export function useAttendance(isAdmin: boolean) {
   const [filters, setFilters] = useState(defaultAttendanceFilters)
@@ -145,7 +145,7 @@ export function useAttendance(isAdmin: boolean) {
         ...changes,
         page: 'page' in changes ? (changes.page ?? 1) : 1,
       })),
-    /** "Clear All": the current month, no search or filter; the page size stays. */
+    /** "Clear All": today, no search or filter; the page size stays. */
     resetFilters: () =>
       setFilters((current) => ({
         ...defaultAttendanceFilters(),

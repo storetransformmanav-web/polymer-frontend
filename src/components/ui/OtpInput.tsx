@@ -16,10 +16,22 @@ export interface OtpInputProps {
   disabled?: boolean
   invalid?: boolean
   label?: string
+  /** Show each digit as a dot (a PIN being chosen, not a code from an email). */
+  masked?: boolean
+  /** `false`: don't take the focus when the boxes appear (a form with other fields first). */
+  autoFocus?: boolean
+  /** `tiles`: smaller white boxes with bold digits, sitting together at the left. */
+  variant?: 'fill' | 'tiles'
+  /** The id of the text that describes the boxes (an error or a hint). */
+  describedBy?: string
 }
 
 const BOX =
-  'border-border bg-surface text-text focus:border-accent focus:outline-accent-tint h-12 w-full min-w-0 rounded-lg border text-center text-xl font-semibold transition-colors outline-none focus:outline-2 disabled:opacity-60'
+  'border-border text-text focus:border-accent focus:outline-accent-tint h-12 w-full min-w-0 rounded-lg border text-center text-xl transition-colors outline-none focus:outline-2 disabled:opacity-60'
+const VARIANTS = {
+  fill: 'bg-surface font-semibold',
+  tiles: 'bg-bg max-w-11 font-bold shadow-sm',
+}
 
 /**
  * Segmented one-time-code input: one box per digit with auto-advance,
@@ -35,6 +47,10 @@ export function OtpInput({
   disabled = false,
   invalid = false,
   label = 'One-time code',
+  masked = false,
+  autoFocus = true,
+  variant = 'fill',
+  describedBy,
 }: OtpInputProps) {
   const boxes = useRef<(HTMLInputElement | null)[]>([])
   const digits = Array.from({ length }, (_, index) => value[index] ?? '')
@@ -50,10 +66,10 @@ export function OtpInput({
   useEffect(() => {
     if (disabled) return
     const inGroup = boxes.current.some((box) => box === document.activeElement)
-    if (value.length === 0 || inGroup) {
+    if ((autoFocus && value.length === 0) || inGroup) {
       boxes.current[Math.min(value.length, length - 1)]?.focus()
     }
-  }, [value, disabled, length])
+  }, [value, disabled, length, autoFocus])
 
   function commit(next: string) {
     onChange(next)
@@ -102,22 +118,28 @@ export function OtpInput({
   }
 
   return (
-    <div role="group" aria-label={label} className="flex gap-2">
+    <div
+      role="group"
+      aria-label={label}
+      aria-describedby={describedBy}
+      className="flex gap-2"
+    >
       {digits.map((digit, index) => (
         <input
           key={index}
           ref={(element) => {
             boxes.current[index] = element
           }}
-          type="text"
+          type={masked ? 'password' : 'text'}
           inputMode="numeric"
           pattern="\d*"
-          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          // Only an emailed code may be filled in by the browser, never a PIN being chosen.
+          autoComplete={index === 0 && !masked && autoFocus ? 'one-time-code' : 'off'}
           aria-label={`Digit ${index + 1} of ${length}`}
           aria-invalid={invalid || undefined}
           value={digit}
           disabled={disabled}
-          className={`${BOX} ${invalid ? 'border-danger' : ''}`}
+          className={`${BOX} ${VARIANTS[variant]} ${invalid ? 'border-danger' : ''}`}
           onChange={(event) => handleChange(index, event)}
           onKeyDown={(event) => handleKeyDown(index, event)}
           onPaste={handlePaste}

@@ -58,8 +58,12 @@ export const RANGE_PRESETS: RangePreset[] = [
 ]
 
 /** The preset that is exactly this range, if any. */
-export function matchingPreset(value: DayRange, today: Date): RangePreset | undefined {
-  return RANGE_PRESETS.find((preset) => {
+export function matchingPreset(
+  value: DayRange,
+  today: Date,
+  presets: RangePreset[] = RANGE_PRESETS,
+): RangePreset | undefined {
+  return presets.find((preset) => {
     const range = preset.range(today)
     return range.from === value.from && range.to === value.to
   })

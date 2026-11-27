@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { RequiredPinDialog } from '../../features/profile/index.ts'
+import { RequiredPinScreen } from '../../features/profile/index.ts'
 import { useCanOpen, useIsOffice } from '../../hooks/useAccess.ts'
 import { useAuth } from '../../hooks/useAuth.ts'
 import { setStoreTimeZone } from '../../lib/storeTime.ts'
@@ -25,7 +25,7 @@ export function DashboardLayout() {
   // warms a page's data when the pointer reaches its link — see Navbar).
   // Idle timeout, token expiry and cross-tab logout for the signed-in session.
   useSessionGuard()
-  // The backend may require a security PIN first: a popup that can't be skipped covers the app.
+  // The backend may require a security PIN first: its screen is shown instead of the app.
   const { pinChangeRequired } = useAuth()
   const activeItem = useActiveNavItem()
   // The Add user form and the profile page fill the window too (from `lg`): the page does not scroll,
@@ -53,6 +53,9 @@ export function DashboardLayout() {
     chosen?.timezone ?? shops.find((shop) => shop.timezone)?.timezone,
   )
 
+  // No sidebar or page is drawn (so none asks for anything) until the PIN is set.
+  if (pinChangeRequired) return <RequiredPinScreen />
+
   // The "office" role has only the Shopify Management pages: anywhere else (the dashboard after
   // sign-in, an old bookmark) goes to Orders.
   if (isOffice && !canView && activeItem?.to !== SHOPIFY_HOME)
@@ -62,26 +65,21 @@ export function DashboardLayout() {
   // deep inside a page's own scroll box would otherwise be placed against the window and
   // stretch the document, so the window scrolled on past the app into empty space.
   return (
-    <>
-      <div
-        // While the PIN popup is up, nothing behind it can be clicked or reached by keyboard.
-        inert={pinChangeRequired}
-        className={`bg-bg relative flex min-h-svh ${fill ? 'lg:h-svh lg:min-h-0 lg:overflow-clip' : ''}`}
-      >
-        <Navbar />
-        <div className={`flex min-w-0 flex-1 flex-col ${fill ? 'lg:min-h-0' : ''}`}>
-          <SystemNote />
-          <AppBar />
-          <main
-            className={`bg-page flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
-              fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-clip lg:pb-6' : ''
-            }`}
-          >
-            {canView ? <Outlet key={timeZone} /> : <NoAccessPage />}
-          </main>
-        </div>
+    <div
+      className={`bg-bg relative flex min-h-svh ${fill ? 'lg:h-svh lg:min-h-0 lg:overflow-clip' : ''}`}
+    >
+      <Navbar />
+      <div className={`flex min-w-0 flex-1 flex-col ${fill ? 'lg:min-h-0' : ''}`}>
+        <SystemNote />
+        <AppBar />
+        <main
+          className={`bg-page flex-1 px-3 pt-4 pb-10 sm:px-6 sm:pt-6 lg:px-8 lg:pt-7 ${
+            fill ? 'lg:flex lg:min-h-0 lg:flex-col lg:overflow-clip lg:pb-6' : ''
+          }`}
+        >
+          {canView ? <Outlet key={timeZone} /> : <NoAccessPage />}
+        </main>
       </div>
-      {pinChangeRequired && <RequiredPinDialog />}
-    </>
+    </div>
   )
 }

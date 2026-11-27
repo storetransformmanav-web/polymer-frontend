@@ -13,7 +13,6 @@ import {
 import { useMediaQuery } from '../../../hooks/useMediaQuery.ts'
 import type { AttendanceItem } from '../../../lib/api/endpoints.ts'
 import { initials } from '../../../lib/format.ts'
-import { formatRelativeDateTime } from '../../../lib/storeTime.ts'
 import {
   ATTENDANCE_CHEVRON_COLUMN_REM,
   attendanceTableMinWidthRem,
@@ -24,7 +23,6 @@ import {
   formatDay,
   formatDayLongName,
   formatMinutes,
-  formatWorkDate,
   humanize,
   statusTone,
 } from '../utils/format.ts'
@@ -111,6 +109,13 @@ function Employee({
   )
 }
 
+/** "27 Nov 2026, 10:10 AM" — the day and its check-in time; just the day when there is none. */
+function dateWithTime(item: AttendanceItem): string {
+  const day = formatDay(item.work_date)
+  const time = formatClock(item.check_in_at, item.check_in_time)
+  return time === '—' ? day : `${day}, ${time}`
+}
+
 /** The date with its weekday, and what kind of day it is when it isn't a plain working day. */
 function DayCell({ item }: { item: AttendanceItem }) {
   const special =
@@ -119,7 +124,7 @@ function DayCell({ item }: { item: AttendanceItem }) {
       : null
   return (
     <span className="flex min-w-0 flex-col">
-      <span className="font-semibold">{formatDay(item.work_date)}</span>
+      <span className="font-semibold">{dateWithTime(item)}</span>
       <span className="text-text-muted text-[0.74rem]">
         {item.weekday ?? ''}
         {special ? ` · ${special}` : ''}
@@ -131,20 +136,15 @@ function DayCell({ item }: { item: AttendanceItem }) {
 const lateText = (item: AttendanceItem) =>
   item.is_late ? (item.late_minutes ? `Late by ${item.late_minutes} min` : 'Late') : '—'
 
-/** The date as the Orders list shows its created date (Today, Yesterday, a weekday, "4 Nov"), the full date on hover. */
+/** The date column: the date and its check-in time, the full date on hover. */
 function DateCell({ item }: { item: AttendanceItem }) {
   const special =
     item.holiday_name || (item.day_type && item.day_type !== 'working')
       ? item.holiday_name || humanize(item.day_type)
       : null
-  // With a check-in it reads like the Orders created date ("Today at 10:10 am"); a day with none
-  // shows just the day.
-  const label = item.check_in_at
-    ? formatRelativeDateTime(item.check_in_at) || formatWorkDate(item.work_date)
-    : formatWorkDate(item.work_date)
   return (
     <span title={formatDayLongName(item.work_date)}>
-      {label}
+      {dateWithTime(item)}
       {special && <span className="text-text-muted"> · {special}</span>}
     </span>
   )

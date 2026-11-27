@@ -1,4 +1,9 @@
-import { toYmd } from '../../../components/ui/dateRange.ts'
+import {
+  addDays,
+  RANGE_PRESETS,
+  toYmd,
+  type RangePreset,
+} from '../../../components/ui/dateRange.ts'
 import type { BadgeTone } from '../../../components/ui/Badge.tsx'
 import { getStoreTimeZone, storeToday } from '../../../lib/storeTime.ts'
 
@@ -13,13 +18,25 @@ export const isAdministrator = (role: string | null | undefined) =>
 export const MAX_RANGE_DAYS = 93
 const DAY_MS = 86_400_000
 
-/** The first and last day of the current month on the store's calendar (the API's own default range). */
-export function currentMonthRange(): { from: string; to: string } {
-  const today = storeToday()
-  return {
-    from: toYmd(new Date(today.getFullYear(), today.getMonth(), 1)),
-    to: toYmd(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-  }
+/**
+ * The date filter's quick choices. There is no "All Time": the API reads at most
+ * `MAX_RANGE_DAYS` days, so the longest choice is exactly that many, ending today.
+ */
+export const ATTENDANCE_RANGE_PRESETS: RangePreset[] = [
+  ...RANGE_PRESETS.filter((preset) => preset.label !== 'All Time'),
+  {
+    label: `Last ${MAX_RANGE_DAYS} Days`,
+    range: (today) => ({
+      from: toYmd(addDays(today, 1 - MAX_RANGE_DAYS)),
+      to: toYmd(today),
+    }),
+  },
+]
+
+/** Today on the store's calendar, as a one-day range: what the page opens on. */
+export function todayRange(): { from: string; to: string } {
+  const today = toYmd(storeToday())
+  return { from: today, to: today }
 }
 
 const parseDay = (value: string): number | null => {
@@ -124,35 +141,6 @@ export const STATUS_OPTION_LABELS: Record<string, string> = {
   not_checked_in: 'Not checked in yet',
   week_off: 'Week off',
   holiday: 'Holiday',
-}
-
-/**
- * A work day the way the Orders list shows its created date, without the time: "Today", "Yesterday",
- * the weekday for the days before that up to a week ("Monday"), then "4 Nov" ("4 Nov 2025" when it is
- * not this year). Days are the store's calendar days. `today` is only for tests.
- */
-export function formatWorkDate(
-  value: string | null | undefined,
-  today: Date = storeToday(),
-): string {
-  const time = value ? parseDay(value.slice(0, 10)) : null
-  if (time === null) return '—'
-  const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
-  const daysAgo = Math.round((now - time) / DAY_MS)
-  if (daysAgo === 0) return 'Today'
-  if (daysAgo === 1) return 'Yesterday'
-  const date = new Date(time)
-  if (daysAgo > 1 && daysAgo < 7) {
-    return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long' }).format(
-      date,
-    )
-  }
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-    ...(date.getUTCFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
-  }).format(date)
 }
 
 /** "Wednesday, 25 Nov 2026" — the full date, for a hover. */

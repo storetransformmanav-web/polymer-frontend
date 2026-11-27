@@ -16,6 +16,7 @@ import {
   monthGrid,
   parseYmd,
   toYmd,
+  type RangePreset,
 } from './dateRange.ts'
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -41,6 +42,8 @@ interface DateRangePickerProps {
   from: string
   to: string
   onChange: (range: { from: string; to: string }) => void
+  /** The quick choices, when a page can't offer the usual ones (Custom Range is always added). */
+  presets?: RangePreset[]
 }
 
 type Side = 'from' | 'to'
@@ -177,12 +180,19 @@ function DateField({
  * first day, the calendar moves on to the last day and greys out the days before the
  * first. A choice applies as soon as it is made, and either end may be left open.
  */
-export function DateRangePicker({ label, id, from, to, onChange }: DateRangePickerProps) {
+export function DateRangePicker({
+  label,
+  id,
+  from,
+  to,
+  onChange,
+  presets = RANGE_PRESETS,
+}: DateRangePickerProps) {
   // "Today" is the store's today, not the computer's.
   const today = storeToday()
   const todayYmd = toYmd(today)
   const hasRange = Boolean(from || to)
-  const preset = matchingPreset({ from, to }, today)
+  const preset = matchingPreset({ from, to }, today, presets)
 
   // "Custom Range" stays chosen while its days are being typed, even when they happen
   // to equal a quick choice; a range that isn't a quick choice is always custom.
@@ -263,7 +273,7 @@ export function DateRangePicker({ label, id, from, to, onChange }: DateRangePick
       else focusFrom.current = true
       return
     }
-    const quick = RANGE_PRESETS.find((item) => item.label === name)
+    const quick = presets.find((item) => item.label === name)
     if (!quick) return
     setCustomChosen(false)
     setCalendarOpen(false)
@@ -326,7 +336,7 @@ export function DateRangePicker({ label, id, from, to, onChange }: DateRangePick
   const firstYear = Math.min(today.getFullYear() - 10, view.year)
   const lastYear = Math.max(today.getFullYear() + 2, view.year)
   const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
-  const choices = [...RANGE_PRESETS.map((item) => item.label), CUSTOM]
+  const choices = [...presets.map((item) => item.label), CUSTOM]
 
   return (
     <div

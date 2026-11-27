@@ -10,6 +10,7 @@ import { shopLabel, shopValue } from '../../../app/store/shopSlice.ts'
 import { DETAIL_CARD, DetailSection } from '../../../components/ui/DetailSection.tsx'
 import { HeaderBackButton } from '../../../components/ui/DetailsHeader.tsx'
 import { FormMessage } from '../../../components/ui/FormMessage.tsx'
+import { PinFields } from '../../../components/ui/PinFields.tsx'
 import {
   FileTextIcon,
   MapPinIcon,
@@ -236,7 +237,8 @@ export function UserCreateView({
   const [reminders, setReminders] = useState(false)
   const [extra, setExtra] = useState<Extra>(BLANK_EXTRA)
   const [unlockPin, setUnlockPin] = useState(false)
-  const [showPin, setShowPin] = useState(false)
+  /** How many digits the PIN will have; 0 until one is chosen. */
+  const [pinLength, setPinLength] = useState(0)
   const [errors, setErrors] = useState<{
     firstName?: string
     email?: string
@@ -266,6 +268,7 @@ export function UserCreateView({
     shopKeys.length > 0 ||
     reminders ||
     unlockPin ||
+    pinLength > 0 ||
     Object.values(extra).some((value) => value.trim() !== '')
   useEffect(() => {
     onDirtyChange?.(dirty)
@@ -341,7 +344,10 @@ export function UserCreateView({
     if (!EMAIL_PATTERN.test(email.trim())) next.email = 'Enter a valid email address'
     const grace = extra.lateGrace.trim()
     if (grace && !/^\d+$/.test(grace)) next.lateGrace = 'Enter whole minutes, e.g. 5'
-    if (!extra.pin.trim()) next.pin = 'Enter a security PIN'
+    if (!pinLength) next.pin = 'Choose a 4 or 6 digit security PIN'
+    else if (extra.pin.length !== pinLength) {
+      next.pin = `Enter all ${pinLength} digits of the security PIN`
+    }
     setErrors(next)
     if (next.firstName || next.email || next.lateGrace || next.pin || !role) return
 
@@ -573,45 +579,19 @@ export function UserCreateView({
             forceOpen={Boolean(errors.pin)}
           >
             <div className="flex flex-col gap-4">
-              <div className="flex max-w-sm flex-col gap-1.5">
-                <label htmlFor={`${formId}-pin`} className={FIELD_LABEL}>
-                  PIN
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    id={`${formId}-pin`}
-                    type={showPin ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    inputMode="numeric"
-                    maxLength={20}
-                    value={extra.pin}
-                    onChange={(event) => setField('pin', event.target.value)}
-                    aria-required="true"
-                    aria-invalid={errors.pin ? true : undefined}
-                    aria-describedby={errors.pin ? `${formId}-pin-error` : undefined}
-                    className={FIELD_INPUT}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPin((value) => !value)}
-                    className={`${BUTTON} border-border bg-bg text-text hover:border-accent shrink-0`}
-                  >
-                    {showPin ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                {errors.pin && (
-                  <p
-                    id={`${formId}-pin-error`}
-                    role="alert"
-                    className="text-danger text-[0.78rem]"
-                  >
-                    {errors.pin}
-                  </p>
-                )}
-                {/* <p className="text-text-muted m-0 text-[0.78rem]">
-                  The PIN is checked by the server. If it is refused, the reason shows
-                  above the form.
-                </p> */}
+              <div className="max-w-sm">
+                <PinFields
+                  id={`${formId}-pin`}
+                  length={pinLength}
+                  onLengthChange={(length) => {
+                    // Another length starts the PIN again.
+                    setPinLength(length)
+                    setField('pin', '')
+                  }}
+                  pin={extra.pin}
+                  onPinChange={(value) => setField('pin', value)}
+                  error={errors.pin}
+                />
               </div>
               <Toggle
                 title="Unlock security PIN"
